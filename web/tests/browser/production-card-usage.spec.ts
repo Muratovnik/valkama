@@ -429,6 +429,7 @@ test.describe('under a finger', () => {
       'All agents ≈\u{A0}11\u{A0}h\u{A0}14\u{A0}min',
       'Cost ≈\u{A0}$240.67',
       /^Tokens /u,
+      'Sessions 1',
     ])
     // No line of notes under figures that need none: each says its why on a press.
     await expect(section.locator('.work-usage-note')).toHaveCount(0)

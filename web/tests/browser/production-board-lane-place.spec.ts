@@ -109,38 +109,41 @@ async function walk(page: Page, where: string) {
   return { changes: changes.length, found }
 }
 
+// Each walk opens a page of its own and shares nothing with another, so they run side by side:
+// one after another, a walk at each locale, input and scroll held one worker for a quarter hour.
+test.describe.configure({ mode: 'parallel' })
+
 for (const locale of ['en-US', 'ru-RU'])
   for (const finger of [false, true])
     test.describe(`${locale}, ${finger ? 'where only a finger presses' : 'with a pointer'}`, () => {
       test.use(finger ? { locale, hasTouch: true, isMobile: true } : { locale })
 
-      test('every lane heading draws the same at a width however the board got there', async ({
-        page,
-      }) => {
-        test.setTimeout(600_000)
-        await page.addInitScript(() => {
-          const reports: string[] = []
-          Object.assign(window, { reports })
-          window.addEventListener('error', ({ message }) =>
-            reports.push(`${innerWidth}px: ${message}`),
-          )
-        })
-        await page.setViewportSize({ width: 1280, height: 900 })
-        await page.emulateMedia({ reducedMotion: 'reduce' })
-        await installBackend(page)
-        await serve(page)
-        await serveWide(page)
-        await openBoard(page)
-        await page.evaluate(() => document.fonts.ready)
-        for (const where of ['start', 'middle']) {
+      for (const where of ['start', 'middle'])
+        test(`every lane heading draws the same at a width however the board got there, at its ${where === 'start' ? 'first' : 'middle'} states`, async ({
+          page,
+        }) => {
+          test.setTimeout(600_000)
+          await page.addInitScript(() => {
+            const reports: string[] = []
+            Object.assign(window, { reports })
+            window.addEventListener('error', ({ message }) =>
+              reports.push(`${innerWidth}px: ${message}`),
+            )
+          })
+          await page.setViewportSize({ width: 1280, height: 900 })
+          await page.emulateMedia({ reducedMotion: 'reduce' })
+          await installBackend(page)
+          await serve(page)
+          await serveWide(page)
+          await openBoard(page)
+          await page.evaluate(() => document.fonts.ready)
           const { changes, found } = await walk(page, where)
           // A walk on which no heading changed would prove nothing about the way it came.
           expect(changes, `${where}: widths where a heading changes`).toBeGreaterThan(5)
           expect(found, `${where}: headings drawn otherwise on the way back`).toEqual([])
-        }
-        const reports = await page.evaluate(() => (window as { reports?: string[] }).reports)
-        expect(reports, 'errors the page reported on the walk').toEqual([])
-      })
+          const reports = await page.evaluate(() => (window as { reports?: string[] }).reports)
+          expect(reports, 'errors the page reported on the walk').toEqual([])
+        })
     })
 
 /**

@@ -368,6 +368,40 @@ class ContainerTests(ItemProjectsCase):
         self.task("Plain", parent=goal)
         self.assertEqual([], self.card(goal)["projects"])
 
+    def test_a_contents_read_counts_its_tasks_in_each_project_they_name(self) -> None:
+        self.write_registry({"alpha": "Alpha", "beta": "Beta"})
+        goal = self.task("Goal", kind="goal")
+        stage = self.task("Stage", kind="stage", parent=goal)
+        self.task("Alpha one", parent=goal, projects=["alpha"])
+        self.task("Alpha two", parent=stage, projects=["alpha"])
+        self.task("Beta", parent=stage, projects=["beta"])
+        self.task("Both", parent=goal, projects=["alpha", "beta"])
+        self.task("None", parent=stage)
+        self.task("Elsewhere", projects=["beta"])
+
+        def by_project(reference: str) -> list[tuple[str | None, str | None, int]]:
+            answer = api.handle_get(
+                self.conn,
+                "/api/planning/work-item/chain",
+                {"id": [reference], "scope": ["tree"]},
+            )
+            assert answer is not None
+            return [
+                (row["project_id"], row["display_name"], row["count"])
+                for row in answer[1]["chain"]["by_project"]
+            ]
+
+        # Five tasks: «Both» stands in alpha's row and in beta's, so the rows add up
+        # to six. The stage is a member but no task, and its derived projects count
+        # nothing; the task outside the goal is not a member. No project comes last
+        # whatever its count.
+        self.assertEqual(
+            [("alpha", "Alpha", 3), ("beta", "Beta", 2), (None, None, 1)], by_project(goal)
+        )
+        self.assertEqual(
+            [("alpha", "Alpha", 1), ("beta", "Beta", 1), (None, None, 1)], by_project(stage)
+        )
+
 
 class MergeTests(ItemProjectsCase):
     def test_a_merge_carries_the_duplicates_projects_by_the_strongest_source(self) -> None:

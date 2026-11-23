@@ -1,8 +1,13 @@
+import { promptMessageSchema } from '@/shared/api/composedTextModel.ts'
 import { boundedList, boundedText, positiveInt, strictObject, z } from '@/shared/api/contract.ts'
 import { ACTION_OUTCOMES, actionSchema } from '@/shared/api/inputRequestAction.ts'
 import { WORK_ITEM_REFERENCE } from '@/shared/api/planningModel.ts'
 import { otherSpaceSchema } from '@/shared/api/planningSpaceModel.ts'
-import { planningCoverageSchema, planningTargetSchema } from '@/shared/api/planningTarget.ts'
+import {
+  planningCoverageSchema,
+  planningSpaceRefSchema,
+  planningTargetSchema,
+} from '@/shared/api/planningTarget.ts'
 import { ISO, UUID } from '@/shared/api/platformApiGuards.ts'
 
 const FIELD_ID = /^[a-z][a-z0-9_-]{0,63}$/u
@@ -134,6 +139,12 @@ const requestSchema = strictObject({
   title: z.string().min(1).max(200),
   kind: z.enum(['question', 'decision']),
   prompt: z.string().min(1).max(8000),
+  /**
+   * The key and values of a prompt the service composed, which the interface says in the
+   * reader's language; null on a prompt an agent wrote and on one stored before keys. A record
+   * a test builds may leave it out.
+   */
+  prompt_message: promptMessageSchema.nullable().optional(),
   fields: boundedList(fieldSchema, FIELD_LIMIT).min(1),
   answers: answersSchema.nullable(),
   /** Own variants of fields with options; null while there is no answer. */
@@ -233,10 +244,12 @@ const listSchema = strictObject({
   has_more: z.boolean(),
   /**
    * One line per space read whose triage stack waits past its thresholds: no question, so
-   * in no count or page. The age is the reader's to count from `oldest_at`.
+   * in no count or page. The age is the reader's to count from `oldest_at`; `space_ref` is
+   * the source's, which opens that space's board.
    */
   triage_due: z.array(
     strictObject({
+      space_ref: planningSpaceRefSchema,
       space: otherSpaceSchema,
       count: positiveInt(),
       oldest_at: boundedText(ISO, 96),

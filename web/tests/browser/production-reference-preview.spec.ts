@@ -9,7 +9,8 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { clear, longestStill, paced, stroke } from './hintFramesPage.ts'
+import { stroke } from './hintFramesPage.ts'
+import { resumeClock, standClock } from './pageClock.ts'
 import {
   card,
   CARD,
@@ -143,19 +144,19 @@ test('a neighbour takes the card over at once; after a pause it waits again', as
   const shown = card(page)
   await expect(shown).toContainText('MAIN-12')
 
+  // Within 450 ms of the page's clock, which stands from before the move: a card that waited its
+  // delay again would not come in that time, and a busy machine does not stretch it.
   const neighbour = reference(entry, 'MAIN-13')
   const { x, y } = await middle(neighbour)
-  // The page's clock stands until the move is over and then runs short of the half second a
-  // resting pointer waits, however long a busy machine takes over the move.
-  await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 1000)
+  await standClock(page)
   await page.mouse.move(x, y, { steps: 4 })
   await page.clock.runFor(449)
   await expect(shown).toContainText('MAIN-13')
+  await resumeClock(page)
   await expect(page.locator(CARD)).toHaveCount(1)
   // No fading in again: it is the same card, moved.
   await expect(shown).toHaveAttribute('data-opened', 'at-once')
   await expect(reference(entry, 'MAIN-12')).not.toHaveAttribute('aria-describedby')
-  await page.clock.resume()
 
   await page.mouse.move(5, 5, { steps: 4 })
   await expect(shown).toHaveCount(0)
@@ -196,16 +197,7 @@ test('down a list, the card keeps the pointer over the reference it covers', asy
     { x: start.x + start.width - 2, y: start.y + start.height / 2, steps: 2 },
     { x: start.x + start.width + 40, y: edge, steps: 6 },
   ]
-  // Again from the start if the pointer stood still on its way to the card (`paced`).
-  const again = async () => {
-    await clear(page, { x: 5, y: 5 })
-    await rest(page, held)
-    await expect(shown).toContainText('MAIN-15')
-  }
-  await paced('along the card', async (round) => {
-    if (round > 1) await again()
-    return { pause: longestStill(await stroke(page, onHeld, [...via, { ...under, steps: 6 }])) }
-  })
+  await stroke(page, onHeld, [...via, { ...under, steps: 6 }])
   expect(await cardsAfterTheDelay(page)).toBe(1)
   await expect(shown).toContainText('MAIN-15')
 

@@ -178,13 +178,14 @@ describe('a card reopened by Back', () => {
   it('takes no return point meant for another card', async () => {
     const scopes = serveChain()
     await open({
-      chain: { details: true, doneOpen: true, expanded: ['triage'], lane: null, scope: 'tree' },
+      chain: { details: true, doneOpen: true, expanded: ['triage'], lane: null, scope: 'chain' },
       opened: 'MAIN-1',
       reference: 'MAIN-2',
       scroll: 0,
       section: 'relations',
     })
-    expect(scopes).toEqual(['chain'])
+    // The goal reads its own first reading, its contents, not the one left on MAIN-2.
+    expect(scopes).toEqual(['tree'])
     expect(focusedReference()).toBeUndefined()
   })
 })

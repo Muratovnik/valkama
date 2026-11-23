@@ -21,7 +21,14 @@ import {
   SelectViewport,
 } from 'reka-ui'
 
-import { choiceValueCodec, decodeChoiceValue, encodeChoiceValue } from '@/shared/ui/choiceControls'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
+import {
+  choicesMatching,
+  choiceValueCodec,
+  decodeChoiceValue,
+  encodeChoiceValue,
+  keepMovedFocus,
+} from '@/shared/ui/choiceControls'
 import type { ChoiceOption } from '@/shared/ui/choiceControls'
 import ControlIcon from '@/shared/ui/ControlIcon.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
@@ -31,11 +38,18 @@ const props = withDefaults(
     label: string
     modelValue: string
     options: readonly Option[]
+    /**
+     * The chevron alone, for a host whose line has no room for the value's words: they stay
+     * the value assistive technology reads, and the button's hint names them.
+     */
+    bare?: boolean
     /** The id of the message that says why the choice was refused. */
     describedby?: string
     disabled?: boolean
     emptyLabel?: string
     invalid?: boolean
+    /** Reached by its host's keys rather than by Tab: the button is out of the Tab order. */
+    keyed?: boolean
     placeholder?: string
     searchable?: boolean
     searchLabel?: string
@@ -47,6 +61,7 @@ const props = withDefaults(
   }>(),
   {
     size: 'default',
+    bare: false,
     searchable: false,
     placeholder: '',
     searchLabel: 'Search',
@@ -73,14 +88,11 @@ const selected = computed(() => props.options.find((option) => option.value === 
 // (a state move the server refused) left the item selected inside the list, and
 // choosing it again changed nothing and sent nothing.
 const internalValue = computed(() => encodeChoiceValue(codec.value, props.modelValue) ?? null)
-const filtered = computed(() => {
-  const needle = query.value.trim().toLocaleLowerCase()
-  return needle
-    ? props.options.filter((option) =>
-        `${option.label} ${option.description ?? ''}`.toLocaleLowerCase().includes(needle),
-      )
-    : [...props.options]
-})
+const filtered = computed(() => choicesMatching(props.options, query.value))
+/** What a bare button's hint says: the words it does not show. */
+const bareName = computed(() => (props.bare ? selected.value?.label || props.placeholder : ''))
+/** Out of the Tab order where the host's keys reach the button. */
+const triggerTab = computed(() => (props.keyed ? -1 : undefined))
 
 function updateValue(value: unknown) {
   if (typeof value !== 'string') return
@@ -101,7 +113,7 @@ function updateOpen(value: boolean) {
     query.value = ''
     return
   }
-  if (props.searchable) void nextTick(() => searchInput.value?.focus())
+  if (props.searchable) void nextTick(() => placeFocus(searchInput.value))
 }
 
 /** Opens the list, for a host whose own action asks for this choice to be made. */
@@ -111,7 +123,7 @@ defineExpose({ show: () => updateOpen(true) })
 <template>
   <div
     class="choice-select"
-    :class="`size-${size}`"
+    :class="[`size-${size}`, { bare }]"
   >
     <SelectRoot
       :model-value="internalValue"
@@ -121,11 +133,13 @@ defineExpose({ show: () => updateOpen(true) })
       @update:open="updateOpen"
     >
       <SelectTrigger
+        v-tooltip.name="bareName"
         class="choice-trigger"
         :class="{ 'has-icon': selected?.icon }"
         :aria-label="label"
         :aria-invalid="invalidMark"
         :aria-describedby="describedby"
+        :tabindex="triggerTab"
       >
         <ControlIcon
           v-if="selected?.icon"
@@ -136,6 +150,7 @@ defineExpose({ show: () => updateOpen(true) })
         <span
           v-tooltip.clipped="$slots.value && selected?.label"
           class="choice-value"
+          :class="{ 'visually-hidden': bare }"
         >
           <SelectValue
             class="choice-value-content"
@@ -177,6 +192,7 @@ defineExpose({ show: () => updateOpen(true) })
           :avoid-collisions="true"
           :hide-when-detached="true"
           :body-lock="false"
+          @close-auto-focus="keepMovedFocus"
         >
           <label
             v-if="searchable"
@@ -356,98 +372,14 @@ defineExpose({ show: () => updateOpen(true) })
   font: var(--font-detail);
 }
 
-.choice-popup {
-  z-index: 120;
-  min-width: var(--reka-select-trigger-width);
-  max-width: min(440px, calc(100vw - 24px));
-  max-height: var(--reka-select-content-available-height);
-  border: 1px solid var(--color-rule-strong);
-  color: var(--color-text);
-  background: var(--color-surface);
-  overflow: hidden;
-  border-radius: var(--radius-control);
-  box-shadow: 0 14px 34px var(--color-shadow);
-}
-
-.choice-search {
-  display: grid;
-  grid-template-columns: 18px minmax(0, 1fr);
-  gap: var(--space-2);
-  align-items: center;
-  padding: 0 var(--space-2);
-  margin: var(--space-2);
-  border: 1px solid var(--color-rule-strong);
-  color: var(--color-text-muted);
-  background: var(--color-control-surface);
-  border-radius: var(--radius-control);
-}
-
-.choice-search-field {
-  width: 100%;
-  min-height: var(--size-control-height-compact);
-  padding: 0;
-  border: 0;
-  color: var(--color-text);
-  background: transparent;
-  outline: 0;
-}
-
-.choice-viewport {
-  max-height: min(320px, var(--reka-select-content-available-height));
-  padding: var(--space-1);
-  overflow-y: auto;
-}
-
-.choice-option {
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 18px;
-  gap: var(--space-3);
-  align-items: center;
-  min-height: var(--size-control-height);
-  padding: var(--space-2);
-  border-radius: var(--radius-status);
-  cursor: pointer;
-
-  &.has-icon {
-    grid-template-columns: 24px minmax(0, 1fr) 18px;
-  }
-
-  &[data-highlighted] {
-    background: var(--color-surface-active);
-  }
-
-  &[data-disabled] {
-    color: var(--color-text-muted);
-    opacity: 0.58;
-    cursor: not-allowed;
-  }
-
-  &[data-state='checked'] {
-    font-weight: 600;
-  }
-}
-
-.choice-check {
-  width: 18px;
-  height: 18px;
-  color: var(--color-text);
-}
-
-.choice-empty {
-  padding: var(--space-4);
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-interface);
-  text-align: center;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .choice-chevron {
     transition: none;
   }
 }
 </style>
+
+<style src="@/shared/ui/choiceList.css"></style>
 
 <style scoped>
 /* What a host draws in an option's place — a state with its dot, a priority with its glyph — is

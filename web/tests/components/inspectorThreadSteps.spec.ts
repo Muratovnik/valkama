@@ -38,7 +38,7 @@ vi.mock('@/shared/api/planningApi.ts', async (load) => ({
   setWorkItemChecklist: vi.fn(),
 }))
 
-const ACTION = 'Make steps'
+const ACTION = 'Make conditions'
 const step = (id: number, text: string) => ({
   id: `00000000-0000-4000-8000-${String(id).padStart(12, '0')}`,
   text,
@@ -113,7 +113,7 @@ describe('choosing the points', () => {
     await press.trigger('click')
     await nextTick()
     expect(press.attributes('aria-expanded')).toBe('true')
-    expect(form(wrapper).get('legend').text()).toBe('Which points become steps of the task')
+    expect(form(wrapper).get('legend').text()).toBe('Which points become conditions of the task')
     expect(document.activeElement).toBe(boxes(wrapper)[0]?.element)
     expect(rows(wrapper)).toEqual([
       { words: 'One', ticked: true, free: true, reason: '' },
@@ -121,12 +121,12 @@ describe('choosing the points', () => {
       { words: 'Three', ticked: true, free: true, reason: '' },
     ])
     expect(form(wrapper).get('[data-depth="1"]').text()).toBe('Three')
-    expect(count(wrapper)).toBe('Will be 4 steps of 100')
-    expect(addButton(wrapper).text()).toBe('Add 3 steps')
+    expect(count(wrapper)).toBe('Will be 4 conditions of 100')
+    expect(addButton(wrapper).text()).toBe('Add 3 conditions')
 
     await boxes(wrapper)[1]?.setValue(false)
-    expect(count(wrapper)).toBe('Will be 3 steps of 100')
-    expect(addButton(wrapper).text()).toBe('Add 2 steps')
+    expect(count(wrapper)).toBe('Will be 3 conditions of 100')
+    expect(addButton(wrapper).text()).toBe('Add 2 conditions')
 
     vi.mocked(setWorkItemChecklist).mockResolvedValueOnce(item)
     await form(wrapper).trigger('submit')
@@ -137,9 +137,9 @@ describe('choosing the points', () => {
       expected_revision: 3,
     })
     expect(wrapper.find('.steps-form').exists()).toBe(false)
-    expect(thread(wrapper, 1).get('.entry-steps-added').text()).toContain('Added 2 steps')
+    expect(thread(wrapper, 1).get('.entry-steps-added').text()).toContain('Added 2 conditions')
     expect(document.activeElement).toBe(inThread(wrapper, 1, ACTION).element)
-    await getButton(wrapper, 'Show checklist').trigger('click')
+    await getButton(wrapper, 'Show conditions').trigger('click')
     expect(revealed).toHaveBeenCalledOnce()
   })
 
@@ -182,11 +182,11 @@ describe('what cannot be a step', () => {
     await inThread(wrapper, 1, ACTION).trigger('click')
     expect(rows(wrapper)).toEqual([
       { words: 'One', ticked: true, free: true, reason: '' },
-      { words: 'Two', ticked: false, free: false, reason: 'already a step' },
+      { words: 'Two', ticked: false, free: false, reason: 'already a condition' },
       // The case is part of the words: a step that says it otherwise is another step.
       { words: 'three', ticked: true, free: true, reason: '' },
     ])
-    expect(count(wrapper)).toBe('Will be 4 steps of 100')
+    expect(count(wrapper)).toBe('Will be 4 conditions of 100')
     vi.mocked(setWorkItemChecklist).mockResolvedValueOnce(item)
     await form(wrapper).trigger('submit')
     await flushPromises()
@@ -200,7 +200,7 @@ describe('what cannot be a step', () => {
     const wrapper = open(card([root(1, { body: '- One\n- One' })]))
     await inThread(wrapper, 1, ACTION).trigger('click')
     expect(rows(wrapper).map((row) => row.reason)).toEqual(['', 'repeats a point above'])
-    expect(addButton(wrapper).text()).toBe('Add 1 step')
+    expect(addButton(wrapper).text()).toBe('Add 1 condition')
   })
 
   it('holds a point longer than a step can be, and lets one at the limit through', async () => {
@@ -217,7 +217,7 @@ describe('what cannot be a step', () => {
     const texts = Array.from({ length: 98 }, (_, index) => `Step ${index}`)
     const wrapper = open(withSteps(card([root(1, { body: '- A\n- B\n- C' })]), ...texts))
     await inThread(wrapper, 1, ACTION).trigger('click')
-    expect(count(wrapper)).toBe('Will be 101 steps of 100: clear 1')
+    expect(count(wrapper)).toBe('Will be 101 conditions of 100: clear 1')
     expect(addButton(wrapper).attributes('disabled')).toBeDefined()
     expect(addButton(wrapper).attributes('aria-describedby')).toBe(
       form(wrapper).get('.steps-count').attributes('id'),
@@ -225,7 +225,7 @@ describe('what cannot be a step', () => {
     await form(wrapper).trigger('submit')
     expect(setWorkItemChecklist).not.toHaveBeenCalled()
     await boxes(wrapper)[2]?.setValue(false)
-    expect(count(wrapper)).toBe('Will be 100 steps of 100')
+    expect(count(wrapper)).toBe('Will be 100 conditions of 100')
     expect(addButton(wrapper).attributes('disabled')).toBeUndefined()
   })
 })
@@ -249,7 +249,7 @@ describe('a write refused for a newer revision', () => {
     const newer = { ...withSteps(item, 'One'), revision: 4 }
     await wrapper.setProps({ item: newer })
     expect(rows(wrapper).map(({ ticked, reason }) => [ticked, reason])).toEqual([
-      [false, 'already a step'],
+      [false, 'already a condition'],
       [true, ''],
       [false, ''],
     ])

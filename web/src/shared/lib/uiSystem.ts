@@ -406,6 +406,7 @@ export type IconName =
   | 'priority-low'
   | 'state-cancelled'
   | 'waiting'
+  | 'withheld'
   | 'holder'
   | 'parent'
   | 'steps'

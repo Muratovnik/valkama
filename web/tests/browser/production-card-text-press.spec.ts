@@ -148,9 +148,14 @@ test('a press on the last text sends Shift+Tab to the control before it', async 
   expect(await placeOf(body)).toBe(place)
 })
 
+/**
+ * The first stop in the card, where a Tab past the last one comes round to: the grip that
+ * resizes it where the window has room for one, and otherwise the first control of its bar,
+ * the first of Back, «…» and Close it holds (DESIGN.md, the card's bar).
+ */
 for (const [width, first] of [
-  [1440, '.overlay-resizer'],
-  [390, '.drawer-frame-close'],
+  [1440, (drawer: Locator) => drawer.locator('.overlay-resizer')],
+  [390, (drawer: Locator) => drawer.locator('[data-drawer-controls]').getByRole('button').first()],
 ] as const) {
   test(`past the last text a Tab comes round to the first control at ${width}px`, async ({
     page,
@@ -162,12 +167,12 @@ for (const [width, first] of [
     const line = await THE_END(drawer).boundingBox()
     await page.mouse.click((line?.x ?? 0) + 20, (line?.y ?? 0) + 6)
     await page.keyboard.press('Tab')
-    await expect(drawer.locator(first)).toBeFocused()
+    await expect(first(drawer)).toBeFocused()
     // And back round the other way, from the real edge.
     await page.keyboard.press('Shift+Tab')
     await expect(drawer.getByRole('textbox', { name: 'Comment' })).toBeFocused()
     await page.keyboard.press('Tab')
-    await expect(drawer.locator(first)).toBeFocused()
+    await expect(first(drawer)).toBeFocused()
   })
 }
 

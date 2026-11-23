@@ -8,7 +8,7 @@ import { enumField, ISO } from '@/shared/api/platformApiGuards.ts'
  * holds them. A strict reader refuses an event whose action is not here, so the list
  * grows with the store's in the same release.
  */
-const EVENT_ACTIONS = [
+export const EVENT_ACTIONS = [
   'created',
   'transitioned',
   'claimed',

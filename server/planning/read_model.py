@@ -34,6 +34,7 @@ from . import (
     participation,
     queue,
     sections,
+    standing,
     states,
     subscriptions,
     triage,
@@ -61,10 +62,16 @@ def whole_store_read() -> Iterator[None]:
         raise
 
 
+#: The longest text a caller may name a work item by: its reference or its id.
+REFERENCE_LIMIT = 64
+#: The longest text a caller may name a space by: its key, its name or its id.
+SPACE_REFERENCE_LIMIT = 200
+
+
 def item_row(conn: sqlite3.Connection, reference: object) -> sqlite3.Row:
     """The item a caller named, by UUID or by what a person types."""
 
-    text = model.text_field(reference, "work item", limit=64)
+    text = model.text_field(reference, "work item", limit=REFERENCE_LIMIT)
     row = conn.execute("SELECT * FROM work_items WHERE work_item_id = ?", (text,)).fetchone()
     if row is not None:
         return row
@@ -91,7 +98,7 @@ def item_by_id(conn: sqlite3.Connection, work_item_id: str) -> sqlite3.Row:
 def space_row(conn: sqlite3.Connection, reference: object) -> sqlite3.Row:
     """The space a caller named by its id, key or name."""
 
-    text = model.text_field(reference, "planning space", limit=200)
+    text = model.text_field(reference, "planning space", limit=SPACE_REFERENCE_LIMIT)
     row = conn.execute(
         "SELECT * FROM planning_spaces WHERE planning_space_id = ? OR key = ? OR name = ?",
         (text, text, text),
@@ -287,9 +294,20 @@ def acceptance(row: sqlite3.Row) -> dict | None:
     return {"basis": row["acceptance"], "at": row["accepted_at"]}
 
 
-#: A closing fact: when the item's latest transition was written, and the
-#: detail of the newest named release after it; None for an item never moved.
-_Closed = tuple[str, str | None] | None
+#: Each of a JSON array of items: when it came to stand where it is (`standing.ENTERED_AT`),
+#: and the detail of the newest named release after its latest transition, null when it
+#: never moved. The ids travel as one JSON array, twice, so the statement is the same text
+#: for any number of them and no build's limit on parameters applies.
+_CLOSINGS = (
+    f"SELECT i.work_item_id, {standing.ENTERED_AT}, (SELECT e.detail"  # noqa: S608 - constant text
+    "  FROM work_item_events e WHERE e.work_item_id = i.work_item_id"
+    "  AND e.action = 'released' AND e.id > t.id AND e.detail != ''"
+    "  ORDER BY e.id DESC LIMIT 1)"
+    " FROM work_items i LEFT JOIN (SELECT work_item_id, MAX(id) AS id FROM work_item_events"
+    "  WHERE action = 'transitioned' AND work_item_id IN (SELECT value FROM json_each(?))"
+    "  GROUP BY work_item_id) t ON t.work_item_id = i.work_item_id"
+    " WHERE i.work_item_id IN (SELECT value FROM json_each(?))"
+)
 
 
 def closing(
@@ -297,27 +315,18 @@ def closing(
 ) -> tuple[str | None, str | None]:
     """When a finished item closed, and who held it then; both null for open work.
 
-    It closed at its latest transition, the rule a chain's `closed_at` uses, or
-    when it was last written if it never moved. Whoever held it then is the
-    claim still on it, for an item closed before a close ended its claim, or
-    else the holder the newest release since that transition names: the one
-    the close itself wrote, or the separate release that used to follow it.
-    No such release means it closed unheld. A read of many items asks
-    `closings` once instead.
+    It closed when it last entered its finished state (`standing.ENTERED_AT`), the
+    moment every read gives it. Whoever held it then is the claim still on it,
+    for an item closed before a close ended its claim, or else the holder the
+    newest release since its latest transition names: the one the close itself
+    wrote, or the separate release that used to follow it. No such release, or
+    no transition, means it closed unheld. A read of many items asks `closings`
+    once instead.
     """
 
     if not terminal:
         return None, None
-    identity = str(row["work_item_id"])
-    found = conn.execute(
-        "SELECT t.created_at, (SELECT e.detail FROM work_item_events e"
-        "  WHERE e.work_item_id = ? AND e.action = 'released' AND e.id > t.id"
-        "  AND e.detail != '' ORDER BY e.id DESC LIMIT 1)"
-        " FROM (SELECT id, created_at FROM work_item_events WHERE work_item_id = ?"
-        "  AND action = 'transitioned' ORDER BY id DESC LIMIT 1) t",
-        (identity, identity),
-    ).fetchone()
-    return _closed(row, (str(found[0]), found[1]) if found is not None else None)
+    return _closings(conn, [row])[str(row["work_item_id"])]
 
 
 def triage_stacks(conn: sqlite3.Connection, rows: Sequence[sqlite3.Row]) -> dict[str, dict]:
@@ -351,25 +360,24 @@ def closings(
         str(state[0])
         for state in conn.execute("SELECT state_id FROM workflow_states WHERE is_terminal = 1")
     }
-    finished = [row for row in rows if str(row["state_id"]) in terminal]
-    found: dict[str, _Closed] = {}
-    # The ids travel as one JSON array, so the statement is the same text for
-    # any number of them and no build's limit on parameters applies.
-    for identity, closed_at, detail in conn.execute(
-        "SELECT t.work_item_id, c.created_at, (SELECT e.detail FROM work_item_events e"
-        "  WHERE e.work_item_id = t.work_item_id AND e.action = 'released'"
-        "  AND e.id > t.id AND e.detail != '' ORDER BY e.id DESC LIMIT 1)"
-        " FROM (SELECT work_item_id, MAX(id) AS id FROM work_item_events"
-        "  WHERE action = 'transitioned'"
-        "  AND work_item_id IN (SELECT value FROM json_each(?))"
-        "  GROUP BY work_item_id) t JOIN work_item_events c ON c.id = t.id",
-        (json.dumps([str(row["work_item_id"]) for row in finished]),),
-    ):
-        found[str(identity)] = (str(closed_at), detail)
-    return {
-        str(row["work_item_id"]): _closed(row, found.get(str(row["work_item_id"])))
-        for row in finished
-    }
+    return _closings(conn, [row for row in rows if str(row["state_id"]) in terminal])
+
+
+def _closings(
+    conn: sqlite3.Connection, finished: Sequence[sqlite3.Row]
+) -> dict[str, tuple[str | None, str | None]]:
+    """When each of `finished` closed and who held it then, by item id (`_CLOSINGS`)."""
+
+    by_id = {str(row["work_item_id"]): row for row in finished}
+    identities = json.dumps(list(by_id))
+    found: dict[str, tuple[str | None, str | None]] = {}
+    for identity, closed_at, detail in conn.execute(_CLOSINGS, (identities, identities)):
+        row = by_id[str(identity)]
+        holder = str(row["claim_ref"]) if row["claim_ref"] else None
+        if holder is None and detail:
+            holder = leases.released_holder(str(detail)) or None
+        found[str(identity)] = (str(closed_at), holder)
+    return found
 
 
 #: The newest release an expiry wrote on each item since its last claim. The event's
@@ -445,17 +453,6 @@ def _lapsed_of_one(conn: sqlite3.Connection, identity: str) -> dict | None:
         if not str(error).startswith("no such table: execution_events"):
             raise
         return None
-
-
-def _closed(row: sqlite3.Row, found: _Closed) -> tuple[str, str | None]:
-    """A finished item's closing time and last holder, from what its history says."""
-
-    closed_at = found[0] if found is not None else str(row["updated_at"])
-    if row["claim_ref"]:
-        return closed_at, str(row["claim_ref"])
-    detail = found[1] if found is not None else None
-    holder = leases.released_holder(str(detail)) if detail else ""
-    return closed_at, holder or None
 
 
 #: How much of a thread's newest reply its root carries; `thread` reads it whole.
@@ -1102,9 +1099,14 @@ def _record(
         facts.question(identity) if facts.asked is not None and identity in facts.nodes else None
     )
     lease: leases.Lease | None = None
-    if row["claim_ref"]:
-        # Only a held item's lease reads the setting, so only it loads one of its own.
-        snapshot = participation.load(conn) if settings is None else settings
+    # A held item's lease reads the setting, and so does the queue's rule for a task
+    # (`queue.withheld` loads it then); a read of many items loads it once for all.
+    snapshot = (
+        participation.load(conn)
+        if settings is None and (row["claim_ref"] or str(row["kind"]) != model.CONTAINER_KIND)
+        else settings
+    )
+    if row["claim_ref"] and snapshot is not None:
         lease = leases.lease(conn, row, settings=snapshot, asked=asked) if full else None
         record["claim_state"] = (
             (lease.state if lease is not None else None)
@@ -1120,7 +1122,7 @@ def _record(
         record["cancelled_blockers"] = cancelled_blockers
     # The take-next queue's own rule (`queue.withheld`): the queue gives exactly
     # what reads workable, and the codes say why anything else is not given.
-    record["withheld"] = queue.withheld(conn, row, facts, read_space=read_space)
+    record["withheld"] = queue.withheld(conn, row, facts, settings=snapshot, read_space=read_space)
     record["workable"] = not record["withheld"]
     if lapsed is not None:
         record["lapsed_claim"] = lapsed.get(identity)
@@ -1260,7 +1262,7 @@ def card(
         # The card reads the state the record published and keeps what a reader names.
         "state": None if state is None else {name: state[name] for name in CARD_STATE},
         "url": acknowledgements.work_item_url(str(record["reference"])),
-        "parent": _parent_reference(conn, row["parent_id"]),
+        "parent": parent_reference(conn, row["parent_id"]),
         "description": row["description"],
         "checklist": [card_step(step) for step in record["checklist"]],
         "summary": model.summary(row["summary"], required=False),
@@ -1305,17 +1307,38 @@ def card_step(step: Mapping[str, object]) -> dict:
     }
 
 
-def _parent_reference(conn: sqlite3.Connection, parent_id: object) -> str | None:
+def parent_reference(conn: sqlite3.Connection, parent_id: object) -> str | None:
+    """The reference of the item over this one, read from its own space; None for a root.
+
+    The agent's card, the interface's exact read of one item and a space's list read carry
+    it beside `parent_id`, which an exact read scoped to a space cannot read an item by.
+    """
+
     if not parent_id:
         return None
-    found = conn.execute(
-        "SELECT p.key, i.number FROM work_items i JOIN planning_spaces p"
-        " ON p.planning_space_id = i.planning_space_id WHERE i.work_item_id = ?",
-        (str(parent_id),),
-    ).fetchone()
+    found = parent_references(conn, [parent_id]).get(str(parent_id))
     if found is None:
         raise model.PlanningError("work item disappeared mid-write")
-    return model.human_id(str(found[0]), int(found[1]))
+    return found
+
+
+def parent_references(conn: sqlite3.Connection, parent_ids: Iterable[object]) -> dict[str, str]:
+    """The reference of each item named, read from its own space, by id, in one statement.
+
+    A space's list read names the parent of each of its rows by it, another space's card's
+    among them, which that space holds and the read does not.
+    """
+
+    wanted = sorted({str(identity) for identity in parent_ids if identity})
+    if not wanted:
+        return {}
+    found = conn.execute(
+        "SELECT i.work_item_id, p.key, i.number FROM work_items i JOIN planning_spaces p"
+        " ON p.planning_space_id = i.planning_space_id"
+        " WHERE i.work_item_id IN (SELECT value FROM json_each(?))",
+        (json.dumps(wanted),),
+    ).fetchall()
+    return {str(row[0]): model.human_id(str(row[1]), int(row[2])) for row in found}
 
 
 def table_of_contents(

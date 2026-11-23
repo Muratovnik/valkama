@@ -18,6 +18,7 @@ import type { Ref } from 'vue'
 import type { UsageDimension } from '@/shared/api/analyticsApi.ts'
 import { focusOnNothing } from '@/shared/lib/focusRight.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 
 export function useSectionFocus(options: {
   /** The panel that shows the section on show. */
@@ -54,7 +55,7 @@ export function useSectionFocus(options: {
       const heading = panel?.querySelector<HTMLElement>(`[data-card="${card}"] .overview-top-open`)
       if (!heading) return
       openedFrom = null
-      if (focusOnNothing() || panel?.contains(document.activeElement)) heading.focus()
+      if (focusOnNothing() || panel?.contains(document.activeElement)) placeFocus(heading)
     },
     { flush: 'post' },
   )
@@ -62,7 +63,7 @@ export function useSectionFocus(options: {
   watch(options.open, async (opened, was) => {
     if (opened === was || !options.narrow()) return
     await nextTick()
-    if (opened) options.back()?.focus()
+    if (opened) placeFocus(options.back())
     else options.focusList()
   })
 

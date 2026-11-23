@@ -1,20 +1,24 @@
 import { computed } from 'vue'
 
+import type { PlatformContextReady } from '@/shared/api/platformApiTypes.ts'
 import {
   planningSpaceEntity,
   resolvePlanningRouteSelection,
+  sameSpace,
 } from '@/shared/api/platformPlanningRefs.ts'
 import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import type { OperatingScope, PlatformRoute } from '@/shared/api/platformRoute.ts'
 import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
 
 interface RouteInputs {
+  /** The spaces this workstation lists, with their projects; null before they are read. */
+  context?: () => PlatformContextReady | null
   route: () => PlatformRoute
   scope: () => OperatingScope
 }
 
 /**
- * Which space, project and item the route names.
+ * Which space, project and item the route names, and the project the workspace stands on.
  *
  * The scope names the space and, when it narrows, the project; the route names the
  * item inside the space. Which item is open is in the route rather than in the
@@ -48,6 +52,22 @@ export function usePlanningRouteSelection(inputs: RouteInputs) {
     return scope.kind === 'space' ? scope.project_ref?.project_id : undefined
   })
 
+  /** The space the scope names as this workstation lists it; undefined at the top or when absent. */
+  const listedSpace = computed(() => {
+    const bound = space.value
+    return bound && inputs.context?.()?.spaces.find((item) => sameSpace(item, bound))
+  })
+
+  /**
+   * The project the workspace stands on: the one the scope narrows to, else the space's
+   * default one. The card's Memory searches it and a new work item starts on it. A space with
+   * no project has none, and an empty string is what the card and the new-work dialog render
+   * as that, where `undefined` would be a missing prop.
+   */
+  const workspaceProject = computed(
+    () => projectId.value ?? listedSpace.value?.default_project ?? '',
+  )
+
   /** Which item the route names. */
   const open = computed(() =>
     selection.value.status === 'ready' ? (selection.value.work_item_ref?.reference ?? null) : null,
@@ -66,5 +86,14 @@ export function usePlanningRouteSelection(inputs: RouteInputs) {
       : `${projectId.value}:${bound.data_scope_id}:${bound.space_key}:${reference}`
   })
 
-  return { open, openIdentity, projectId, selection, space, spaceResourceRef }
+  return {
+    listedSpace,
+    open,
+    openIdentity,
+    projectId,
+    selection,
+    space,
+    spaceResourceRef,
+    workspaceProject,
+  }
 }

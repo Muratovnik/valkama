@@ -48,7 +48,10 @@ export const SPACE: WorkItemBrief[] = [
   ...under(1, 2, ['todo', 'done']),
   goal(10, 'Reconcile the release notes with the installer'),
   ...under(10, 11, ['todo', 'done']),
-  goal(20, 'Reconcile the release notes with what the installer actually ships to the desktop'),
+  goal(
+    20,
+    'Reconcile the release notes with what the installer actually ships to the desktop and to the server',
+  ),
   ...under(20, 21, ['todo', 'done']),
   // Folded, with every group in its counts and what the fold hides under its edge.
   goal(40, 'Crowded'),

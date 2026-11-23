@@ -36,7 +36,12 @@ import { useI18n } from 'vue-i18n'
 
 import { useEventListener } from '@vueuse/core'
 
-import { drawnGroups, filterGroups, stepGroups } from '@/features/work-filter/filterOptions.ts'
+import {
+  drawnGroups,
+  filterGroups,
+  isValueFacet,
+  stepGroups,
+} from '@/features/work-filter/filterOptions.ts'
 import type { FilterStep } from '@/features/work-filter/filterOptions.ts'
 import { useMenuRoom } from '@/features/work-filter/useMenuRoom.ts'
 
@@ -50,6 +55,7 @@ import {
 import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import { optionGroupItemId } from '@/shared/ui/choiceControls.ts'
 import OptionGroups from '@/shared/ui/OptionGroups.vue'
 import { isStrayPress } from '@/shared/ui/strayPress.ts'
@@ -104,7 +110,7 @@ function type(text: string) {
 function clearText() {
   if (!shown.value) closeMenu()
   setText('')
-  input.value?.focus()
+  placeFocus(input.value)
 }
 
 function remove(token: WorkFilterToken) {
@@ -114,7 +120,7 @@ function remove(token: WorkFilterToken) {
 function focusText() {
   const field = input.value
   if (!field) return
-  field.focus()
+  placeFocus(field)
   field.setSelectionRange(field.value.length, field.value.length)
 }
 
@@ -281,7 +287,7 @@ function pick(token: WorkFilterToken, key: string) {
     return
   }
   filter.value = { ...next, text: '' }
-  if (token.facet !== 'ready' && token.facet !== 'held') step.value = token.facet
+  if (isValueFacet(token)) step.value = token.facet as FilterStep
   highlightKey(key)
 }
 
@@ -374,7 +380,7 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
   const field = input.value
   if (!field || field.offsetParent === null) return
   event.preventDefault()
-  field.focus()
+  placeFocus(field)
   field.select()
   openMenu(false)
 })
@@ -389,7 +395,7 @@ useEventListener(document, 'pointerdown', (event: PointerEvent) => {
     closeMenu()
 })
 
-defineExpose({ focus: focusText })
+defineExpose({ takeFocus: focusText })
 </script>
 
 <template>

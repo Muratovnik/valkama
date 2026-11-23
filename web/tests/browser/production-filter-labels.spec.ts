@@ -36,9 +36,12 @@ async function active(page: Page) {
   return page.locator(`[id="${id}"]`)
 }
 
-/** ↓ from the field to the labels' row, into it, and on until the highlight stands on «all». */
+/**
+ * ↓ from the field to the labels' row, into it, and on until the highlight stands on «all». The
+ * first bound is the conditions and the facets over the labels' row, with room to spare.
+ */
 async function walkToChoice(page: Page) {
-  for (let step = 0; step < 10; step += 1) {
+  for (let step = 0; step < 20; step += 1) {
     await page.keyboard.press('ArrowDown')
     const row = await active(page)
     const text = await row.textContent()
@@ -224,7 +227,9 @@ test('the highlight stays on a value picked by its text as the list grows back',
 }) => {
   await openSpace(page, {})
   await field(page).fill('boa')
-  await page.keyboard.press('ArrowDown')
+  // The two goals whose titles hold the text come first; the labels stand last.
+  for (let step = 0; step < 3; step += 1) await page.keyboard.press('ArrowDown')
+  await expect(await active(page)).toHaveText('board')
   await page.keyboard.press('Enter')
   await expect(field(page)).toHaveValue('')
   const id = await field(page).getAttribute('aria-activedescendant')

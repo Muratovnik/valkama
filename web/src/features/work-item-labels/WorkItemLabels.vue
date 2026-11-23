@@ -22,6 +22,7 @@ import { injectSpaceLabels } from '@/features/work-item-labels/spaceLabels.ts'
 
 import LabelChip from '@/entities/work-item/components/LabelChip.vue'
 
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import SearchCombobox from '@/shared/ui/SearchCombobox.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
@@ -67,7 +68,7 @@ async function dismissPicker(refocus: boolean) {
   editing.value = false
   if (!refocus) return
   await nextTick()
-  ;(plus.value?.$el as HTMLElement | undefined)?.focus()
+  placeFocus(plus.value?.$el as HTMLElement | undefined)
 }
 
 /** A press on the row beside the chips opens the picker; a chip keeps its own press. */

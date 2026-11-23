@@ -38,12 +38,14 @@ const WORDS = {
   en: {
     create: 'New work item',
     labels: 'Labels',
+    project: 'Project',
     goal: 'Parent',
     hint: 'pick one, or type a new one',
   },
   ru: {
     create: 'Новая работа',
     labels: 'Метки',
+    project: 'Проект',
     goal: 'Родитель',
     hint: 'выберите или введите новую',
   },
@@ -132,7 +134,11 @@ for (const width of [1280, 390])
       const dialog = page.getByRole('dialog')
       await expect(dialog).toHaveCSS('transform', 'none')
 
-      expectOneRow(await edges(dialog.locator('.choice-trigger')), FIELD, 'type and priority')
+      expectOneRow(
+        await edges(dialog.locator('.composer-pair').first().locator('.choice-trigger')),
+        FIELD,
+        'type and priority',
+      )
 
       const labels = dialog.getByRole('combobox', { name: words.labels, exact: true })
       // The hint is the empty field's placeholder, not a line under one field of the pair.
@@ -144,10 +150,16 @@ for (const width of [1280, 390])
       await page.keyboard.press('Escape')
       await expect(dialog.locator('.combo-chip')).toHaveCount(1)
 
-      // A field with a chip in it keeps the field's height; side by side the two share a top.
-      const fields = await edges(dialog.locator('.combo-box'))
-      for (const field of fields) expect(field.height, 'labels and goal').toBeCloseTo(FIELD, 1)
-      // Side by side on a desktop the two share a top edge; on a phone one stands under the other.
-      expect(Math.abs(fields[1].top - fields[0].top) < 1).toBe(width >= 1280)
+      // A field with a chip in it keeps the field's height. Side by side on a desktop the project
+      // and the labels share a top edge; on a phone one stands under the other. The parent
+      // stands under them, on a row of its own.
+      const [labelsBox, parentBox] = await edges(dialog.locator('.combo-box'))
+      const [projectBox] = await edges(
+        dialog.getByRole('combobox', { name: words.project, exact: true }),
+      )
+      for (const field of [projectBox, labelsBox, parentBox])
+        expect(field.height, field.name).toBeCloseTo(FIELD, 1)
+      expect(Math.abs(labelsBox.top - projectBox.top) < 1).toBe(width >= 1280)
+      expect(parentBox.top, 'parent').toBeGreaterThan(labelsBox.top + FIELD)
     })
   }

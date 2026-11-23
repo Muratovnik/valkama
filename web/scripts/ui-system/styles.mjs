@@ -394,7 +394,7 @@ export const FILL_BUDGET = new Map([
   ['widgets/work-item-graph/components/GraphNodeBlock.vue', 4],
   // edge: a frame's progress, its 3px edge in four tones, one part per group.
   ['widgets/work-item-graph/components/GraphFrameProgress.vue', 4],
-  ['widgets/work-item-inspector/components/InspectorOverview.css', 1], // check: a done step.
+  ['entities/work-item/components/StepMark.vue', 1], // check: a done step.
 ])
 
 const FILL_DECLARATION = /(?:^|[{;])\s*(?:background|background-color)\s*:([^;{}]*)/gi

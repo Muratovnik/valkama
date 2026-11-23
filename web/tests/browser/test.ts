@@ -1,13 +1,18 @@
 import { test as base } from '@playwright/test'
 
+import { keepTestOutput, shotRunVariable } from './keptShots.ts'
+import { timedProject, timedTag } from './timedChecks.ts'
+
 interface RendererExit {
   errorCode: number
   status: string
 }
 
 /**
- * The suite's `test`: Playwright's, with any renderer death attached to the test
- * that saw it, since a crash this rare is read once, from those artifacts.
+ * The suite's `test`: Playwright's, with what each test wrote and attached kept past
+ * the run, with any renderer death attached to the test that saw it, since a crash
+ * this rare is read once, from those artifacts, and with a test that bounds a time failed
+ * in any project but the one that runs it alone (`timedChecks.ts`).
  *
  * Playwright reports every such death as "Page crashed" or "Target crashed", and
  * the trace it keeps says no more. A killed renderer and one with an access
@@ -15,7 +20,23 @@ interface RendererExit {
  * apart. It does not cover running out of memory: that renderer hangs and never
  * reports, so the test fails on its timeout.
  */
-export const test = base.extend<{ rendererExits: RendererExit[] }>({
+export const test = base.extend<{
+  keptOutput: undefined
+  rendererExits: RendererExit[]
+  timedAlone: undefined
+}>({
+  // First of the suite's own, so it is set up first and torn down last: Playwright tears a
+  // test's fixtures down in the reverse of their setup, and the renderer's death is
+  // attached as its fixture is torn down.
+  keptOutput: [
+    // oxlint-disable-next-line no-empty-pattern -- Playwright reads a fixture's needs from this pattern, and this one needs none
+    async ({}, use, testInfo) => {
+      await use(undefined)
+      const run = process.env[shotRunVariable]
+      if (run) keepTestOutput(testInfo, run)
+    },
+    { auto: true },
+  ],
   rendererExits: [
     async ({ browser }, use, testInfo) => {
       const session = await browser.newBrowserCDPSession()
@@ -34,6 +55,21 @@ export const test = base.extend<{ rendererExits: RendererExit[] }>({
           `status=${status} errorCode=0x${(errorCode >>> 0).toString(16).toUpperCase()}`,
       )
       await testInfo.attach('renderer-exit', { body: lines.join('\n'), contentType: 'text/plain' })
+    },
+    { auto: true },
+  ],
+  // A test that bounds a time runs alone, after the rest (`timedChecks.ts`). The timed project
+  // takes the production specs alone, so a tagged test anywhere else fails here, rather than
+  // run beside the other workers or not at all.
+  timedAlone: [
+    // oxlint-disable-next-line no-empty-pattern -- Playwright reads a fixture's needs from this pattern, and this one needs none
+    async ({}, use, testInfo) => {
+      if (testInfo.tags.includes(timedTag) && testInfo.project.name !== timedProject)
+        throw new Error(
+          `${testInfo.title} is tagged ${timedTag} and runs in ${testInfo.project.name}: ` +
+            `a timed test runs only in ${timedProject}, which takes the production specs`,
+        )
+      await use(undefined)
     },
     { auto: true },
   ],

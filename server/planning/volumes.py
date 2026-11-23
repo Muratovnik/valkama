@@ -1,9 +1,9 @@
 """How much work stands in a scope, and what it took: the read behind the Volumes page.
 
-A read names its scope and its period. The scope is every space of the store this
-service writes, or one space, or one space narrowed to a project, and it holds the
-items the space's board holds (`item_projects.space_read`): a number here opens the
-board on the same items. The period is the Analytics grammar (`usage.period`): a
+A read names its scope and its period. The scope is every space, or one space of
+the store this service writes, or one space narrowed to a project; a space holds the
+items its board holds (`item_projects.space_read`): a number here opens the board on
+the same items. The period is the Analytics grammar (`usage.period`): a
 date is the start of that day in the caller's zone, and `to` is not in it.
 
 The read is a frame — the scope, the period and the moment usage was first counted
@@ -25,7 +25,7 @@ each day of the period, the owner's decisions and the commits, with the pace of 
 tasks (`volume_flow`). The estimates close the read: the scope's done work that
 estimates are judged by, described by project, kind and label (`estimates.table`).
 
-A read may also name kinds of task and labels (`WorkFilter`), by the rules of the
+A read may also name kinds of task and labels (`task_filter.WorkFilter`), by the rules of the
 board's filter. It then keeps only the scope's tasks that match, by one condition every
 section takes (`Request.matching`): a goal or stage never matches, so the counts give
 no number of goals and stages, a goal's row adds up only the tasks that match under it,
@@ -34,18 +34,28 @@ have no task to match, are counted as without a filter and left out of the flow.
 estimates of open tasks are judged by the whole store as without a filter; the table
 describes the done tasks that match.
 
-Only the store this service writes is read. Usage is written there alone, and an
-attached store is read as an earlier build left it, so a space of one is refused
-rather than counted short. The four numbers of a space's card in the portfolio count
-no usage, and are counted in the store that holds the space (`portfolio_numbers`),
+The read of every space counts its numbers by category and its questions waiting for
+the owner in every store the questions window reads every space from: the store this
+service writes and each attached store beside it (`sources`), as «All spaces» lists
+them. A store an earlier build wrote is read as it is, and its states stand in the
+categories of before, so only its questions count. The read names each source it covers
+as the questions window names them (`coverage`), so a store that could not be read is
+said rather than counted short in silence. The rest of the read is of the store this
+service writes alone: usage, the owner's decisions and the commits are written there, so
+the goals, the work outside goals, the flow, the estimates and the commits on no card are
+its own, which the read says while an attached store it counts holds work
+(`attached_work`), and a space of an attached store is refused rather than counted
+short. The four numbers of a space's card in the portfolio count no
+usage, and are counted in the store that holds the space (`portfolio_numbers`),
 unless an earlier build wrote it.
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
 import sqlite3
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterator, Sequence
 from typing import NamedTuple
 
 from ..projects import project_registry, scopes
@@ -59,9 +69,11 @@ from . import (
     questions,
     read_model,
     standing,
+    task_filter,
     usage,
     volume_flow,
 )
+from .routing import PlanningRouting
 
 SCOPE_KINDS = ("global", "space")
 UNKNOWN_SCOPE = "scope_kind must be global or space"
@@ -70,8 +82,6 @@ GLOBAL_NAMES_NOTHING = "a global scope names no space and no project"
 ATTACHED = "volumes read the store this service writes; {key} lives in an attached store"
 NO_SPACE = "no planning space {key}"
 NO_PROJECT = "no project {project}"
-KIND_FILTERS_TASKS = "kind filters tasks: task, bug or improvement"
-NO_LABEL = "no work item carries label {label}"
 
 #: The categories whose work is counted as it stands now; the others when it came there.
 OPEN_CATEGORIES = tuple(
@@ -122,39 +132,21 @@ class Period(NamedTuple):
         }
 
 
-class WorkFilter(NamedTuple):
-    """The tasks a filtered read keeps, by the rules of the board's filter: of any of `kinds`,
-    or of any kind when it names none, and carrying every one of `labels`."""
-
-    kinds: tuple[str, ...]
-    labels: tuple[str, ...]
-
-    def answer(self) -> dict:
-        return {"kinds": list(self.kinds), "labels": list(self.labels)}
-
-    def condition(self) -> tuple[tuple[str, ...], tuple[object, ...]]:
-        """The one rule of a task the filter keeps, as conditions on `work_items i` joined by
-        `AND`, with their parameters in order. A goal or stage never matches: it has no kind
-        of a task, and its labels are not labels of work."""
-
-        kinds = json.dumps(list(self.kinds) or sorted(model.TASK_KINDS))
-        carries = "EXISTS (SELECT 1 FROM json_each(i.labels) WHERE value = ?)"
-        return (
-            ("i.kind IN (SELECT value FROM json_each(?))", *(carries for _ in self.labels)),
-            (kinds, *self.labels),
-        )
-
-
 class Request(NamedTuple):
     """What one read is asked: what it counts, over which period, and which of its tasks."""
 
     scope: Scope
     period: Period
-    work_filter: WorkFilter | None = None
+    work_filter: task_filter.WorkFilter | None = None
+    #: The stores counted beside the one the read writes, in the read of every space
+    #: (`sources`); a space's read has none.
+    beside: tuple[sqlite3.Connection, ...] = ()
+    #: Each source the read covers, read or not and why (`Sources.coverage`).
+    coverage: tuple[dict, ...] = ()
 
     def matching(self) -> Scope:
         """The items the sections count: the scope's, or under a filter the scope's tasks
-        it keeps (`WorkFilter.condition`)."""
+        it keeps (`task_filter.WorkFilter.condition`)."""
 
         if self.work_filter is None:
             return self.scope
@@ -213,6 +205,64 @@ def scope(
             raise model.PlanningError(NO_PROJECT.format(project=project))
     clauses, parameters = item_projects.space_read(conn, space, project)
     return Scope(space, project, own, tuple(clauses), tuple(parameters))
+
+
+class Sources(NamedTuple):
+    """What a read counts beside the store it writes, and what it covers."""
+
+    #: The stores counted beside `conn`, open while the read runs.
+    stores: tuple[sqlite3.Connection, ...]
+    #: Each source the read covers, as the questions window's read of every space names
+    #: its own (`PlanningRouting.sources`): `space_ref`, `status` `searched` or
+    #: `unavailable`, and the stable code of why in `reason`, or None.
+    coverage: tuple[dict, ...]
+
+
+@contextlib.contextmanager
+def sources(conn: sqlite3.Connection, scope: Scope) -> Iterator[Sources]:
+    """The stores a read counts beside `conn`, open while it reads, and the sources it covers:
+    for every space, each attached store of a space «All spaces» lists
+    (`PlanningRouting.present_spaces`), the list the questions window reads every space by,
+    and every source that list names; for one space, no store and that space alone.
+
+    A source is skipped for the reason the routing gives (`unavailable_reason`), for
+    `store_unreadable` when its store went away after the routing listed it, and for
+    `requests_unavailable` when its store keeps no questions, as the window skips them.
+    """
+
+    if scope.space is not None:
+        yield Sources((), (_covered(scope.answer()["space_ref"], None),))
+        return
+    routing = PlanningRouting(conn, _store_path(conn))
+    with routing.attached_stores() as attached:
+        opened = {str(read_store_metadata(store)["data_scope_id"]): store for store in attached}
+        opened[scope.data_scope_id] = conn
+        coverage = []
+        for space_ref in routing.sources():
+            reason = routing.unavailable_reason(space_ref)
+            store = opened.get(space_ref["data_scope_id"])
+            if reason is None and store is None:
+                reason = "store_unreadable"
+            elif reason is None and store is not None and not questions.kept(store):
+                reason = "requests_unavailable"
+            coverage.append(_covered(space_ref, reason))
+        yield Sources(attached, tuple(coverage))
+
+
+def _covered(space_ref: dict, reason: str | None) -> dict:
+    return {
+        "space_ref": space_ref,
+        "status": "searched" if reason is None else "unavailable",
+        "reason": reason,
+    }
+
+
+def _holds_work(stores: Sequence[sqlite3.Connection]) -> bool:
+    """Whether any of these stores holds a work item."""
+
+    return any(
+        store.execute("SELECT 1 FROM work_items LIMIT 1").fetchone() is not None for store in stores
+    )
 
 
 def space_scope(
@@ -287,31 +337,6 @@ def period(start: str, end: str, utc_offset: int) -> Period:
     return Period(begins, ends, utc_offset)
 
 
-def work_filter(
-    conn: sqlite3.Connection, kinds: Iterable[str], labels: Iterable[str]
-) -> WorkFilter | None:
-    """The filter a caller names, None when it names no kind and no label, or a refusal.
-
-    A kind is one of a task's; a label is one some item of the store carries. A label
-    the store holds but the scope does not gives an empty read, not a refusal.
-    """
-
-    kept_kinds = tuple(dict.fromkeys(kinds))
-    kept_labels = tuple(dict.fromkeys(labels))
-    if not kept_kinds and not kept_labels:
-        return None
-    if any(kind not in model.TASK_KINDS for kind in kept_kinds):
-        raise model.PlanningError(KIND_FILTERS_TASKS)
-    for label in kept_labels:
-        carried = conn.execute(
-            "SELECT 1 FROM work_items w, json_each(w.labels) l WHERE l.value = ? LIMIT 1",
-            (label,),
-        ).fetchone()
-        if carried is None:
-            raise model.PlanningError(NO_LABEL.format(label=label))
-    return WorkFilter(kept_kinds, kept_labels)
-
-
 def _store_path(conn: sqlite3.Connection) -> str:
     """The file of the store this connection writes, where its list of attached stores lies."""
 
@@ -358,7 +383,10 @@ def _standing(
 
 
 def category_counts(
-    conn: sqlite3.Connection, scope: Scope, period: Period | None = None
+    conn: sqlite3.Connection,
+    scope: Scope,
+    period: Period | None = None,
+    beside: Sequence[sqlite3.Connection] = (),
 ) -> dict[str, dict]:
     """The scope's tasks, goals and stages in each stored category, with the card longest there.
 
@@ -366,10 +394,14 @@ def category_counts(
     open goal or stage stands. Each says `tasks`, `goals`, `stages` and `oldest`: the
     card that came to stand there first, with its `since`, or None when none stands
     there. With a period, a completed or cancelled card counts only when it came to
-    stand there inside it; without one, every card counts as it stands now.
+    stand there inside it; without one, every card counts as it stands now. The stores
+    `beside` count too, but for one an earlier build wrote (`holds_the_work_model`).
     """
 
     rows = _standing(conn, scope)
+    for store in beside:
+        if holds_the_work_model(store):
+            rows.extend(_standing(store, scope))
     found: dict[str, dict] = {
         category: {"tasks": 0, "goals": 0, "stages": 0, "oldest": None}
         for category in model.STORED_CATEGORIES
@@ -409,7 +441,7 @@ def _categories(conn: sqlite3.Connection, request: Request) -> list[dict]:
     Under a filter only tasks match, and `goals` and `stages` are null rather than none.
     """
 
-    counted = category_counts(conn, request.matching(), request.period)
+    counted = category_counts(conn, request.matching(), request.period, request.beside)
     filtered = request.work_filter is not None
     return [
         {
@@ -423,21 +455,35 @@ def _categories(conn: sqlite3.Connection, request: Request) -> list[dict]:
     ]
 
 
-def _waiting_owner(conn: sqlite3.Connection, scope: Scope) -> dict:
-    """The questions open for the owner on the scope's items, and the one asked first."""
+def _waiting_owner(
+    conn: sqlite3.Connection, scope: Scope, beside: Sequence[sqlite3.Connection] = ()
+) -> dict:
+    """The questions open for the owner on the scope's items, and the one asked first, in
+    `conn` and the stores `beside` it. A store beside it that cannot answer is left out,
+    as the questions window skips it."""
 
-    rows = questions.open_on(conn, scope.where(), scope.parameters)
-    if not rows:
+    asked = [(conn, row) for row in questions.open_on(conn, scope.where(), scope.parameters)]
+    for store in beside:
+        try:
+            found = questions.open_on(store, scope.where(), scope.parameters)
+        except sqlite3.Error:
+            continue
+        asked.extend((store, row) for row in found)
+    if not asked:
         return {"count": 0, "oldest": None}
-    first = min(
-        rows, key=lambda row: (usage.stored_micro(str(row["created_at"])), str(row["request_id"]))
+    holder, first = min(
+        asked,
+        key=lambda pair: (
+            usage.stored_micro(str(pair[1]["created_at"])),
+            str(pair[1]["request_id"]),
+        ),
     )
-    item = read_model.item_by_id(conn, str(first["work_item_id"]))
+    item = read_model.item_by_id(holder, str(first["work_item_id"]))
     return {
-        "count": len(rows),
+        "count": len(asked),
         "oldest": {
             "request_id": str(first["request_id"]),
-            "reference": read_model.reference(conn, item),
+            "reference": read_model.reference(holder, item),
             "since": str(first["created_at"]),
         },
     }
@@ -470,7 +516,7 @@ def _counts(reading: Reading) -> dict:
     # number opens the list it is attached from: no filter narrows it.
     return {
         "categories": _categories(conn, request),
-        "waiting_owner": _waiting_owner(conn, request.matching()),
+        "waiting_owner": _waiting_owner(conn, request.matching(), request.beside),
         "unattached_commits": _unattached_commits(conn, request.scope),
     }
 
@@ -661,5 +707,8 @@ def read(conn: sqlite3.Connection, request: Request) -> dict:
         "period": request.period.answer(),
         "filter": None if request.work_filter is None else request.work_filter.answer(),
         "measured_from": measured_from(conn),
+        "coverage": list(request.coverage),
+        # The stores beside it count at the top alone: the sections under it read `conn`.
+        "attached_work": _holds_work(request.beside),
         **{name: section(reading) for name, section in SECTIONS},
     }

@@ -22,7 +22,7 @@ async function openSplit(page: Page, width: number, height: number) {
   await serve(page, THIRTY_TASKS)
   await page.setViewportSize({ width, height })
   await page.goto(TASK_REPORT)
-  await expect(page.locator('.spending-table-frame tbody tr').first()).toBeVisible()
+  await expect(page.locator('.section-table-frame tbody tr').first()).toBeVisible()
   await page.evaluate(() => document.fonts.ready)
 }
 
@@ -45,7 +45,7 @@ function split(page: Page) {
     const linesOf = () =>
       [
         ...document.querySelectorAll<HTMLElement>(
-          '.spending-table-frame thead .chart-cell, .spending-table-frame tbody .chart-cell',
+          '.section-table-frame thead .chart-cell, .section-table-frame tbody .chart-cell',
         ),
       ].map((one) => {
         const style = getComputedStyle(one)
@@ -79,21 +79,21 @@ function split(page: Page) {
         ),
       ),
       // The name's column, and the table it stands in.
-      name: Math.round(boxOf('.spending-table-frame tbody th')?.width ?? 0),
+      name: Math.round(boxOf('.section-table-frame tbody th')?.width ?? 0),
       figures: Math.round(
-        [...document.querySelectorAll('.spending-table-frame thead th[data-numeric="true"]')]
+        [...document.querySelectorAll('.section-table-frame thead th[data-numeric="true"]')]
           .map((one) => one.getBoundingClientRect().width)
           .reduce((sum, width) => sum + width, 0),
       ),
-      tableWidth: Math.round(boxOf('.spending-table-frame table')?.width ?? 0),
+      tableWidth: Math.round(boxOf('.section-table-frame table')?.width ?? 0),
       // How much wider each figure's column stands than the widest thing in it, padding and all.
       slack: [
         ...document.querySelectorAll<HTMLTableCellElement>(
-          '.spending-table-frame thead th[data-numeric="true"]',
+          '.section-table-frame thead th[data-numeric="true"]',
         ),
       ].map((heading) => {
         const cells = document.querySelectorAll(
-          `.spending-table-frame tr > :nth-child(${heading.cellIndex + 1})`,
+          `.section-table-frame tr > :nth-child(${heading.cellIndex + 1})`,
         )
         const needs = [...cells].map((cell) => {
           const range = document.createRange()
@@ -118,14 +118,14 @@ const panelScrolled = (page: Page) =>
 
 /** How far the table's frame is scrolled down. */
 const frameScrolled = (page: Page) =>
-  page.evaluate(() => Math.round(document.querySelector('.spending-table-frame')?.scrollTop ?? -1))
+  page.evaluate(() => Math.round(document.querySelector('.section-table-frame')?.scrollTop ?? -1))
 
 /** How far the document is scrolled down. */
 const documentScrolled = (page: Page) =>
   page.evaluate(() => Math.round(document.scrollingElement?.scrollTop ?? 0))
 
 /** Turns the wheel over the middle of an element, the table's frame unless named. */
-async function wheelOver(page: Page, selector = '.spending-table-frame') {
+async function wheelOver(page: Page, selector = '.section-table-frame') {
   const box = await page.locator(selector).boundingBox()
   if (!box) throw new Error(`${selector} is not drawn`)
   await page.mouse.move(box.x + box.width / 2, box.y + Math.min(box.height / 2, 100))
@@ -179,7 +179,7 @@ for (const [width, height] of [
 
     // A wheel over the table scrolls it in its own frame, and the panel and the document stand
     // still; the names stay pinned at the frame's start.
-    await page.locator('.spending-table-frame').evaluate((frame) => {
+    await page.locator('.section-table-frame').evaluate((frame) => {
       frame.scrollIntoView({ block: 'start' })
     })
     const before = await panelScrolled(page)
@@ -188,7 +188,7 @@ for (const [width, height] of [
     expect(await panelScrolled(page)).toBe(before)
     expect(await documentScrolled(page)).toBe(0)
     const name = await page
-      .locator('.spending-table-frame tbody th')
+      .locator('.section-table-frame tbody th')
       .first()
       .evaluate((one) => getComputedStyle(one).position)
     expect(name).toBe('sticky')
@@ -277,7 +277,7 @@ test('at 1024×768 in place of the list the section scrolls in the panel and rea
   await serve(page, THIRTY_TASKS)
   await page.setViewportSize({ width: 1024, height: 768 })
   await page.goto(pageAt({ by: 'work_item', open: 'section' }))
-  await expect(page.locator('.spending-table-frame tbody tr').first()).toBeVisible()
+  await expect(page.locator('.section-table-frame tbody tr').first()).toBeVisible()
   await page.evaluate(() => document.fonts.ready)
   const measured = await page.evaluate(() => {
     const panel = document.querySelector<HTMLElement>('.analytics-panel')
@@ -310,10 +310,10 @@ test('at 1024×768 a column’s heading takes two lines at most', async ({ page 
   await serve(page, THIRTY_TASKS)
   await page.setViewportSize({ width: 1024, height: 768 })
   await page.goto(pageAt({ by: 'work_item', open: 'section' }))
-  await expect(page.locator('.spending-table-frame tbody tr').first()).toBeVisible()
+  await expect(page.locator('.section-table-frame tbody tr').first()).toBeVisible()
   // At this width a column's heading takes two lines at most, and a row's name still one.
   const lines = await page.evaluate(() =>
-    [...document.querySelectorAll<HTMLElement>('.spending-table-frame thead .table-sort')].map(
+    [...document.querySelectorAll<HTMLElement>('.section-table-frame thead .table-sort')].map(
       (one) => {
         const style = getComputedStyle(one)
         const line = Number.parseFloat(style.lineHeight) || Number.parseFloat(style.fontSize) * 1.2

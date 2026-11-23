@@ -51,6 +51,8 @@ const props = defineProps<{
   waiting: Map<string, string>
   writable: boolean
   hintId?: string
+  /** The stage each tile stands under, by its id, which its second line names. */
+  stages?: ReadonlyMap<string, WorkItemBrief>
 }>()
 
 const emit = defineEmits<{
@@ -129,6 +131,7 @@ function walk(event: KeyboardEvent) {
       :group="props.group"
       :state="props.state"
       :items="props.items"
+      :stages="props.stages"
       :limit="limit"
       :waiting="props.waiting"
       :live="props.live"

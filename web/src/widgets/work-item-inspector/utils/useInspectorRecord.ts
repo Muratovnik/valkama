@@ -1,4 +1,4 @@
-import { computed, inject, provide, ref } from 'vue'
+import { computed, inject, provide, ref, watch } from 'vue'
 import type { ComputedRef, InjectionKey } from 'vue'
 
 import { useWorkItemResource } from '@/widgets/work-item-inspector/utils/useWorkItemResource.ts'
@@ -44,6 +44,9 @@ const USAGE: InjectionKey<InspectorUsage> = Symbol('inspector-usage')
  *
  * What the numbers go to reads them from here, so each stands in the section it belongs to and
  * the card passes none of them through.
+ *
+ * News of an agent reads the record again, and nothing else: it is no reason to take a refused
+ * write's reason away, which the card's own load does.
  */
 export function useInspectorRecord(
   props: {
@@ -91,6 +94,10 @@ export function useInspectorRecord(
       recordKind.value = record.kind
       await Promise.all([read.settled(), runs.settled()])
     },
+  )
+  watch(
+    () => props.agentsToken,
+    () => void resource.load(),
   )
   /** The runs the rows name, which the card's count of agents takes in with its record's. */
   return { ...resource, spent: computed(() => rows.value?.agents ?? []) }

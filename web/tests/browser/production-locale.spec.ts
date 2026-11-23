@@ -5,7 +5,8 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { answerFilePlans, copiedIn, keepCopies, noticeOf } from './documentEditorPlan.ts'
-import { openPage, shot } from './documentPageSurface.ts'
+import { openPage } from './documentPageSurface.ts'
+import { requestedShot } from './keptShots.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { globalScope, spaceScope } from './planningFixtures.ts'
 import { test } from './test.ts'
@@ -33,7 +34,7 @@ test('Russian production shell localizes Settings without runtime failures', asy
     ).toBeVisible()
     await expectNoSilentClipping(page, `Russian Settings General at ${width}px`)
 
-    await expect(sections.getByRole('tab')).toHaveText(['Общие', 'Диагностика'])
+    await expect(sections.getByRole('tab')).toHaveText(['Общие', 'Участие', 'Диагностика'])
     await expect(page.getByRole('heading', { name: 'Интеграции', exact: true })).toHaveCount(0)
 
     await sections.getByRole('tab', { name: 'Диагностика' }).click()
@@ -141,11 +142,19 @@ test('every order of the Russian phone list has its whole name', async ({ page }
   )
   const head = page.locator('.work-item-list thead')
   const choice = head.getByRole('combobox', { name: 'Сортировать по' })
-  await expect(choice).toHaveText('Обновлено')
+  // The list opens in the queue's order, which no column names, so the choice names
+  // none of them.
+  await expect(choice).toHaveText('Порядок')
+  // How much of the name a shown choice cuts. A choice with no room for a name beside the
+  // title's sort is bare: the name is its hint and the value read out, never cut on screen.
   const cut = () =>
-    choice.locator('.choice-title').evaluate((title) => title.scrollWidth - title.clientWidth)
+    choice.evaluate((trigger) => {
+      const title = trigger.querySelector('.choice-title') as HTMLElement
+      const shown = !trigger.closest('.choice-select')?.classList.contains('bare')
+      return Number(shown) * (title.scrollWidth - title.clientWidth)
+    })
   expect(await cut(), 'the order the list opens on is whole').toBeLessThanOrEqual(0)
-  for (const order of ['Состояние', 'Приоритет', 'Исполнитель', 'Шаги', 'Обновлено']) {
+  for (const order of ['Состояние', 'Приоритет', 'Исполнитель', 'Условия', 'Обновлено']) {
     await choice.click()
     await page.getByRole('option', { name: order, exact: true }).click()
     await expect(choice).toHaveText(order)
@@ -158,13 +167,13 @@ test('every order of the Russian phone list has its whole name', async ({ page }
   expect(box?.y ?? Infinity).toBeLessThan((sort?.y ?? 0) + (sort?.height ?? 0))
 })
 
-test('Russian Work bar keeps its controls on one row, and the former presets are conditions of its menu', async ({
+test('Russian Work bar keeps its controls on one row, and the former presets are filters of its menu', async ({
   page,
 }) => {
   await installBackend(page)
   await page.goto(serializePlatformRoute({ module_id: 'planning', scope: spaceScope }))
   await expect(page.locator('.work-item-tile').first()).toBeVisible()
-  const conditions = page.getByRole('group', { name: 'Условия' })
+  const conditions = page.getByRole('group', { name: 'Фильтры' })
   const field = page.getByRole('combobox', { name: 'Фильтр работы' })
 
   for (const [width, height] of [
@@ -192,7 +201,14 @@ test('Russian Work bar keeps its controls on one row, and the former presets are
   await expect(conditions).toHaveCount(0)
   await field.click()
   await expect(conditions).toBeVisible()
-  await expect(conditions.getByRole('option')).toHaveText(['Можно брать', /^Есть исполнитель/u])
+  await expect(conditions.getByRole('option')).toHaveText([
+    'Можно брать',
+    /^Есть исполнитель/u,
+    'Ждёт моего ответа',
+    'Ждёт разбора',
+    'Из другого пространства',
+    'Закрыто за период',
+  ])
   await page.keyboard.press('Escape')
   await field.click()
   // The menu opens on the facets; a state is a step further in.
@@ -290,6 +306,6 @@ for (const width of [1280, 390]) {
     await expect(noticeOf(page)).toHaveText('Там ничего нет. Путь скопирован')
     expect(await copiedIn(page)).toEqual(['docs/plan.md'])
     await expectNoSilentClipping(page, `Russian document page at ${width}px`)
-    await shot(page, `doc-${width}-ru`)
+    await requestedShot(page, `doc-${width}-ru`)
   })
 }

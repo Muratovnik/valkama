@@ -239,66 +239,77 @@ const LANES = 6
 /** The open lanes among them that stand a goal's actions: MAIN-401, MAIN-491 and MAIN-493. */
 const ACTING = 3
 
+/** Where the board is scrolled: to its first states, or to its middle ones. */
+type Scroll = 'start' | 'middle'
+
 /**
- * Every heading at `width`, with the board at its first states and scrolled to its middle ones,
- * and what is wrong with each, against itself at rest and against the base: at rest only, or
- * under the pointer and the keyboard too where `every`. It says how many headings it read at
- * each scroll, since a sweep that read none would find nothing wrong.
+ * Every heading at `width`, with the board at `scroll`, and what is wrong with each, against
+ * itself at rest and against the base: at rest only, or under the pointer and the keyboard too
+ * where `every`. It says how many headings it read, since a sweep that read none would find
+ * nothing wrong.
  */
 async function readWidth(
   page: Page,
   width: number,
-  { every, hover, locale }: { every: boolean; hover: boolean; locale: string },
+  {
+    every,
+    hover,
+    locale,
+    scroll,
+  }: { every: boolean; hover: boolean; locale: string; scroll: Scroll },
 ) {
   await page.setViewportSize({ width, height: 900 })
   const board = page.locator('.work-item-lanes')
   const found: string[] = []
-  const read: number[] = []
   const input = `${locale}|${hover ? 'pointer' : 'touch'}`
   const insetUpTo = INSET_UP_TO[input]
   if (insetUpTo === undefined) throw new Error(`DESIGN.md names no inset width for ${input}`)
-  for (const scroll of ['start', 'middle'] as const) {
-    await page.mouse.move(0, 0)
-    await board.evaluate((node: HTMLElement, where) => {
-      const states = node.querySelectorAll<HTMLElement>('.lanes-state')
-      node.scrollLeft = where === 'start' ? 0 : (states[2]?.offsetLeft ?? 0)
-    }, scroll)
-    await settle(board)
-    const heads = page.locator('.lane-head')
-    read.push(await heads.count())
-    for (let index = 0; index < (await heads.count()); index += 1) {
-      const head = heads.nth(index)
-      const name = (await head.locator('.lane-reference, .lane-title').first().textContent()) ?? ''
-      const where = `${width}px ${scroll} ${name}`
-      const states = every
-        ? await readStates(page, head, hover)
-        : [['at rest', await readHeading(head)] as const]
-      const [[, rest]] = states
-      const paired = await head.evaluate(stateFitsCounts)
-      for (const [state, reading] of states)
-        found.push(...faults(reading, rest, paired).map((one) => `${where} ${state}: ${one}`))
-      if (!states.every(([, reading], at) => at === 0 || reading.actionsShown))
-        found.push(`${where}: an action the pointer or keyboard is on is not up`)
-      const alone = await aloneAgainst(head, states)
-      found.push(...alone.map((one) => `${where}: ${one}`))
-      const cut = titleCut(rest, await head.evaluate(mayWrap))
-      found.push(...cut.map((one) => `${where}: ${one}`))
-      const base = baseOf(`${input}|${scroll}|${name}`, width)
-      const lost = await againstBase(head, rest, base, { insetUpTo, width })
-      found.push(...lost.map((one) => `${where}: ${one}`))
-    }
+  await page.mouse.move(0, 0)
+  await board.evaluate((node: HTMLElement, where) => {
+    const states = node.querySelectorAll<HTMLElement>('.lanes-state')
+    node.scrollLeft = where === 'start' ? 0 : (states[2]?.offsetLeft ?? 0)
+  }, scroll)
+  await settle(board)
+  const heads = page.locator('.lane-head')
+  const read = await heads.count()
+  for (let index = 0; index < (await heads.count()); index += 1) {
+    const head = heads.nth(index)
+    const name = (await head.locator('.lane-reference, .lane-title').first().textContent()) ?? ''
+    const where = `${width}px ${scroll} ${name}`
+    const states = every
+      ? await readStates(page, head, hover)
+      : [['at rest', await readHeading(head)] as const]
+    const [[, rest]] = states
+    const paired = await head.evaluate(stateFitsCounts)
+    for (const [state, reading] of states)
+      found.push(...faults(reading, rest, paired).map((one) => `${where} ${state}: ${one}`))
+    if (!states.every(([, reading], at) => at === 0 || reading.actionsShown))
+      found.push(`${where}: an action the pointer or keyboard is on is not up`)
+    const alone = await aloneAgainst(head, states)
+    found.push(...alone.map((one) => `${where}: ${one}`))
+    const cut = titleCut(rest, await head.evaluate(mayWrap))
+    found.push(...cut.map((one) => `${where}: ${one}`))
+    const base = baseOf(`${input}|${scroll}|${name}`, width)
+    const lost = await againstBase(head, rest, base, { insetUpTo, width })
+    found.push(...lost.map((one) => `${where}: ${one}`))
   }
   return { found, read }
 }
 
 /**
- * Every heading at `width` where only a finger presses, and at `TOUCHED` its focus and reach:
- * what is wrong, the headings read at each scroll, and the headings whose reach was read.
+ * Whether the reach of the actions is read at `width` with the board at `scroll`: at `TOUCHED`,
+ * once, with the board at its first states, which is where `readReach` scrolls it.
  */
-async function readTouch(page: Page, width: number, locale: string) {
+const reachedAt = (width: number, scroll: Scroll) => scroll === 'start' && TOUCHED.has(width)
+
+/**
+ * Every heading at `width` where only a finger presses, and at `TOUCHED` its focus and reach:
+ * what is wrong, the headings read, and the headings whose reach was read.
+ */
+async function readTouch(page: Page, width: number, locale: string, scroll: Scroll) {
   const every = TOUCHED.has(width)
-  const { found, read } = await readWidth(page, width, { every, hover: false, locale })
-  if (!every) return { found, read, reached: null }
+  const { found, read } = await readWidth(page, width, { every, hover: false, locale, scroll })
+  if (!reachedAt(width, scroll)) return { found, read, reached: null }
   const reach = await readReach(page, width)
   return { found: [...found, ...reach.found], read, reached: reach.read }
 }
@@ -354,59 +365,69 @@ async function readReach(page: Page, width: number) {
   return { found, read }
 }
 
+// Each test opens a page of its own and shares nothing with another, so they run side by side:
+// one after another, the sweeps held one worker for ten minutes and more, and a sweep that read
+// both scrolls at every width was then the longest test of the two files.
+test.describe.configure({ mode: 'parallel' })
+
+const SCROLLS: Record<Scroll, string> = { start: 'its first states', middle: 'its middle states' }
+
 for (const locale of ['en-US', 'ru-RU']) {
   test.describe(`${locale}, with a pointer`, () => {
     test.use({ locale })
 
-    test('a heading’s actions cover nothing, move nothing and never stand alone', async ({
-      page,
-    }) => {
-      test.setTimeout(900_000)
-      await openWide(page, 1280)
-      const found: string[] = []
-      const read: number[][] = []
-      for (const width of SWEEP) {
-        const one = await readWidth(page, width, {
-          every: WIDTHS.includes(width),
-          hover: true,
-          locale,
-        })
-        found.push(...one.found)
-        read.push(one.read)
-      }
-      expect(read, 'the headings read at each width, at the start and the middle').toEqual(
-        SWEEP.map(() => [LANES, LANES]),
-      )
-      expect(found).toEqual([])
-    })
+    for (const scroll of ['start', 'middle'] as const)
+      test(`a heading’s actions cover nothing, move nothing and never stand alone, at ${SCROLLS[scroll]}`, async ({
+        page,
+      }) => {
+        test.setTimeout(900_000)
+        await openWide(page, 1280)
+        const found: string[] = []
+        const read: number[] = []
+        for (const width of SWEEP) {
+          const one = await readWidth(page, width, {
+            every: WIDTHS.includes(width),
+            hover: true,
+            locale,
+            scroll,
+          })
+          found.push(...one.found)
+          read.push(one.read)
+        }
+        expect(read, `the headings read at each width, at ${SCROLLS[scroll]}`).toEqual(
+          SWEEP.map(() => LANES),
+        )
+        expect(found).toEqual([])
+      })
   })
 
   test.describe(`${locale}, where only a finger presses`, () => {
     test.use({ locale, hasTouch: true, isMobile: true })
 
-    test('a heading keeps its actions up, a finger’s reach apart, covering nothing', async ({
-      page,
-    }) => {
-      test.setTimeout(900_000)
-      await openWide(page, 390)
-      await expect.poll(() => page.evaluate(() => matchMedia('(hover: none)').matches)).toBe(true)
-      const found: string[] = []
-      const read: number[][] = []
-      const reached: (number | null)[] = []
-      for (const width of SWEEP) {
-        const one = await readTouch(page, width, locale)
-        found.push(...one.found)
-        read.push(one.read)
-        reached.push(one.reached)
-      }
-      expect(read, 'the headings read at each width, at the start and the middle').toEqual(
-        SWEEP.map(() => [LANES, LANES]),
-      )
-      expect(reached, 'the headings whose reach was read, at the widths that read it').toEqual(
-        SWEEP.map((width) => (TOUCHED.has(width) ? ACTING : null)),
-      )
-      expect(found).toEqual([])
-    })
+    for (const scroll of ['start', 'middle'] as const)
+      test(`a heading keeps its actions up, a finger’s reach apart, covering nothing, at ${SCROLLS[scroll]}`, async ({
+        page,
+      }) => {
+        test.setTimeout(900_000)
+        await openWide(page, 390)
+        await expect.poll(() => page.evaluate(() => matchMedia('(hover: none)').matches)).toBe(true)
+        const found: string[] = []
+        const read: number[] = []
+        const reached: (number | null)[] = []
+        for (const width of SWEEP) {
+          const one = await readTouch(page, width, locale, scroll)
+          found.push(...one.found)
+          read.push(one.read)
+          reached.push(one.reached)
+        }
+        expect(read, `the headings read at each width, at ${SCROLLS[scroll]}`).toEqual(
+          SWEEP.map(() => LANES),
+        )
+        expect(reached, 'the headings whose reach was read, at the widths that read it').toEqual(
+          SWEEP.map((width) => (reachedAt(width, scroll) ? ACTING : null)),
+        )
+        expect(found).toEqual([])
+      })
   })
 }
 

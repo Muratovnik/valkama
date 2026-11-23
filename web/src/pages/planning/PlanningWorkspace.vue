@@ -21,16 +21,20 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { usePlanningCensus } from '@/pages/planning/composables/usePlanningCensus.ts'
+import { VIEW_GROUPINGS } from '@/pages/planning/composables/usePlanningChainScope.ts'
 import type { ViewGrouping } from '@/pages/planning/composables/usePlanningChainScope.ts'
 import { usePlanningFilter } from '@/pages/planning/composables/usePlanningFilter.ts'
 import PlanningChainFailure from '@/pages/planning/PlanningChainFailure.vue'
 import PlanningWorkspaceBar from '@/pages/planning/PlanningWorkspaceBar.vue'
 import { graphView } from '@/pages/planning/utils/graphView.ts'
+import { sortOf, withSort } from '@/pages/planning/utils/viewSortRoute.ts'
 
 import WorkItemBoard from '@/widgets/work-item-views/components/WorkItemBoard.vue'
 import WorkItemList from '@/widgets/work-item-views/components/WorkItemList.vue'
 import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
+import type { ViewSort } from '@/widgets/work-item-views/utils/workOrder.ts'
 
+import { otherSpaceEndBriefs } from '@/entities/work-item/utils/otherSpaceEnds.ts'
 import { filterTokens } from '@/entities/work-item/utils/workFilter.ts'
 
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
@@ -65,8 +69,10 @@ const props = defineProps<{
   chainPending?: boolean
   /** Moves each time the card asks for the graph, which then takes focus. */
   graphFocus?: number
-  /** How the views are grouped: the board by parent, the list by goal, or not at all. */
+  /** How the address groups the views; a view that does not offer it draws none. */
   grouping?: ViewGrouping
+  /** The project the scope narrows to; none while «All projects» is chosen. */
+  project?: string
   /** The space is being read: the bar stands, and the stage says so in place of a view. */
   reading?: boolean
   selectedId?: string | null
@@ -138,7 +144,14 @@ const {
   maxBytes: () => props.stateBytes,
   write: (state) => emit('state', state),
 })
-const boardGrouping = computed(() => (props.grouping === 'goal' ? 'goal' : 'none'))
+/** The grouping of each view: the address's where the view offers it, none elsewhere. */
+const offered = (mode: PlanningViewMode) =>
+  VIEW_GROUPINGS[mode].includes(props.grouping ?? 'none') ? (props.grouping ?? 'none') : 'none'
+const boardGrouping = computed(() => offered('kanban'))
+const listGrouping = computed(() => offered('list'))
+/** The order the board and the list draw in, which the address keeps (`viewSortRoute`). */
+const sort = computed(() => sortOf(props.routeState))
+const setSort = (next: ViewSort) => emit('state', withSort(props.routeState, next))
 const census = usePlanningCensus(() => ({
   chain: props.chain ?? null,
   filter: filter.value,
@@ -156,17 +169,20 @@ const {
 } = census
 /**
  * The list grouped by goal is a tree of the whole scope: what the filter let
- * through, with the path to it. Grouped or not, it is another list, made anew.
+ * through, with the path to it; by project, a row per project with its cards under
+ * it. Grouped or not, and by either, it is another list, made anew.
  */
-const listTree = computed(() =>
-  props.grouping === 'goal'
-    ? {
-        filtered: filtered.value,
-        scope: scopeItems.value,
-        space: props.model.planning_space?.planning_space_id ?? '',
-      }
-    : null,
-)
+const listTree = computed(() => {
+  const grouping = listGrouping.value
+  if (grouping !== 'goal' && grouping !== 'project') return null
+  return {
+    filtered: filtered.value,
+    grouping,
+    projects: props.model.planning_space?.projects ?? null,
+    scope: scopeItems.value,
+    space: props.model.planning_space?.planning_space_id ?? '',
+  }
+})
 /** The workflow's state categories in its own order: what the state facet offers. */
 const categories = computed(() => [
   ...new Set((props.model.workflow?.states ?? []).map((state) => state.category)),
@@ -214,20 +230,39 @@ const graphFilter = computed(() =>
 /** The whole space, or exactly one chain with the links the chain endpoint named. */
 const graphScopeKind = computed(() => (props.chain ? 'chain' : 'all'))
 const graphEdges = computed(() => props.chain?.edges ?? props.model.links)
+/**
+ * The far ends of the links with other spaces, which the graph stands in their spaces'
+ * frames: narrowed by the same filter as the cards, and counted nowhere above the stage.
+ */
+const graphEnds = computed(() => {
+  const all = otherSpaceEndBriefs(props.model)
+  return { all, shown: filtered.value ? all.filter((end) => census.matches(end)) : all }
+})
 
 /** The chain the board or the list is narrowed to, for the bar's chip; the graph names its own. */
 const chipReference = computed(() =>
   props.chain && stageView.value !== 'graph' ? props.chain.root.reference : null,
 )
 /** The grouping of the view on the stage, and what it offers; the graph has none. */
-const barGrouping = computed<ViewGrouping | null>(() => {
-  if (stageView.value === 'kanban') return boardGrouping.value
-  if (stageView.value === 'list') return listTree.value ? 'goal' : 'none'
-  return null
+const barGrouping = computed<ViewGrouping | null>(() =>
+  stageView.value === 'graph' ? null : offered(stageView.value),
+)
+const barGroupings = computed(() => VIEW_GROUPINGS[stageView.value])
+/** The order of the view on the stage; the graph is drawn by its links and has none. */
+const barSort = computed(() => (stageView.value === 'graph' ? null : sort.value))
+/**
+ * The space's projects where the list names each row's: a space of several with «All
+ * projects» chosen, the rule a tile's project mark follows. Null elsewhere: one project is
+ * every row's, and a chosen one is the scope's.
+ */
+const listProjects = computed(() => {
+  const projects = props.model.planning_space?.projects ?? []
+  return props.project === undefined && projects.length > 1 ? projects : null
 })
-const barGroupings: readonly ViewGrouping[] = ['none', 'goal']
-/** The list's key, which makes it anew when it turns from a flat list to a tree. */
-const listKind = computed(() => (listTree.value ? 'tree' : 'flat'))
+/** The list's key, which makes it anew when its grouping turns or its projects come or go. */
+const listKind = computed(
+  () => `${listTree.value?.grouping ?? 'flat'}:${listProjects.value ? 'projects' : 'one'}`,
+)
 /**
  * What the view leaves out of the counts: the graph's parents, which the bar
  * says as a sentence, and the grouped board's goals, which it says as rows.
@@ -269,6 +304,7 @@ defineExpose({ toggleFilter })
       :filtered="filtered"
       :grouping="barGrouping"
       :groupings="barGroupings"
+      :sort="barSort"
       :items="countedItems"
       :stored="filterStored"
       :route-state="routeState"
@@ -280,6 +316,7 @@ defineExpose({ toggleFilter })
       @exit-chain="emit('exit-chain')"
       @find="(text) => emit('find', text)"
       @group="(value) => emit('group', value)"
+      @sort="setSort"
       @state="(state) => emit('state', state)"
       @view="(mode) => emit('view', mode)"
     />
@@ -316,6 +353,8 @@ defineExpose({ toggleFilter })
           :filter="filter"
           :filtered="filtered"
           :grouping="boardGrouping"
+          :projects="model.planning_space?.projects ?? null"
+          :sort="sort"
           :live="model.live_work"
           :writable="writable"
           @chain="(reference) => emit('show-chain', reference)"
@@ -331,8 +370,13 @@ defineExpose({ toggleFilter })
           :links="model.links"
           :filter="filter"
           :tree="listTree"
+          :projects="listProjects"
+          :space-items="model.work_items"
+          :sort="sort"
+          :goal-volumes="writable"
           @filter="toggleFilter"
           @open="(reference) => emit('open', reference)"
+          @sort="setSort"
         />
         <WorkItemGraph
           v-else-if="stageView === 'graph'"
@@ -344,6 +388,7 @@ defineExpose({ toggleFilter })
           :live="model.live_work"
           :selected-id="selectedId"
           :edges="graphEdges"
+          :ends="graphEnds"
           :scope-root-id="chain?.root.work_item_id ?? null"
           :chain="graphChain"
           :filter="graphFilter"

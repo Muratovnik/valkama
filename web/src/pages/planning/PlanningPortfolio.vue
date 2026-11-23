@@ -3,8 +3,14 @@
  * Every space this workstation has, at «All spaces», with its projects.
  *
  * The space's name leads each card and its key stands under it, as the space choice names
- * it. Under them its work and its projects in one line, and the way in at the foot: a space
- * is a thing you read first and enter second.
+ * it. Under them its four numbers, counted as the space's Volumes page counts them: the cards in
+ * triage, the tasks ready and in progress, the questions waiting for the owner. Then its work
+ * and its projects in one line, and the way in at the foot: a space is a thing you read first
+ * and enter second. A space without numbers shows each as «—», never 0, and says why: an
+ * earlier build wrote its store, or its store could not be read.
+ *
+ * Each number carries `data-number` (`triage`, `ready`, `active`, `waiting_owner`), its name
+ * and figure `data-part` `label` and `figure`; the reason for no numbers is `data-part="absent"`.
  */
 import { useI18n } from 'vue-i18n'
 
@@ -17,8 +23,27 @@ defineProps<{ spaces: PlatformPlanningReady['spaces'] }>()
 const emit = defineEmits<{ 'open-space': [space: PlanningSpaceRef] }>()
 const { t } = useI18n()
 
+type PortfolioSpace = PlatformPlanningReady['spaces'][number]
+
+const NUMBERS = ['triage', 'ready', 'active', 'waiting_owner'] as const
+const ABSENT = '—'
+
+/** A number's name: a category's own, and the Volumes page's for the questions. */
+function numberLabel(key: (typeof NUMBERS)[number]): string {
+  return key === 'waiting_owner' ? t('volumes.numbers.waiting') : t(`workItem.category.${key}`)
+}
+
+/** The space's four numbers as drawn, each «—» where the read gives none. */
+function numbersOf(space: PortfolioSpace) {
+  return NUMBERS.map((key) => ({
+    key,
+    label: numberLabel(key),
+    figure: space.numbers === null ? ABSENT : String(space.numbers[key]),
+  }))
+}
+
 /** The space's projects in one line, or that it has none. */
-function projectsLine(space: PlatformPlanningReady['spaces'][number]): string {
+function projectsLine(space: PortfolioSpace): string {
   const names = space.projects.map((project) => project.display_name)
   return names.length ? names.join(' · ') : t('platform.planning.noProjects')
 }
@@ -35,6 +60,37 @@ function projectsLine(space: PlatformPlanningReady['spaces'][number]): string {
         <strong class="space-title">{{ space.title }}</strong>
         <small class="space-key">{{ space.space_ref.space_key }}</small>
       </header>
+      <dl
+        class="space-numbers"
+        :aria-label="t('platform.planning.numbers')"
+      >
+        <div
+          v-for="number in numbersOf(space)"
+          :key="number.key"
+          class="space-number"
+          :data-number="number.key"
+        >
+          <dt
+            class="number-label"
+            data-part="label"
+          >
+            {{ number.label }}
+          </dt>
+          <dd
+            class="number-figure"
+            data-part="figure"
+          >
+            {{ number.figure }}
+          </dd>
+        </div>
+      </dl>
+      <p
+        v-if="space.numbers_absent"
+        class="numbers-absent"
+        data-part="absent"
+      >
+        {{ t(`platform.planning.numbersAbsent.${space.numbers_absent}`) }}
+      </p>
       <!-- A space whose store could not be read has no count to show. -->
       <span
         v-if="space.work_item_count !== null"
@@ -66,10 +122,14 @@ function projectsLine(space: PlatformPlanningReady['spaces'][number]): string {
   gap: var(--space-3);
 }
 
+/* A column whose foot is the card's: a row of cards is as tall as its tallest, and each
+   card's way in stands on that foot, whatever the card says above it. Stood after its
+   words instead, «Open space» of one row stood 78px apart at 1280px, where one card's
+   projects ran to three lines and another's to one. */
 .portfolio-space {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: var(--space-3);
-  align-content: start;
   padding: var(--space-4);
   background: var(--color-surface);
   border-radius: var(--radius-card);
@@ -89,6 +149,39 @@ function projectsLine(space: PlatformPlanningReady['spaces'][number]): string {
   font: var(--font-detail);
 }
 
+/* Four numbers in two rows of two, as a card is never wide enough for four in a row of whole
+   words: a column is never narrower than its longest word, which is never broken. */
+.space-numbers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(min-content, 1fr));
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+}
+
+.space-number {
+  display: grid;
+  gap: var(--space-half);
+  align-content: start;
+}
+
+.number-label {
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+  overflow-wrap: normal;
+}
+
+.number-figure {
+  margin: 0;
+  font: var(--font-section-title);
+  font-variant-numeric: tabular-nums;
+}
+
+.numbers-absent {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-dense);
+}
+
 .space-count {
   font-size: var(--font-size-dense);
 }
@@ -106,6 +199,7 @@ function projectsLine(space: PlatformPlanningReady['spaces'][number]): string {
 
 /* The action stands at the foot of the card rather than filling it. */
 .open-space {
-  justify-self: start;
+  align-self: start;
+  margin-block-start: auto;
 }
 </style>

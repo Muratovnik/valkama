@@ -10,6 +10,7 @@ import SettingsKindColors from '@/pages/settings/components/SettingsKindColors.v
 import SettingsOpening from '@/pages/settings/components/SettingsOpening.vue'
 import SettingsQuota from '@/pages/settings/components/SettingsQuota.vue'
 import SettingsRow from '@/pages/settings/components/SettingsRow.vue'
+import SettingsSheet from '@/pages/settings/components/SettingsSheet.vue'
 
 import { STATE_NAMINGS } from '@/shared/lib/stateNames.ts'
 import type { StateNaming } from '@/shared/lib/stateNames.ts'
@@ -46,13 +47,7 @@ function emitLocale(value: string) {
     class="settings-general"
     :aria-label="t('settings.section.general')"
   >
-    <!-- The sheet is a list of wide rows: a field's or a switch's hint stands beside it inside
-         its own row, over the row's label, rather than under the control and over the row after
-         it, or past the sheet's edge, far from it. -->
-    <div
-      class="settings-general-sheet"
-      data-hint-list="wide-rows"
-    >
+    <SettingsSheet>
       <SettingsGroup
         class="settings-general-group"
         :title="t('settings.interface')"
@@ -109,7 +104,7 @@ function emitLocale(value: string) {
 
       <SettingsAccounts class="settings-general-group" />
       <SettingsQuota class="settings-general-group" />
-    </div>
+    </SettingsSheet>
   </section>
 </template>
 
@@ -117,17 +112,6 @@ function emitLocale(value: string) {
 .settings-general {
   width: 100%;
   min-width: 0;
-}
-
-.settings-general-sheet {
-  background: var(--color-surface);
-  overflow: hidden;
-  border-radius: var(--radius-card);
-
-  /* A forced palette clears the sheet; the rules between its groups stay, its edge goes. */
-  @media (forced-colors: active) {
-    border: 1px solid currentcolor;
-  }
 }
 
 .settings-general-group + .settings-general-group {

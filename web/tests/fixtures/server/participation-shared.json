@@ -1,0 +1,165 @@
+{
+  "scope": null,
+  "set": "custom",
+  "sets": {
+    "minimal": {
+      "queue": "on",
+      "finding": "agent",
+      "proposed_goal": "agent",
+      "task_in_goal": "agent",
+      "decision": "agent",
+      "cancel_outside": "agent",
+      "cancel_shared": "agent",
+      "condition": "agent",
+      "goal_close": "agent",
+      "goal_defer": "agent",
+      "triage_reminder": "on"
+    },
+    "default": {
+      "queue": "on",
+      "finding": "human",
+      "proposed_goal": "human",
+      "task_in_goal": "agent",
+      "decision": "human",
+      "cancel_outside": "agent",
+      "cancel_shared": "human",
+      "condition": "human",
+      "goal_close": "agent",
+      "goal_defer": "agent",
+      "triage_reminder": "on"
+    },
+    "maximal": {
+      "queue": "on",
+      "finding": "human",
+      "proposed_goal": "human",
+      "task_in_goal": "agent",
+      "decision": "human",
+      "cancel_outside": "human",
+      "cancel_shared": "human",
+      "condition": "human",
+      "goal_close": "human",
+      "goal_defer": "human",
+      "triage_reminder": "on"
+    },
+    "manual": {
+      "queue": "off",
+      "finding": "human",
+      "proposed_goal": "human",
+      "task_in_goal": "human",
+      "decision": "human",
+      "cancel_outside": "human",
+      "cancel_shared": "human",
+      "condition": "human",
+      "goal_close": "human",
+      "goal_defer": "human",
+      "triage_reminder": "off"
+    }
+  },
+  "values": [
+    {
+      "key": "queue",
+      "value": "on",
+      "own": false,
+      "inherited": "on"
+    },
+    {
+      "key": "finding",
+      "value": "human",
+      "own": false,
+      "inherited": "human"
+    },
+    {
+      "key": "proposed_goal",
+      "value": "human",
+      "own": false,
+      "inherited": "human"
+    },
+    {
+      "key": "task_in_goal",
+      "value": "agent",
+      "own": false,
+      "inherited": "agent"
+    },
+    {
+      "key": "decision",
+      "value": "human",
+      "own": false,
+      "inherited": "human"
+    },
+    {
+      "key": "cancel_outside",
+      "value": "agent",
+      "own": false,
+      "inherited": "agent"
+    },
+    {
+      "key": "cancel_shared",
+      "value": "human",
+      "own": false,
+      "inherited": "human"
+    },
+    {
+      "key": "condition",
+      "value": "human",
+      "own": false,
+      "inherited": "human"
+    },
+    {
+      "key": "goal_close",
+      "value": "human",
+      "own": true,
+      "inherited": "agent"
+    },
+    {
+      "key": "goal_defer",
+      "value": "agent",
+      "own": false,
+      "inherited": "agent"
+    },
+    {
+      "key": "triage_reminder",
+      "value": "on",
+      "own": false,
+      "inherited": "on"
+    },
+    {
+      "key": "triage_age_days",
+      "value": 10,
+      "own": false,
+      "inherited": 10
+    },
+    {
+      "key": "triage_count",
+      "value": 100,
+      "own": false,
+      "inherited": 100
+    },
+    {
+      "key": "lease_quiet_days",
+      "value": 3,
+      "own": false,
+      "inherited": 3
+    },
+    {
+      "key": "recent_close_minutes",
+      "value": 30,
+      "own": false,
+      "inherited": 30
+    }
+  ],
+  "labels": [
+    {
+      "label": "flow",
+      "ready": true,
+      "description": "The main line",
+      "own": {
+        "ready": true,
+        "description": true
+      },
+      "inherited": {
+        "ready": false,
+        "description": null
+      }
+    }
+  ]
+}

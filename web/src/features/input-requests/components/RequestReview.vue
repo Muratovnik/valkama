@@ -140,7 +140,7 @@ const edit = (field: InputRequestField, change: FieldEdit) =>
 const choose = (field: InputRequestField, verdict: Verdict) =>
   emit('edit', chooseVerdict(props.fields, props.draft, field, verdict))
 
-const controls: Record<string, { focus: () => void } | null> = {}
+const controls: Record<string, { takeFocus: () => void } | null> = {}
 /** Takes focus to one field, opening its group first, and its point where it hangs from one. */
 async function focusField(id: string) {
   const field = props.fields.find((candidate) => candidate.id === id)
@@ -151,7 +151,7 @@ async function focusField(id: string) {
   if (parent?.type === 'verdict') showPoint(parent.id)
   preview.value = false
   await nextTick()
-  controls[id]?.focus()
+  controls[id]?.takeFocus()
 }
 defineExpose({ focusField, undecided: computed(() => undecided.value.length) })
 </script>
@@ -193,7 +193,7 @@ defineExpose({ focusField, undecided: computed(() => undecided.value.length) })
       >
         <RequestVerdictRow
           v-if="field.type === 'verdict'"
-          :ref="(row) => (controls[field.id] = row as { focus: () => void } | null)"
+          :ref="(row) => (controls[field.id] = row as { takeFocus: () => void } | null)"
           v-model:preview="preview"
           :comment="draft.comments[field.id]"
           :disabled="disabled"
@@ -216,7 +216,7 @@ defineExpose({ focusField, undecided: computed(() => undecided.value.length) })
             <RequestField
               v-for="child in hanging(field)"
               :key="child.id"
-              :ref="(control) => (controls[child.id] = control as { focus: () => void } | null)"
+              :ref="(control) => (controls[child.id] = control as { takeFocus: () => void } | null)"
               v-model:preview="preview"
               :after="afterOf(child)"
               :held="isHeld(child)"
@@ -235,7 +235,7 @@ defineExpose({ focusField, undecided: computed(() => undecided.value.length) })
         <RequestField
           v-for="shown in plainFields(field)"
           :key="shown.id"
-          :ref="(control) => (controls[shown.id] = control as { focus: () => void } | null)"
+          :ref="(control) => (controls[shown.id] = control as { takeFocus: () => void } | null)"
           v-model:preview="preview"
           :class="{ 'request-review-under': shown.under }"
           :field="shown"

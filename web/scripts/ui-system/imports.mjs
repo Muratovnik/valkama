@@ -54,7 +54,7 @@ export function scanImportDirection(sources) {
  * extensionless and directory-index forms, and a cycle that hides behind one of
  * those is still a cycle.
  */
-function resolveAliasTarget(specifier, known) {
+export function resolveAliasTarget(specifier, known) {
   for (const candidate of [
     specifier,
     `${specifier}.ts`,

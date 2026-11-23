@@ -87,6 +87,22 @@ export const DETAIL_TOOLTIPS = new Map([
     'which place «the place» is, the last one a session was open in; it stood as a paragraph over the group',
   ],
   [
+    'pages/volumes/components/VolumesCommits.vue <td> v-tooltip.detail="row.sessionWhole"',
+    'the whole session id, of which the row prints the start',
+  ],
+  [
+    'pages/volumes/components/VolumesGoals.vue <td> v-tooltip.detail="figure.hint"',
+    "how a goal's figure is counted, or why it is «—», which the figure does not say",
+  ],
+  [
+    'pages/volumes/components/VolumesNumbers.vue <button> v-tooltip.detail="number.hint"',
+    "where a press on the number goes, and its category's oldest card and how long it has waited",
+  ],
+  [
+    'pages/volumes/components/VolumesNumbers.vue <div> v-tooltip.detail="number.hint"',
+    'why the number opens nothing, and what it counts where the figure alone does not say',
+  ],
+  [
     'shared/ui/ChoiceSelect.vue <strong> v-tooltip.detail="{ text: selected?.title, words: selected?.label }"',
     'the chosen option’s hint, which no row of the field draws; while its own words are cut, they come first, whole',
   ],
@@ -171,6 +187,10 @@ export const DETAIL_TOOLTIPS = new Map([
     'that a press copies the path; while its own words are cut, they come first, whole',
   ],
   [
+    `widgets/work-item-graph/components/GraphControls.vue <ControlButton> v-tooltip.detail="fitHint"`,
+    'why the fit shows only the beginning on a narrow screen and «Zoom out» is off: the cards would not read further out',
+  ],
+  [
     `widgets/work-item-graph/components/GraphNodeCard.vue <span> v-tooltip.detail="{ text: t('workItem.parent'), words: parentReference }"`,
     'what the reference beside the number is: the item’s epic; while its own words are cut, they come first, whole',
   ],
@@ -208,12 +228,20 @@ export const DETAIL_TOOLTIPS = new Map([
     'the whole agent id, of which the row prints the start',
   ],
   [
-    'widgets/work-item-inspector/components/InspectorFacts.vue <span> v-tooltip.detail="holderHint"',
+    'widgets/work-item-inspector/components/InspectorHolderRows.vue <span> v-tooltip.detail="holderHint"',
     "the holder's whole session id, where the card prints its start, and the lease behind the claim; the name only while it is cut",
   ],
   [
-    'widgets/work-item-inspector/components/InspectorFacts.vue <span> v-tooltip.detail="nameHint(follower.label)"',
+    'widgets/work-item-inspector/components/InspectorHolderRows.vue <span> v-tooltip.detail="nameHint(follower.label)"',
     "the follower's whole session id, where the card prints its start; never the name the card prints",
+  ],
+  [
+    'widgets/work-item-inspector/components/GoalSpendLine.vue <span> v-tooltip.detail="part.figure.hint"',
+    'why a figure of what a goal spent is «—» or not whole, which the figure does not say',
+  ],
+  [
+    'widgets/work-item-inspector/components/InspectorHolderRows.vue <span> v-tooltip.detail="participant.hint"',
+    "a goal's participant's whole session id, where the card prints its start, and the tasks it holds",
   ],
   [
     'widgets/work-item-inspector/components/UsageAccounts.vue <span> v-tooltip.detail="row.full"',
@@ -222,5 +250,17 @@ export const DETAIL_TOOLTIPS = new Map([
   [
     'widgets/work-item-inspector/components/UsageFacts.vue <span> v-tooltip.detail="fact.title"',
     'how a figure is counted, which the figure does not say',
+  ],
+  [
+    'widgets/work-item-inspector/components/UsageQuota.vue <span> v-tooltip.detail="week.ids"',
+    'the whole seat of a quota week, of which the line prints the starts of its ids',
+  ],
+  [
+    'widgets/work-item-inspector/components/UsageQuota.vue <span> v-tooltip.detail="week.hint"',
+    "the share and the week's spent percent a quota figure is made of, or why it has none",
+  ],
+  [
+    'widgets/work-item-views/composables/useListGoalSpend.ts script [vTooltip, part.figure.hint, undefined, { detail: true }]',
+    "why a figure of what a goal's row spent is «—» or not whole, which the figure does not say",
   ],
 ])

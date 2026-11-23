@@ -35,6 +35,7 @@ export type PlanningCardProps = Pick<
   | 'onChain'
   | 'onChanged'
   | 'onFilter'
+  | 'opensOn'
   | 'ownChain'
   | 'parent'
   | 'projectId'
@@ -112,6 +113,7 @@ defineExpose({ close, openFrom })
       :writable="card.writable"
       :parent="card.parent"
       :own-chain="card.ownChain"
+      :opens-on="card.opensOn"
       :kind="card.kind"
       :question-asked="card.questionAsked"
       @back="trail.goBack"

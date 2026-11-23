@@ -34,6 +34,7 @@ import { useI18n } from 'vue-i18n'
 import { markdownEdit } from '@/shared/lib/markdownEdits.ts'
 import type { MarkdownTool, TextEdit } from '@/shared/lib/markdownEdits.ts'
 import { revealFrame } from '@/shared/lib/revealFrame.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import MarkdownFoot from '@/shared/ui/MarkdownFoot.vue'
 import MarkdownSuggestions from '@/shared/ui/MarkdownSuggestions.vue'
@@ -133,7 +134,7 @@ const field = {
     const control = input.value?.control()
     return { start: control?.selectionStart ?? 0, end: control?.selectionEnd ?? 0 }
   },
-  focus: () => input.value?.control()?.focus(),
+  takeFocus: () => placeFocus(input.value?.control()),
   /**
    * A text set from outside has its caret at the end, and plain focus scrolls the
    * field and everything around it to show that caret. So this focus moves nothing,
@@ -158,7 +159,7 @@ const field = {
   replace({ start, end, text, selection }: TextEdit) {
     const control = input.value?.control()
     if (!control) return
-    control.focus()
+    placeFocus(control)
     control.setSelectionRange(start, end)
     const typed = document.execCommand?.(text ? 'insertText' : 'delete', false, text) ?? false
     if (!typed) {
@@ -221,7 +222,7 @@ watch(
   (disabled) => {
     if (disabled) hadFocus = surface.value?.contains(document.activeElement) ?? false
     else if (hadFocus)
-      void nextTick(() => document.activeElement === document.body && field.focus())
+      void nextTick(() => document.activeElement === document.body && field.takeFocus())
   },
   { flush: 'pre' },
 )
@@ -305,7 +306,7 @@ function keydown(event: KeyboardEvent) {
 
 defineExpose({
   /** Put the caret in the field, for a host that opens the editor on purpose. */
-  focus: () => field.focus(),
+  takeFocus: () => field.takeFocus(),
   /**
    * The same for a host that opens it on a text the reader was just reading, with
    * the frame brought into view: all of it where it fits, and otherwise its start.

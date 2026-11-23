@@ -35,7 +35,8 @@ const doneTiles = (wrapper: ReturnType<typeof board>) =>
 describe('the Done column', () => {
   it('stands the most recently closed first, flat and in a goal’s lane', async () => {
     const flat = board({ items: finished, spaceItems: finished })
-    expect(doneTiles(flat)).toEqual(['MAIN-21', 'MAIN-22', 'MAIN-20', 'MAIN-2'])
+    // The closed goal is no tile: it stays in its lane's count, not in Done.
+    expect(doneTiles(flat)).toEqual(['MAIN-21', 'MAIN-22', 'MAIN-20'])
 
     const grouped = board({ items: finished, spaceItems: finished, grouping: 'goal' })
     // A lane with nothing open is folded, and its Done cell draws on request.
@@ -51,7 +52,7 @@ describe('the Done column', () => {
     expect(done.attributes('aria-describedby')).toMatch(/-keys$/)
     for (const key of ['ArrowUp', 'ArrowDown']) await done.trigger('keydown', { key, altKey: true })
     expect(wrapper.emitted('place')).toBeUndefined()
-    expect(doneTiles(wrapper)).toEqual(['MAIN-21', 'MAIN-22', 'MAIN-20', 'MAIN-2'])
+    expect(doneTiles(wrapper)).toEqual(['MAIN-21', 'MAIN-22', 'MAIN-20'])
     expect(tile(wrapper, 'MAIN-1').attributes('aria-keyshortcuts')).toBeUndefined()
   })
 

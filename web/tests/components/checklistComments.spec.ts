@@ -66,8 +66,8 @@ describe('checklist-linked comments', () => {
     Object.defineProperty(form.element, 'scrollIntoView', { value: scroll, configurable: true })
     await wrapper.get('textarea[aria-label="Comment"]').setValue('Existing plain draft')
     // The action names its step, so a row of identical icons stays distinguishable.
-    const action = wrapper.get('button[aria-label="Discuss step “Second step”"]')
-    expect(hintOf(action)).toBe('Discuss step')
+    const action = wrapper.get('button[aria-label="Discuss condition “Second step”"]')
+    expect(hintOf(action)).toBe('Discuss condition')
     expect(action.element.closest('[role="checkbox"]')).toBeNull()
     expect(action.attributes('type')).toBe('button')
     await action.trigger('click')
@@ -105,7 +105,7 @@ describe('checklist-linked comments', () => {
     }
     await wrapper.setProps({ item: renamed })
     expect(wrapper.get('.step-context').text()).toContain('First step')
-    expect(wrapper.get('.step-context').text()).toContain('Step text has changed')
+    expect(wrapper.get('.step-context').text()).toContain('Condition text has changed')
     vi.mocked(commentWorkItem).mockRejectedValueOnce(new Error('offline'))
     await wrapper.get('form').trigger('submit')
     await flushPromises()
@@ -114,8 +114,8 @@ describe('checklist-linked comments', () => {
     await wrapper.setProps({
       item: { ...renamed, checklist: renamed.checklist.filter((step) => step.id !== stepA) },
     })
-    expect(wrapper.get('.step-context').text()).toContain('Step has been removed')
-    await getButton(wrapper, 'Remove step link').trigger('click')
+    expect(wrapper.get('.step-context').text()).toContain('Condition has been removed')
+    await getButton(wrapper, 'Remove condition link').trigger('click')
     vi.mocked(commentWorkItem).mockResolvedValueOnce()
     await wrapper.get('form').trigger('submit')
     await flushPromises()
@@ -146,13 +146,13 @@ describe('checklist-linked comments', () => {
       props: { item, writable: false },
       global: global(),
     })
-    expect(wrapper.get('blockquote').text()).toBe('Checklist stepFirst step')
+    expect(wrapper.get('blockquote').text()).toBe('ConditionFirst step')
     await wrapper.setProps({
       item: { ...item, checklist: item.checklist.map((step) => ({ ...step, text: 'Changed' })) },
     })
-    expect(wrapper.get('blockquote').text()).toBe('Step text has changedFirst step')
+    expect(wrapper.get('blockquote').text()).toBe('Condition text has changedFirst step')
     await wrapper.setProps({ item: { ...item, checklist: [] } })
-    expect(wrapper.get('blockquote').text()).toBe('Step has been removedFirst step')
+    expect(wrapper.get('blockquote').text()).toBe('Condition has been removedFirst step')
     expect(wrapper.text()).toContain('A note')
     expect(wrapper.find('form').exists()).toBe(false)
     await wrapper.vm.discussStep(stepA)

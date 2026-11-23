@@ -54,8 +54,73 @@ describe('input request wire contract', () => {
     })
   })
 
+  it('reads a scope as its board holds it, with the project it is narrowed to', async () => {
+    const space = requestEntry().target.space_ref
+    const fetchMock = serve(requestList())
+    const none = { kinds: [], labels: [] }
+    await fetchInputRequests({ scope: { space, project: 'alpha', ...none } })
+    await fetchInputRequests({ scope: { space, project: null, ...none } })
+    const queries = fetchMock.mock.calls
+      .map(([input]) => new URL(requestUrl(input), 'https://test.example'))
+      .filter((url) => url.pathname === '/api/modules/planning/requests')
+      .map((url) => Object.fromEntries(url.searchParams))
+    const space_fields = { data_scope_id: space.data_scope_id, space_key: space.space_key }
+    expect(queries).toEqual([
+      {
+        scope_kind: 'space',
+        status: 'pending',
+        limit: '200',
+        ...space_fields,
+        other_spaces: 'true',
+        project_id: 'alpha',
+      },
+      {
+        scope_kind: 'space',
+        status: 'pending',
+        limit: '200',
+        ...space_fields,
+        other_spaces: 'true',
+      },
+    ])
+  })
+
+  it('sends the Volumes filter of tasks, of a space or of every space, each value once', async () => {
+    const space = requestEntry().target.space_ref
+    const fetchMock = serve(requestList())
+    const filter = { kinds: ['bug', 'task'], labels: ['ui'] }
+    await fetchInputRequests({ scope: { space, project: 'alpha', ...filter } })
+    await fetchInputRequests({ scope: { space: null, project: null, ...filter } })
+    const queries = fetchMock.mock.calls
+      .map(([input]) => new URL(requestUrl(input), 'https://test.example'))
+      .filter((url) => url.pathname === '/api/modules/planning/requests')
+      .map((url) => [...url.searchParams])
+    expect(queries).toEqual([
+      [
+        ['scope_kind', 'space'],
+        ['status', 'pending'],
+        ['limit', '200'],
+        ['data_scope_id', space.data_scope_id],
+        ['space_key', space.space_key],
+        ['other_spaces', 'true'],
+        ['project_id', 'alpha'],
+        ['task_kind', 'bug'],
+        ['task_kind', 'task'],
+        ['task_label', 'ui'],
+      ],
+      [
+        ['scope_kind', 'global'],
+        ['status', 'pending'],
+        ['limit', '200'],
+        ['task_kind', 'bug'],
+        ['task_kind', 'task'],
+        ['task_label', 'ui'],
+      ],
+    ])
+  })
+
   it('takes the line that triage is due from the first page, which alone carries it', async () => {
     const line = {
+      space_ref: requestEntry().target.space_ref,
       space: { key: 'TASK', name: 'Tasks' },
       count: 120,
       oldest_at: '2026-11-02T09:12:00Z',
@@ -82,6 +147,9 @@ describe('input request wire contract', () => {
     expect(() =>
       validateInputRequestList({ ...requestList(), triage_due: [{ ...line, unknown: true }] }),
     ).toThrow()
+    // Without its source's ref the line could not open that space's board.
+    const unplaced = { space: line.space, count: line.count, oldest_at: line.oldest_at }
+    expect(() => validateInputRequestList({ ...requestList(), triage_due: [unplaced] })).toThrow()
   })
 
   it('uses the request revision and sends a required boolean false without coercion', async () => {
@@ -122,6 +190,37 @@ describe('input request wire contract', () => {
     const writes = fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')
     expect(writes).toHaveLength(1)
     expect(writes[0]?.[0]).toBe('/api/modules/planning/request/decline')
+  })
+
+  it('hands back the list a refused cancel names, with its token, and no list for another 409', async () => {
+    const list = {
+      cancels: [
+        {
+          reference: 'TASK-8',
+          title: 'Accepted work under the goal',
+          kind: 'task',
+          state: { key: 'dev', name: 'Dev', category: 'active' },
+          container_state: null,
+          holder: [],
+        },
+      ],
+      dependents: [],
+      list_token: 'refused-token',
+    }
+    serve(
+      { error: { code: 'cancel_list', message: '[cancel_list] TASK-7 has work', ...list } },
+      409,
+    )
+    await expect(answerInputRequest(requestEntry(), { answer: 'drop' })).rejects.toMatchObject({
+      code: 'cancel_list',
+      status: 409,
+      cancelList: list,
+    })
+    serve({ error: { code: 'workflow_guard', message: '[group] not waiting' } }, 409)
+    await expect(answerInputRequest(requestEntry(), { answer: 'drop' })).rejects.toMatchObject({
+      code: 'workflow_guard',
+      cancelList: null,
+    })
   })
 
   it('sends a note only when there is one, with answers that may be empty', async () => {

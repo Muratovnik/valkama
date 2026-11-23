@@ -34,10 +34,13 @@
  *
  * It is the frame of a question of every kind (`QuestionRecord`). A choice of options is
  * answered by its form, as above. Any other kind draws its own content in `subject`, which is
- * handed the question, and is answered by its kind's row of buttons in the foot: one press
+ * handed the question and whether what it offers to tick takes nothing now (`disabled`), and is
+ * answered by its kind's row of buttons in the foot: one press
  * writes, through the same write as Send, what that answer says over what the form holds; an
  * answer that cannot be taken back asks first, as Don't answer does, and the answer that puts
- * the question off opens the choice of a day in place (`RequestLater`). Its history, a change of
+ * the question off opens the choice of a day in place (`RequestLater`). One the server refuses
+ * with the list of open work it would cancel shows that list in the foot and asks again, and
+ * its confirmed retry confirms that list (`useKindAnswers`). Its history, a change of
  * its answer, its fold and what it left unsent are this frame's, whatever its kind. Where the
  * listing says the question's space and project, its head says them.
  *
@@ -54,6 +57,7 @@ import RequestFold from '@/features/input-requests/components/RequestFold.vue'
 import RequestFoot from '@/features/input-requests/components/RequestFoot.vue'
 import RequestHead from '@/features/input-requests/components/RequestHead.vue'
 import { useAnswerChange } from '@/features/input-requests/composables/useAnswerChange.ts'
+import { useBlockNote } from '@/features/input-requests/composables/useBlockNote.ts'
 import { useKindAnswers } from '@/features/input-requests/composables/useKindAnswers.ts'
 import { useRequestFocus } from '@/features/input-requests/composables/useRequestFocus.ts'
 import { useRequestWrites } from '@/features/input-requests/composables/useRequestWrites.ts'
@@ -61,6 +65,7 @@ import { useUncoveredFocus } from '@/features/input-requests/composables/useUnco
 import { ANSWER_VERSION_LIMIT, unsentWords } from '@/features/input-requests/utils/answerChange.ts'
 import { unsentChoices } from '@/features/input-requests/utils/answerDisplay.ts'
 import type { QuestionRecord } from '@/features/input-requests/utils/questionRecord.ts'
+import { answeredFields } from '@/features/input-requests/utils/spokenFields.ts'
 import { hasDraft, stillRefused } from '@/features/input-requests/utils/validateAnswers.ts'
 import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
@@ -72,6 +77,7 @@ import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { NO_FOCUS_RIGHT } from '@/shared/lib/focusRight.ts'
 import type { FocusRight } from '@/shared/lib/focusRight.ts'
 import { unbroken } from '@/shared/lib/unbroken.ts'
+import { useComposedText } from '@/shared/lib/useComposedText.ts'
 import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
 import type MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
 import RichText from '@/shared/ui/RichText.vue'
@@ -107,7 +113,7 @@ const emit = defineEmits<{
   'update:draft': [draft: RequestDraft]
   'updated': [entry: InputRequestEntry, right: FocusRight]
 }>()
-const { t, d } = useI18n()
+const { t, te, d } = useI18n()
 const promptId = useId()
 const metaId = useId()
 const titleId = useId()
@@ -142,6 +148,7 @@ const {
   error,
   fieldsDisabled,
   forget,
+  listed,
   pastDue,
   refresh,
   refused,
@@ -174,8 +181,14 @@ const {
 
 const waiting = computed(() => request.value.status === 'pending')
 const inForm = computed(() => waiting.value || changing.value)
+/** The prompt in the reader's language where the service composed it, else as written. */
+const composed = useComposedText()
+const prompt = computed(() => composed.prompt(request.value))
+/** What the form offers, a purpose's answer named as its buttons name it, which its prompt names. */
+const fields = computed(() => answeredFields(request.value, t, te))
 const kind = useKindAnswers({
   answers: () => props.answers,
+  entry: () => props.entry,
   draft: () => props.draft,
   focusDay: () => foot.value?.focusDay(),
   kind: () => props.kind,
@@ -183,7 +196,7 @@ const kind = useKindAnswers({
   question: card,
   waiting,
   write: (draft) => emit('update:draft', draft),
-  writes: { busy, declining, requiresRefresh, resolve, sendDisabled, stepBack, writable },
+  writes: { busy, declining, listed, requiresRefresh, resolve, sendDisabled, stepBack, writable },
 })
 const { asking, byAnswers, chooseDay, laterControl, offered, putOff } = kind
 const { press: pressAnswer, stepStands } = kind
@@ -223,26 +236,12 @@ const hasFoot = computed(() =>
   [inForm.value, canRefresh.value, props.standalone, error.value].some(Boolean),
 )
 const busyMark = computed(() => busy.value || undefined)
-/**
- * A block of one question with options offers no comment of its own: the field's comment would
- * say the same. One an older answer wrote there stays open, to be read and changed.
- */
-const offersNote = computed(() => {
-  const [only, ...rest] = request.value.fields
-  return rest.length > 0 || only?.type === 'text' || (answerFields.value?.noteOpen ?? false)
+const { noteToggle, pressNote } = useBlockNote({
+  disabled: fieldsDisabled,
+  fields: answerFields,
+  request,
+  shown: () => inForm.value && supported.value,
 })
-/** The press of the comment on the block, which stands in its head while there is a form. */
-const noteToggle = computed(() =>
-  inForm.value && supported.value && offersNote.value
-    ? {
-        disabled: fieldsDisabled.value,
-        name: t('requests.questionNoteName', { title: request.value.title }),
-        open: answerFields.value?.noteOpen ?? false,
-        written: answerFields.value?.noteWritten ?? false,
-      }
-    : null,
-)
-const pressNote = () => answerFields.value?.pressNote()
 /** Why an answered question offers no change, where that is something to know. */
 const changeFact = computed(() => {
   if (request.value.status !== 'answered' || !props.entry.target.writable) return ''
@@ -257,7 +256,7 @@ const errorText = computed(() => {
 /** What the form still held when the question closed some other way: words, and what was chosen. */
 const unsent = computed(() => (inForm.value ? '' : unsentWords(request.value, props.draft)))
 const unsentChosen = computed(() =>
-  inForm.value ? [] : unsentChoices(request.value.fields, props.draft, t),
+  inForm.value ? [] : unsentChoices(request.value, props.draft, t, te),
 )
 const change = useAnswerChange({
   busy,
@@ -322,7 +321,7 @@ function writeNote(note: string) {
   stepBack()
   emit('update:draft', { ...props.draft, note })
 }
-defineExpose({ focus, focusOutcome, holdsFocus, reveal, send })
+defineExpose({ takeFocus: focus, focusOutcome, holdsFocus, reveal, send })
 </script>
 
 <template>
@@ -359,7 +358,7 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal, send })
       >
         <RichText
           :id="promptId"
-          :source="request.prompt"
+          :source="prompt"
         />
       </CollapsibleText>
       <p
@@ -392,11 +391,12 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal, send })
         v-else-if="byAnswers"
         name="subject"
         :entry="entry"
+        :disabled="fieldsDisabled"
       />
       <RequestAnswerFields
         v-else
         ref="answerFields"
-        :fields="request.fields"
+        :fields="fields"
         :draft="draft"
         :prompt-id="promptId"
         :refused="refused"
@@ -436,6 +436,7 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal, send })
       :stuck="answerFields?.structured ?? false"
       :undecided="answerFields?.undecided ?? 0"
       :later="laterControl"
+      :listed="listed"
       :waiting="waiting"
       @answer="pressAnswer"
       @day="chooseDay"

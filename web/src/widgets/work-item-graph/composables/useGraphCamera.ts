@@ -16,7 +16,8 @@
  * The farthest out the camera goes is the field's whole view, for the drawing and
  * the size it has now (`minZoom`). Past it a header is a pixel or two and the map a
  * smudge. Vue Flow holds the button, the wheel and a pinch to that limit, and a move
- * that leaves the camera past it brings it back.
+ * that leaves the camera past it brings it back. On a phone-wide field the whole view
+ * goes no further out than its cards read (`fieldZoomFloor`).
  *
  * The field's own chrome — the key above it, the controls below — stands in
  * strips of its own outside the flow, so no framing and no pan can put a node
@@ -38,12 +39,14 @@ import {
 import type {
   GraphBranchFrame,
   GraphCameraCause,
+  GraphFieldSize,
   HeldFrame,
 } from '@/widgets/work-item-graph/utils/graphCamera.ts'
 import { FRAME_GAP, GRAPH_ZOOM_MIN } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import type { GraphLayout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import { nodeCentre } from '@/widgets/work-item-graph/utils/graphWalk.ts'
 import type { Box } from '@/widgets/work-item-graph/utils/graphWalk.ts'
+import { fieldZoomFloor } from '@/widgets/work-item-graph/utils/graphZoomFloor.ts'
 
 /**
  * Below this zoom a card's words are too small to read, so each node is drawn
@@ -90,7 +93,12 @@ interface CameraInput {
 }
 
 export function useGraphCamera(input: CameraInput) {
-  const { dimensions, setViewport, viewport } = useVueFlow({ id: input.flowId })
+  const { dimensions, setViewport, viewport, vueFlowRef } = useVueFlow({ id: input.flowId })
+  /** The field's size and its floor, read together: a width that crosses a phone's moves both. */
+  const field = (): GraphFieldSize => ({
+    ...dimensions.value,
+    floor: fieldZoomFloor(vueFlowRef.value),
+  })
   const flowReady = ref(false)
   const fitted = ref(false)
   let cameraRequest = 0
@@ -109,13 +117,11 @@ export function useGraphCamera(input: CameraInput) {
     const opening = !fitted.value
     const held = opening && heldCamera?.scope === scopeKey() ? heldCamera.viewport : null
     if (held)
-      return (
-        graphCameraMove('resized', placed, { camera: held, dimensions: dimensions.value }) ?? held
-      )
+      return graphCameraMove('resized', placed, { camera: held, dimensions: field() }) ?? held
     return graphCameraMove(
       opening ? 'open' : cause,
       placed,
-      { camera: viewport.value, dimensions: dimensions.value, held: frame },
+      { camera: viewport.value, dimensions: field(), held: frame },
       { branch: input.branch(), selectedId: input.selectedId(), rootId: input.rootId() },
     )
   }
@@ -199,14 +205,14 @@ export function useGraphCamera(input: CameraInput) {
    */
   const minZoom = computed<number>((last) => {
     const placed = input.placed.value
-    const whole = placed && graphWholeView(placed, dimensions.value)
+    const whole = placed && graphWholeView(placed, field())
     return whole?.zoom ?? last ?? GRAPH_ZOOM_MIN
   })
 
   /** «Fit whole graph»: set outright, so the limit, which is only as new as the last draw, cannot hold it. */
   function fitWhole() {
     const placed = input.placed.value
-    const whole = placed && graphWholeView(placed, dimensions.value)
+    const whole = placed && graphWholeView(placed, field())
     if (whole) void setViewport(whole, { duration: 0 })
   }
 

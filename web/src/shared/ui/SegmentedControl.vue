@@ -30,6 +30,15 @@
  * A host that gives the row a line of its own makes it its line's width with a class on the
  * tag, and shares that width among the segments by `--segmented-option-grow`.
  *
+ * A row that may be wider than what holds it, as a settings row's choice (`SettingsRow`'s
+ * `wide`), or the periods of a page's bar (`PeriodBar`), says so (`wrap`): it stays one line
+ * where that line holds it, and where it does not its segments stand in columns of one width,
+ * as wide as what holds it, on the fewest lines the room allows, a line short of the others
+ * only the last (`segmentColumns`). Each host used to state the wrap and only some the sharing:
+ * on a phone the scope choice of Participation stood its two segments 135 and 110px wide on
+ * lines of 240. Each line then shared its own room, and the set's four broke their two lines
+ * 17px apart; the periods, wrapped by their bar, stood three over two at 390px.
+ *
  * A segment's words stay on one line: a host that scrolls the row, as a card's sections, or that
  * lays its bar out by the row's whole width, as the Analytics periods, reads that width. A row
  * that nothing scrolls and that must stand inside what holds it, as a chart's head in a phone's
@@ -41,9 +50,10 @@
  * to a line as fit — the Analytics figures, each the measure its charts show. The segment's
  * words are still its name, so a tile says in words whatever it draws.
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 import type { TabIds } from '@/shared/ui/tabIds.ts'
+import { useSegmentColumns } from '@/shared/ui/useSegmentColumns.ts'
 
 // The segment shape stays inline: naming it would have to be exported for the
 // generic component's own declaration, and an export nothing imports is dead
@@ -69,8 +79,10 @@ const props = withDefaults(
     size?: 'default' | 'compact' | 'inline' | 'tile'
     /** The ids that make the row a tab list over the panel it shows. */
     tabs?: TabIds | null
+    /** Where one line cannot hold the row, its segments wrap and share each line evenly. */
+    wrap?: boolean
   }>(),
-  { size: 'default', tabs: null, activation: 'automatic', fit: false },
+  { size: 'default', tabs: null, activation: 'automatic', fit: false, wrap: false },
 )
 
 const emit = defineEmits<{ 'update:modelValue': [value: T] }>()
@@ -88,6 +100,18 @@ function select(option: { value: T; disabled?: boolean }) {
   if (option.disabled || isCurrent(option)) return
   emit('update:modelValue', option.value)
 }
+
+const track = ref<HTMLElement | null>(null)
+/** The columns of a wrapped row, or null while it stands on one line. */
+const columns = useSegmentColumns(
+  track,
+  () => props.wrap,
+  () => props.options.map((option) => option.label).join('\n'),
+)
+const columned = computed(() => columns.value !== null)
+const columnsStyle = computed(() =>
+  columns.value === null ? undefined : { '--segmented-columns': columns.value },
+)
 
 /** A tab list over a panel, or a radio group of values. */
 const groupRole = computed(() => (props.tabs ? 'tablist' : 'radiogroup'))
@@ -159,9 +183,11 @@ function move(event: KeyboardEvent) {
 
 <template>
   <div
+    ref="track"
     class="segmented"
     :role="groupRole"
-    :class="[`size-${size}`, { fit }]"
+    :class="[`size-${size}`, { fit, wrap, columns: columned }]"
+    :style="columnsStyle"
     :aria-label="label"
   >
     <button
@@ -198,6 +224,15 @@ function move(event: KeyboardEvent) {
    they shared. A control that wraps another control cannot size the inner one
    and stay the same height as its neighbours. */
 .segmented {
+  /* The pressed segment's weight, which a wrapped row's columns are measured in as well. */
+  --segmented-chosen-weight: 600;
+
+  /* The least room a wrapped row's column leaves on each side of its centred words. */
+  --segmented-column-padding: var(--space-3);
+
+  /* How many columns a wrapped row stands in; the row's own style says, once it is measured. */
+  --segmented-columns: 1;
+
   display: inline-flex;
   flex: 0 0 auto;
   gap: var(--space-half);
@@ -273,12 +308,6 @@ function move(event: KeyboardEvent) {
     text-align: start;
     white-space: normal;
   }
-
-  /* A tile's words keep their own inks, so the ink a segment takes under the pointer would change
-     nothing on one: a tile not pressed takes the hovered ground instead, and nothing moves. */
-  .segmented-option:hover:not(:disabled, .active) {
-    background: var(--color-surface-hover);
-  }
 }
 
 /* A row that must stand inside what holds it (`fit`) is never wider than that: its words wrap
@@ -296,13 +325,46 @@ function move(event: KeyboardEvent) {
   }
 }
 
+/* A row that may be wider than what holds it (`wrap`) wraps only where one line cannot hold
+   it. On one line the track is as wide as its segments and leaves none to share. Until its
+   columns are worked out, as where nothing lays the page out, each wrapped line's segments
+   grow into the room it leaves. */
+.segmented.wrap {
+  flex-wrap: wrap;
+  max-inline-size: 100%;
+
+  .segmented-option {
+    flex-grow: 1;
+  }
+}
+
+/* Wrapped, the row stands in columns of one width (`useSegmentColumns`) across what holds it,
+   each centring its words: a grid, so a last line short of the others keeps its segments under
+   the columns above instead of growing them into the room it leaves, and a rounding never sends
+   a line's last segment to the next. */
+.segmented.wrap.columns {
+  display: grid;
+  grid-template-columns: repeat(var(--segmented-columns), minmax(0, 1fr));
+  inline-size: 100%;
+
+  .segmented-option {
+    min-width: 0;
+    padding-inline: calc(var(--segmented-column-padding));
+  }
+}
+
+/* A segment not pressed takes the hovered ground under the pointer as well as the main ink,
+   a step under the pressed one's, and nothing moves. The ink alone was a step of grey on two
+   short words, which a reader pointing at «Agent» in Participation did not see change; a tile's
+   words keep their own inks, so on a tile the ground was all that changed. */
 .segmented-option:hover:not(:disabled, .active) {
   color: var(--color-text);
+  background: var(--color-surface-hover);
 }
 
 .segmented-option.active {
   color: var(--color-text);
-  font-weight: 600;
+  font-weight: var(--segmented-chosen-weight);
   background: var(--color-surface-active);
 
   /* A forced palette clears that ground and repaints the word, and the weight alone does

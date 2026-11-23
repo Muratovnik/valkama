@@ -1,3 +1,5 @@
+import { readCancelList } from '@/shared/api/inputRequestAction.ts'
+import type { CancelList } from '@/shared/api/inputRequestAction.ts'
 import {
   validateInputRequestDetail,
   validateInputRequestList,
@@ -10,6 +12,8 @@ import type {
 import { readRefusal } from '@/shared/api/planningRefusal.ts'
 import { serializePlanningTarget } from '@/shared/api/planningTarget.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
+import { validatePlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
+import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import { readJsonResponse } from '@/shared/api/readJsonResponse.ts'
 import { WEB_AUTHOR } from '@/shared/api/webAuthor.ts'
 
@@ -18,13 +22,16 @@ export class InputRequestError extends Error {
   /** The server's bracketed word on why, such as `item_closed`; empty when it gave none. */
   readonly reason: string
   readonly status: number
+  /** What an answer that cancels work would close, handed back to be confirmed by its token. */
+  readonly cancelList: CancelList | null
 
-  constructor(code: string, status: number, reason = '') {
+  constructor(code: string, status: number, reason = '', cancelList: CancelList | null = null) {
     super(code)
     this.name = 'InputRequestError'
     this.code = code
     this.reason = reason
     this.status = status
+    this.cancelList = cancelList
   }
 }
 
@@ -32,13 +39,32 @@ async function request(url: string, init?: RequestInit): Promise<unknown> {
   const { response, payload } = await readJsonResponse(url, init)
   if (!response.ok) {
     const refusal = readRefusal(payload)
+    const listed = readCancelList(payload)
     throw new InputRequestError(
-      refusal?.error.code ?? 'request_failed',
+      refusal?.error.code ?? (listed ? 'cancel_list' : 'request_failed'),
       response.status,
       /^\[([a-z_]+)\]/u.exec(refusal?.error.message ?? '')?.[1],
+      listed,
     )
   }
   return payload
+}
+
+/**
+ * What the questions window is narrowed to: a space read as its board holds it — its cards and
+ * other spaces' cards that name one of its projects — or every space, the one project the space
+ * is narrowed to, if any, and the Volumes page's filter of tasks. It holds what the page's
+ * «Waiting for me» counts for the same scope and filter.
+ */
+export interface QuestionScope {
+  /** Kinds of task whose questions are kept, by the Volumes filter's rule; empty for any. */
+  kinds: readonly string[]
+  /** Labels a task carries, every one of them, for its questions to be kept; empty for any. */
+  labels: readonly string[]
+  /** A project's id, which keeps the cards that name it; null for the whole space. */
+  project: string | null
+  /** The space whose board's questions are kept; null for every space's. */
+  space: PlanningSpaceRef | null
 }
 
 /** The most questions one page of the server's list holds. */
@@ -57,24 +83,37 @@ const entryIdentity = (entry: InputRequestEntry) =>
  */
 export async function fetchInputRequests(
   options: {
+    /**
+     * A space as its board holds it, and its project: `other_spaces` and `project_id`; the
+     * filter of tasks, of a space or of every space: `task_kind` and `task_label`.
+     */
+    scope?: QuestionScope
     signal?: AbortSignal
     status?: InputRequestEntry['request']['status'] | 'all'
     target?: PlanningTarget
   } = {},
 ): Promise<InputRequestList> {
   const { target, signal } = options
+  const scope = target ? undefined : options.scope
+  const space = scope?.space ? validatePlanningSpaceRef(scope.space) : undefined
   const status = options.status ?? 'pending'
-  const query = {
-    scope_kind: target ? 'space' : 'global',
-    ...(status === 'all' ? {} : { status }),
-    limit: String(PAGE),
-    ...(target ? { ...serializePlanningTarget(target), reference: target.reference } : {}),
-  }
+  const query = [
+    ...Object.entries({
+      scope_kind: target || space ? 'space' : 'global',
+      ...(status === 'all' ? {} : { status }),
+      limit: String(PAGE),
+      ...(target ? { ...serializePlanningTarget(target), reference: target.reference } : {}),
+      ...(space ? { ...space, other_spaces: 'true' } : {}),
+      ...(space && scope?.project ? { project_id: scope.project } : {}),
+    }),
+    ...(scope?.kinds ?? []).map((kind) => ['task_kind', kind]),
+    ...(scope?.labels ?? []).map((label) => ['task_label', label]),
+  ]
   const read = async (offset: number) => {
-    const parameters = new URLSearchParams({
+    const parameters = new URLSearchParams([
       ...query,
-      ...(offset ? { offset: String(offset) } : {}),
-    })
+      ...(offset ? [['offset', String(offset)]] : []),
+    ])
     return validateInputRequestList(
       await request(`/api/modules/planning/requests?${parameters}`, { signal }),
     )

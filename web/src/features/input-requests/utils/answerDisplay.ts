@@ -1,3 +1,4 @@
+import { answeredFields } from '@/features/input-requests/utils/spokenFields.ts'
 import { isShown } from '@/features/input-requests/utils/validateAnswers.ts'
 
 import type {
@@ -7,8 +8,10 @@ import type {
   InputRequestOption,
 } from '@/shared/api/inputRequestModel.ts'
 import { plainText } from '@/shared/lib/richText.ts'
+import { endsSentence, labelled } from '@/shared/lib/sentences.ts'
 
 type Translate = (key: string, values?: Record<string, unknown>) => string
+type Knows = (key: string) => boolean
 type Version = InputRequestEntry['request']['history'][number]
 
 /** What a field offers to choose from: Yes and No are the options of a boolean. */
@@ -60,29 +63,29 @@ export function versionLines(
       said('requests.ownVariantSaid', version.own[field.id]),
       said('requests.fieldNoteSaid', version.field_notes[field.id]),
     ].filter(Boolean)
-    return parts.length ? [{ id: field.id, text: `${field.label}: ${clauses(parts)}` }] : []
+    return parts.length ? [{ id: field.id, text: labelled(field.label, clauses(parts)) }] : []
   })
 }
 
 /**
  * What a form had chosen when its question closed some other way, one line per field:
  * the options by their labels, and Yes or No. A comment is words, and so is a text field's
- * answer, so neither is here but among them (`unsentWords`).
+ * answer, so neither is here but among them (`unsentWords`). Each field is named as the form
+ * offered it (`answeredFields`): a question Valkama composed in the reader's words, where the
+ * service's own words read «Answer: Put it off» in Russian.
  */
 export function unsentChoices(
-  fields: readonly InputRequestField[],
+  request: InputRequestEntry['request'],
   draft: { answers: InputAnswers },
   t: Translate,
+  te: Knows,
 ): string[] {
-  return fields.flatMap((field) => {
+  return answeredFields(request, t, te).flatMap((field) => {
     if (field.type === 'text' || !isShown(field, draft.answers)) return []
     const chosen = displayAnswer(field, draft.answers[field.id], t)
-    return chosen ? [`${field.label}: ${chosen}`] : []
+    return chosen ? [labelled(field.label, chosen)] : []
   })
 }
-
-/** A stop, a question mark or an ellipsis, with any closing quotes or brackets after it. */
-const SENTENCE_END = /[.!?…]["'»”’)\]]*$/u
 
 /**
  * Parts of one line, a semicolon between them. A part that ends its own sentence, as an own
@@ -93,7 +96,7 @@ function clauses([first = '', ...rest]: string[]) {
   let line = first
   for (const part of rest) {
     const sentence = `${part.charAt(0).toLocaleUpperCase()}${part.slice(1)}`
-    line = SENTENCE_END.test(line) ? `${line} ${sentence}` : `${line}; ${part}`
+    line = endsSentence(line) ? `${line} ${sentence}` : `${line}; ${part}`
   }
   return line
 }

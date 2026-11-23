@@ -3,7 +3,9 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { requestIdentity, targetIdentity } from '@/features/input-requests/utils/requestIdentity.ts'
 
 import { fetchInputRequest, fetchInputRequests } from '@/shared/api/inputRequestApi.ts'
+import type { QuestionScope } from '@/shared/api/inputRequestApi.ts'
 import type { InputRequestEntry, InputRequestList } from '@/shared/api/inputRequestModel.ts'
+import { coverageIncomplete } from '@/shared/api/planningTarget.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 
 /**
@@ -21,7 +23,13 @@ export type PendingCount = { incomplete: boolean; value: number } | 'unknown'
 const confirmedWrites = ref(0)
 
 /**
- * What to read: one card's questions, those waiting everywhere, or nothing at all.
+ * What a reader reads: one card's questions, those waiting on what one space's board holds,
+ * narrowed to a project or not, those waiting everywhere, or nothing at all.
+ */
+export type RequestSource = PlanningTarget | QuestionScope | 'all' | null
+
+/**
+ * What to read, as `RequestSource` names it.
  *
  * `keep` names a question the host holds something in — words, a choice, the keyboard.
  * A read that no longer brings such a question, because it was answered or closed
@@ -37,7 +45,7 @@ const confirmedWrites = ref(0)
  * question. A host that gives none keeps them where they stand.
  */
 export function useInputRequests(
-  source: () => PlanningTarget | 'all' | null,
+  source: () => RequestSource,
   keep: (entry: InputRequestEntry) => boolean = () => false,
   settles: (entry: InputRequestEntry) => boolean = () => false,
 ) {
@@ -52,9 +60,7 @@ export function useInputRequests(
   let generation = 0
   let timer: ReturnType<typeof setInterval> | undefined
   let seenWrites = confirmedWrites.value
-  const partial = computed(
-    () => result.value?.coverage.some((source) => source.status === 'unavailable') ?? false,
-  )
+  const partial = computed(() => coverageIncomplete(result.value?.coverage ?? []))
   const entries = computed(() => {
     const combined = new Map<string, InputRequestEntry>()
     for (const entry of result.value?.items ?? []) combined.set(requestIdentity(entry), entry)
@@ -114,13 +120,15 @@ export function useInputRequests(
     if (loading.value || document.visibilityState === 'hidden') return
     const chosen = source()
     if (chosen === null) return
-    const selected = chosen === 'all' ? undefined : chosen
+    const selected = chosen === 'all' || 'space' in chosen ? undefined : chosen
+    const scope = chosen !== 'all' && 'space' in chosen ? chosen : undefined
     const current = ++generation
     controller = new AbortController()
     loading.value = true
     try {
       const response = await fetchInputRequests({
         target: selected,
+        scope,
         status: selected ? 'all' : 'pending',
         signal: controller.signal,
       })
@@ -210,9 +218,9 @@ export function useInputRequests(
   watch(
     () => {
       const selected = source()
-      return selected === null || selected === 'all'
-        ? String(selected)
-        : `${targetIdentity(selected)}:${selected.writable}`
+      if (selected === null || selected === 'all') return String(selected)
+      if ('space' in selected) return `scope:${JSON.stringify(selected)}`
+      return `${targetIdentity(selected)}:${selected.writable}`
     },
     () => {
       generation++

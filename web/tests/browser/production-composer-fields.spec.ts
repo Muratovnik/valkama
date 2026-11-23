@@ -65,7 +65,7 @@ test('an item is created with a goal found by search, a label the space has and 
   await dialog.getByRole('textbox', { name: 'Title' }).fill('Ship the parser')
 
   const goal = dialog.getByRole('combobox', { name: 'Parent', exact: true })
-  await expect(goal).toHaveValue('No parent')
+  await expect(goal).toHaveValue('No goal')
   await goal.click()
   await page.keyboard.type('rework')
   const list = page.getByRole('listbox', { name: 'Parent' })
@@ -102,17 +102,18 @@ test('an item is created with a goal found by search, a label the space has and 
   })
 })
 
-// Side by side on a desktop; one above the other on a phone, where half the dialog left an
-// goal's title 172px in its field and in its list, six lines of it there.
+// The labels stand beside the project on a desktop and under it on a phone, where a chip and
+// the input took two lines in half the dialog; the parent has a row of its own, where half the
+// dialog left a goal's title 172px in its field and in its list, six lines of it.
 for (const { width, alone } of [
-  { width: 1280, alone: false },
-  { width: 390, alone: true },
-]) {
+  { width: 1280, alone: { Labels: false, Parent: true } },
+  { width: 390, alone: { Labels: true, Parent: true } },
+] as const) {
   test(`at ${width}px an open list stands under its field and inside the dialog`, async ({
     page,
   }) => {
     const { dialog } = await openComposer(page, width)
-    for (const name of ['Labels', 'Parent']) {
+    for (const name of ['Labels', 'Parent'] as const) {
       const field = dialog.getByRole('combobox', { name, exact: true })
       await field.click()
       const list = page.getByRole('listbox', { name })
@@ -125,7 +126,7 @@ for (const { width, alone } of [
       // Alone on its row, a field keeps the same inset from both edges of the dialog.
       const before = box.x - frame.x
       const after = frame.x + frame.width - box.x - box.width
-      expect(Math.abs(before - after) < 1).toBe(alone)
+      expect(Math.abs(before - after) < 1, name).toBe(alone[name])
       expect(shown.y).toBeGreaterThan(box.y + box.height)
       expect(shown.x + shown.width).toBeLessThanOrEqual(frame.x + frame.width)
       expect(shown.y + shown.height).toBeLessThanOrEqual(900)
@@ -148,21 +149,21 @@ test('a pointer opens the goal list over an empty search, the chosen goal standi
 }) => {
   const { dialog } = await openComposer(page, 1280)
   const goal = dialog.getByRole('combobox', { name: 'Parent', exact: true })
-  await expect(goal).toHaveValue('No parent')
+  await expect(goal).toHaveValue('No goal')
   await goal.click()
   const list = page.getByRole('listbox', { name: 'Parent' })
   await expect(list).toBeVisible()
   // Nothing painted as selected: the whole value stood highlighted on every press. The words
   // stay in sight as the field's placeholder, and whatever is typed searches from nothing.
   await expect(goal).toHaveValue('')
-  await expect(goal).toHaveAttribute('placeholder', 'No parent')
+  await expect(goal).toHaveAttribute('placeholder', 'No goal')
   await page.keyboard.type('rew')
   await expect(goal).toHaveValue('rew')
   await expect(list.getByRole('option')).toHaveText([`MAIN-12 · ${GOAL_TITLE}In progress`])
   // Left without a choice, the field says what is still chosen.
   await dialog.getByRole('heading', { name: 'New work' }).click()
   await expect(list).toHaveCount(0)
-  await expect(goal).toHaveValue('No parent')
+  await expect(goal).toHaveValue('No goal')
   await expect(goal).not.toHaveAttribute('placeholder')
 })
 

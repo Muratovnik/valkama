@@ -16,18 +16,35 @@ reuses a server, so a second checkout running it at the same time sets
 `VALKAMA_BROWSER_PORT` to another harness port; the app takes the next one. It
 builds the app into the ignored `web/test-results/<port>/app` and keeps the run's
 traces in `web/test-results/<port>/results`, so a run leaves the committed
-`web/dist` as it was. The `server-` specs, run with `VALKAMA_BROWSER_STORE`, are
+`web/dist` as it was. Playwright empties `results` when the next run starts and
+writes an attachment given as a body nowhere, so the suite's `test` copies what
+each test wrote into its output directory and every body attachment into
+`web/test-results/<port>/shots/<run>/`, named `<spec>__<name>`; the ten newest
+runs of a port keep theirs, and a run's end says where its files are. A shot taken
+only when `VALKAMA_SHOT_DIR` names a folder goes there by `requestedShot`, under
+the same `<spec>__` prefix. The `server-` specs, run with `VALKAMA_BROWSER_STORE`, are
 the exception: the Python server serves `web/dist` alone, so they build there.
 Each command below runs in `web/`:
 
 - One spec: `npx playwright test <file> --workers=4`. A name is a prefix, so give
-  the whole file name when it begins another.
+  the whole file name when it begins another. Every test of the suite that bounds
+  a time (`web/tests/browser/timedChecks.ts`) runs after it, alone: Playwright runs
+  that project whole, and only the runner's list narrows it.
 - A probe spec kept outside the suite, such as in a worktree's ignored
   `tmp/<name>/`: `VALKAMA_BROWSER_PROBES=<its directory> npx playwright test
-  --config tests/browser/probe.config.ts`. Name the file `ui-…` or
-  `production-…` for the project it runs in; it imports `@playwright/test`, `@/`
-  and the suite's own `test` from `web/tests/browser/test.ts` as a spec does, so
-  it needs no configuration of its own.
+  --config tests/browser/probe.config.ts`. Name the file
+  `ui-<name>.spec.mts` or `production-<name>.spec.mts` for the project it runs
+  in. Both run in `en-US`: a probe that reads the Russian interface sets
+  `test.use({ locale: 'ru-RU' })`. It imports `expect` and the types from
+  `@playwright/test` and the app through `@/` as a spec does, and the suite's
+  own `test` and helpers by a path relative to itself, such as
+  `../../web/tests/browser/test.ts` from `tmp/<name>/`, so it needs no
+  configuration and no `package.json` of its own.
+  The `.mts` is what makes it an ES module, as every module of the suite is: a
+  `.spec.ts` there is a CommonJS script, and its first import of a suite module
+  the run has already loaded, through the configuration or the global setup,
+  fails. `web/tests/probeConfig.test.ts` lists such a probe through the
+  configuration.
 - The whole suite, or a batch of it: `npm run test:browser:allowed`, never
   Playwright handed a list of names. Playwright given no spec runs every spec
   its configuration selects, and the list of the whole suite does not fit a
@@ -119,6 +136,14 @@ minute, then how long it waited:
 waiting for the heavy-test lock <file>: <who holds its CPUs, how many are free, or who is ahead>
 took the heavy-test lock after 41 s: 2 of 32 CPUs, the machine 31% busy, alone
 ```
+
+A command of its own goes through the gate as `python tests/machine_lock.py run
+--run <what it is> [--cpus N] -- <command>`. The gate finds the command's
+program on `PATH` before it waits, so a name it cannot find fails at once, and
+`npx` starts as the `npx.cmd` it is; Windows finds only an `.exe` by a bare
+name, and looks in its own directory before `PATH`. The Windows `timeout` is
+refused there, since it runs no command: a `timeout` found first on `PATH`, as
+Git's, is the one used.
 
 `tests/commit_subjects.py` reads the subject of every commit `HEAD` reaches,
 merges included. Twice an integration branch reached the merge into `main`

@@ -307,7 +307,7 @@ export async function measure(page: Page) {
       // The bar's content and its first control, the period, which starts it.
       bar: [
         contentStart(document.querySelector('.analytics-page-bar'))?.x ?? null,
-        box(document.querySelector('.analytics-period'))?.x ?? null,
+        box(document.querySelector('.period-bar-periods'))?.x ?? null,
       ],
       // The tiles: the radios that name a measure (`SpendingTiles`).
       tiles: [...document.querySelectorAll('[role="radio"]:has([data-measure])')].map((tile) =>

@@ -580,6 +580,19 @@ def _argv(command: str, tools: Mapping[str, tuple[str, ...]]) -> list[str]:
     return [*tools[program], *arguments]
 
 
+def _tools_started(steps: Sequence[Step]) -> set[str]:
+    """The gate tools the steps start: each program, or the module `python -m` runs."""
+
+    named: set[str] = set()
+    for step in steps:
+        program, *arguments = shlex.split(step.command)
+        started = [program]
+        if program == "python" and arguments[:1] == ["-m"]:
+            started += arguments[1:2]
+        named.update(name for name in started if name in release.TOOLS)
+    return named
+
+
 def gates(steps: Sequence[Step], out: Path) -> int:
     occupied = _occupied(out)
     if occupied is not None:
@@ -589,7 +602,10 @@ def gates(steps: Sequence[Step], out: Path) -> int:
     requirements = (ROOT / "requirements-dev.txt").read_text(encoding="utf-8")
     try:
         tools = release.require_toolchain(
-            interpreter, release.pins(requirements), release.own_environments()
+            interpreter,
+            release.pins(requirements),
+            release.own_environments(),
+            only=_tools_started(steps),
         )
     except release.ToolchainError as error:
         _say(str(error))
@@ -1344,7 +1360,12 @@ def _parser() -> argparse.ArgumentParser:
 
     gates_command = commands.add_parser("gates", help="run the gates of the repository")
     gates_command.add_argument(
-        "--only", nargs="+", choices=names, metavar="NAME", help=f"any of: {', '.join(names)}"
+        "--only",
+        nargs="+",
+        action="extend",
+        choices=names,
+        metavar="NAME",
+        help=f"any of: {', '.join(names)}; a repeated --only adds its names",
     )
     gates_command.add_argument(
         "--owner", action="store_true", help="have the release audit enforce the owner policy"

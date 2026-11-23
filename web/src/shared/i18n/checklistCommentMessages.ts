@@ -1,34 +1,34 @@
 export const checklistCommentMessages = {
   en: {
     checklistComment: {
-      discuss: 'Discuss step',
-      discussStep: 'Discuss step “{step}”',
+      discuss: 'Discuss condition',
+      discussStep: 'Discuss condition “{step}”',
       composer: 'Write a comment',
-      linked: 'Comment on checklist step',
-      current: 'Checklist step',
-      changed: 'Step text has changed',
-      removed: 'Step has been removed',
-      remove: 'Remove step link',
+      linked: 'Comment on a condition',
+      current: 'Condition',
+      changed: 'Condition text has changed',
+      removed: 'Condition has been removed',
+      remove: 'Remove condition link',
       changedHint:
-        'The selected text is retained below. The saved comment will quote the step text at submission.',
+        'The selected text is retained below. The saved comment will quote the condition text at submission.',
       removedHint:
-        'This step is no longer available. Remove the step link to send an ordinary comment.',
+        'This condition is no longer available. Remove the condition link to send an ordinary comment.',
     },
   },
   ru: {
     checklistComment: {
-      discuss: 'Обсудить шаг',
-      discussStep: 'Обсудить шаг «{step}»',
+      discuss: 'Обсудить условие',
+      discussStep: 'Обсудить условие «{step}»',
       composer: 'Написать комментарий',
-      linked: 'Комментарий к шагу чек-листа',
-      current: 'Шаг чек-листа',
-      changed: 'Текст шага изменён',
-      removed: 'Шаг удалён',
-      remove: 'Убрать привязку к шагу',
+      linked: 'Комментарий к условию',
+      current: 'Условие',
+      changed: 'Текст условия изменён',
+      removed: 'Условие удалено',
+      remove: 'Убрать привязку к условию',
       changedHint:
-        'Выбранный текст сохранён ниже. В комментарии будет процитирован текст шага на момент отправки.',
+        'Выбранный текст сохранён ниже. В комментарии будет процитирован текст условия на момент отправки.',
       removedHint:
-        'Этот шаг больше недоступен. Уберите привязку к шагу, чтобы отправить обычный комментарий.',
+        'Этого условия больше нет. Уберите привязку к условию, чтобы отправить обычный комментарий.',
     },
   },
 }

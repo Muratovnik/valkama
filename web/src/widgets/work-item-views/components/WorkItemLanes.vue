@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * The board read by goal: a row of state columns per goal, and the states named
- * once above them all.
+ * The board in lanes — by goal, by stage or by project (`boardLanes`): a row of
+ * state columns per lane, and the states named once above them all.
  *
  * Every lane shares one set of column tracks, so a state stands at the same x in
  * every lane and its name is said once, in a header that stays while the lanes
@@ -26,21 +26,27 @@
  * work is already counted in the heading, so it is named only when nothing of
  * the lane is in view. The heading also stays at the top while its lane passes
  * under the row of state names, so a lane in view always says whose it is.
+ *
+ * A folded column (`useColumnFolds`) is a narrow track in every lane: the row of state
+ * names holds its strip, and the lanes' cells there hold nothing until it opens.
  */
 import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import WorkItemLaneCell from '@/widgets/work-item-views/components/WorkItemLaneCell.vue'
 import WorkItemLaneHead from '@/widgets/work-item-views/components/WorkItemLaneHead.vue'
+import WorkItemLanesHead from '@/widgets/work-item-views/components/WorkItemLanesHead.vue'
 import type { StackLanding } from '@/widgets/work-item-views/components/WorkItemStack.vue'
 import { useColumnFit } from '@/widgets/work-item-views/composables/useColumnFit.ts'
 import { useColumnsInView } from '@/widgets/work-item-views/composables/useColumnsInView.ts'
 import { useLandedCells } from '@/widgets/work-item-views/composables/useLandedCells.ts'
 import { useLaneClearance } from '@/widgets/work-item-views/composables/useLaneClearance.ts'
 import { useLaneCollapse } from '@/widgets/work-item-views/composables/useLaneCollapse.ts'
+import { FOLDED_COLUMN } from '@/widgets/work-item-views/utils/boardColumns.ts'
 import { outOfSight } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import type { BoardLane, HeldIn } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
+import { laneTitle } from '@/widgets/work-item-views/utils/laneTitle.ts'
 
 import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
@@ -48,13 +54,15 @@ import type { LiveWork } from '@/shared/api/liveWorkModel.ts'
 import type { WorkflowState, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { useStateName } from '@/shared/lib/useStateName.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
-import SemanticState from '@/shared/ui/SemanticState.vue'
 
 const props = defineProps<{
   /** The filter in force, which a tile's chips read. */
   filter: WorkFilter
   /** A queue or search filter is narrowing what the lanes draw. */
   filtered: boolean
+  /** The states whose column folds, and those folded now, by state id. */
+  foldable: ReadonlySet<string>
+  folded: ReadonlySet<string>
   lanes: BoardLane[]
   /** What an agent's session is doing on each item with live work, by item id. */
   live: Readonly<Record<string, LiveWork>>
@@ -71,6 +79,7 @@ const emit = defineEmits<{
   chain: [reference: string]
   dragging: [active: boolean]
   filter: [token: WorkFilterToken]
+  fold: [state: WorkflowState]
   open: [reference: string]
   place: [move: BoardMove, landing: StackLanding]
 }>()
@@ -87,10 +96,27 @@ const track = ref<HTMLElement | null>(null)
 const { columnWidth, measured, visibleWidth } = useColumnFit(
   scroller,
   track,
-  () => props.states.length,
+  () => props.states.length - props.folded.size,
+  () => props.folded.size,
 )
 
-const inView = useColumnsInView(scroller, measured, () => props.states.length)
+const isFoldedState = (state: WorkflowState) => props.folded.has(state.state_id)
+/** The folded columns by index, which a sideways scroll reads as narrow. */
+const narrow = computed(
+  () => new Set(props.states.flatMap((state, index) => (isFoldedState(state) ? [index] : []))),
+)
+const tracks = computed(() =>
+  props.states
+    .map((state) => (isFoldedState(state) ? `${FOLDED_COLUMN}px` : 'var(--column-width)'))
+    .join(' '),
+)
+
+const inView = useColumnsInView(
+  scroller,
+  measured,
+  () => props.states.length,
+  () => narrow.value,
+)
 useLaneClearance(scroller)
 
 /**
@@ -129,10 +155,6 @@ const stateCounts = computed(() => {
   return counts
 })
 
-function stateCount(state: WorkflowState): number {
-  return stateCounts.value.get(state.state_id) ?? 0
-}
-
 function isFolded(lane: BoardLane): boolean {
   return folded(lane, props.filtered)
 }
@@ -146,7 +168,7 @@ function bodyId(lane: BoardLane): string {
 }
 
 function title(lane: BoardLane): string {
-  return lane.goal?.title ?? t('workItem.lanes.noParent')
+  return laneTitle(lane.head, t)
 }
 
 function inState(lane: BoardLane, state: WorkflowState): WorkItemBrief[] {
@@ -213,29 +235,20 @@ function laneGroup(lane: BoardLane): string {
       '--column-count': props.states.length,
       '--column-width': columnWidth,
       '--board-visible-width': visibleWidth,
+      '--lane-tracks': tracks,
     }"
   >
     <div
       ref="track"
       class="lanes-track"
     >
-      <div
-        class="lanes-head"
-        aria-hidden="true"
-      >
-        <span
-          v-for="state in props.states"
-          :key="state.state_id"
-          class="lanes-state"
-        >
-          <SemanticState
-            dimension="work-item-state"
-            :state="state.category"
-            :label="stateName(state)"
-          />
-          <span class="lanes-state-count">{{ stateCount(state) }}</span>
-        </span>
-      </div>
+      <WorkItemLanesHead
+        :states="props.states"
+        :counts="stateCounts"
+        :foldable="props.foldable"
+        :folded="props.folded"
+        @fold="emit('fold', $event)"
+      />
       <!-- A press inside keeps focus inside: see `.board-lane`. -->
       <!-- eslint-disable-next-line vuejs-accessibility/no-noninteractive-tabindex -->
       <section
@@ -272,25 +285,37 @@ function laneGroup(lane: BoardLane): string {
             class="lane-cells"
             data-board-row
           >
-            <WorkItemLaneCell
+            <template
               v-for="state in props.states"
               :key="state.state_id"
-              :group="laneGroup(lane)"
-              :state="state"
-              :items="inState(lane, state)"
-              :waiting="props.waiting"
-              :live="props.live"
-              :filter="props.filter"
-              :hint-id="props.hintId"
-              :landable="isLanding(lane)"
-              :revealed="isLanded(lane, state)"
-              :writable="props.writable"
-              @collapse="settle(lane, state)"
-              @dragging="(active) => drag(lane, active)"
-              @filter="emit('filter', $event)"
-              @open="emit('open', $event)"
-              @place="(move, landing) => (land(lane, move, landing), emit('place', move, landing))"
-            />
+            >
+              <div
+                v-if="isFoldedState(state)"
+                class="lane-folded"
+                aria-hidden="true"
+              />
+              <WorkItemLaneCell
+                v-else
+                :group="laneGroup(lane)"
+                :state="state"
+                :items="inState(lane, state)"
+                :stages="lane.stages"
+                :waiting="props.waiting"
+                :live="props.live"
+                :filter="props.filter"
+                :hint-id="props.hintId"
+                :landable="isLanding(lane)"
+                :revealed="isLanded(lane, state)"
+                :writable="props.writable"
+                @collapse="settle(lane, state)"
+                @dragging="(active) => drag(lane, active)"
+                @filter="emit('filter', $event)"
+                @open="emit('open', $event)"
+                @place="
+                  (move, landing) => (land(lane, move, landing), emit('place', move, landing))
+                "
+              />
+            </template>
           </div>
         </template>
       </section>
@@ -345,32 +370,6 @@ function laneGroup(lane: BoardLane): string {
   grid-template-columns: var(--lane-tracks);
   gap: var(--space-2);
   padding-bottom: var(--space-4);
-}
-
-.lanes-head {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  display: grid;
-  grid-template-columns: subgrid;
-  grid-column: 1 / -1;
-  min-height: var(--lanes-head-block);
-  padding: 0 0 var(--space-2);
-  background: var(--color-canvas);
-}
-
-.lanes-state {
-  display: flex;
-  gap: var(--space-2);
-  align-items: center;
-  padding-inline: var(--space-3);
-  scroll-snap-align: start;
-}
-
-.lanes-state-count {
-  color: var(--color-text-muted);
-  font: var(--font-count);
-  font-variant-numeric: tabular-nums;
 }
 
 /* A lane is its heading and a row of grounds; the space above the next heading

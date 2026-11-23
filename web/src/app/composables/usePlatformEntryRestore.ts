@@ -116,14 +116,13 @@ export function usePlatformEntryRestore(inputs: EntryInputs) {
   }, 400)
 
   watch(
-    () =>
-      [
-        inputs.modulesSettled.value,
-        inputs.entryRestorePending.value,
-        inputs.route.value.module_id,
-        JSON.stringify(inputs.route.value.scope),
-        JSON.stringify(inputs.route.value.entity),
-      ] as const,
+    [
+      inputs.modulesSettled,
+      inputs.entryRestorePending,
+      () => inputs.route.value.module_id,
+      () => JSON.stringify(inputs.route.value.scope),
+      () => JSON.stringify(inputs.route.value.entity),
+    ],
     () => {
       if (inputs.entryRestorePending.value || inputs.blocked.value || !inputs.modulesSettled.value)
         return

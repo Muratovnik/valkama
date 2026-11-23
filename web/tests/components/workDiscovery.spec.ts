@@ -18,6 +18,7 @@ import { i18n as appI18n, messages } from '@/shared/i18n/index.ts'
 
 import { planningReadModel, workItem } from '../browser/planningFixtures.ts'
 import { stateOf } from '../fixtures/workItem.ts'
+import { keptOrder } from '../support/listOrder.ts'
 
 vi.mock('@/shared/api/memoryApi.ts', () => ({
   fetchMemoryProviders: vi.fn(),
@@ -165,10 +166,15 @@ describe('work discovery', () => {
     const item = data.work_items[0]
     if (!item) throw new Error('Expected fixture item')
     item.claim_ref = 'A long task owner with a descriptive session name'
-    const wrapper = mount(WorkItemList, {
-      props: { items: data.work_items, links: data.links },
-      global: { plugins: [i18n()] },
-    })
+    const host = keptOrder()
+    // In the page, as the list hears a press at the document.
+    const wrapper = host.hold(
+      mount(WorkItemList, {
+        attachTo: document.body,
+        props: { items: data.work_items, links: data.links, ...host.props },
+        global: { plugins: [i18n()] },
+      }),
+    )
     const header = wrapper.get('th')
     await header.get('button').trigger('click')
     expect(wrapper.findAll('tbody tr').map((row) => row.get('.list-open').text())).toEqual([
@@ -176,7 +182,7 @@ describe('work discovery', () => {
       'MAIN-265',
     ])
     expect(wrapper.get('tbody').text()).toContain(item.claim_ref)
-    expect(wrapper.get('tbody tr').findAll('td')).toHaveLength(7)
+    expect(wrapper.get('tbody tr').findAll('td')).toHaveLength(8)
     expect(wrapper.get('tbody tr td:last-child').text()).not.toBe('')
     await wrapper.get('tbody tr').get('.list-open').trigger('click')
     expect(wrapper.emitted('open')).toEqual([['MAIN-264']])
@@ -186,6 +192,7 @@ describe('work discovery', () => {
       'MAIN-265',
       'MAIN-264',
     ])
+    wrapper.unmount()
   })
 })
 describe('supporting copy', () => {

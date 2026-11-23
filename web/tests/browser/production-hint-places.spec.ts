@@ -80,7 +80,7 @@ const PERIODS: List = {
 }
 const RANKING: List = { across: true, holder: '.ranked-row', drawn: '.ranked-bar' }
 const STEPS: List = { across: false, holder: '.checklist', row: '.step-row' }
-const SETTINGS: List = { across: false, holder: '.settings-general-sheet', row: '.settings-row' }
+const SETTINGS: List = { across: false, holder: '.settings-sheet', row: '.settings-row' }
 const RAIL_TILES: List = { across: false, holder: '.analytics-rail-list' }
 const LIST_ROWS: List = { across: false, holder: '.list-table' }
 
@@ -213,7 +213,7 @@ for (const width of [1440, 1024]) {
     }) => {
       await installBackend(page)
       await page.goto(serializePlatformRoute({ module_id: 'settings', scope: spaceScope }))
-      const sheet = page.locator('.settings-general-sheet')
+      const sheet = page.locator('.settings-sheet')
       await expect(sheet.locator('.settings-row').first()).toBeVisible()
       // A field's and a switch's detail stood under it, over the row after it.
       const placed = await sweep(page, sheet, SETTINGS)

@@ -1,49 +1,36 @@
+import { returnExpressions, unwrapExpression, visitNodes } from './semantic-state-bindings.mjs'
 import {
   cssDeclarations,
   normalizeStyleProperty,
   paintCustomProperties,
   SEMANTIC_MARK_PROPERTY,
 } from './semantic-state-css.mjs'
-import { identifierIsShadowed, unwrapExpression, visitNodes } from './semantic-state-provenance.mjs'
 
-function childNodes(node) {
-  const children = []
-  for (const [key, value] of Object.entries(node)) {
-    if (key === 'parent') continue
-    if (Array.isArray(value)) children.push(...value)
-    else if (value && typeof value === 'object') children.push(value)
+/**
+ * The shapes the functions a call can reach give back, read in each one's own
+ * file, or null when the guard cannot list those functions or one returns
+ * nothing it can read.
+ */
+function calledShapes(expression, { provenance, scope, resolving }, shapeOf) {
+  const functions = provenance.callables(expression.callee, scope)
+  if (!functions || functions.some((entry) => resolving.has(entry.node))) return null
+  const next = new Set(resolving)
+  for (const entry of functions) next.add(entry.node)
+  const shapes = []
+  for (const entry of functions) {
+    const returned = returnExpressions(entry.node)
+    if (returned.length === 0) return null
+    for (const value of returned) shapes.push(shapeOf(value, entry.provenance, null, next))
   }
-  return children
+  return shapes
 }
 
-function isNestedFunction(node, root) {
-  return node !== root && /^(?:ArrowFunction|Function)(?:Declaration|Expression)$/u.test(node.type)
-}
-
-function collectReturns(node, root, returned) {
-  if (!node || typeof node !== 'object' || isNestedFunction(node, root)) return
-  if (node.type === 'ReturnStatement') {
-    if (node.argument) returned.push(node.argument)
-    return
-  }
-  for (const child of childNodes(node)) collectReturns(child, root, returned)
-}
-
-function returnExpressions(functionNode) {
-  const body = unwrapExpression(functionNode)?.body
-  if (!body) return []
-  if (body.type !== 'BlockStatement') return [body]
-  const returned = []
-  collectReturns(body, body, returned)
-  return returned
-}
-
-function localFunction(callee, context) {
-  if (callee?.type !== 'Identifier') return null
-  const declaration = context.functions.get(callee.name)
-  if (declaration) return declaration
-  const definition = unwrapExpression(context.definitions.get(callee.name))
-  return /^(?:ArrowFunction|Function)Expression$/u.test(definition?.type) ? definition : null
+/** The shapes the values a name stands for give, read in each one's own file, or null. */
+function boundShapes(expression, { provenance, scope, resolving }, shapeOf) {
+  const found = provenance.values(expression, scope)
+  if (!found || resolving.has(found.key)) return null
+  const next = new Set(resolving).add(found.key)
+  return found.values.map((value) => shapeOf(value.node, value.provenance, null, next))
 }
 
 function mergeStyleShapes(shapes) {
@@ -92,35 +79,21 @@ function literalStyleShape(expression, scope) {
 
 function identifierStyleShape(expression, provenance, scope, resolving) {
   if (expression.name === 'undefined') return { entries: [], unknown: false }
-  if (identifierIsShadowed(expression, scope) || resolving.has(expression.name))
-    return { entries: [], unknown: true }
-  const definition = provenance.context.definitions.get(expression.name)
-  if (!definition) return { entries: [], unknown: true }
-  const next = new Set(resolving).add(expression.name)
-  return mergeStyleShapes([
-    styleShape(definition, provenance, null, next),
-    ...(provenance.context.assignments.get(expression.name) ?? []).map((assignment) =>
-      styleShape(assignment, provenance, null, next),
-    ),
-  ])
+  const shapes = boundShapes(expression, { provenance, scope, resolving }, styleShape)
+  return shapes ? mergeStyleShapes(shapes) : { entries: [], unknown: true }
 }
 
 function callStyleShape(expression, provenance, scope, resolving) {
-  const callee = unwrapExpression(expression.callee)
-  if (callee?.type === 'Identifier' && provenance.context.computed.has(callee.name))
+  const kind = provenance.callKind(expression.callee, scope)
+  if (kind === 'computed')
     return mergeStyleShapes(
       returnExpressions(expression.arguments[0]).map((returned) =>
         styleShape(returned, provenance, scope, resolving),
       ),
     )
-  if (callee?.type === 'Identifier' && provenance.context.refs.has(callee.name))
-    return styleShape(expression.arguments[0], provenance, scope, resolving)
-  const callable = localFunction(callee, provenance.context)
-  if (!callable || resolving.has(callee.name)) return { entries: [], unknown: true }
-  const returned = returnExpressions(callable)
-  if (returned.length === 0) return { entries: [], unknown: true }
-  const next = new Set(resolving).add(callee.name)
-  return mergeStyleShapes(returned.map((entry) => styleShape(entry, provenance, null, next)))
+  if (kind === 'ref') return styleShape(expression.arguments[0], provenance, scope, resolving)
+  const shapes = calledShapes(expression, { provenance, scope, resolving }, styleShape)
+  return shapes ? mergeStyleShapes(shapes) : { entries: [], unknown: true }
 }
 
 function styleShape(node, provenance, scope, resolving = new Set()) {
@@ -178,12 +151,8 @@ function styleValueIsStatic(node, provenance, scope, resolving = new Set()) {
     )
   if (expression.type === 'Identifier') {
     if (expression.name === 'undefined') return true
-    if (identifierIsShadowed(expression, scope) || resolving.has(expression.name)) return false
-    const definition = provenance.context.definitions.get(expression.name)
-    return Boolean(
-      definition &&
-      styleValueIsStatic(definition, provenance, null, new Set(resolving).add(expression.name)),
-    )
+    const statics = boundShapes(expression, { provenance, scope, resolving }, styleValueIsStatic)
+    return Boolean(statics?.every(Boolean))
   }
   if (expression.type === 'ConditionalExpression')
     return [expression.test, expression.consequent, expression.alternate].every((entry) =>
@@ -225,28 +194,13 @@ function objectAttributeShape(expression, provenance, scope, resolving) {
 
 function identifierAttributeShape(expression, provenance, scope, resolving) {
   if (expression.name === 'undefined') return { styles: [], unknown: false }
-  if (identifierIsShadowed(expression, scope) || resolving.has(expression.name))
-    return { styles: [], unknown: true }
-  const definition = provenance.context.definitions.get(expression.name)
-  if (!definition) return { styles: [], unknown: true }
-  const next = new Set(resolving).add(expression.name)
-  return mergeAttributeShapes([
-    attributeBagShape(definition, provenance, null, next),
-    ...(provenance.context.assignments.get(expression.name) ?? []).map((assignment) =>
-      attributeBagShape(assignment, provenance, null, next),
-    ),
-  ])
+  const shapes = boundShapes(expression, { provenance, scope, resolving }, attributeBagShape)
+  return shapes ? mergeAttributeShapes(shapes) : { styles: [], unknown: true }
 }
 
 function callAttributeShape(expression, provenance, scope, resolving) {
-  const callee = unwrapExpression(expression.callee)
-  if (
-    callee?.type === 'Identifier' &&
-    provenance.context.styleless.has(callee.name) &&
-    !identifierIsShadowed(callee, scope)
-  )
-    return { styles: [], unknown: false }
-  if (callee?.type === 'Identifier' && provenance.context.computed.has(callee.name)) {
+  const kind = provenance.callKind(expression.callee, scope)
+  if (kind === 'computed') {
     const returned = returnExpressions(expression.arguments[0])
     return returned.length === 0
       ? { styles: [], unknown: true }
@@ -254,16 +208,10 @@ function callAttributeShape(expression, provenance, scope, resolving) {
           returned.map((entry) => attributeBagShape(entry, provenance, scope, resolving)),
         )
   }
-  if (callee?.type === 'Identifier' && provenance.context.refs.has(callee.name))
+  if (kind === 'ref')
     return attributeBagShape(expression.arguments[0], provenance, scope, resolving)
-  const callable = localFunction(callee, provenance.context)
-  if (!callable || resolving.has(callee.name)) return { styles: [], unknown: true }
-  const returned = returnExpressions(callable)
-  if (returned.length === 0) return { styles: [], unknown: true }
-  const next = new Set(resolving).add(callee.name)
-  return mergeAttributeShapes(
-    returned.map((entry) => attributeBagShape(entry, provenance, null, next)),
-  )
+  const shapes = calledShapes(expression, { provenance, scope, resolving }, attributeBagShape)
+  return shapes ? mergeAttributeShapes(shapes) : { styles: [], unknown: true }
 }
 
 function attributeBagShape(node, provenance, scope, resolving = new Set()) {

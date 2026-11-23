@@ -2,6 +2,12 @@
 /**
  * «…» in a card's bar: what else a person can do with the item, beside Back and Close.
  *
+ * It starts the writes that change what the item is part of, first and only where the item's
+ * place allows them (`dividingActions`): splitting a part off a task opens its window, and
+ * converting, converting back to a task and moving out of the goal ask in the band under the bar.
+ * They are the card's closing writes' to start (`provideInspectorClosing`), so none opens over
+ * another.
+ *
  * It holds the pin, which keeps the item in the side panel's list of work whether or not
  * anyone works on it, until a person takes it off — the person's own list, like a favourite,
  * not a fact about the item. It stood in the identity line between the link and the date,
@@ -17,6 +23,9 @@
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+
+import { dividingActions } from '@/widgets/work-item-inspector/utils/dividingActions.ts'
+import { injectInspectorClosing } from '@/widgets/work-item-inspector/utils/useInspectorClosing.ts'
 
 import { useOpenNotice } from '@/features/session-open/openNotice.ts'
 
@@ -46,7 +55,21 @@ async function pin(on: boolean) {
   }
 }
 
-const entries = computed<MenuEntry[]>(() =>
+const closing = injectInspectorClosing()
+/** Each one opens what takes focus next, a window or a question, once the menu has gone. */
+const dividing = computed<MenuEntry[]>(() => {
+  const item = closing?.host.item.value
+  if (!closing || !item) return []
+  return dividingActions(item, closing.host.chain?.value ?? null).map(({ action, label }) => ({
+    kind: 'action',
+    key: action,
+    label: t(label),
+    opens: true,
+    select: () => closing.divide(action),
+  }))
+})
+
+const pinEntries = computed<MenuEntry[]>(() =>
   pinned.value === null
     ? []
     : [
@@ -61,6 +84,7 @@ const entries = computed<MenuEntry[]>(() =>
         },
       ],
 )
+const entries = computed(() => [...dividing.value, ...pinEntries.value])
 </script>
 
 <template>

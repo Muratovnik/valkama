@@ -4,14 +4,16 @@ import { useI18n } from 'vue-i18n'
 
 import InspectorDescription from '@/widgets/work-item-inspector/components/InspectorDescription.vue'
 import InspectorDiscussion from '@/widgets/work-item-inspector/components/InspectorDiscussion.vue'
+import InspectorHindrances from '@/widgets/work-item-inspector/components/InspectorHindrances.vue'
 import InspectorSummary from '@/widgets/work-item-inspector/components/InspectorSummary.vue'
 import { provideCardSteps } from '@/widgets/work-item-inspector/utils/entrySteps.ts'
 import { checklistProgress } from '@/widgets/work-item-inspector/utils/inspectorActivity.ts'
-import { openBlockers } from '@/widgets/work-item-inspector/utils/openBlockers.ts'
 import type { StateMove } from '@/widgets/work-item-inspector/utils/useInspectorWrites.ts'
 
 import { useItemQuestions } from '@/features/input-requests/composables/useItemQuestions.ts'
 import ExecutorLink from '@/features/session-open/ExecutorLink.vue'
+
+import StepMark from '@/entities/work-item/components/StepMark.vue'
 
 import { uploadImage } from '@/shared/api/imageApi.ts'
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
@@ -19,7 +21,6 @@ import type { WorkItem } from '@/shared/api/planningModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import { plainText } from '@/shared/lib/richText.ts'
-import { semanticStatePresentation, statePresentation } from '@/shared/lib/uiSystem.ts'
 import RichText from '@/shared/ui/RichText.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
@@ -100,9 +101,8 @@ provideCardSteps({
 // answer — is kept for this item, and goes when the item does.
 provideEditorImages((file, signal) => uploadImage(props.item.work_item_id, file, signal))
 
-// A closed item is neither blocked nor waiting on a next step: both read as
-// live instructions, and on a Done card they were stale ones.
-const blockers = computed(() => openBlockers(props.item))
+// A closed item is not waiting on a next step: it reads as a live instruction, and on a
+// Done card it was a stale one.
 const nextStep = computed(() =>
   props.item.open ? props.item.checklist.find((step) => !step.done) : undefined,
 )
@@ -119,9 +119,6 @@ const nextStepPlace = computed(() => {
     total: checklist.length,
   })
 })
-function stepState(done: boolean) {
-  return done ? 'done' : 'open'
-}
 /** The step's box, which its text labels; one card is open at a time, its ids its own. */
 const checklistId = useId()
 const stepBox = (stepId: string) => `${checklistId}-${stepId}`
@@ -130,12 +127,6 @@ const stepHolder = (step: WorkItem['checklist'][number]) =>
   step.done ? step.done_by : step.claimed_by
 const stepHolderKey = (step: WorkItem['checklist'][number]) =>
   step.done ? 'workItem.stepDoneBy' : 'workItem.stepHeldBy'
-/** A blocker as the facet registry words a wait: «Ждёт MAIN-12», then what it is. */
-const blockerTone = semanticStatePresentation({
-  dimension: 'work-item-readiness',
-  state: 'blocked',
-}).tone
-
 /** After the flush: pressed from another section, Overview has not been shown yet. */
 async function revealQuestion() {
   await nextTick()
@@ -147,29 +138,7 @@ defineExpose({ askOutcome, readQuestions: questions.readNow, revealChecklist, re
 
 <template>
   <div class="overview">
-    <ul
-      v-if="blockers.length"
-      class="blockers"
-    >
-      <li
-        v-for="link in blockers"
-        :key="link.reference"
-        class="blocker"
-      >
-        <VIcon
-          class="blocker-glyph"
-          name="waiting"
-          :data-tone="blockerTone"
-          :size="14"
-          :stroke-width="2"
-        />
-        <RichText
-          class="blocker-text"
-          :source="`${t('workItem.facet.waiting', { reference: link.reference })} — ${link.title}`"
-          inline
-        />
-      </li>
-    </ul>
+    <InspectorHindrances :item="item" />
     <!-- A line and the step's words, with no heading of its own: it answers the question
          the card is opened with, and a heading stood over one sentence. -->
     <div
@@ -256,21 +225,11 @@ defineExpose({ askOutcome, readQuestions: questions.readNow, revealChecklist, re
             type="button"
             role="checkbox"
             :class="{ done: step.done }"
-            :data-tone="statePresentation('checklist-step', stepState(step.done)).tone"
             :disabled="!writable"
             :aria-checked="step.done"
             @click="emit('tick', step.id, !step.done)"
           >
-            <span
-              class="step-mark"
-              aria-hidden="true"
-            >
-              <VIcon
-                v-if="step.done"
-                name="check"
-                :size="13"
-              />
-            </span>
+            <StepMark :done="step.done" />
           </button>
           <label
             class="step-text"
@@ -307,6 +266,25 @@ defineExpose({ askOutcome, readQuestions: questions.readNow, revealChecklist, re
               :holder="stepHolder(step)"
               :executor="step.executor"
           /></span>
+          <!-- The mark and its confirmation each on a line of their own under the holder: in the
+               holder's line, which never wraps, they pushed its name to a letter a line on a
+               phone. -->
+          <span
+            v-if="step.by_previous_holder"
+            class="step-previous"
+            data-mark="by-previous-holder"
+            >{{ t('workItem.facts.byPreviousHolder') }}</span
+          >
+          <VButton
+            v-if="writable && step.by_previous_holder"
+            class="step-confirm"
+            size="compact"
+            :aria-label="
+              t('workItem.closeActions.mark.confirmStep', { step: plainText(step.text) })
+            "
+            @click="emit('tick', step.id, true)"
+            >{{ t('workItem.closeActions.mark.confirm') }}</VButton
+          >
         </li>
       </ul>
     </section>

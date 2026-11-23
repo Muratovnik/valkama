@@ -19,7 +19,7 @@ const graph = sourceCode('widgets/work-item-graph/components/GraphView.vue')
 const drawer = sourceCode('widgets/work-item-inspector/components/WorkItemInspector.vue')
 const card = sourceCode('widgets/work-item-views/components/WorkItemTile.vue')
 const drawerDetails = sourceCode('widgets/work-item-inspector/components/InspectorOverview.vue')
-const drawerDetailsCss = sourceCode('widgets/work-item-inspector/components/InspectorOverview.css')
+const stepMark = sourceCode('entities/work-item/components/StepMark.vue')
 const graphControls = sourceCode('widgets/work-item-graph/components/GraphControls.vue')
 const graphField = sourceCode('widgets/work-item-graph/components/GraphField.vue')
 const graphNode = sourceCode('widgets/work-item-graph/components/GraphNodeCard.vue')
@@ -64,7 +64,7 @@ test('GraphView delegates camera behavior to Vue Flow and keeps graph nodes non-
   assert.deepEqual(flowRenderers, ['widgets/work-item-graph/components/GraphField.vue'])
   // The camera controls are Vue Flow's, and find the field's camera by the id the field has.
   assert.match(graphControls, renders('ControlButton'))
-  const flowId = /useVueFlow\(\s*\{\s*id:\s*([\w.]+)\s*\}/.exec(graphControls)?.[1]
+  const flowId = /useVueFlow\(\s*\{\s*id:\s*([\w.]+),?\s*\}/.exec(graphControls)?.[1]
   assert.ok(flowId, 'the controls name no flow')
   assert.match(graphField, sets('id', flowId))
   assert.match(graphField, renders('Background'))
@@ -88,7 +88,7 @@ test('the inspector exposes its emits, related navigation, and shared focus owne
   assert.match(cardPanel, renders('PlanningCardDrawer'))
   assert.match(cardDrawer, renders('ResizableInspector'))
   assert.match(drawer, renders('DrawerFrame'))
-  assert.match(drawer, renders('InspectorTabs'))
+  assert.match(drawer, renders('TabStrip'))
   assert.match(drawer, renders('InspectorOverview'))
   assert.doesNotMatch(drawer, /<InspectorDrawer|<InspectorHead/)
   // No write while one is in flight: components/inspectorFacts.spec.ts. A refresh of the
@@ -220,9 +220,9 @@ test('Planning components carry presentation tones instead of remapping operatio
   // read from its shared presentation: components/planningPresentation.spec.ts.
   assert.doesNotMatch(graphNode, /class="claimed"|'claimed':/)
   assert.match(drawerDetails, /<style\b[^>]*\ssrc="\.\/InspectorOverview\.css"/)
-  const done = [
-    ...compactCss(drawerDetailsCss).matchAll(/\[data-tone='success'\][^{}]*\{([^}]*)\}/g),
-  ]
+  // The step's box is the one the window that confirms a close draws too.
+  assert.match(drawerDetails, /<StepMark\b/)
+  const done = [...compactCss(stepMark).matchAll(/\[data-tone='success'\][^{}]*\{([^}]*)\}/g)]
   assert.ok(
     done.some(
       ([, body]) =>

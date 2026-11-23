@@ -159,9 +159,9 @@ test('a refused move answered from another section brings the checklist into vie
     .click()
   await drawer.locator('.card-state').first().click()
   await page.locator('[role="option"]').last().click()
-  await drawer.getByRole('button', { name: 'Go to the checklist', exact: true }).click()
+  await drawer.getByRole('button', { name: 'Go to the conditions', exact: true }).click()
   await expect(drawer.locator('.overview')).toBeVisible()
-  await expect(drawer.getByRole('heading', { name: /^Checklist/u }).first()).toBeInViewport()
+  await expect(drawer.getByRole('heading', { name: /^Conditions/u }).first()).toBeInViewport()
 })
 
 /** The card from its tile, read down with the wheel until the sections stick. */

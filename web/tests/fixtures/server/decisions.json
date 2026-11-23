@@ -1,0 +1,111 @@
+{
+  "items": [
+    {
+      "at": "2026-01-02T03:04:05Z",
+      "point": "assignment",
+      "item": {
+        "reference": "MAIN-23",
+        "title": "Converted card",
+        "space": "MAIN",
+        "projects": []
+      },
+      "session": "agent",
+      "what": "accepted MAIN-23",
+      "what_message": {
+        "key": "accepted",
+        "values": {
+          "label": null,
+          "reference": "MAIN-23",
+          "under": null
+        }
+      },
+      "event_id": 71
+    },
+    {
+      "at": "2026-01-02T03:04:05Z",
+      "point": "assignment",
+      "item": {
+        "reference": "MAIN-18",
+        "title": "Asked of a session",
+        "space": "MAIN",
+        "projects": []
+      },
+      "session": "claude (session 00000000-0000-4000-8000-000000000049)",
+      "what": "accepted MAIN-18",
+      "what_message": {
+        "key": "accepted",
+        "values": {
+          "label": null,
+          "reference": "MAIN-18",
+          "under": null
+        }
+      },
+      "event_id": 58
+    },
+    {
+      "at": "2026-01-02T03:04:05Z",
+      "point": "assignment",
+      "item": {
+        "reference": "MAIN-8",
+        "title": "Quiet task",
+        "space": "MAIN",
+        "projects": []
+      },
+      "session": "claude (session 00000000-0000-4000-8000-000000000021)",
+      "what": "accepted MAIN-8 under MAIN-7",
+      "what_message": {
+        "key": "accepted",
+        "values": {
+          "label": null,
+          "reference": "MAIN-8",
+          "under": "MAIN-7"
+        }
+      },
+      "event_id": 33
+    },
+    {
+      "at": "2026-01-02T03:04:05Z",
+      "point": "assignment",
+      "item": {
+        "reference": "MAIN-4",
+        "title": "Goal with participants",
+        "space": "MAIN",
+        "projects": []
+      },
+      "session": "claude agent a7c3e9f1d2b4a608 (session 00000000-0000-4000-8000-000000000018)",
+      "what": "accepted MAIN-4",
+      "what_message": {
+        "key": "accepted",
+        "values": {
+          "label": null,
+          "reference": "MAIN-4",
+          "under": null
+        }
+      },
+      "event_id": 21
+    },
+    {
+      "at": "2026-01-02T03:04:05Z",
+      "point": "assignment",
+      "item": {
+        "reference": "MAIN-3",
+        "title": "Card with executors",
+        "space": "MAIN",
+        "projects": []
+      },
+      "session": "claude (session 00000000-0000-4000-8000-000000000012)",
+      "what": "accepted MAIN-3",
+      "what_message": {
+        "key": "accepted",
+        "values": {
+          "label": null,
+          "reference": "MAIN-3",
+          "under": null
+        }
+      },
+      "event_id": 14
+    }
+  ],
+  "total": 5,
+  "has_more": false
+}

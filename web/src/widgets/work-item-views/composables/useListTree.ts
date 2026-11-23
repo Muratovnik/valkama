@@ -1,6 +1,8 @@
 /**
  * The list grouped by goal: the space's work as a tree of rows (`treeRows`),
- * a goal at the top, its stages and tasks under it by depth.
+ * a goal at the top, its stages and tasks under it by depth. Grouped by project it
+ * is a tree of one level, the groups' rows and the cards under them (`listGroups`):
+ * the same rows, folds and keys, read by another source.
  *
  * The tree lays out the whole scope, filtered or not, so a filter shows what
  * it let through with the path to it. Rows that share a parent stand in the
@@ -17,7 +19,7 @@ import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { foldedByRule, treeRows } from '@/shared/lib/treeRows.ts'
-import type { FoldFacts, TreeRow } from '@/shared/lib/treeRows.ts'
+import type { FoldFacts, TreeRow, TreeSource } from '@/shared/lib/treeRows.ts'
 import { useFoldChoices } from '@/shared/lib/useFoldChoices.ts'
 
 const STORAGE_KEY = 'valkama-tree-folds'
@@ -29,10 +31,13 @@ interface ListTree {
   matches: () => ReadonlySet<string> | null
   /** The scope in the list's order, which orders the rows beside each other. */
   ordered: () => readonly WorkItemBrief[]
+  /** How the tree reads its things; the tree of work unless it says. */
+  source?: () => TreeSource<WorkItemBrief> | undefined
   space: () => string
 }
 
-export function useListTree({ items, matches, ordered, space }: ListTree) {
+export function useListTree({ items, matches, ordered, space, source }: ListTree) {
+  const read = () => source?.() ?? WORK_ITEM_TREE
   const { choices, choose } = useFoldChoices(STORAGE_KEY, space)
 
   /** The rows, with the facts each container was folded by. */
@@ -40,15 +45,16 @@ export function useListTree({ items, matches, ordered, space }: ListTree) {
     const rank = new Map(ordered().map((item, at) => [item.work_item_id, at]))
     const chosen = choices.value
     const seen = new Map<string, FoldFacts>()
-    const tree = treeRows(WORK_ITEM_TREE, {
+    const tree = treeRows(read(), {
       folded: (id, given) => {
         seen.set(id, given)
         return chosen[id] ?? foldedByRule(given)
       },
       items: items(),
       matches: matches(),
+      // A group's row has no place in the list's order and stands after the rows that do.
       order: (left, right) =>
-        (rank.get(left.work_item_id) ?? 0) - (rank.get(right.work_item_id) ?? 0),
+        (rank.get(left.work_item_id) ?? rank.size) - (rank.get(right.work_item_id) ?? rank.size),
     })
     return { facts: seen, tree }
   })
@@ -62,7 +68,7 @@ export function useListTree({ items, matches, ordered, space }: ListTree) {
    * with nothing folded, so a fold does not read it again, nor what stands on it.
    */
   const depths = computed(() => {
-    const whole = treeRows(WORK_ITEM_TREE, {
+    const whole = treeRows(read(), {
       folded: () => false,
       items: items(),
       matches: null,

@@ -61,7 +61,8 @@ is complete on its own.
   commits among an item's refs, `kind=commit` and `space` on `GET /api/ref`,
   and the handshake text about commits — and for the directory of spaces —
   a `work_item_count` that is `null` for a space whose store could not be
-  read — as
+  read — and a finished item's `closed_at`, when it last entered its finished
+  state — as
   `docs/decisions/0014-work-model-breaks-the-planning-schemas.md` records. It
   covers nothing else and no later change. Preserve existing
   local data through a verified backup, one forward-only migration, and a

@@ -66,8 +66,8 @@ function activityItem() {
   ]
   item.refs = [
     {
-      kind: 'commit',
-      value: 'sha-hidden-123',
+      kind: 'url',
+      value: 'https://example.com/sha-hidden-123',
       label: 'delivery',
       author: 'A',
       at: '2026-10-23T11:00:00Z',

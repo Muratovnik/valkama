@@ -20,7 +20,7 @@ from ..projects import project_registry, scopes
 from ..store_identity.metadata import ScopeError
 from ..store_identity.refs import validate_work_item_ref
 from ..ui_state import PlatformHttpError, envelope
-from . import interactions, item_tree, model, queue, service, states, volumes
+from . import interactions, item_tree, model, queue, read_model, service, states, volumes
 from .routing import PlanningRouting, one, scope_parameters
 
 PLANNING_INTERFACE = "valkama-planning"
@@ -201,7 +201,9 @@ def work_item_payload(
     function owns the scope. The inspector reads links and
     refs from the work item itself. `brief=true` answers with the brief record
     instead, the one a space's list carries, whose size does not grow with the
-    item's history: what a preview of a reference draws.
+    item's history: what a preview of a reference draws. Both carry `parent`, the
+    reference of the item over it (`read_model.parent_reference`), null for a root:
+    this read takes a reference, so `parent_id` alone cannot read that item.
     """
 
     brief = "brief" in parameters
@@ -221,6 +223,7 @@ def work_item_payload(
     with routing.store_connection(space_ref) as store:
         try:
             work_item = item_loader(store, work_item_ref["reference"])
+            work_item["parent"] = read_model.parent_reference(store, work_item["parent_id"])
         except model.StoreSchemaError as error:
             raise PlatformHttpError(409, "unavailable", model.STORE_SCHEMA_MISMATCH) from error
         except (ValueError, KeyError) as error:

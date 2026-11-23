@@ -8,12 +8,36 @@ import type { Locator, Page } from '@playwright/test'
 import { parsePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
+import { boardSpace } from './boardFixtures.ts'
 import type { Brief } from './boardFixtures.ts'
 import { boardRoute } from './boardPage.ts'
 import { filterSpace } from './served/filter.ts'
 import { spaceAnswer } from './servedAnswers.ts'
 
-async function serveSpace(page: Page, items?: Brief[], workflow?: unknown) {
+/** A moment on the reader's own clock, the browser's and this runner's alike. */
+const at = (day: number, hours: number, minutes = 0) =>
+  new Date(2026, 9, day, hours, minutes).toISOString()
+
+/**
+ * The space's finished work, each card come to stand in Done at its moment: MAIN-406 at the first
+ * moment of 21 October, MAIN-422 at the last minute of the 25th, MAIN-421 at the first of the
+ * 26th and the goal MAIN-420 at the last minute of the 20th.
+ */
+const CLOSED: Record<string, string> = {
+  'MAIN-406': at(21, 0),
+  'MAIN-422': at(25, 23, 59),
+  'MAIN-421': at(26, 0),
+  'MAIN-420': at(20, 23, 59),
+}
+
+/** The labelled space, its finished cards come to a close at the moments above. */
+export const closedSpace = (): Brief[] =>
+  boardSpace().map((item) =>
+    CLOSED[item.reference] ? { ...item, closed_at: CLOSED[item.reference] } : item,
+  )
+
+/** The space's read, laid over the backend's: these items, in this workflow when one is given. */
+export async function serveSpace(page: Page, items?: Brief[], workflow?: unknown) {
   await page.route('**/api/planning?*', (route) =>
     route.fulfill(
       spaceAnswer(new URL(route.request().url()).searchParams, filterSpace(items, workflow)),

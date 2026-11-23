@@ -3,9 +3,13 @@
 import { activityMessages } from '@/shared/i18n/activityMessages.ts'
 import { alertMessages } from '@/shared/i18n/alertMessages.ts'
 import { analyticsMessages } from '@/shared/i18n/analyticsMessages.ts'
+import { boardMessages } from '@/shared/i18n/boardMessages.ts'
 import { checklistCommentMessages } from '@/shared/i18n/checklistCommentMessages.ts'
 import { commentStepsMessages } from '@/shared/i18n/commentStepsMessages.ts'
+import { composedTextMessages } from '@/shared/i18n/composedTextMessages.ts'
 import { connectionMessages } from '@/shared/i18n/connectionMessages.ts'
+import { decisionPointMessages } from '@/shared/i18n/decisionPointMessages.ts'
+import { decisionsMessages } from '@/shared/i18n/decisionsMessages.ts'
 import { discussionThreadMessages } from '@/shared/i18n/discussionThreadMessages.ts'
 import { doctorCommitMessages } from '@/shared/i18n/doctorCommitMessages.ts'
 import { doctorDesktopMessages } from '@/shared/i18n/doctorDesktopMessages.ts'
@@ -29,10 +33,15 @@ import { shellScopeMessages } from '@/shared/i18n/shellScopeMessages.ts'
 import { timeMessages } from '@/shared/i18n/timeMessages.ts'
 import { treeRowMessages } from '@/shared/i18n/treeRowMessages.ts'
 import { viewMenuMessages } from '@/shared/i18n/viewMenuMessages.ts'
+import { volumesMessages } from '@/shared/i18n/volumesMessages.ts'
 import { workFilterMessages } from '@/shared/i18n/workFilterMessages.ts'
 import { workItemAgentMessages } from '@/shared/i18n/workItemAgentMessages.ts'
+import { workItemChainMessages } from '@/shared/i18n/workItemChainMessages.ts'
+import { workItemClosingMessages } from '@/shared/i18n/workItemClosingMessages.ts'
 import { workItemComposeMessages } from '@/shared/i18n/workItemComposeMessages.ts'
+import { workItemDividingMessages } from '@/shared/i18n/workItemDividingMessages.ts'
 import { workItemFacetMessages } from '@/shared/i18n/workItemFacetMessages.ts'
+import { workItemFactMessages } from '@/shared/i18n/workItemFactMessages.ts'
 import { workItemHeadMessages } from '@/shared/i18n/workItemHeadMessages.ts'
 import { workItemLinkMessages } from '@/shared/i18n/workItemLinkMessages.ts'
 import { workItemNextStepMessages } from '@/shared/i18n/workItemNextStepMessages.ts'
@@ -60,7 +69,12 @@ export const en = {
   pastedImages: pastedImageMessages.en.pastedImages,
   ...connectionMessages.en,
   liveWork: liveWorkMessages.en.liveWork,
+  commits: workItemFactMessages.en.commits,
   analytics: analyticsMessages.en.analytics,
+  decisions: decisionsMessages.en,
+  decisionPoints: decisionPointMessages.en,
+  composed: composedTextMessages.en,
+  volumes: volumesMessages.en,
   app: {
     title: 'Valkama',
   },
@@ -232,6 +246,8 @@ export const en = {
     zoomIn: 'Zoom in',
     zoomOut: 'Zoom out',
     zoomReset: 'Fit whole graph',
+    zoomFloor:
+      'On a narrow screen the graph stops where its cards still read. Drag to see the rest.',
     options: 'Graph options and key',
     chainChip: 'Chain {reference} · {count}',
     chainExit: 'Leave chain {reference} and show the whole space',
@@ -662,6 +678,8 @@ export const en = {
   },
   workItem: {
     agents: workItemAgentMessages.en.agents,
+    closeActions: workItemClosingMessages.en.closeActions,
+    dividing: workItemDividingMessages.en.dividing,
     usage: workItemUsageMessages.en.usage,
     preview: workItemPreviewMessages.en.preview,
     addDescription: 'Add description',
@@ -712,78 +730,7 @@ export const en = {
       outgoing: 'From this task',
       incoming: 'To this task',
     },
-    chain: {
-      title: 'Chain',
-      scopeLabel: 'What the chain covers',
-      scopeTree: 'Contents',
-      scopeChain: 'Chain',
-      showOnGraph: 'Show on graph',
-      onGraph: 'On graph',
-      details: 'Chart and pace',
-      loadFailed: 'The chain could not be loaded.',
-      primaryOnly: 'The chain is available only for work items of the primary store.',
-      refreshFailed: 'The chain could not be refreshed; this is the last answer.',
-      stat: {
-        total: 'Under the root',
-        open: 'Open',
-        noneOpen: 'Nothing open',
-        workable: 'Workable',
-        workableNote: 'untriaged work included',
-      },
-      part: '{group} {count}',
-      group: {
-        active: 'In progress',
-        review: 'Review',
-        ready: 'Ready',
-        triage: 'Triage',
-        deferred: 'Deferred',
-        blocked: 'Blocked',
-        containers: 'Goals and stages',
-        done: 'Done',
-      },
-      groupCount: '{group} · {count}',
-      showAll: 'Show all · {count}',
-      showFewer: 'Show fewer',
-      forecast: {
-        window: 'Last {days}\u{A0}days',
-        first: 'First day | First {count}\u{A0}days',
-        facts: '{period}: {created} added, {closed} done',
-        quiet: 'Nothing added or done in the last {days}\u{A0}days',
-        line: '{facts}. {verdict}',
-        young: 'A forecast needs {days}\u{A0}days of history',
-        growing:
-          'New work arrives faster than it closes: to converge, more than {rate}\u{A0}a day must close',
-        steady:
-          'The open part is not shrinking: to converge, more than {rate}\u{A0}a day must close',
-        about: 'At this pace the open work closes in about {span}',
-        aboutBy: 'At this pace the open work closes in about {span} (by\u{A0}{date})',
-        range: 'At this pace the open work closes in {span}',
-        rangeOn: 'At this pace the open work closes in {span} ({date})',
-        earliest: 'At this pace the open work closes in {span} at the earliest: the pace is uneven',
-        year: 'At this pace the open work takes more than a year to close',
-        day: '{count}\u{A0}day | {count}\u{A0}days',
-        week: '{count}\u{A0}week | {count}\u{A0}weeks',
-        month: '{count}\u{A0}month | {count}\u{A0}months',
-      },
-      noParent: 'no parent',
-      map: {
-        summary: 'Branch map: {lanes} lanes, {total} items; {parts}.',
-        lane: 'Lane {name}: {total} items; {parts}',
-        hint: 'Left and Right move between tasks, Page Up and Page Down jump between stretches of one state, Home and End go to the ends, Enter opens the task.',
-        task: '{reference} · {title} · {state}',
-        position: '{position} of {total}',
-        filterLane: 'Show only lane {name}',
-        filter: 'Lane {name}',
-        clearFilter: 'Lane {name}: show every lane',
-        openParent: 'Open {reference}',
-        countDone: '{done} of {total} done',
-      },
-      seriesTotal: 'Scope {count}',
-      seriesClosed: 'Done {count}',
-      seriesOpen: 'Open {count}',
-      chartSummary:
-        'Scope from {from} to {to}: {start} at the start, {total} now; {closed} done and {open} open on {day}.',
-    },
+    chain: workItemChainMessages.en.chain,
     inspector: 'Work item',
     resize: 'Resize the work item',
     sections: 'Work item sections',
@@ -801,25 +748,7 @@ export const en = {
     countsExclude: {
       laneHeads: '{goals} parent as a row | {goals} parents as rows',
     },
-    columnEmpty: 'Nothing here',
-    lanes: {
-      noParent: 'No parent',
-      counts: '{open} open · {closed} closed',
-      fold: 'Fold {lane}',
-      unfold: 'Unfold {lane}',
-      openGoal: 'Open {reference}',
-      showChain: 'Show the chain of {reference} on the board',
-      empty: 'Nothing under it yet.',
-      showAll: 'Show all · {count}',
-      showFewer: 'Show fewer',
-      inState: '{count} in {state}',
-      offLeft: 'To the left:',
-      offRight: 'To the right:',
-    },
-    order: {
-      hint: 'Arrow keys move focus between work items.',
-      moved: '{reference} moved: {position} of {total} in {state}',
-    },
+    ...boardMessages.en,
     listEmpty: 'This space has no work items yet.',
     noSpace: 'This project has no planning space yet.',
     cutoverPending: 'Run `valkama migrate work-model` once, with every session stopped.',
@@ -832,6 +761,7 @@ export const en = {
     },
     ...workItemFacetMessages.en,
     ...workItemHeadMessages.en,
+    ...workItemFactMessages.en,
     ...workItemNextStepMessages.en,
     filter: workFilterMessages.en.filter,
     ...viewMenuMessages.en,
@@ -872,7 +802,7 @@ export const en = {
       claim: 'The claim was refused',
       release: 'The release was refused',
       takeover: 'The takeover was refused',
-      tick: 'The step was not updated',
+      tick: 'The condition was not updated',
       attach: 'The reference was not attached',
       priority: 'The priority was not changed',
       labels: 'The labels were not changed',
@@ -882,14 +812,14 @@ export const en = {
       dismiss: 'Dismiss',
       guard: {
         summary: 'There is no closing summary: say what was done and what comes next.',
-        checklist: 'The checklist has open steps.',
+        checklist: 'Some conditions are still open.',
         executor: 'The work has no executor.',
         blocker: 'Blocking needs a blocking task or a reason.',
         transition: 'The workflow has no such transition.',
       },
       action: {
         summary: 'Write the outcome',
-        checklist: 'Go to the checklist',
+        checklist: 'Go to the conditions',
         executor: 'Claim the work',
         blocker: 'Open relations',
       },
@@ -898,7 +828,7 @@ export const en = {
         transitionQuestion:
           'Move to “{state}” against the workflow rules? The override is recorded in the work history.',
         tick: 'Complete anyway',
-        tickQuestion: '{holder} holds this step. Mark it done in your name?',
+        tickQuestion: '{holder} holds this condition. Mark it done in your name?',
       },
     },
     noClaim: 'No active claim',
@@ -912,7 +842,7 @@ export const en = {
     create: 'New work item',
     newTitle: 'New work',
     cancel: 'Cancel',
-    checklist: 'Checklist',
+    checklist: 'Conditions',
     checklistProgress: '{done}/{total} done',
     stepHeldBy: 'in work',
     stepDoneBy: 'completed by',
@@ -961,7 +891,7 @@ export const en = {
     refAttached: 'attached by {author} · {at}',
     noActivity: 'No activity has been recorded.',
     note: 'Note',
-    noteHint: 'Outcome, blocker reason, or next step.',
+    noteHint: 'Outcome, blocker reason, or what comes next.',
     noteSend: 'Add note',
     reserved: 'Reserved sections',
     reservedIntro: 'Valkama fixes the section list; these arrive with their own layer.',
@@ -980,10 +910,12 @@ export const en = {
       caption: 'Work items in this space, sortable by every column.',
       reference: 'Ref',
       title: 'Title',
+      goal: 'Goal and stage',
+      project: 'Project',
       state: 'State',
       priority: 'Priority',
       claim: 'Assignee',
-      checklist: 'Steps',
+      checklist: 'Conditions',
       updated: 'Updated',
       sortBy: 'Sort by',
       sortOther: 'Order',
@@ -1021,23 +953,23 @@ export const en = {
     taken_over: 'Claim transferred',
     linked: 'Relationship added',
     unlinked: 'Relationship removed',
-    checklist_replaced: 'Checklist replaced',
-    checklist_claimed: 'Checklist step claimed',
-    checklist_taken_over: 'Checklist step transferred',
-    checklist_released: 'Checklist step released',
-    checklist_completed: 'Checklist step completed',
-    checklist_reopened: 'Checklist step reopened',
+    checklist_replaced: 'Conditions replaced',
+    checklist_claimed: 'Condition claimed',
+    checklist_taken_over: 'Condition transferred',
+    checklist_released: 'Condition released',
+    checklist_completed: 'Condition completed',
+    checklist_reopened: 'Condition reopened',
     summarized: 'Closing summary recorded',
     execution_attached: 'Execution attached',
     overridden: 'Guard overridden',
     moved: 'Column changed',
     takenOver: 'Claim transferred',
-    checklistClaimed: 'Checklist item claimed',
-    checklistTakenOver: 'Checklist item transferred',
-    checklistReleased: 'Checklist item released',
-    checklistCompleted: 'Checklist item completed',
-    checklistReopened: 'Checklist item reopened',
-    checklistReplaced: 'Checklist replaced',
+    checklistClaimed: 'Condition claimed',
+    checklistTakenOver: 'Condition transferred',
+    checklistReleased: 'Condition released',
+    checklistCompleted: 'Condition completed',
+    checklistReopened: 'Condition reopened',
+    checklistReplaced: 'Conditions replaced',
     event: 'Card event',
     previousAgent: '· previous agent {agent}',
     session: 'Session attached',

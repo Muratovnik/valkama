@@ -24,7 +24,7 @@ withDefaults(
 const emit = defineEmits<{ 'submit': []; 'update:modelValue': [value: string] }>()
 const preview = defineModel<boolean>('preview', { default: false })
 const editor = ref<InstanceType<typeof MarkdownEditor> | null>(null)
-defineExpose({ focus: () => editor.value?.focus() })
+defineExpose({ takeFocus: () => editor.value?.takeFocus() })
 </script>
 
 <template>

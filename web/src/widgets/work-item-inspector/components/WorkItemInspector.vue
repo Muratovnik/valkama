@@ -31,9 +31,10 @@
  * under it, and moved all of that when the answer came. The bar's controls and the
  * waiting mark are all that stand until then, and a failed read gets the head back.
  */
-import { computed, ref, toRef, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import InspectorActionDialogs from '@/widgets/work-item-inspector/components/InspectorActionDialogs.vue'
 import InspectorActivity from '@/widgets/work-item-inspector/components/InspectorActivity.vue'
 import InspectorAgents from '@/widgets/work-item-inspector/components/InspectorAgents.vue'
 import InspectorChain from '@/widgets/work-item-inspector/components/InspectorChain.vue'
@@ -44,9 +45,9 @@ import InspectorIdentity from '@/widgets/work-item-inspector/components/Inspecto
 import InspectorMemory from '@/widgets/work-item-inspector/components/InspectorMemory.vue'
 import InspectorNotices from '@/widgets/work-item-inspector/components/InspectorNotices.vue'
 import InspectorOverview from '@/widgets/work-item-inspector/components/InspectorOverview.vue'
+import InspectorReadRecovery from '@/widgets/work-item-inspector/components/InspectorReadRecovery.vue'
 import InspectorReferenceScope from '@/widgets/work-item-inspector/components/InspectorReferenceScope.vue'
 import InspectorRelations from '@/widgets/work-item-inspector/components/InspectorRelations.vue'
-import InspectorTabs from '@/widgets/work-item-inspector/components/InspectorTabs.vue'
 import InspectorWriteActions from '@/widgets/work-item-inspector/components/InspectorWriteActions.vue'
 import { agentCount } from '@/widgets/work-item-inspector/utils/agentUsage.ts'
 import { followGuard } from '@/widgets/work-item-inspector/utils/guardStep.ts'
@@ -58,6 +59,7 @@ import { useInspectorExecution } from '@/widgets/work-item-inspector/utils/useIn
 import { useInspectorRecord } from '@/widgets/work-item-inspector/utils/useInspectorRecord.ts'
 import { useInspectorReturn } from '@/widgets/work-item-inspector/utils/useInspectorReturn.ts'
 import { useInspectorSections } from '@/widgets/work-item-inspector/utils/useInspectorSections.ts'
+import type { InspectorSection } from '@/widgets/work-item-inspector/utils/useInspectorSections.ts'
 import { useInspectorWrites } from '@/widgets/work-item-inspector/utils/useInspectorWrites.ts'
 import { useQuestionReveal } from '@/widgets/work-item-inspector/utils/useQuestionReveal.ts'
 import { useTakeoverQuestion } from '@/widgets/work-item-inspector/utils/useTakeoverQuestion.ts'
@@ -79,7 +81,7 @@ import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import DrawerFrame from '@/shared/ui/DrawerFrame.vue'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 import TabPanel from '@/shared/ui/TabPanel.vue'
-import VButton from '@/shared/ui/VButton.vue'
+import TabStrip from '@/shared/ui/TabStrip.vue'
 
 const props = defineProps<{
   /** True while a related item was opened from inside this drawer. */
@@ -95,6 +97,8 @@ const props = defineProps<{
   agentsToken?: number
   /** The item's kind as the host's model has it, so its usage can be read with its record. */
   kind?: string
+  /** The section the page it was opened from shows it on first; Back's place wins over it. */
+  opensOn?: InspectorSection | null
   /**
    * The address names this card's own chain, in this scope: the graph was opened from the
    * card's Chain, and the card opens there, its chain in that scope and in view.
@@ -156,8 +160,7 @@ const {
 // refresh, never twice for one answer. Like executions, the chain endpoint reads
 // the primary store only, so an attached store's item asks it nothing. It is read
 // ahead of the sections, which offer its tab only where there is a chain.
-const chainRoot = computed(() => (props.writable ? (item.value?.work_item_id ?? '') : ''))
-const chain = useWorkItemChain(chainRoot, toRef(props, 'refreshToken'))
+const chain = useWorkItemChain(item, props)
 
 const { offersExecution, section, sections, shownSection, tabs } = useInspectorSections({
   writable: () => props.writable,
@@ -173,11 +176,9 @@ async function load() {
   await loadResource()
 }
 
-const holdFocus = () => frame.value?.holdFocus()
-
 /** The Retry pressed goes with the failure it answers, and focus must not go with it. */
 function retryRead() {
-  holdFocus()
+  frame.value?.holdFocus()
   void load()
 }
 
@@ -186,6 +187,7 @@ const reloaded = () => load().then(() => emit('changed'))
 const {
   attachMemory,
   claim,
+  closing,
   dismiss: dismissNotice,
   error: writeError,
   force,
@@ -197,6 +199,7 @@ const {
 } = useInspectorWrites({
   busy,
   item,
+  chain: chain.chain,
   changed: reloaded,
   failureText: (error) => failureText(typedFailure(error, 'mutation_failed')),
   load,
@@ -226,12 +229,6 @@ watch(
   { immediate: true },
 )
 
-// Not `load`: news of an agent is no reason to take a refused write's reason away.
-watch(
-  () => props.agentsToken,
-  () => void loadResource(),
-)
-
 /** The item and its chain have both answered, so the body is as tall as it will be. */
 const settled = () => item.value !== null && chain.answered.value
 
@@ -255,8 +252,8 @@ const target = computed(() => inspectorTarget(props))
 const takeover = useTakeoverQuestion(() => item.value?.claim_ref ?? '', takeOver)
 
 /** The band under the bar holds what has to be answered or read, and only while it does. */
-const notices = computed(
-  () => Boolean(notice.value || writeError.value || takeover.question.value) || asking.value,
+const notices = computed(() =>
+  [notice, writeError, takeover.question, asking, closing.inPlace].some((part) => part.value),
 )
 
 /** The next step a guard asks for, taken where the inspector can take it. */
@@ -386,8 +383,9 @@ defineExpose({ close, openFrom })
       v-if="!missing && !pending"
       #tabs
     >
-      <InspectorTabs
+      <TabStrip
         v-model="shownSection"
+        class="inspector-tabs"
         :label="t('workItem.sections')"
         :sections="sections"
         :tabs="tabs"
@@ -411,17 +409,10 @@ defineExpose({ close, openFrom })
         @retry="retryRead"
       >
         <template #default="{ payload }">
-          <div
+          <InspectorReadRecovery
             v-if="state.status === 'degraded' && state.reason && readRetryable"
-            class="inspector-read-recovery"
-          >
-            <VButton
-              variant="ghost"
-              @click="retryRead"
-            >
-              {{ t('platform.actions.retry') }}
-            </VButton>
-          </div>
+            @retry="retryRead"
+          />
           <TabPanel
             class="inspector-panel"
             :tabs="tabs"
@@ -436,7 +427,7 @@ defineExpose({ close, openFrom })
               :target="target"
               :writable="writable && !busy"
               @changed="reloaded"
-              @hold-focus="holdFocus"
+              @hold-focus="frame?.holdFocus"
               @refresh="load"
               @resume="(state) => changeFacts({ state })"
               @tick="tick"
@@ -449,6 +440,7 @@ defineExpose({ close, openFrom })
               :loading="chain.loading.value"
               :readable="writable"
               :scope="chain.scope.value"
+              :space="chain.space.value"
               @scope="chain.setScope"
               @retry="chain.load"
               @graph="(shown, branch) => emit('chain', shown, branch)"
@@ -508,6 +500,7 @@ defineExpose({ close, openFrom })
     @close="running.launchOpen.value = false"
     @submit="submitLaunch"
   />
+  <InspectorActionDialogs :target="target" />
 </template>
 
 <style scoped src="./WorkItemInspector.css"></style>

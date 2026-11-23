@@ -1,0 +1,127 @@
+{
+  "questions": {
+    "task_filed": [
+      "reference",
+      "goal",
+      "title"
+    ],
+    "task_moved_in": [
+      "reference",
+      "goal",
+      "title"
+    ],
+    "task_moved_to": [
+      "reference",
+      "goal",
+      "state",
+      "title"
+    ],
+    "goal_proposed": [
+      "reference",
+      "title"
+    ],
+    "goal_came_back": [
+      "reference",
+      "title"
+    ],
+    "put_off_asked": [
+      "reference",
+      "kind",
+      "title",
+      "until",
+      "comments",
+      "reason"
+    ],
+    "put_off_came": [
+      "reference",
+      "until",
+      "item",
+      "comments"
+    ],
+    "cancel_asked": [
+      "reference",
+      "point",
+      "title",
+      "reason",
+      "sessions_asked",
+      "objections",
+      "unanswered"
+    ],
+    "cancel_consent": [
+      "reference",
+      "title",
+      "reason"
+    ],
+    "confirm_asked": [
+      "reference",
+      "cancelled",
+      "moved_out",
+      "steps",
+      "hidden"
+    ],
+    "confirm_agent": [
+      "reference",
+      "summary",
+      "cancelled",
+      "moved_out",
+      "steps",
+      "hidden"
+    ],
+    "confirm_agent_empty": [
+      "reference",
+      "summary",
+      "cancelled",
+      "moved_out",
+      "steps",
+      "hidden"
+    ],
+    "steps_asked": [
+      "reference",
+      "kind",
+      "title",
+      "removed",
+      "rewritten",
+      "reason"
+    ],
+    "group_asked": [
+      "count",
+      "title"
+    ]
+  },
+  "decisions": {
+    "accepted": [
+      "reference",
+      "under",
+      "label"
+    ],
+    "moved": [
+      "reference",
+      "under"
+    ],
+    "cancelled": [
+      "reference",
+      "question"
+    ],
+    "closed": [
+      "reference"
+    ],
+    "put_off": [
+      "reference",
+      "until",
+      "comments",
+      "reason"
+    ],
+    "steps": [
+      "changes",
+      "reason"
+    ],
+    "chose": [
+      "labels"
+    ],
+    "group": [
+      "title",
+      "answer",
+      "count"
+    ]
+  }
+}

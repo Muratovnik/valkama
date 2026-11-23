@@ -4,7 +4,7 @@
  *
  * The row is the view and its menu, then the filter, with the one primary action
  * at its end, where every module puts it. The menu stands by the view because what
- * it holds arranges what is drawn — the view's grouping — or brings a whole view
+ * it holds arranges what is drawn — the view's grouping and order — or brings a whole view
  * back, a saved one (`PlanningViewMenu`); everything to the right of it narrows
  * what is drawn, so the two are not read as one set of filters. The filter is one
  * field — text and facet chips — and the menu it opens, because the five queue
@@ -23,10 +23,14 @@ import { useI18n } from 'vue-i18n'
 
 import type { CensusExclusion } from '@/pages/planning/composables/usePlanningCensus.ts'
 import type { ViewGrouping } from '@/pages/planning/composables/usePlanningChainScope.ts'
+import PlanningClosedDays from '@/pages/planning/PlanningClosedDays.vue'
 import PlanningViewMenu from '@/pages/planning/PlanningViewMenu.vue'
 import type { PlanningViewMode } from '@/pages/planning/PlanningWorkspace.vue'
 import { graphView } from '@/pages/planning/utils/graphView.ts'
 
+import type { ViewSort } from '@/widgets/work-item-views/utils/workOrder.ts'
+
+import { filterWords } from '@/features/work-filter/filterOptions.ts'
 import WorkFilterChips from '@/features/work-filter/WorkFilterChips.vue'
 import WorkFilterField from '@/features/work-filter/WorkFilterField.vue'
 
@@ -53,7 +57,15 @@ const props = defineProps<{
   categories: readonly NonNullable<WorkItemBrief['state']>['category'][]
   /** The chain the board or the list is narrowed to; the graph names its own. */
   chain: string | null
-  counts: { held: number; matchedClosed: number; matchedOpen: number; open: number; total: number }
+  /** The space's own work; `elsewhere`, the cards of other spaces that name its project. */
+  counts: {
+    elsewhere: number
+    held: number
+    matchedClosed: number
+    matchedOpen: number
+    open: number
+    total: number
+  }
   /** What the graph leaves out of its own counts. */
   exclusion: CensusExclusion | null
   /** The filter differs from the empty one. */
@@ -74,6 +86,8 @@ const props = defineProps<{
   groupings?: readonly ViewGrouping[]
   /** The space is being read, so the bar has nothing to count yet and says no number. */
   reading?: boolean
+  /** The order the view on the stage draws in; null for a view with none. */
+  sort?: ViewSort | null
 }>()
 
 const emit = defineEmits<{
@@ -82,6 +96,7 @@ const emit = defineEmits<{
   /** Search every project for the filter's text, from the last row of its menu. */
   'find': [text: string]
   'group': [grouping: ViewGrouping]
+  'sort': [sort: ViewSort]
   /** A saved view chosen: the address state it keeps. */
   'state': [state: Record<string, string | number | boolean>]
   'view': [mode: PlanningViewMode]
@@ -117,6 +132,16 @@ const countsText = computed(() => {
     : t('workItem.filter.open', { open, total }, open)
 })
 /**
+ * Named apart as not this space's work, «и 3 из других пространств»: a fact of its own, so the
+ * line breaks before it where both do not fit. Held to the count in one fact, the line ran
+ * 15px past a phone's screen and its end was cut.
+ */
+const elsewhereText = computed(() =>
+  props.counts.elsewhere ? t('workItem.filter.elsewhere', { count: props.counts.elsewhere }) : '',
+)
+/** The space the line breaks at between two facts with no separator; markup drops a bare one. */
+const BETWEEN = ' '
+/**
  * The closed items a filter let through, said only when it let through no open
  * one: beside open matches they are the views' own extra items and the line
  * does not carry them.
@@ -133,17 +158,21 @@ const closedText = computed(() => {
  */
 const rowsText = computed(() => {
   const left = props.exclusion
-  return props.grouping === 'goal' && left?.kind === 'lane-heads'
+  // Only a board in lanes by goal or by stage draws its containers as rows.
+  const lanes = props.grouping === 'goal' || props.grouping === 'stage'
+  return lanes && left?.kind === 'lane-heads'
     ? t('workItem.countsExclude.laneHeads', { goals: left.count }, left.count)
     : ''
 })
 
 const tokens = computed(() => filterTokens(filter.value))
 const labelsAny = computed(() => filter.value.labelsMatch === 'any')
+/** A project's name and a goal's title for its chip, from the work the bar counts. */
+const tokenWords = computed(() => filterWords(props.items))
 /** Where focus goes when the last chip on the narrow line is taken out. */
-const field = useTemplateRef<{ focus: () => void }>('field')
+const field = useTemplateRef<{ takeFocus: () => void }>('field')
 function focusField() {
-  field.value?.focus()
+  field.value?.takeFocus()
 }
 /** Reset takes the button that did it away, so the caret goes to the field. */
 function reset() {
@@ -187,8 +216,10 @@ function removeChip(token: WorkFilterToken) {
         :grouping="grouping"
         :groupings="groupings"
         :place="viewPlace"
+        :sort="sort ?? null"
         :state="routeState"
         @group="(value) => emit('group', value)"
+        @sort="(value) => emit('sort', value)"
         @state="(state) => emit('state', state)"
       />
       <WorkFilterField
@@ -226,10 +257,12 @@ function removeChip(token: WorkFilterToken) {
           ref="chips"
           :labels-any="labelsAny"
           :tokens="tokens"
+          :words="tokenWords"
           @leave="focusField"
           @negate="(token) => (filter = negateToken(filter, token))"
           @remove="removeChip"
         />
+        <PlanningClosedDays v-model:filter="filter" />
       </div>
       <p
         class="workspace-figures"
@@ -240,6 +273,8 @@ function removeChip(token: WorkFilterToken) {
           v-if="!reading"
           class="workspace-fact"
           >{{ countsText }}</span
+        ><template v-if="!reading && elsewhereText"
+          >{{ BETWEEN }}<span class="workspace-fact">{{ elsewhereText }}</span></template
         ><span
           v-if="closedText"
           class="workspace-closed"
@@ -332,8 +367,13 @@ function removeChip(token: WorkFilterToken) {
   max-width: 100%;
 }
 
-/* The picked facets, first on the line they explain; gone with the last one. */
+/* The picked facets, first on the line they explain, and the days of «Closed in a period» of the
+   reader's own after them; gone with the last one. */
 .workspace-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  align-items: center;
   min-width: 0;
 
   &:empty {
@@ -353,7 +393,8 @@ function removeChip(token: WorkFilterToken) {
 }
 
 /* A fact never breaks inside itself: «319 открытых из 1267» wrapped mid-number
-   at 390. A separator rides on the start of the fact after it. */
+   at 390. The line breaks between facts, and a separator rides on the start of the
+   fact after it. */
 .workspace-fact {
   white-space: nowrap;
 }

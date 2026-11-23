@@ -68,7 +68,8 @@ CONFIRM_FIELDS = _confirm_fields("Leave it to the next session")
 CONFIRM_OPEN_FIELDS = _confirm_fields("Leave it open")
 #: The fields of the question put-off work asks when its condition came under goals
 #: and stages all accepted: `do` takes it up, `later` puts it off again until `until`
-#: (a day or an item's reference, as `defer` reads it), and `drop` cancels it, with
+#: (a day, a count of new comments, both, or an item's reference, as `defer` reads it),
+#: and `drop` cancels it, with
 #: `cancels` the list token a goal or stage with open work under it is cancelled by.
 RETURN_DO = "do"
 RETURN_LATER = "later"
@@ -89,7 +90,8 @@ RETURN_FIELDS = (
     },
     {
         "id": RETURN_UNTIL,
-        "label": "Until: a day YYYY-MM-DD or the item it waits on",
+        "label": "Until: a day YYYY-MM-DD, a count such as 3 comments, both as 2026-12-01 or"
+        " 3 comments, or the item it waits on",
         "type": "text",
         "required": True,
         "options": [],
@@ -286,6 +288,8 @@ def consent_fields() -> list[dict]:
 
 
 MAX_NOTE = 8000
+#: The longest label of a field, an option or a list, and a field's group.
+MAX_LABEL = 200
 MAX_OPTION_DESCRIPTION = 8000
 #: A question's fields as stored. A description may run to 8000 characters on each
 #: of 20 options of 12 fields, and that is not a question anyone can read.
@@ -329,7 +333,9 @@ MAX_COMPACT_JSON = 2000
 MAX_CHANGE_QUOTE = 60
 #: What marks an option a change removed, as the contract writes it: U+2212, not a hyphen.
 MINUS = "\u2212"
-_KEY = re.compile(r"[a-z][a-z0-9_-]{0,63}\Z")
+#: The longest id of a field or an option.
+MAX_KEY = 64
+_KEY = re.compile(rf"[a-z][a-z0-9_-]{{0,{MAX_KEY - 1}}}\Z")
 _OPTION_KEYS = frozenset({"id", "label", "description", "recommended", "why"})
 #: One valid field with two options, which a refusal of the fields' shape shows, so a
 #: caller sees the form to send instead of rebuilding it from the rule's words.
@@ -343,7 +349,7 @@ def key(value: object) -> str:
     if not isinstance(value, str) or not _KEY.fullmatch(value):
         raise model.PlanningError(
             "field and option ids must be stable lowercase identifiers (a-z first, then"
-            f" a-z, 0-9, _ or -; at most 64), as in {FIELD_EXAMPLE}"
+            f" a-z, 0-9, _ or -; at most {MAX_KEY}), as in {FIELD_EXAMPLE}"
         )
     return value
 
@@ -404,7 +410,7 @@ def fields(value: object) -> list[dict]:
             raise model.PlanningError("a choice field recommends at most one option")
         field = {
             "id": identity,
-            "label": model.text_field(raw["label"], "field.label", limit=200),
+            "label": model.text_field(raw["label"], "field.label", limit=MAX_LABEL),
             "type": kind,
             "required": raw["required"],
             "options": parsed,
@@ -430,7 +436,7 @@ def _field_extras(raw: dict, identity: str, kind: str, earlier: dict[str, dict])
             raise model.PlanningError("field.description is required when it is given")
         extras["description"] = description
     if "group" in raw:
-        extras["group"] = model.text_field(raw["group"], "field.group", limit=200)
+        extras["group"] = model.text_field(raw["group"], "field.group", limit=MAX_LABEL)
     if "recommended" in raw:
         if kind != "verdict":
             raise model.PlanningError(
@@ -535,7 +541,7 @@ def _option(raw: object) -> dict:
         )
     option: dict = {
         "id": key(raw["id"]),
-        "label": model.text_field(raw["label"], "option.label", limit=200),
+        "label": model.text_field(raw["label"], "option.label", limit=MAX_LABEL),
     }
     if "description" in raw:
         description = model.multiline_field(

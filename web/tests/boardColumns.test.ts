@@ -75,6 +75,14 @@ describe('the columns a sideways scroll shows', () => {
     })
   })
 
+  it('reads a folded column as its narrow strip', () => {
+    // The second column folded to 40px: the next three open ones fit beside it at rest,
+    // and scrolled by the first column the fifth comes in.
+    const folded = { ...board, narrow: new Set([1]) }
+    expect(columnsInView({ ...folded, scrollLeft: 0 })).toEqual({ first: 0, last: 3 })
+    expect(columnsInView({ ...folded, scrollLeft: 237 })).toEqual({ first: 1, last: 4 })
+  })
+
   it('counts every column in view when nothing was measured', () => {
     expect(columnsInView({ ...board, scrollLeft: 0, width: null })).toEqual({ first: 0, last: 6 })
     expect(columnsInView({ ...board, available: 0, scrollLeft: 0 })).toEqual({ first: 0, last: 6 })

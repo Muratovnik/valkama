@@ -2,6 +2,7 @@
 
 import { groupHistory } from '@/widgets/work-item-inspector/utils/historyRecords.ts'
 
+import type { DecisionPoint } from '@/shared/api/planningDecisionPoints.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 
 type Ref = WorkItem['refs'][number]
@@ -15,11 +16,12 @@ export interface ActivityEntry {
   /** Message key naming what happened; the entry never spells its own label. */
   titleKey: string
   action?: string
+  /** The participation point an agent's own decision marked the event with; absent on any other. */
+  point?: DecisionPoint
   reference?: Ref
 }
 
 const REF_TITLE_KEYS: Record<Ref['kind'], string> = {
-  commit: 'reference.commit',
   memory: 'reference.memory',
   session: 'reference.session',
   url: 'reference.url',
@@ -34,6 +36,7 @@ export function buildActivity(item: WorkItem): ActivityEntry[] {
     titleKey: `activity.${event.action}`,
     action: event.action,
     detail: event.detail,
+    ...(event.point ? { point: event.point } : {}),
   }))
   const refs = item.refs.map((reference, index): ActivityEntry => ({
     key: `ref-${index}-${reference.at}`,

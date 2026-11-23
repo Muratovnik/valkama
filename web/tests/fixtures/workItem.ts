@@ -84,6 +84,14 @@ export function getButton(wrapper: VueWrapper, text: string) {
   return button
 }
 
+/** Turn the chain section to one of its readings, Contents or Chain, and wait for its read. */
+export async function chooseScope(wrapper: VueWrapper, name: 'Chain' | 'Contents') {
+  const option = wrapper.findAll('.chain-scope button').find((entry) => entry.text() === name)
+  if (option === undefined) throw new Error(`Missing reading: ${name}`)
+  await option.trigger('click')
+  await flushPromises()
+}
+
 /** A tab of the card's strip by its name, or undefined where the card does not offer it. */
 export function findTab(wrapper: VueWrapper, name: string) {
   return wrapper.findAll('.inspector-tabs [role="tab"]').find((tab) => tab.text() === name)

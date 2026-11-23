@@ -30,7 +30,6 @@ import sys
 import tempfile
 import threading
 import unittest
-from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from functools import partial
 from pathlib import Path
@@ -41,13 +40,22 @@ from server import http_surface, mcp_surface, session_open, sessions, store
 from server.analytics import quota as analytics_quota
 from server.hooks import ingest, normalize
 from server.ops import doctor, git_hook, url_schemes
-from server.planning import calls, read_model, requests, service, subscriptions
+from server.planning import (
+    calls,
+    composed,
+    participation,
+    read_model,
+    requests,
+    service,
+    subscriptions,
+)
 from server.projects import project_registry
 from server.quota import samples
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
 from tests.registry_fixtures import project_entry, registry_bytes
 from tests.test_planning_questions import BOOLEAN, CHOICE, MULTI, TEXT
+from tests.web_fixture_closed import closed_in_period
 
 FIXTURES = Path(__file__).resolve().parents[1] / "web" / "tests" / "fixtures" / "server"
 PROJECT = "example-project"
@@ -69,11 +77,16 @@ class _Normalizer:
     def __init__(self, root: Path) -> None:
         self.root = root
         self.uuids: dict[str, str] = {}
+        #: The fields whose moments the file being written keeps, as its scenario wrote them.
+        self.kept: frozenset[str] = frozenset()
 
     def __call__(self, value: object) -> object:
         if isinstance(value, dict):
             # A key can be an id too: the read model's live work is keyed by its items' ids.
-            return {self.text(key): self(found) for key, found in value.items()}
+            return {
+                self.text(key): found if key in self.kept else self(found)
+                for key, found in value.items()
+            }
         if isinstance(value, list):
             return [self(found) for found in value]
         if isinstance(value, str):
@@ -100,6 +113,14 @@ class _Normalizer:
         return self.uuids[found.group(0)]
 
 
+def _order_moves(workflow: dict) -> None:
+    """Put a workflow's moves in its states' order: they stand in the order of the states' ids,
+    which change run to run."""
+
+    position = {state["state_id"]: state["position"] for state in workflow["states"]}
+    workflow["transitions"].sort(key=lambda move: (position[move["from"]], position[move["to"]]))
+
+
 class _Scenario:
     """One store with threads and questions in every state a card shows."""
 
@@ -107,6 +128,8 @@ class _Scenario:
         self.root = root
         #: The goal, the stage and the task done under the goal that `tree` files.
         self.tree_refs: dict[str, str] = {}
+        #: The stage under the goal `goal_card` files.
+        self.in_goal = ""
         conn = store.connect()
         try:
             service.create_planning_space(conn, name="Contract", key=SPACE)
@@ -158,18 +181,23 @@ class _Scenario:
             raise AssertionError(f"{path} answered {response.status}: {answer}")
         return answer
 
-    def refusal(self, path: str) -> dict:
-        """A call the server must refuse, as the browser makes it."""
+    def refusal(self, path: str, payload: dict | None = None) -> dict:
+        """A call the server must refuse, as the browser makes it; a write when `payload`."""
 
         client = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=10)
+        headers = {
+            "Origin": f"http://127.0.0.1:{self.server.server_port}",
+            "Sec-Fetch-Site": "same-origin",
+        }
+        if payload is not None:
+            headers["Content-Type"] = "application/json"
+            headers["X-Valkama-Session"] = self.server.security_context.browser_session_token
         try:
             client.request(
-                "GET",
+                "GET" if payload is None else "POST",
                 path,
-                headers={
-                    "Origin": f"http://127.0.0.1:{self.server.server_port}",
-                    "Sec-Fetch-Site": "same-origin",
-                },
+                body=None if payload is None else json.dumps(payload),
+                headers=headers,
             )
             response = client.getresponse()
             answer = json.loads(response.read())
@@ -242,7 +270,10 @@ class _Scenario:
             conn.close()
 
     def goal_card(self) -> dict:
-        """A goal's card naming who works on it: its creator, and a holder under a stage."""
+        """A goal's card naming who works on it: its creator, and a holder under a stage.
+
+        The stage under it is kept (`in_goal`), whose brief read names the goal as its parent.
+        """
 
         def who(identity: str, agent: str | None = None) -> calls.Identity:
             return calls.Identity(
@@ -278,6 +309,7 @@ class _Scenario:
             conn.commit()
         finally:
             conn.close()
+        self.in_goal = str(stage)
         return self.http(f"/api/modules/planning/work-item?{self.scope(reference=goal)}")
 
     def session_gone(self) -> dict:
@@ -356,6 +388,37 @@ class _Scenario:
         question = answer["waits_for_owner"]["question"]
         return self.http(f"/api/modules/planning/request?{self.scope(id=question)}")
 
+    def participation(self) -> dict[str, dict]:
+        """The owner's participation as Settings reads and writes it: a space with one value
+        of its own and a label's rule over a shared one, a write's answer, and the space's
+        record its launch place write answers with."""
+
+        self.http(
+            "/api/planning/participation", {"space": None, "key": "goal_close", "value": "human"}
+        )
+        self.http(
+            "/api/planning/participation",
+            {"space": None, "label": "flow", "ready": True, "description": "The main line"},
+        )
+        self.http(
+            "/api/planning/participation",
+            {"space": SPACE, "label": "flow", "ready": False, "description": None},
+        )
+        written = self.http(
+            "/api/planning/participation", {"space": SPACE, "key": "lease_quiet_days", "value": 5}
+        )
+        record = self.http(
+            "/api/planning/space/settings",
+            {"space": SPACE, "launch_place": "item_project", "author": "user"},
+        )
+        _order_moves(record["workflow"])
+        return {
+            "participation-space": self.http(f"/api/planning/participation?space={SPACE}"),
+            "participation-shared": self.http("/api/planning/participation"),
+            "participation-written": written,
+            "space-settings": record,
+        }
+
     def put_off(self) -> dict[str, dict]:
         """A card put off until another item, and one that came back when the item it
         waited on was deleted."""
@@ -377,6 +440,29 @@ class _Scenario:
             ),
             "card-returned": self.http(
                 f"/api/modules/planning/work-item?{self.scope(reference=back)}"
+            ),
+        }
+
+    def counted(self) -> dict[str, dict]:
+        """A card put off until a day or two new comments, with one written, and one that
+        came back with the one new comment it waited for."""
+
+        counting, answered = (
+            str(self.tool("create_work_item", space=SPACE, title=title)["reference"])
+            for title in ("Counting card", "Answered card")
+        )
+        for ref, until in ((counting, "2099-01-01 or 2 comments"), (answered, "1 comment")):
+            self.http(
+                "/api/planning/work-item/apply",
+                {"id": ref, "defer": {"until": until, "reason": "Waits for news."}},
+            )
+            self.http("/api/planning/work-item/apply", {"id": ref, "comment": {"body": "News."}})
+        return {
+            "card-deferred-comments": self.http(
+                f"/api/modules/planning/work-item?{self.scope(reference=counting)}"
+            ),
+            "card-returned-comments": self.http(
+                f"/api/modules/planning/work-item?{self.scope(reference=answered)}"
             ),
         }
 
@@ -789,22 +875,39 @@ class _Scenario:
         # items naming it.
         model = self.http(f"/api/planning?{urlencode(self.space_ref)}")
         # A digest of the whole answer, ids and instants included, which change run to run.
-        model["revision"] = "0" * 64
-        # The workflow's moves stand in the order of their states' ids; put them in the states'.
-        position = {state["state_id"]: state["position"] for state in model["workflow"]["states"]}
-        model["workflow"]["transitions"].sort(
-            key=lambda move: (position[move["from"]], position[move["to"]])
-        )
+        _settle(model)
+        due = self.triage_due()
         found = self.http(f"/api/modules/planning/search?{urlencode({'q': 'Tree', 'limit': '50'})}")
         # Equal matches stand in the order of their ids, which change run to run.
         found["items"].sort(key=lambda hit: int(hit["item"]["reference"].split("-")[1]))
         return {
             "planning-read-model": model,
+            "requests-triage-due": due,
             "planning-chain-tree": self.http(
                 f"/api/planning/work-item/chain?{urlencode({'id': goal, 'scope': 'tree'})}"
             ),
             "planning-search": found,
         }
+
+    def triage_due(self) -> dict[str, object]:
+        """The space's open questions as they read beside the board just read, with the line
+        «time to triage» for its stack: the space's count is one for this read alone, so the
+        line stands, and it inherits again after it, so no answer after this one reads it."""
+
+        def count(value: int | None) -> None:
+            conn = store.connect()
+            try:
+                space = read_model.space_identity(conn, SPACE)
+                participation.write_value(conn, space, "triage_count", value)
+                conn.commit()
+            finally:
+                conn.close()
+
+        count(1)
+        try:
+            return self.http(f"/api/modules/planning/requests?{self.scope(limit='1')}")
+        finally:
+            count(None)
 
     def volumes(self) -> dict[str, object]:
         """What stands in the space, in its project and in the space filtered to its tasks
@@ -950,6 +1053,67 @@ class _Scenario:
                 "states": session_open.STATES,
                 "steps": session_open.STEP_KINDS,
             },
+        }
+
+    def written(self) -> dict[str, object]:
+        """Writes of a card as the interface sends them, and what the server answers.
+
+        A goal's cancel through the batch route is refused with the list of what it closes,
+        named by its step as every refused batch step is; a close without a summary is
+        refused by its guard the same way; and a commit attached to a card nobody wrote to
+        since it was filed answers that card at revision 0.
+        """
+
+        conn = store.connect()
+        try:
+
+            def item(title: str, **fields: object) -> str:
+                return str(
+                    service.create_work_item(conn, space=SPACE, title=title, **fields)["reference"]
+                )
+
+            goal = item("Goal to cancel", kind="goal", acceptance="assignment")
+            under = item("Work under the goal to cancel", parent=goal)
+            waiting = item("Work outside that waits on it")
+            service.link_work_items(conn, under, waiting, "blocks")
+            unsummarized = item("Work closed without a summary")
+            fresh = item("Card a commit is attached to")
+            closed = item("Work closed on the board")
+            service.set_summary(conn, closed, {"done": "Closed.", "next": "Nothing."})
+            put_off = item("Work put off until the closed one")
+            service.defer_work_item(conn, put_off, until=closed, reason="After it")
+            made = "2026-01-02T03:04:05Z"
+            conn.execute(
+                "INSERT INTO commits(project_id, hash, subject, committed_at, session_id, client,"
+                " reported_at) VALUES (?, ?, 'fix: attached by hand', ?, 'sess-attach', 'claude',"
+                " ?)",
+                (PROJECT, "d" * 40, made, made),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        apply = "/api/planning/work-item/apply"
+        return {
+            "refusal-cancel-list": self.refusal(
+                apply,
+                {
+                    "author": "user",
+                    "id": goal,
+                    "summary": {"done": "Cancelled.", "next": "Nothing: it was cancelled."},
+                    "transition": {"state": "cancelled", "reason": "The plan changed"},
+                },
+            ),
+            "refusal-apply-step": self.refusal(
+                apply, {"author": "user", "id": unsummarized, "transition": {"state": "done"}}
+            ),
+            "commit-attached": self.http(
+                "/api/planning/work-item/commit",
+                {"reference": fresh, "repository": PROJECT, "hash": "d" * 40},
+            ),
+            "transition-returned": self.http(
+                "/api/planning/work-item/transition",
+                {"author": "user", "id": closed, "state": "done"},
+            ),
         }
 
     def answers(self) -> dict[str, object]:
@@ -1110,7 +1274,35 @@ class _Scenario:
             ),
             # After the counts above, which the group's goal and findings would change.
             "request-triage-group": self.triage_group(),
+            # Last: its launch place changes the space every answer above reads.
+            **self.participation(),
+            # After every other, so the ids it names first take no number another file holds.
+            "card-in-goal-brief": self.http(
+                f"/api/modules/planning/work-item?{self.scope(reference=self.in_goal, brief='true')}"
+            ),
+            # A space of its own, after them all, so it changes no answer above.
+            "closed-in-period": closed_in_period(
+                self.http, self.space_ref["data_scope_id"], _settle
+            ),
+            # After them all too: the cards it files take numbers no answer above holds.
+            **self.written(),
+            # After them all as well, for the same reason: work put off until new comments.
+            **self.counted(),
+            # The decisions the agents took on their own in the answers above, each with the
+            # key its line was composed of, and every key the service composes.
+            "decisions": self.http(f"/api/planning/decisions?{urlencode({'space': SPACE})}"),
+            "composed-texts": {
+                "questions": {key: list(names) for key, names in composed.QUESTIONS.items()},
+                "decisions": {key: list(names) for key, names in composed.DECISIONS.items()},
+            },
         }
+
+
+def _settle(model: dict) -> None:
+    """A board's read as its file holds it: its digest, which changes run to run, as zeros."""
+
+    model["revision"] = "0" * 64
+    _order_moves(model["workflow"])
 
 
 _QUOTA_CHECK = re.compile(r"quota-(?:statusline|mod|poll)")
@@ -1180,6 +1372,11 @@ def _everything_but_cursor() -> url_schemes.Installed:
     )
 
 
+#: The files whose scenario writes these fields' moments and days itself, so they stay as
+#: written: a card's own moment, and the days of a period the scenario names.
+_KEPT_MOMENTS = {"closed-in-period": frozenset({"closed_at", "day"})}
+
+
 def generate() -> dict[str, str]:
     """Every fixture as the server answers now, by file name, as the file's text."""
 
@@ -1203,11 +1400,14 @@ def generate() -> dict[str, str]:
                 answers = scenario.answers()
             finally:
                 scenario.close()
-        normalize: Callable[[object], object] = _Normalizer(root)
-        return {
-            f"{name}.json": json.dumps(normalize(answer), indent=2, ensure_ascii=False) + "\n"
-            for name, answer in answers.items()
-        }
+        normalize = _Normalizer(root)
+        written: dict[str, str] = {}
+        for name, answer in answers.items():
+            normalize.kept = _KEPT_MOMENTS.get(name, frozenset())
+            written[f"{name}.json"] = (
+                json.dumps(normalize(answer), indent=2, ensure_ascii=False) + "\n"
+            )
+        return written
 
 
 def write() -> None:

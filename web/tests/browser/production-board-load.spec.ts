@@ -204,7 +204,8 @@ test('a list one row short of a window paints its first rows first, then all of 
     requestAnimationFrame(watch)
   })
   const reading = page.waitForRequest('**/api/planning?*')
-  const opening = openList(page)
+  // Changed last, newest first, so the longest unchanged row is the last one.
+  const opening = openList(page, { sort: 'updated', desc: true })
   await reading
   await page.evaluate(() => document.fonts.ready)
   await stillFrames(page)

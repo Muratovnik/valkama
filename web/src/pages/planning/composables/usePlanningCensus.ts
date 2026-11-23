@@ -3,7 +3,11 @@ import { computed } from 'vue'
 import { boardLanes } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import type { BoardGrouping } from '@/widgets/work-item-views/utils/boardLanes.ts'
 
-import { isWorkFilterEmpty, matchesWorkFilter } from '@/entities/work-item/utils/workFilter.ts'
+import {
+  isWorkFilterEmpty,
+  lineageIn,
+  matchesWorkFilter,
+} from '@/entities/work-item/utils/workFilter.ts'
 import type { WorkFilter } from '@/entities/work-item/utils/workFilter.ts'
 
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
@@ -20,6 +24,8 @@ type CensusInput = () => {
 }
 
 const isOpen = (item: WorkItemBrief) => item.open
+/** A card of another space that names this space's project: the read holds it, the space does not. */
+const isElsewhere = (item: WorkItemBrief) => Boolean(item.other_space)
 
 /** Items the view on the stage leaves out of its own counts, and why. */
 export type CensusExclusion = { count: number; kind: 'lane-heads' }
@@ -51,7 +57,9 @@ export function usePlanningCensus(input: CensusInput) {
   const scope = computed(() => (input().view === 'graph' ? input().space : counted.value))
   const filtered = computed(() => !isWorkFilterEmpty(input().filter))
 
-  const matches = (item: WorkItemBrief) => matchesWorkFilter(item, input().filter)
+  /** «Goal or stage» reads an item's goal and stages over the whole space, a chain's root's too. */
+  const lineage = computed(() => lineageIn(input().space))
+  const matches = (item: WorkItemBrief) => matchesWorkFilter(item, input().filter, lineage.value)
   const visible = computed(() => scope.value.filter((item) => matches(item)))
   /** The counted items the filter lets through. */
   const matched = computed(() =>
@@ -59,36 +67,43 @@ export function usePlanningCensus(input: CensusInput) {
   )
 
   /**
-   * The numbers above the stage. Unfiltered they say how much of the work is
-   * open; filtered they answer the filter: how many open items it let through
-   * of the open ones, and how many closed ones came with them, since a view
-   * draws those too. The held count belongs to its preset.
+   * The numbers above the stage. Unfiltered they say how much of the space's own work is
+   * open; filtered they answer the filter: how many open items it let through of the open
+   * ones, and how many closed ones came with them, since a view draws those too. The held
+   * count belongs to its preset. Another space's cards that name this space's project are
+   * not this space's work: they are counted apart (`elsewhere`), what the filter let through
+   * of them, and the far ends of links never, since the population holds none.
    */
   const counts = computed(() => {
-    const items = counted.value
-    const shown = filtered.value ? matched.value : items
-    const shownOpen = shown.filter((item) => isOpen(item)).length
+    const all = counted.value
+    const items = all.filter((item) => !isElsewhere(item))
+    const shown = filtered.value ? matched.value : all
+    const own = shown.filter((item) => !isElsewhere(item))
+    const shownOpen = own.filter((item) => isOpen(item)).length
     return {
       total: items.length,
       open: items.filter((item) => isOpen(item)).length,
       held: items.filter((item) => item.claim_ref !== '' && isOpen(item)).length,
       matchedOpen: shownOpen,
-      matchedClosed: shown.length - shownOpen,
+      matchedClosed: own.length - shownOpen,
+      elsewhere: shown.length - own.length,
     }
   })
 
   /**
-   * The board grouped by goal heads each lane with its goal, so its columns count
-   * every item but those; under a filter it describes what the filter let
-   * through, as the board does. The graph leaves nothing out: the whole space
+   * The board grouped by goal or by stage heads each lane with its goal or stage, so
+   * its columns count every item but those; under a filter it describes what the
+   * filter let through, as the board does. By project no card heads a lane. The graph
+   * leaves nothing out: the whole space
    * draws each goal and stage as the frame round its work, and a chain draws its parents.
    */
   const exclusion = computed<CensusExclusion | null>(() => {
     const { grouping, space, view } = input()
     const items = filtered.value ? matched.value : counted.value
-    if (view === 'kanban' && grouping === 'goal') {
+    if (view === 'kanban' && (grouping === 'goal' || grouping === 'stage')) {
       const tiles = boardLanes({
         filtered: filtered.value,
+        grouping,
         scope: counted.value,
         space,
         visible: items,
@@ -99,5 +114,5 @@ export function usePlanningCensus(input: CensusInput) {
     return null
   })
 
-  return { counted, counts, exclusion, filtered, matched, scope, visible }
+  return { counted, counts, exclusion, filtered, matched, matches, scope, visible }
 }

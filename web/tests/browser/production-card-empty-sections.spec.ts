@@ -101,7 +101,7 @@ test.describe('a section with nothing in it', () => {
     const overview = page.locator('.drawer .overview')
     await expect(overview).toBeVisible()
     await expect(overview.getByText('Description', { exact: true })).toBeVisible()
-    const checklist = overview.getByRole('heading', { name: /^Checklist/u })
+    const checklist = overview.getByRole('heading', { name: /^Conditions/u })
     await expect(checklist).toHaveCount(0)
     await expect(overview.getByText('No checklist', { exact: false })).toHaveCount(0)
 

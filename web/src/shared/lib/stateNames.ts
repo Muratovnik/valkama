@@ -41,6 +41,16 @@ const STANDARD_STATES: ReadonlyMap<string, { category: string; name: string }> =
   ['cancelled', { name: 'Cancelled', category: 'cancelled' }],
 ])
 
+/**
+ * The standard state a key names, as the server's default workflow has it; null for a key of
+ * another workflow. A line that names a state by its key alone, read where the card's workflow is
+ * not known or no longer has that key, names it so.
+ */
+export function standardState(key: string): NamedState | null {
+  const standard = STANDARD_STATES.get(key)
+  return standard ? { key, ...standard } : null
+}
+
 /** The standard key a state without one stands for: its name, and its category if it has one. */
 function keyOf(state: NamedState): string | undefined {
   if (state.key !== undefined) return state.key

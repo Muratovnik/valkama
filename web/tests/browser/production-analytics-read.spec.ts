@@ -249,7 +249,9 @@ test('a new period read for 3 s dims the panel and the tiles until its answer, m
   // Four weeks held for three seconds: the chosen period is marked at once, and the week's
   // figures stay drawn, dimmed, with no wait mark and nothing moved, all three seconds.
   release = answer.hold()
-  const weeks4 = analytics.locator('.analytics-period').getByRole('radio', { name: 'Past 4 weeks' })
+  const weeks4 = analytics
+    .locator('.period-bar-periods')
+    .getByRole('radio', { name: 'Past 4 weeks' })
   await weeks4.click()
   await expect(weeks4).toHaveAttribute('aria-checked', 'true')
   await page.clock.runFor(1000)

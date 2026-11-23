@@ -16,12 +16,14 @@ import {
   validateUsageAnswer,
 } from '@/shared/api/analyticsApi.ts'
 import { validateCommentResolved, validateCommentWritten } from '@/shared/api/commentWriteModel.ts'
+import { validateDecisionsPage } from '@/shared/api/decisionsApi.ts'
 import {
   validateDocument,
   validateFound,
   validateRefusal,
   validateResolved,
 } from '@/shared/api/documentApi.ts'
+import { readCancelList } from '@/shared/api/inputRequestAction.ts'
 import {
   validateInputRequestDetail,
   validateInputRequestList,
@@ -35,9 +37,15 @@ import {
   validateOpenPlaces,
   validateOpenPlan,
 } from '@/shared/api/openPlanModel.ts'
+import { validateParticipation, validateSpaceRecord } from '@/shared/api/participationApi.ts'
 import { validateWorkItemChain } from '@/shared/api/planningChainApi.ts'
 import { validateGlobalPlanningSearch } from '@/shared/api/planningGlobalSearchApi.ts'
-import { validateReadModel, validateWorkItemRecord } from '@/shared/api/planningModel.ts'
+import {
+  validateMovedItem,
+  validateReadModel,
+  validateWorkItemRecord,
+} from '@/shared/api/planningModel.ts'
+import { readRefusal } from '@/shared/api/planningRefusal.ts'
 import {
   validateItemUsageAnswer,
   validateSessionUsageAnswer,
@@ -47,6 +55,7 @@ import {
   validatePlanningWorkItemPayload,
   validatePlatformPlanningPayload,
 } from '@/shared/api/platformPlanningPayload.ts'
+import { validateAttachedCommit } from '@/shared/api/unattachedCommitsApi.ts'
 import { validateGoalVolumesAnswer, validateVolumesAnswer } from '@/shared/api/volumesApi.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
@@ -64,6 +73,10 @@ const STEP_KINDS = [
 
 const directory = SERVER_FIXTURES
 const read = readServerFixture
+/** A refusal reader answers null for an envelope it cannot read; a fixture must not be one. */
+const unread = (value: unknown): never => {
+  throw new Error(`the web reads no refusal in ${JSON.stringify(value)}`)
+}
 
 /** Each fixture the web reads, with the validator of the call that reads it. */
 const readers: Record<string, (value: unknown) => unknown> = {
@@ -71,12 +84,26 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'analytics-usage.json': validateUsageAnswer,
   'analytics-usage-seat.json': validateUsageAnswer,
   'card.json': (value) => validatePlanningWorkItemPayload(value),
+  // A space's board and its Volumes read over one period (`workFilterClosed.test.ts`).
+  'closed-in-period.json': (value) => {
+    const { board, volumes, volumes_labelled: labelled } = value as Record<string, unknown>
+    return {
+      board: validateReadModel(board),
+      volumes: validateVolumesAnswer(volumes),
+      volumes_labelled: validateVolumesAnswer(labelled),
+    }
+  },
   'card-brief.json': (value) => validatePlanningWorkItemBriefPayload(value),
+  'card-in-goal-brief.json': (value) => validatePlanningWorkItemBriefPayload(value),
   'card-executors.json': (value) => validatePlanningWorkItemPayload(value),
   'card-goal.json': (value) => validatePlanningWorkItemPayload(value),
   'card-deferred.json': (value) => validatePlanningWorkItemPayload(value),
   'card-returned.json': (value) => validatePlanningWorkItemPayload(value),
+  'card-deferred-comments.json': (value) => validatePlanningWorkItemPayload(value),
+  'card-returned-comments.json': (value) => validatePlanningWorkItemPayload(value),
   'card-converted.json': (value) => validatePlanningWorkItemPayload(value),
+  'commit-attached.json': validateAttachedCommit,
+  'decisions.json': validateDecisionsPage,
   'comment-reply.json': validateCommentWritten,
   'comment-resolved.json': validateCommentResolved,
   'description-told.json': (value) => validateWorkItemRecord(value),
@@ -98,16 +125,24 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'open-plan-silent-desktop.json': validateOpenPlan,
   'open-plan-silent.json': validateOpenPlan,
   'open-plan-session.json': validateOpenPlan,
+  'participation-shared.json': validateParticipation,
+  'participation-space.json': validateParticipation,
+  'participation-written.json': validateParticipation,
   'planning-chain-tree.json': (value) => validateWorkItemChain(value),
   'planning-portfolio.json': (value) => validatePlatformPlanningPayload(value),
   'planning-read-model.json': (value) => validateReadModel(value),
   'planning-search.json': validateGlobalPlanningSearch,
+  'refusal-apply-step.json': (value) => readRefusal(value) ?? unread(value),
+  'refusal-cancel-list.json': (value) => readCancelList(value) ?? unread(value),
   'request-answered.json': validateInputRequestDetail,
   'request-pending.json': validateInputRequestDetail,
   'request-proposed-goal.json': validateInputRequestDetail,
   'request-session-gone.json': validateInputRequestDetail,
   'request-triage-group.json': validateInputRequestDetail,
+  'requests-triage-due.json': validateInputRequestList,
   'requests.json': validateInputRequestList,
+  'space-settings.json': validateSpaceRecord,
+  'transition-returned.json': (value) => validateMovedItem(value),
   'usage-item.json': validateItemUsageAnswer,
   'usage-session.json': validateSessionUsageAnswer,
   'volumes-filtered.json': validateVolumesAnswer,
@@ -116,8 +151,10 @@ const readers: Record<string, (value: unknown) => unknown> = {
 }
 /** What only an agent reads: the MCP answers, which no web schema describes. */
 const agentOnly = new Set([
-  // The server's closed lists, which the tests below hold the web's to.
+  // The server's closed lists, which the tests below hold the web's to; the keys of the
+  // texts it composes, which `composedText.test.ts` holds the web's schemas to.
   'open-vocabulary.json',
+  'composed-texts.json',
   'doctor-vocabulary.json',
   'mcp-get-work-item.json',
   'mcp-get-work-item-thread.json',
@@ -217,6 +254,16 @@ describe('the server fixtures', () => {
     expect(item.agents?.map((agent) => agent.executor?.state).toSorted()).toEqual(['ended', 'live'])
   })
 
+  it('name the item over the one read by its reference, and none over a root', () => {
+    const under = validatePlanningWorkItemBriefPayload(read('card-in-goal-brief.json'))
+    const root = validatePlanningWorkItemBriefPayload(read('card-brief.json'))
+    if (under.state.status !== 'ready' || root.state.status !== 'ready')
+      throw new Error('the brief read is not ready')
+    expect(under.state.payload.work_item.parent).toBe('MAIN-4')
+    expect(root.state.payload.work_item.parent).toBeNull()
+    expect(cardItem('card-goal.json').parent).toBeNull()
+  })
+
   it('name who works on a goal: its creator following it, and a holder under it', () => {
     const card = validatePlanningWorkItemPayload(read('card-goal.json'))
     if (card.state.status !== 'ready') throw new Error('the card read is not ready')
@@ -242,6 +289,12 @@ describe('the server fixtures', () => {
       'deleted',
     ])
     expect(back.events.at(-1)?.action).toBe('returned')
+  })
+
+  it('say what work put off until new comments waits for, and that they came', () => {
+    const { deferred } = cardItem('card-deferred-comments.json')
+    expect([deferred?.until_item, deferred?.until_comments]).toEqual([null, 2])
+    expect(cardItem('card-returned-comments.json').returned?.because).toBe('comments')
   })
 
   it('read a task converted into a goal as the goal it became', () => {

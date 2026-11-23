@@ -123,6 +123,7 @@ POSTCONDITION_NAMES = [
     "commits-attached",
     "commit-projects",
     "baselines",
+    "composed-texts",
     "second-run",
     "recovery-point",
 ]
@@ -943,7 +944,7 @@ class MigratedStoreTests(StoreCase):
         columns = [row[1] for row in self.read("PRAGMA table_info(work_item_requests)")]
         self.assertEqual(
             ["addressee", "purpose", "action_id"],
-            columns[-3:],
+            columns[-5:-2],
             "in the order a fresh store declares them",
         )
         [index] = self.read(
@@ -1215,6 +1216,21 @@ class MigratedStoreTests(StoreCase):
                 "sqlite_autoindex_work_item_deferrals_1",
             },
             names,
+        )
+        # A condition may count new comments, alone or with a moment (schema 25).
+        self.assertEqual(
+            [
+                "work_item_id",
+                "until_at",
+                "until_item_id",
+                "until_comments",
+                "comments_after",
+                "reason",
+                "call_id",
+                "since",
+                "reached_at",
+            ],
+            [str(row[1]) for row in self.read("PRAGMA table_info(work_item_deferrals)")],
         )
         [(rows,)] = self.read("SELECT COUNT(*) FROM work_item_deferrals")
         self.assertEqual(0, rows)
@@ -1922,7 +1938,38 @@ class ClosedItemRequestsTests(StoreCase):
             )
         }
 
-    def test_m14_ends_the_requests_a_close_left_waiting_by_the_items_category(self) -> None:
+    def test_every_request_keeps_its_prompt_and_gains_no_composed_key(self) -> None:
+        """A prompt 2.9 stored is English alone: each request keeps it as written and
+        carries no key or values to say it from, so the interface shows its text; the
+        summary of decisions holds the same two columns for a mark, empty."""
+
+        before = {
+            str(row[0]): str(row[1])
+            for row in self.read("SELECT request_id, prompt FROM work_item_requests")
+        }
+        self.assertGreaterEqual(len(before), len(CLOSED_ITEM_REQUESTS) + 1)
+        report = self.migrate()
+        self.assertEqual("migrated", report["status"])
+        after = {
+            str(row[0]): (str(row[1]), row[2], row[3])
+            for row in self.read(
+                "SELECT request_id, prompt, prompt_key, prompt_values FROM work_item_requests"
+            )
+        }
+        self.assertEqual({key: (prompt, None, None) for key, prompt in before.items()}, after)
+        self.assertEqual(
+            ["event_id", "point", "what", "what_key", "what_values"],
+            [str(row[1]) for row in self.read("PRAGMA table_info(agent_decisions)")],
+        )
+        details = {entry["name"]: entry for entry in report["postconditions"]}
+        self.assertEqual(
+            (True, {"keyed": 0}),
+            (details["composed-texts"]["passed"], details["composed-texts"]["detail"]),
+        )
+
+    def test_ended_requests_ends_the_requests_a_close_left_waiting_by_the_items_category(
+        self,
+    ) -> None:
         report = self.migrate()
         self.assertEqual("migrated", report["status"])
         self.assertEqual(
@@ -2443,8 +2490,11 @@ FAULTS = (
         "INSERT INTO work_item_events(work_item_id, action, detail) VALUES(?, 'triage_seen', 'seen')",
         lambda ids: (ids["WM-9"],),
     ),
-    fault("store-identity", "UPDATE planning_spaces SET next_number = next_number + 1 WHERE key = 'ALT'"),
-    fault("space-projects", "UPDATE planning_spaces SET launch_place = 'item_project' WHERE key = 'WM'"),
+    fault(
+        "composed-texts",
+        "UPDATE work_item_requests SET prompt_key = 'goal_proposed', prompt_values = '{}'"
+        " WHERE request_id = 'kept-request'",
+    ),
     fault(
         "store-identity",
         "UPDATE planning_spaces SET next_number = next_number + 1 WHERE key = 'ALT'",

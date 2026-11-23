@@ -1,0 +1,162 @@
+/**
+ * What the lines of the work model's events say to a reader, by the shapes the service writes
+ * them in: an acceptance's basis (`inherited`, `label_rule: docs`), work put off until a day, a
+ * count of new comments, both, or a card's close (`until 2026-12-01: why`, `until 3 comments`,
+ * `until 2026-12-01 or 3 comments`, `until MAIN-12`), and why it came back (`date 2026-12-01`,
+ * `comments 3`, `completed MAIN-12`), a triage review's mark (`seen`, `cleared`), a card that left
+ * for another goal (`MAIN-12: moved under MAIN-3`), a part split off (`MAIN-15: 2 steps`) and a
+ * change of kind (`task -> stage; leftover MAIN-15: 2 steps; projects dropped: alpha`).
+ *
+ * A line of any other shape, and a part of one the service never words — an agent's reason, a
+ * label, a reference — is said as recorded.
+ */
+
+/** `t` with the count a plural form is chosen by. */
+export type CountedTranslate = (
+  key: string,
+  values?: Record<string, unknown>,
+  plural?: number,
+) => string
+
+const REFERENCE = /^[A-Z][A-Z\d]{1,7}-[1-9]\d{0,8}$/u
+const BASES = new Set(['owner', 'assignment', 'inherited', 'label_rule', 'agent', 'migrated'])
+const KINDS = new Set(['task', 'bug', 'improvement', 'goal', 'stage'])
+const CAME = new Set(['completed', 'cancelled', 'deleted'])
+
+/** `basis` or `basis: label`, as an acceptance writes it. */
+export function acceptedWords(detail: string, t: CountedTranslate) {
+  const [, basis = '', label] = /^([a-z_]+)(?:: ([\s\S]+))?$/u.exec(detail) ?? []
+  if (!BASES.has(basis)) return detail
+  const word = t(`workItem.facts.basis.${basis}`)
+  return label ? t('history.event.byLabel', { basis: word, label }) : word
+}
+
+/** What put-off work waits for: a moment, a count of new comments or both, or a card alone. */
+export type PutOffCondition = { comments: number | null; item: string | null; until: string | null }
+
+/**
+ * The condition put-off work waits for, as said after «Put off»: until a card closes, until a day
+ * or a time, until a count of new comments, or a day or a count, whichever comes first.
+ */
+export function putOffWords(
+  condition: PutOffCondition,
+  t: CountedTranslate,
+  day: (value: string) => string,
+): string {
+  if (condition.item) return t('workItem.closeActions.deferred.card', { reference: condition.item })
+  const moment =
+    condition.until === null
+      ? null
+      : t('workItem.closeActions.deferred.day', { date: day(condition.until) })
+  if (condition.comments === null) return moment ?? ''
+  const n = condition.comments
+  const counted = t('workItem.closeActions.deferred.comments', { n }, n)
+  return moment === null
+    ? counted
+    : t('workItem.closeActions.deferred.either', { day: moment, comments: counted })
+}
+
+/** `3 comments`, `1 comment`, or a moment and one of them joined by `or`, as `until` names it. */
+const COUNTED = /^(?:(\S+) or )?(\d+) comments?$/u
+
+/** The condition an `until` of a note names: a count with its moment, a card, or a moment. */
+function namedCondition(until: string): PutOffCondition {
+  const [, moment = null, count] = COUNTED.exec(until) ?? []
+  if (count !== undefined) return { comments: Number(count), item: null, until: moment }
+  if (REFERENCE.test(until)) return { comments: null, item: until, until: null }
+  return { comments: null, item: null, until }
+}
+
+/**
+ * `until X` or `until X: why`, as a move into the put-off state notes it: until a card's close
+ * when X is a reference, until a count of new comments, alone or with a day or a time, or until a
+ * day or a time otherwise. Null for a note of another shape.
+ */
+export function untilWords(
+  note: string,
+  t: CountedTranslate,
+  day: (value: string) => string,
+): string | null {
+  const [, until = '', why = ''] =
+    /^until ((?:\S+ or )?\d+ comments?|\S+)(?:: ([\s\S]*))?$/u.exec(note) ?? []
+  if (!until) return null
+  const said = putOffWords(namedCondition(until), t, day)
+  return why.trim() ? t('history.event.why', { until: said, why: why.trim() }) : said
+}
+
+/**
+ * A note the service writes for a move or an opening it makes itself: a claim, a failed launch,
+ * an acceptance with the goal above, a merge into a survivor, a change of kind and a move out of a
+ * goal. Null for a note of another shape, which is a writer's own.
+ */
+export function serviceNoteWords(note: string, t: CountedTranslate): string | null {
+  if (note === 'claimed') return t('history.event.claimed')
+  if (note === 'launch_failed') return t('history.event.launchFailed')
+  const [, kind = ''] = /^converted from an? ([a-z]+)$/u.exec(note) ?? []
+  if (KINDS.has(kind)) return t('history.event.convertedFrom', { kind: t(`workItem.kind.${kind}`) })
+  const [, said = '', reference = ''] = /^(accepted with|duplicate of) (\S+)$/u.exec(note) ?? []
+  if (REFERENCE.test(reference))
+    return t(
+      said === 'accepted with' ? 'history.event.acceptedWith' : 'history.event.duplicateOf',
+      {
+        reference,
+      },
+    )
+  const [, left = '', why = ''] = /^moved out of (\S+): ([\s\S]+)$/u.exec(note) ?? []
+  return REFERENCE.test(left) ? t('history.event.movedOut', { reference: left, why }) : null
+}
+
+/**
+ * `date 2026-12-01`, `comments 3`, or `completed MAIN-12` and the like, as work that came back
+ * says why.
+ */
+export function returnedWords(detail: string, t: CountedTranslate, day: (value: string) => string) {
+  const [, because = '', what = ''] = /^([a-z]+) (\S+)$/u.exec(detail) ?? []
+  if (because === 'date') return t('history.event.cameDay', { date: day(what) })
+  if (because === 'comments' && /^[1-9]\d*$/u.test(what))
+    return t('history.event.cameComments', { n: Number(what) }, Number(what))
+  if (CAME.has(because) && REFERENCE.test(what))
+    return t(`history.event.cameCard.${because}`, { reference: what })
+  return detail
+}
+
+/** `seen` or `cleared`, as a triage review's mark writes it. */
+export function triageWords(detail: string, t: CountedTranslate) {
+  return detail === 'seen' || detail === 'cleared' ? t(`history.event.${detail}`) : detail
+}
+
+/** `MAIN-12: why`; the service's own why, `moved under MAIN-3`, in words, an agent's as written. */
+export function childLeftWords(detail: string, t: CountedTranslate) {
+  const [, reference = '', goal = ''] = /^(\S+): moved under (\S+)$/u.exec(detail) ?? []
+  return REFERENCE.test(reference) && REFERENCE.test(goal)
+    ? t('history.event.movedUnder', { reference, goal })
+    : detail
+}
+
+/** `MAIN-15: 2 steps`, as the part a split took writes it on the task. */
+export function splitWords(detail: string, t: CountedTranslate) {
+  const [, reference = '', count] = /^(\S+): (\d+) steps$/u.exec(detail) ?? []
+  if (!REFERENCE.test(reference) || count === undefined) return detail
+  const n = Number(count)
+  return t('history.event.conditions', { reference, n }, n)
+}
+
+/** One part of a change of kind's line in words, or null when its shape is not known. */
+function convertedPart(part: string, t: CountedTranslate): string | null {
+  const [, was = '', became = ''] = /^([a-z]+) -> ([a-z]+)$/u.exec(part) ?? []
+  const kind = (key: string) => t(`workItem.kind.${key}`)
+  if (KINDS.has(was) && KINDS.has(became)) return `${kind(was)} → ${kind(became)}`
+  const [, reference = '', count] = /^leftover (\S+): (\d+) steps$/u.exec(part) ?? []
+  if (REFERENCE.test(reference) && count !== undefined) {
+    const n = Number(count)
+    return t('history.event.leftover', { reference, n }, n)
+  }
+  const [, projects] = /^projects dropped: ([\s\S]+)$/u.exec(part) ?? []
+  return projects === undefined ? null : t('history.event.projectsDropped', { projects })
+}
+
+/** `task -> stage`, then the leftover and the projects dropped, each part in words. */
+export function convertedWords(detail: string, t: CountedTranslate) {
+  const parts = detail.split('; ').map((part) => convertedPart(part, t))
+  return parts.every((part) => part !== null) ? parts.join('; ') : detail
+}

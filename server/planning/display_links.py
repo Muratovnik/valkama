@@ -24,8 +24,8 @@ from collections import OrderedDict
 from collections.abc import Callable, Mapping
 
 from .acknowledgements import work_item_url
-from .interactions import existing_references
 from .mentions import ScanState, scan, with_links
+from .references_present import existing_references
 
 #: Where the listener answers the hook. Host Runtime registers this path, on the port
 #: `valkama capabilities` names, so moving it is a change to that public contract.

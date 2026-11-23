@@ -10,18 +10,27 @@ which a search names as skipped rather than leaves out.
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Collection, Mapping
+from collections.abc import Mapping
+from typing import NamedTuple
 
-from ..projects import project_registry, scopes
-from ..store_identity.metadata import ScopeError
 from ..store_identity.primitives import ContractError
 from ..store_identity.refs import (
-    planning_space_ref,
     planning_work_item_entity,
     route_entity_parameter,
     validate_planning_space_ref,
 )
-from . import api, model, participation, read_model, requests, service, triage
+from . import (
+    api,
+    item_projects,
+    model,
+    participation,
+    questions,
+    read_model,
+    requests,
+    service,
+    task_filter,
+    triage,
+)
 from .routing import PlanningRouting
 
 READ_PATHS = frozenset(
@@ -80,33 +89,21 @@ def _target(routing: PlanningRouting, space_ref: dict, reference: str) -> dict:
 
 
 def _resources(routing: PlanningRouting) -> list[dict]:
-    """Every source, once: the readable spaces, then the bound spaces no store here holds.
-
-    The primary store's spaces come first, so its item leads a search before an
-    attached store's item of the same reference.
-    """
+    """Every source, once, as the routing lists them (`PlanningRouting.sources`), or a refusal
+    while the registry that binds the spaces no store here holds cannot be read."""
 
     if not routing.registry_available:
         raise api.PlanningHttpError(409, "unavailable", "project_registry_unavailable")
-    result = routing.present_spaces()
-    absent = []
-    for project in routing.projects:
-        binding = project.get("planning_binding")
-        if binding is None:
-            continue
-        try:
-            space_ref = planning_space_ref(project_registry.binding_entity(binding))
-        except (ContractError, KeyError, TypeError) as error:
-            raise api.PlanningHttpError(409, "unavailable", "planning_binding_invalid") from error
-        if routing.unavailable_reason(space_ref) is not None and space_ref not in absent:
-            absent.append(space_ref)
-    return result + sorted(absent, key=lambda ref: (ref["data_scope_id"], ref["space_key"]))
+    try:
+        return routing.sources()
+    except (ContractError, KeyError, TypeError) as error:
+        raise api.PlanningHttpError(409, "unavailable", "planning_binding_invalid") from error
 
 
 def search(routing: PlanningRouting, parameters: Mapping[str, list[str]]) -> dict:
     if set(parameters) - {"q", "limit"} or "q" not in parameters:
         raise api.PlanningHttpError(400, "invalid_request", "search requires q and optional limit")
-    query = model.text_field(_one(parameters, "q"), "query", limit=200)
+    query = model.text_field(_one(parameters, "q"), "query", limit=service.MAX_QUERY)
     limit = _limit(parameters, 50, SEARCH_CEILING)
     items: list[dict] = []
     coverage: list[dict] = []
@@ -237,73 +234,6 @@ def work_item_location(routing: PlanningRouting, text: str) -> str | None:
     return None
 
 
-def _present_in(conn: sqlite3.Connection, pairs: list[tuple[str, int]]) -> set[str]:
-    """Which (space key, number) pairs this store holds, in one indexed statement."""
-
-    if not pairs:
-        return set()
-    values = ",".join("(?,?)" for _ in pairs)
-    rows = conn.execute(
-        f"""
-        WITH wanted(space_key, number) AS (VALUES {values})
-        SELECT wanted.space_key, wanted.number
-        FROM wanted
-        JOIN planning_spaces ON planning_spaces.key = wanted.space_key
-        JOIN work_items
-          ON work_items.planning_space_id = planning_spaces.planning_space_id
-         AND work_items.number = wanted.number
-        """,  # noqa: S608 - only placeholders are interpolated
-        [value for pair in pairs for value in pair],
-    )
-    return {f"{row[0]}-{row[1]}" for row in rows}
-
-
-def _attached_present(primary_db: str, pairs: list[tuple[str, int]]) -> set[str]:
-    """What the attached stores hold of these pairs; one unreadable holds nothing."""
-
-    try:
-        attached = [item for item in scopes.load(primary_db) if not item.get("primary")]
-    except scopes.ScopeError:
-        return set()
-    found: set[str] = set()
-    for item in attached:
-        try:
-            store = scopes.open_readonly(item)
-            try:
-                found |= _present_in(store, pairs)
-            finally:
-                store.close()
-        except (sqlite3.Error, scopes.ScopeError, ScopeError):
-            continue
-    return found
-
-
-def existing_references(
-    primary: sqlite3.Connection, primary_db: str, references: Collection[str]
-) -> set[str]:
-    """Which of these references `work_item_location` leads to a card, read together.
-
-    The same rule without its per-reference cost, for a caller holding many candidates
-    and a client waiting: the registry is readable, and a store here holds the item.
-    The primary store answers in one statement. An attached store is opened only for
-    a candidate the primary store does not hold, so with every candidate at home no
-    other file is touched.
-    """
-
-    if project_registry.read_registry()["status"] != "available":
-        return set()
-    pairs = [
-        (key, int(number)) for key, number in (reference.rsplit("-", 1) for reference in references)
-    ]
-    if not pairs:
-        return set()
-    found = _present_in(primary, pairs)
-    outstanding = [pair for pair in pairs if f"{pair[0]}-{pair[1]}" not in found]
-    if outstanding:
-        found |= _attached_present(primary_db, outstanding)
-    return found
-
-
 def _exact_parameters(parameters: Mapping[str, list[str]], extras: set[str]) -> dict:
     """The space an exact request names: `scope_kind=space`, its store and its key."""
 
@@ -325,12 +255,7 @@ def _request_item(conn: sqlite3.Connection, record: dict, key: str) -> None:
 
 
 def _capability(conn: sqlite3.Connection) -> None:
-    if (
-        conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='work_item_requests'"
-        ).fetchone()
-        is None
-    ):
+    if not questions.kept(conn):
         raise api.PlanningHttpError(409, "unavailable", "requests_unavailable")
 
 
@@ -354,11 +279,20 @@ def request_list(routing: PlanningRouting, parameters: Mapping[str, list[str]]) 
     and `total` counts them all; the answer stays one page however many there are,
     and a reader takes the next from `offset` while `has_more` says so.
 
+    A space is read as a source: the questions on its own cards. `other_spaces=true` and
+    `project_id` read it instead as its board holds it (`_board_held`): the questions a
+    count of the space's work counts, each with the target of its card's own space.
+    `task_kind` and `task_label`, in every space's read or one space's, keep only the
+    questions on the tasks the filter keeps (`task_filter`), the one rule the Volumes read
+    counts them by under the same filter.
+
     Beside the questions stands `triage_due`: a line for each space read whose stack
-    of triage waits past the owner's thresholds (`triage.due`). It is no question, so
+    of triage waits past the owner's thresholds (`triage.due`), with the `space_ref` of
+    its source, which a link to that space's board needs. It is no question, so
     it is no item, counts in no total and takes no answer. It belongs to the list as
     a whole, not to a page: only the first page reads it, and a read of answered or
-    closed questions, or of one item's, has none.
+    closed questions, or of one item's, has none. It is the source's stack whole, which
+    holds the space's own cards alone, however the questions beside it are narrowed.
     """
 
     limit = _limit(parameters, 100, requests.PAGE)
@@ -373,14 +307,18 @@ def request_list(routing: PlanningRouting, parameters: Mapping[str, list[str]]) 
     }
     scope_kind = _one(scoped, "scope_kind")
     reference = None
+    held: _Held | None = None
     if scope_kind == "global":
-        if set(scoped) != {"scope_kind"}:
+        if set(scoped) - _TASK_KEYS != {"scope_kind"}:
             raise api.PlanningHttpError(400, "invalid_request", "global_scope_fields_invalid")
         resources = _resources(routing)
     else:
         reference = _one(scoped, "reference") if "reference" in scoped else None
-        space_ref = _exact_parameters(scoped, {"reference"} if reference is not None else set())
+        held = _held(scoped, reference)
+        named = {"reference", *_HELD_KEYS, *_TASK_KEYS}
+        space_ref = _exact_parameters(scoped, set(scoped) & named)
         resources = [space_ref]
+    tasks = _tasks(scoped, reference)
     reminds = offset == 0 and status in {None, "pending"} and reference is None
     items: list[dict] = []
     coverage: list[dict] = []
@@ -401,14 +339,17 @@ def request_list(routing: PlanningRouting, parameters: Mapping[str, list[str]]) 
         try:
             with routing.planning_store(_store_parameters(space_ref)) as (conn, _key):
                 _capability(conn)
-                found = _every_request(conn, space_ref["space_key"], status, reference)
+                own, within = _narrowed(conn, space_ref["space_key"], held, tasks, routing)
+                found = _every_request(conn, own, status, reference, within)
                 for record in found:
                     identity = (space_ref["data_scope_id"], record["request_id"])
                     if identity not in seen:
                         seen.add(identity)
+                        # A card of another space is that space's to open and to answer on.
+                        home = {**space_ref, "space_key": record["reference"].rsplit("-", 1)[0]}
                         items.append(
                             {
-                                "target": _target(routing, space_ref, record["reference"]),
+                                "target": _target(routing, home, record["reference"]),
                                 "request": record,
                             }
                         )
@@ -423,7 +364,8 @@ def request_list(routing: PlanningRouting, parameters: Mapping[str, list[str]]) 
                 )
             entry.update(status="searched", reason=None)
             if line is not None:
-                due.append(line)
+                # The source's own ref: two stores may hold a space of one key.
+                due.append({"space_ref": space_ref, **line})
         except (api.PlanningHttpError, ValueError, sqlite3.Error, KeyError, TypeError):
             if scope_kind != "global":
                 raise
@@ -443,13 +385,118 @@ def request_list(routing: PlanningRouting, parameters: Mapping[str, list[str]]) 
     }
 
 
+#: The keys that read a space as its board holds it.
+_HELD_KEYS = frozenset({"other_spaces", "project_id"})
+
+
+class _Held(NamedTuple):
+    """What a space's read of questions holds as its board does: other spaces' cards that
+    name one of its projects, and the one project it is narrowed to."""
+
+    other_spaces: bool
+    project: str | None
+
+
+def _held(parameters: Mapping[str, list[str]], reference: str | None) -> _Held | None:
+    """The narrowing a space's read names, or None for the source's own cards."""
+
+    if not _HELD_KEYS & set(parameters):
+        return None
+    if reference is not None:
+        raise api.PlanningHttpError(400, "invalid_request", "reference_names_one_item")
+    other_spaces = "other_spaces" in parameters
+    if other_spaces and _one(parameters, "other_spaces") != "true":
+        raise api.PlanningHttpError(400, "invalid_request", "other_spaces must be true")
+    project = None
+    if "project_id" in parameters:
+        try:
+            project = item_projects.project_id(_one(parameters, "project_id"), "project_id")
+        except model.PlanningError as error:
+            raise api.PlanningHttpError(400, "invalid_request", str(error)) from error
+    return _Held(other_spaces, project)
+
+
+#: The keys that keep the questions on the tasks a filter keeps.
+_TASK_KEYS = frozenset({"task_kind", "task_label"})
+
+
+def _tasks(
+    parameters: Mapping[str, list[str]], reference: str | None
+) -> task_filter.WorkFilter | None:
+    """The filter of tasks a read names (`task_filter.named`), or None for every card.
+
+    A label no card carries keeps nothing rather than being refused: a read of every
+    space reads several stores, and a label is of the store that holds it.
+    """
+
+    if not _TASK_KEYS & set(parameters):
+        return None
+    if reference is not None:
+        raise api.PlanningHttpError(400, "invalid_request", "reference_names_one_item")
+    for name in sorted(_TASK_KEYS & set(parameters)):
+        values = parameters[name]
+        if not isinstance(values, list) or not all(isinstance(v, str) and v for v in values):
+            raise api.PlanningHttpError(400, "invalid_request", f"{name} must not be empty")
+    try:
+        return task_filter.named(parameters.get("task_kind", []), parameters.get("task_label", []))
+    except model.PlanningError as error:
+        raise api.PlanningHttpError(400, "invalid_request", str(error)) from error
+
+
+def _narrowed(
+    conn: sqlite3.Connection,
+    key: str,
+    held: _Held | None,
+    tasks: task_filter.WorkFilter | None,
+    routing: PlanningRouting,
+) -> tuple[str | None, tuple[list[str], list[object]] | None]:
+    """What one source's read keeps: the space whose own cards it reads, None when it reads
+    them as the space's board holds them, and the conditions on the cards it keeps."""
+
+    clauses: list[str] = []
+    values: list[object] = []
+    if held is not None:
+        clauses, values = _board_held(conn, key, held, routing)
+    if tasks is not None:
+        kept, parameters = tasks.condition()
+        clauses, values = [*clauses, *kept], [*values, *parameters]
+    narrowing = held is not None or tasks is not None
+    return (key if held is None else None), ((clauses, values) if narrowing else None)
+
+
+def _board_held(
+    conn: sqlite3.Connection, key: str, held: _Held, routing: PlanningRouting
+) -> tuple[list[str], list[object]]:
+    """The cards a space's read of questions holds, by the one rule of what a space's board
+    holds (`item_projects.space_read`), which the Volumes read counts its questions by."""
+
+    space = conn.execute(
+        "SELECT planning_space_id, key FROM planning_spaces WHERE key = ?", (key,)
+    ).fetchone()
+    if space is None:
+        raise api.PlanningHttpError(409, "unavailable", "planning_space_unavailable")
+    return item_projects.space_read(
+        conn,
+        space,
+        held.project,
+        other_spaces=held.other_spaces,
+        listing=routing.projects_result,
+    )
+
+
 def _every_request(
-    conn: sqlite3.Connection, space: str, status: str | None, reference: str | None
+    conn: sqlite3.Connection,
+    space: str | None,
+    status: str | None,
+    reference: str | None,
+    within: tuple[list[str], list[object]] | None = None,
 ) -> list[dict]:
     """Every request of one space the filters keep, read a page at a time.
 
     Without an item this is what waits for the person, and a list on a comment
-    waits for nobody: it is read with its item, under its comment.
+    waits for nobody: it is read with its item, under its comment. `space` is the space
+    whose own cards are read, None for those `within` holds alone, and `within` the
+    conditions on the cards kept.
     """
 
     found: list[dict] = []
@@ -458,6 +505,7 @@ def _every_request(
         page = requests.list_page(
             conn,
             space=space,
+            within=within,
             status=status,
             reference=reference,
             lists=reference is not None,

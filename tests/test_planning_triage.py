@@ -189,7 +189,7 @@ class SelectionTests(Stack):
         self.assertEqual(
             {bare: T2, moved: T3},
             {
-                f"{found.space_key}-{found.number}": found.entered_at
+                f"{found.space_key}-{found.number}": found.since
                 for found in triage.waiting(self.conn, self.space)
             },
         )
@@ -593,6 +593,7 @@ class DueTests(Stack):
         before = self.listed()
         filed.append(self.filed_at("f5", "2026-11-17T09:00:00Z"))
         line = {
+            "space_ref": self.space_ref,
             "space": {"key": "MAIN", "name": "Crew"},
             "count": 5,
             "oldest_at": "2026-11-17T01:00:00Z",
@@ -616,7 +617,15 @@ class DueTests(Stack):
             due = self.listed()["triage_due"]
 
         self.assertEqual(
-            [{"space": {"key": "MAIN", "name": "Crew"}, "count": 1, "oldest_at": entered}], due
+            [
+                {
+                    "space_ref": self.space_ref,
+                    "space": {"key": "MAIN", "name": "Crew"},
+                    "count": 1,
+                    "oldest_at": entered,
+                }
+            ],
+            due,
         )
 
     def test_the_line_goes_once_the_stack_is_reviewed(self) -> None:
@@ -675,6 +684,7 @@ class DueTests(Stack):
         )
         _before, filed = self.five_due()
         line = {
+            "space_ref": self.space_ref,
             "space": {"key": "MAIN", "name": "Crew"},
             "count": 5,
             "oldest_at": "2026-11-17T01:00:00Z",

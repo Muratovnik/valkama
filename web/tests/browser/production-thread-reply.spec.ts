@@ -11,6 +11,7 @@ import { expectStripOnColumn } from './confirmStrip.ts'
 import { openCard } from './editorPage.ts'
 import { launchedSessionId } from './executionFixtures.ts'
 import { frames } from './frames.ts'
+import { requestedShot } from './keptShots.ts'
 import { sessionHead } from './metaLine.ts'
 import { asked } from './questionBackend.ts'
 import { openQuestion } from './questionPage.ts'
@@ -33,12 +34,6 @@ const KNOWN = launchedSessionId
 const KNOWN_START = '11111111-2222'
 /** A link to the session drawn as the words it acts on, whose tooltip holds the whole id. */
 const LINKED = { role: 'button', title: expect.stringContaining(KNOWN) }
-
-/** Where a shot goes when a person asks for shots; a run without the setting takes none. */
-async function shot(page: Page, name: string) {
-  const folder = process.env.VALKAMA_SHOT_DIR
-  if (folder) await page.screenshot({ path: `${folder}/${name}.png` })
-}
 
 async function setUp(page: Page, locale: Locale, width: number) {
   await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
@@ -217,7 +212,7 @@ for (const locale of ['en', 'ru'] as const)
         probe.remove()
         return family
       })
-      await shot(page, `session-head-${locale}-${width}`)
+      await requestedShot(page, `session-head-${locale}-${width}`)
       expect(heads).toHaveLength(4)
       for (const { head, whole, start, link } of heads) {
         const drawn = await sessionHead(head)
@@ -233,7 +228,7 @@ for (const locale of ['en', 'ru'] as const)
       }
       await card.evaluate((node) => node.scrollIntoView({ block: 'start' }))
       await page.mouse.move(0, 0)
-      await shot(page, `session-question-${locale}-${width}`)
+      await requestedShot(page, `session-question-${locale}-${width}`)
       // The start reached by a press opens the session, which says its whole id.
       await thread.locator('.reply-meta').first().getByRole('button', { name: KNOWN_START }).click()
       await expect(page.getByRole('dialog').filter({ hasText: KNOWN })).toBeVisible()

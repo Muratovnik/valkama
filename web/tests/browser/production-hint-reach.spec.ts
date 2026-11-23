@@ -16,7 +16,7 @@ import type { Locator, Page, TestInfo } from '@playwright/test'
 import { pageAt as analyticsAt, record, serve as serveAnalytics } from './analyticsPage.ts'
 import { openRail } from './cutRailPage.ts'
 import type { Move } from './hintFramesPage.ts'
-import { longestStill, paced, pass, stroke, wholeText } from './hintFramesPage.ts'
+import { pass, stroke, wholeText } from './hintFramesPage.ts'
 import { test } from './test.ts'
 
 /** A point on `anchor` where the pointer is on the anchor itself, not on an element inside it. */
@@ -45,49 +45,38 @@ const crossed = (step: Move) => !['', 'from', 'surface', 'to'].includes(step.on)
 
 /**
  * Raises `anchor`'s hint and moves the pointer from the anchor to it in one stroke of small steps,
- * as a hand does: what the hint shows at every step, and whether it is there at the end. A stroke
- * the page heard with a gap of the hint's grace between two steps stood still on the way, and is
- * done again (`paced`).
+ * as a hand does, at a pace the page's clock keeps (`stroke`): what the hint shows at every step,
+ * and whether it is there at the end.
  */
 async function reach(page: Page, anchor: Locator, info: TestInfo, name: string) {
   const words = await wordsOf(anchor)
   const viewport = page.viewportSize() ?? { width: 0, height: 0 }
-  return paced(name, async (round) => {
-    await page.mouse.move(viewport.width - 2, viewport.height - 2)
-    await pass(page, 400)
-    const from = await ownPoint(anchor)
-    await page.mouse.move(from.x, from.y)
-    const hint = page.locator('.tooltip-hint')
-    await expect(hint).toHaveCount(1)
-    await expect(hint).toContainText(words)
-    const box = await hint.evaluate((node) => {
-      const { left, right, top, bottom } = node.getBoundingClientRect()
-      return { left, right, top, bottom }
-    })
-    // Into the hint by a few pixels, level with its middle, from whichever side it stands on.
-    const to = {
-      x: box.left >= from.x ? box.left + 6 : box.right - 6,
-      y: (box.top + box.bottom) / 2,
-    }
-    const steps = await stroke(page, from, [{ ...to, steps: 24 }])
-    // Resting on the hint, past its grace.
-    await pass(page, 400)
-    const end = await shownNow(page)
-    const onHint = await page.evaluate(
-      ({ x, y }) => Boolean(document.elementFromPoint(x, y)?.closest('.tooltip-hint')),
-      to,
-    )
-    const pause = longestStill(steps)
-    await record(info, round === 1 ? name : `${name}-${round}`, {
-      from,
-      to,
-      box,
-      pause,
-      steps,
-      end,
-    })
-    return { end, onHint, pause, steps, words }
+  await page.mouse.move(viewport.width - 2, viewport.height - 2)
+  await pass(page, 400)
+  const from = await ownPoint(anchor)
+  await page.mouse.move(from.x, from.y)
+  const hint = page.locator('.tooltip-hint')
+  await expect(hint).toHaveCount(1)
+  await expect(hint).toContainText(words)
+  const box = await hint.evaluate((node) => {
+    const { left, right, top, bottom } = node.getBoundingClientRect()
+    return { left, right, top, bottom }
   })
+  // Into the hint by a few pixels, level with its middle, from whichever side it stands on.
+  const to = {
+    x: box.left >= from.x ? box.left + 6 : box.right - 6,
+    y: (box.top + box.bottom) / 2,
+  }
+  const steps = await stroke(page, from, [{ ...to, steps: 24 }])
+  // Resting on the hint, past its grace.
+  await pass(page, 400)
+  const end = await shownNow(page)
+  const onHint = await page.evaluate(
+    ({ x, y }) => Boolean(document.elementFromPoint(x, y)?.closest('.tooltip-hint')),
+    to,
+  )
+  await record(info, name, { from, to, box, steps, end })
+  return { end, onHint, steps, words }
 }
 
 /** Every step of the way across other elements kept the anchor's own hint, and nothing else. */
@@ -127,6 +116,12 @@ async function cutRow(page: Page, width: number) {
   expect(index, 'a row with a cut name and a hint').toBeGreaterThanOrEqual(0)
   return rows.nth(index)
 }
+
+// The hint's grace runs on this clock, which a stroke stops while it moves (`stroke`), so a
+// loaded machine cannot stand the pointer still on the way; until then it keeps the wall's pace.
+test.beforeEach(async ({ page }) => {
+  await page.clock.install()
+})
 
 for (const width of [1440, 1024]) {
   test(`the pointer reaches a rail row’s hint across its cut name, at ${width}px`, async ({

@@ -126,14 +126,26 @@ _MODULES = (
             "closed",
             "group",
             "branch",
+            # The order of the views and its direction: web `viewSortRoute.ts`.
+            "sort",
+            "desc",
             # The Work filter beside the text in `query`: web `workFilter.ts`.
             "ready",
             "held",
+            "asked",
+            "triage",
+            # «Closed in a period», by the keys the period pages write theirs with.
+            "period",
+            "from",
+            "to",
+            "elsewhere",
             "cat",
             "kind",
             "pri",
             "labels",
             "holder",
+            "proj",
+            "goal",
         ],
         ["planning.spaces", "planning.work-items", "planning.goal-volumes"],
         ["planning.space", "planning.work-items", "planning.goal-volumes"],
@@ -244,7 +256,7 @@ _MODULES = (
 #: When the module list above last changed. A registration is never changed at
 #: runtime any more, so this is the one `updated_at` every registration reports;
 #: move it with a change to the list or to a manifest.
-DECLARED_AT = "2026-11-18T12:00:00Z"
+DECLARED_AT = "2026-11-20T15:00:00Z"
 
 
 def _registration(manifest: dict) -> dict:

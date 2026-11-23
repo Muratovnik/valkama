@@ -26,6 +26,7 @@ import { accountNamesFailure } from '@/shared/api/quotaApi.ts'
 import { aliasOf, cleanAlias } from '@/shared/lib/accountAliases.ts'
 import { ownAccountName } from '@/shared/lib/accountLabel.ts'
 import { useCopyNote } from '@/shared/lib/copyNote.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import { useAccountNamesStore } from '@/shared/stores/accountNamesStore.ts'
 import type { MenuEntry } from '@/shared/ui/menuEntries.ts'
 
@@ -73,7 +74,7 @@ export function useAccountActions(options: {
     draft.value = kept()
     failure.value = ''
     await nextTick()
-    document.querySelector<HTMLElement>(`#${CSS.escape(options.fieldId)}`)?.focus()
+    placeFocus(document.querySelector<HTMLElement>(`#${CSS.escape(options.fieldId)}`))
   }
 
   function close() {

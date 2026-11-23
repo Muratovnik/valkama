@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import WorkItemList from '@/widgets/work-item-views/components/WorkItemList.vue'
 import WorkItemListHead from '@/widgets/work-item-views/components/WorkItemListHead.vue'
 import { LIST_COLUMNS } from '@/widgets/work-item-views/utils/listColumns.ts'
+import type { Level } from '@/widgets/work-item-views/utils/listColumns.ts'
 
 import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { i18n as appI18n } from '@/shared/i18n/index.ts'
@@ -17,6 +18,8 @@ import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 
 import { boardItem } from '../fixtures/board.ts'
+import { atListWidth } from '../fixtures/listRoom.ts'
+import { keptOrder } from '../support/listOrder.ts'
 import { i18n } from '../support/workItemBoardHarness.ts'
 
 /** `ChoiceSelect` is generic over its options, which test-utils cannot read its props through. */
@@ -36,11 +39,14 @@ const items = [1, 2, 3, 4].map((number) =>
 )
 
 async function list() {
-  const wrapper = mount(WorkItemList, {
-    attachTo: document.body,
-    props: { items, links: [] },
-    global: { plugins: [i18n()] },
-  })
+  const host = keptOrder()
+  const wrapper = host.hold(
+    mount(WorkItemList, {
+      attachTo: document.body,
+      props: { items, links: [], ...host.props },
+      global: { plugins: [i18n()] },
+    }),
+  )
   // The list listens once for all its rows, from the moment it is in the page.
   await flushPromises()
   return wrapper
@@ -65,7 +71,7 @@ describe('the list rows', () => {
     expect(after.map((button) => button.text())).toEqual(['MAIN-2'])
   })
 
-  it('walk with the arrows, Home and End, and stop at either end', async () => {
+  it('walk with the arrows, Home and End, stop at the end, and go up into the head', async () => {
     const wrapper = await list()
     buttons(wrapper)[0].element.focus()
     press('ArrowDown')
@@ -76,7 +82,10 @@ describe('the list rows', () => {
     expect(focusedReference()).toBe('MAIN-1')
     press('Home')
     expect(focusedReference()).toBe('MAIN-4')
+    // Above the first row is the head, the sort over the reference, and ↓ comes back.
     press('ArrowUp')
+    expect(focusedReference()).toBe('Ref')
+    press('ArrowDown')
     expect(focusedReference()).toBe('MAIN-4')
     // A modified arrow is someone else's shortcut.
     press('ArrowDown', { shiftKey: true })
@@ -168,11 +177,11 @@ describe('the list rows', () => {
     })
     await flushPromises()
     const [recent, older] = wrapper.findAll('tbody tr').map((row) => row.findAll('td'))
-    expect(recent[5].text()).toBe('1/2')
-    expect(recent[6].text()).toContain('Mar')
-    expect(recent[6].text()).not.toContain(String(year))
-    expect(older[5].text()).toBe('—')
-    expect(older[6].text()).toContain(String(year - 1))
+    expect(recent[6].text()).toBe('1/2')
+    expect(recent[7].text()).toContain('Mar')
+    expect(recent[7].text()).not.toContain(String(year))
+    expect(older[6].text()).toBe('—')
+    expect(older[7].text()).toContain(String(year - 1))
   })
 })
 
@@ -193,7 +202,7 @@ const cells = (wrapper: Awaited<ReturnType<typeof rows>>, index: number) =>
 describe('the facets a list row prints', () => {
   it('says nobody holds an unheld item with a dash, never that it is workable', async () => {
     const wrapper = await rows([boardItem(1, 'backlog', { workable: true })])
-    const holder = cells(wrapper, 0)[4]
+    const holder = cells(wrapper, 0)[5]
     expect(holder.text()).toBe('—')
     expect(wrapper.get('tbody').text()).not.toContain('Workable')
   })
@@ -203,8 +212,8 @@ describe('the facets a list row prints', () => {
       boardItem(1, 'done', { last_claim_ref: 'claude (session 5937aa01-1234-4c00)' }),
       boardItem(2, 'done', { last_claim_ref: null }),
     ])
-    expect(cells(wrapper, 0)[4].text()).toBe('Previously responsible: claude · 5937aa01-1234')
-    expect(cells(wrapper, 1)[4].text()).toBe('—')
+    expect(cells(wrapper, 0)[5].text()).toBe('Previously responsible: claude · 5937aa01-1234')
+    expect(cells(wrapper, 1)[5].text()).toBe('—')
   })
 
   it('leads every reference with one kind slot, filled or not, and drops the kind word', async () => {
@@ -231,14 +240,14 @@ describe('the facets a list row prints', () => {
       boardItem(2, 'backlog', { priority: 'high' }),
       boardItem(3, 'backlog', { priority: 'low' }),
     ])
-    const medium = cells(wrapper, 0)[3].get('.facet-mark')
+    const medium = cells(wrapper, 0)[4].get('.facet-mark')
     expect(medium.text()).toBe('Medium')
     expect(medium.classes()).toContain('quiet')
     for (const [index, word, tone] of [
       [1, 'High', 'warning'],
       [2, 'Low', 'neutral'],
     ] as const) {
-      const column = cells(wrapper, index)[3].get('.facet-mark')
+      const column = cells(wrapper, index)[4].get('.facet-mark')
       expect(column.text()).toBe(word)
       // The word alone, in the tone its glyph has where the column folds away.
       expect(column.classes()).toContain('facet-word-alone')
@@ -249,26 +258,19 @@ describe('the facets a list row prints', () => {
       expect(glyphs).toHaveLength(0)
     }
     for (const index of [0, 1, 2])
-      expect(cells(wrapper, index)[3].find('.facet-glyph').exists()).toBe(false)
+      expect(cells(wrapper, index)[4].find('.facet-glyph').exists()).toBe(false)
   })
 
   it('where the priority column folds away, its glyph follows the reference, after the kind', async () => {
-    const width = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')
-    // A list of 700px folds the state, the priority and the holder columns.
-    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
-      configurable: true,
-      get: () => 700,
-    })
-    try {
+    // A list of 700px folds the goal and stage, the state, the priority and the holder columns.
+    await atListWidth(700, async () => {
       const wrapper = await rows([boardItem(1, 'backlog', { kind: 'bug', priority: 'urgent' })])
       const head = cells(wrapper, 0)[0]
         .findAll('[data-facet], .list-open')
         .map((part) => part.attributes('data-facet') ?? 'reference')
       expect(head).toEqual(['kind', 'reference', 'priority'])
       wrapper.unmount()
-    } finally {
-      if (width) Object.defineProperty(HTMLElement.prototype, 'clientWidth', width)
-    }
+    })
   })
 
   it('filters by a glyph without opening the row, and keeps the row one Tab stop', async () => {
@@ -304,15 +306,13 @@ describe('the facets a list row prints', () => {
 describe('the list head on a narrow list', () => {
   const folded = LIST_COLUMNS.filter((column) => !['reference', 'title'].includes(column.key))
 
-  function head(sortKey: (typeof LIST_COLUMNS)[number]['key']) {
+  function head(sortKey: (typeof LIST_COLUMNS)[number]['key'], level: Level = 'narrow') {
     return mount(WorkItemListHead, {
       props: {
-        sortState: () => 'none' as const,
         columns: LIST_COLUMNS.filter((column) => !folded.includes(column)),
-        descending: true,
         folded,
-        narrow: true,
-        sortKey,
+        level,
+        sort: { key: sortKey, descending: true },
       },
       global: { plugins: [i18n()] },
     })
@@ -328,7 +328,7 @@ describe('the list head on a narrow list', () => {
     // Nothing to turn over until a folded order is the list's.
     expect((choice.props() as ChoiceProps).modelValue).toBe('')
     choice.vm.$emit('update:modelValue', 'priority')
-    expect(wrapper.emitted('sort')).toEqual([['priority']])
+    expect(wrapper.emitted('sort')).toEqual([[{ key: 'priority', descending: true }]])
   })
 
   it('turns a chosen folded order over from the same choice', () => {
@@ -338,6 +338,32 @@ describe('the list head on a narrow list', () => {
     const turn = (choice.props() as ChoiceProps).options.at(-1)
     expect(turn?.label).toBe('Sort ascending')
     choice.vm.$emit('update:modelValue', turn?.value)
-    expect(wrapper.emitted('sort')).toEqual([['updated']])
+    expect(wrapper.emitted('sort')).toEqual([[{ key: 'updated', descending: false }]])
+  })
+
+  it('keeps one choice of order through every level, hidden where the folded sorts are buttons', async () => {
+    const wrapper = head('title')
+    const choice = wrapper.get('.list-sort-choice').element
+    expect(choice.hasAttribute('hidden')).toBe(false)
+    for (const level of ['full', 'wide', 'narrow', 'bare'] as const) {
+      await wrapper.setProps({ level })
+      expect(wrapper.get('.list-sort-choice').element, level).toBe(choice)
+      expect(choice.hasAttribute('hidden'), level).toBe(level === 'full' || level === 'wide')
+    }
+  })
+
+  it('shows its words in every level but the last, which bares the choice to its chevron', () => {
+    const named = head('title').get('.list-sort-choice')
+    expect(named.classes()).not.toContain('bare')
+    expect(named.get('.choice-value').classes()).not.toContain('visually-hidden')
+    expect(named.get('.choice-trigger').attributes('aria-describedby')).toBeUndefined()
+    const bare = head('title', 'bare').get('.list-sort-choice')
+    expect(bare.classes()).toContain('bare')
+    // The words stay the value assistive technology reads, and the hint says them.
+    expect(bare.get('.choice-value').classes()).toContain('visually-hidden')
+    expect(bare.get('.choice-value').text()).toBe('Order')
+    const trigger = bare.get('.choice-trigger')
+    expect(trigger.attributes('aria-label')).toBe('Sort by')
+    expect(trigger.attributes('aria-describedby')).toBeTruthy()
   })
 })

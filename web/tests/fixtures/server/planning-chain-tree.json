@@ -24,6 +24,18 @@
     "by_container_state": {
       "not_started": 2
     },
+    "by_project": [
+      {
+        "project_id": "example-project",
+        "display_name": "example-project",
+        "count": 1
+      },
+      {
+        "project_id": null,
+        "display_name": null,
+        "count": 2
+      }
+    ],
     "origins": [
       {
         "parent_reference": "MAIN-9",

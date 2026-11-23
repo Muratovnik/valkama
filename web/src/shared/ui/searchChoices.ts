@@ -5,6 +5,7 @@
  * so every value reaches Reka as a token; typed words offered as a new value are a token
  * of their own kind, which no option can spell.
  */
+import { choicesMatching } from '@/shared/ui/choiceControls.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 
 const VALUE = 'v:'
@@ -47,11 +48,7 @@ export function searchChoices(input: {
   ]
   const words = input.query.trim()
   const needle = words.toLocaleLowerCase()
-  const found = needle
-    ? listed.filter((option) =>
-        `${option.label} ${option.description ?? ''}`.toLocaleLowerCase().includes(needle),
-      )
-    : listed
+  const found = choicesMatching(listed, words)
   const said = listed.some((option) => option.label.toLocaleLowerCase() === needle)
   return { found, fresh: input.creatable && words && !said ? words : '' }
 }

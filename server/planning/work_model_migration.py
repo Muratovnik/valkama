@@ -49,9 +49,11 @@ otherwise cascade into them:
 - **addressee** appends the column a request names the agent session it asks with
   (`work_item_requests.addressee`) and its index; every request it finds asks the
   owner, as it did.
-- **ended-requests** rebuilds `work_item_requests` from the fresh declaration, with the `purpose`
-  a question to the owner may carry, the action waiting for the owner it is about
-  (`action_id`, null on every row it carries) and the reasons a close stores: a request still
+- **ended-requests** rebuilds `work_item_requests` from the fresh declaration, with
+  the `purpose` a question to the owner may carry, the action waiting for the owner it is about
+  (`action_id`, null on every row it carries), the key and values of a prompt the
+  service composed (`prompt_key` and `prompt_values`, null on every row it carries, whose
+  prompt stays as written) and the reasons a close stores: a request still
   pending on a closed item, which 2.9 read `task_closed` and left pending, ends
   `expired` as `item_completed` or `item_cancelled` by the category its item stands
   in, with no event, as does one that stored `task_closed`. One that had already
@@ -104,6 +106,9 @@ otherwise cascade into them:
 
 The postcondition **agent-basis** holds that no item stands accepted on an agent's own
 decision (`agent`): before 3.0 no setting let an agent decide, so nothing was.
+**composed-texts** holds that no request carries the key of a text the service composed:
+a prompt 2.9 stored is shown as written. The summary of decisions starts empty, which
+**agent-decisions** holds, so no mark carries one either.
 
 The place of a step in `STEPS` sets when it runs, not its name, and a name once given
 stays. The order keeps these relations:
@@ -1833,6 +1838,7 @@ def _requests_needed(conn: sqlite3.Connection, context: Context) -> bool:
     return (
         "purpose" not in columns
         or "action_id" not in columns
+        or "prompt_key" not in columns
         or "'task_closed'" in str(declared[0])
         or conn.execute(f"SELECT 1{_REQUEST_STATES} WHERE {_ENDS} LIMIT 1").fetchone() is not None
     )
@@ -3623,7 +3629,29 @@ def _triage_marks_none(conn: sqlite3.Connection, context: Context) -> Mapping[st
     return {"marks": marks, "triage_seen_events": events}
 
 
-def _p16(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+# -- composed-texts: no row carries the key of a composed text ------------------------
+
+#: The postcondition that holds every request a 2.9 store kept to its text alone.
+COMPOSED_TEXTS = "composed-texts"
+
+
+def _composed_none(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
+    """No request carries a composed prompt's key or values: 2.9 composed every prompt
+    in English alone, and `ended-requests` carries each as it was, so each is shown as
+    written. `request-shapes` holds the columns to a fresh store's."""
+
+    del context
+    keyed = int(
+        conn.execute(
+            "SELECT COUNT(*) FROM work_item_requests"
+            " WHERE prompt_key IS NOT NULL OR prompt_values IS NOT NULL"
+        ).fetchone()[0]
+    )
+    _unmet([f"{keyed} requests carry a composed key"] if keyed else [], "composed texts")
+    return {"keyed": keyed}
+
+
+def _holds_second_run(conn: sqlite3.Connection, context: Context) -> Mapping[str, Any]:
     again = [step.name for step in context.steps if step.needed(conn, context)]
     _unmet(again, "steps a second run would take")
     return {"steps_needed_again": again}
@@ -3732,7 +3760,8 @@ POSTCONDITIONS = (
     Postcondition(
         BASELINES, "a count at acceptance only where an acceptance was not migrated", _baselines
     ),
-    Postcondition("second-run", "a second run changes nothing", _p16),
+    Postcondition(COMPOSED_TEXTS, "no request carries a composed key", _composed_none),
+    Postcondition("second-run", "a second run changes nothing", _holds_second_run),
 )
 
 __all__ = ["AUTHOR", "POSTCONDITIONS", "STEPS", "Oracle", "store_steps"]

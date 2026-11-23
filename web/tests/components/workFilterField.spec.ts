@@ -51,7 +51,15 @@ const highlighted = (wrapper: ReturnType<typeof field>) =>
 const groupNames = (wrapper: ReturnType<typeof field>) =>
   wrapper.findAll('[role="listbox"] [role="group"] .option-group-name').map((name) => name.text())
 const everywhere = (text: string) => `Search for “${text}” in all projects`
-const FACETS = ['State', 'Kind', 'Priority', 'Assignee', 'Label']
+// Work that names no project offers «No project», so the project's facet is there too.
+/** The conditions after the held count. */
+const CONDITIONS_AFTER = [
+  'Waiting for my answer',
+  'Awaiting triage',
+  'From another space',
+  'Closed in a period',
+]
+const FACETS = ['State', 'Kind', 'Priority', 'Assignee', 'Project', 'Label']
 
 afterEach(() => {
   document.body.innerHTML = ''
@@ -92,9 +100,14 @@ describe('the Work filter field', () => {
     const wrapper = field()
     await input(wrapper).trigger('click')
     expect(input(wrapper).attributes('aria-expanded')).toBe('true')
-    expect(groupNames(wrapper)).toEqual(['Conditions', 'Filter by'])
+    expect(groupNames(wrapper)).toEqual(['Filters', 'Filter by'])
     // The held condition says how many it lets through, as its preset did.
-    expect(options(wrapper)).toEqual(['Workable', 'Has an assignee7', ...FACETS])
+    expect(options(wrapper)).toEqual([
+      'Workable',
+      'Has an assignee7',
+      ...CONDITIONS_AFTER,
+      ...FACETS,
+    ])
     expect(option(wrapper, 'Has an assignee7').get('.option-detail').text()).toBe('7')
     // A facet's row leads somewhere and is no value, so it is not «not selected» either.
     for (const name of FACETS)
@@ -107,7 +120,12 @@ describe('the Work filter field', () => {
       'Assignee: back to the facets',
     )
     await option(wrapper, 'Assignee').trigger('click')
-    expect(options(wrapper)).toEqual(['Workable', 'Has an assignee7', ...FACETS])
+    expect(options(wrapper)).toEqual([
+      'Workable',
+      'Has an assignee7',
+      ...CONDITIONS_AFTER,
+      ...FACETS,
+    ])
 
     // Labels by how many items carry them, under the choice of how they combine.
     await option(wrapper, 'Label').trigger('click')
@@ -165,7 +183,8 @@ describe('the Work filter field', () => {
     element.focus()
     await input(wrapper).trigger('keydown', { key: 'ArrowDown' })
     expect(highlighted(wrapper)).toBe('Workable')
-    for (let step = 0; step < 3; step += 1)
+    // Past the other five conditions and «State».
+    for (let step = 0; step < 7; step += 1)
       await input(wrapper).trigger('keydown', { key: 'ArrowDown' })
     expect(highlighted(wrapper)).toBe('Kind')
     await input(wrapper).trigger('keydown', { key: 'Enter' })

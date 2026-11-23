@@ -29,7 +29,7 @@ const planningApi = sourceCode('shared/api/platformPlanningApi.ts')
 const coreApi = sourceCode('shared/api/api.ts')
 const nav = sourceCode('widgets/app-nav/components/AppNav.vue')
 const inspector = sourceCode('widgets/work-item-inspector/components/WorkItemInspector.vue')
-const inspectorTabs = sourceCode('widgets/work-item-inspector/components/InspectorTabs.vue')
+const inspectorTabs = sourceCode('shared/ui/TabStrip.vue')
 const overview = sourceCode('widgets/work-item-inspector/components/InspectorOverview.vue')
 const identity = sourceCode('widgets/work-item-inspector/components/InspectorIdentity.vue')
 const inspectorMemory = sourceCode('widgets/work-item-inspector/components/InspectorMemory.vue')
@@ -228,7 +228,7 @@ test('common responsive controls keep keyboard focus and 44px targets', () => {
   // tablist of its own, so the row it stands in is the primitive's answer. It
   // lives in the shared frame now, with the two writes it sits beside, as the
   // card's own strip of sections.
-  assert.match(inspector, renders('InspectorTabs'))
+  assert.match(inspector, renders('TabStrip'))
   assert.match(inspectorTabs, renders('SegmentedControl'))
   assert.ok(
     declarationsOf(segmented, '.segmented-option').some((each) =>

@@ -18,9 +18,11 @@ import { computed, nextTick, useId, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { tokenKey, tokenName } from '@/features/work-filter/filterOptions.ts'
+import type { FilterWords } from '@/features/work-filter/filterOptions.ts'
 
 import type { ValueToken, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import ToggleChip from '@/shared/ui/ToggleChip.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
@@ -29,6 +31,8 @@ const props = defineProps<{
   /** One of the labels will do, rather than every one of them. */
   labelsAny: boolean
   tokens: readonly WorkFilterToken[]
+  /** A project's name and a goal's title, where the chip would say only an id or a reference. */
+  words?: FilterWords
 }>()
 
 const emit = defineEmits<{
@@ -47,7 +51,7 @@ const chips = computed(() => {
   const word = t(`workItem.filter.labelsMatch.${props.labelsAny ? 'any' : 'all'}.join`)
   const and = t('workItem.filter.labelsMatch.all.join')
   return props.tokens.map((token, index) => {
-    const name = tokenName(token, t)
+    const name = tokenName(token, t, props.words)
     // The word before it, from the second label on, which also describes the chip.
     // A label negated is kept out whatever «any» lets in, so the word before it is always «and».
     const joined = token.facet === 'labels' && token.not ? and : word
@@ -66,7 +70,7 @@ const chips = computed(() => {
         pressed: value.not === true,
         sign: value.not ? '≠' : '=',
         name: t('workItem.filter.negate', {
-          name: tokenName({ ...value, not: undefined } as ValueToken, t),
+          name: tokenName({ ...value, not: undefined } as ValueToken, t, props.words),
         }),
       },
       removeName: t('workItem.filter.remove', { name }),
@@ -85,7 +89,7 @@ const list = useTemplateRef<HTMLElement>('list')
 function focusAt(index: number): boolean {
   const button = list.value?.querySelectorAll<HTMLButtonElement>('.filter-chip')[index]
   if (!button || button.offsetParent === null) return false
-  button.focus()
+  placeFocus(button)
   return true
 }
 

@@ -16,6 +16,7 @@ import { LINK } from './documentBackend.ts'
 import { openFromCard } from './documentFocusMoves.ts'
 import { openCard } from './editorPage.ts'
 import { frames } from './frames.ts'
+import { requestedShot } from './keptShots.ts'
 import { spaceScope, workItemRef } from './planningFixtures.ts'
 import { asked, send } from './questionBackend.ts'
 import { openQuestion } from './questionPage.ts'
@@ -94,12 +95,6 @@ async function heldWrites(page: Page) {
   return letGo
 }
 
-/** Where a shot goes when a person asks for shots; a run without the setting takes none. */
-async function shot(page: Page, name: string) {
-  const folder = process.env.VALKAMA_SHOT_DIR
-  if (folder) await page.screenshot({ path: `${folder}/${name}.png` })
-}
-
 for (const locale of ['en', 'ru'] as const)
   for (const width of [1280, 390])
     for (const input of INPUTS)
@@ -120,7 +115,7 @@ for (const locale of ['en', 'ru'] as const)
         letGo()
         const written = thread.locator('.reply').filter({ hasText: 'Beside it, then.' })
         expect(await landing(page, written, input)).toEqual(RING_AFTER[input])
-        await shot(page, `reply-${input}-${locale}-${width}`)
+        await requestedShot(page, `reply-${input}-${locale}-${width}`)
       })
 
 for (const input of INPUTS) {
@@ -167,7 +162,7 @@ for (const input of INPUTS) {
     expect(await edge()).toEqual(shown)
   })
 
-  test(`the checklist's head takes focus from All steps, ringed only after a key: ${input}`, async ({
+  test(`the checklist's head takes focus from All conditions, ringed only after a key: ${input}`, async ({
     page,
   }) => {
     await page.addInitScript(() => localStorage.setItem('valkama-locale', 'en'))
@@ -186,7 +181,7 @@ for (const input of INPUTS) {
     )
     const drawer = page.locator('.drawer')
     await expect(drawer).toHaveCSS('transform', 'none')
-    await act(drawer.getByRole('button', { name: 'All steps', exact: true }), input)
+    await act(drawer.getByRole('button', { name: 'All conditions', exact: true }), input)
     expect(await landing(page, drawer.locator('.checklist-head'), input)).toEqual(RING_AFTER[input])
   })
 

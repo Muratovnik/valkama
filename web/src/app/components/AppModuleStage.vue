@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
-import { analyticsView, settingsView } from '@/app/moduleViews.ts'
+import { analyticsView, decisionsView, settingsView, volumesView } from '@/app/moduleViews.ts'
 
 import PlanningCardOverlay from '@/pages/planning/PlanningCardOverlay.vue'
 import PlanningModuleSurface from '@/pages/planning/PlanningModuleSurface.vue'
 
 import ModuleFrame from '@/widgets/module-frame/components/ModuleFrame.vue'
 
+import type { QuestionScope } from '@/shared/api/inputRequestApi.ts'
 import type { PlatformContextReady } from '@/shared/api/platformApiTypes.ts'
 import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
 import type { ModuleId } from '@/shared/api/platformModuleContract.ts'
@@ -37,10 +38,14 @@ const emit = defineEmits<{
   'notice': [message: string]
   'open-space': [space: PlanningSpaceRef]
   'question-taken': []
+  /** The questions window, asked for by a page: narrowed to the page's scope, or not at all. */
+  'requests': [scope: QuestionScope | null]
   'state': [state: Record<string, string | number | boolean>, mode?: 'push' | 'replace']
 }>()
 const SettingsView = settingsView.component
 const AnalyticsView = analyticsView.component
+const DecisionsView = decisionsView.component
+const VolumesView = volumesView.component
 const planningSurface = ref<InstanceType<typeof PlanningModuleSurface> | null>(null)
 const cardOverlay = ref<InstanceType<typeof PlanningCardOverlay> | null>(null)
 async function refresh() {
@@ -53,12 +58,18 @@ function stateValue(key: string, fallback = '') {
 const scopeProject = computed(() =>
   props.scope.kind === 'space' ? (props.scope.project_ref?.project_id ?? null) : null,
 )
+/** The space a scope names, which Settings shows its own values of; null at the top. */
+const scopeSpace = computed(() => (props.scope.kind === 'space' ? props.scope.space_ref : null))
+/** The key of that space, which Agent decisions and Analytics read by; null at the top. */
+const scopeSpaceKey = computed(() => scopeSpace.value?.space_key ?? null)
 /** The work item whose card is on show, for as long as its module is. */
 const openCardId = computed(
   () => planningSurface.value?.selectedId ?? cardOverlay.value?.selectedId ?? null,
 )
 /** Whether a card stands over the module, which a side panel of the module waits under. */
 const cardOver = computed(() => props.route.entity?.kind === 'work-item')
+/** Agent decisions are recorded as events, so a card it opens shows its System events first. */
+const cardOpensOn = computed(() => (props.activeModule === 'decisions' ? 'activity' : null))
 defineExpose({ openCardId, refresh })
 </script>
 <template>
@@ -87,9 +98,37 @@ defineExpose({ openCardId, refresh })
   >
     <AnalyticsView
       :route-state="route.state"
+      :space="scopeSpaceKey"
       :project-id="scopeProject"
       :covered="cardOver"
       @state="(state, mode) => emit('state', state, mode)"
+    />
+  </ModuleFrame>
+
+  <ModuleFrame
+    v-else-if="activeModule === 'decisions'"
+    module="decisions"
+    :label="moduleTitle"
+  >
+    <DecisionsView
+      :route-state="route.state"
+      :space="scopeSpaceKey"
+      :project-id="scopeProject"
+      @state="(state) => emit('state', state)"
+    />
+  </ModuleFrame>
+
+  <ModuleFrame
+    v-else-if="activeModule === 'volumes'"
+    module="volumes"
+    :label="moduleTitle"
+  >
+    <VolumesView
+      :route-state="route.state"
+      :scope="scope"
+      @go="(next) => emit('go', next)"
+      @requests="(asked) => emit('requests', asked)"
+      @state="(state) => emit('state', state)"
     />
   </ModuleFrame>
 
@@ -101,6 +140,7 @@ defineExpose({ openCardId, refresh })
     <SettingsView
       :locale="locale"
       :section="stateValue('section', 'general')"
+      :space="scopeSpace"
       @locale="(value) => emit('locale', value)"
       @state="(state) => emit('state', state)"
     />
@@ -112,6 +152,7 @@ defineExpose({ openCardId, refresh })
     ref="cardOverlay"
     :context="context"
     :entity="route.entity"
+    :opens-on="cardOpensOn"
     :primary-write-scope-id="primaryWriteScopeId"
     :question-asked="questionAsked"
     :scope="scope"

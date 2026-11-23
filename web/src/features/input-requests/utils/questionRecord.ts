@@ -20,9 +20,13 @@ import type { InputAnswers, InputRequestEntry } from '@/shared/api/inputRequestM
  * in the record's `subject` and is answered by a row of buttons (`answers`), each of which writes
  * through the same answer every question is written with. The record owns that write, its
  * history, a change of answer and what was left unsent; a kind repeats none of them.
+ *
+ * A kind other than a choice is the server's purpose of the question (`questionKinds.ts`): a
+ * review of finished work, a group of findings, a goal or a task in an accepted goal an agent
+ * files, a condition it changes, a cancel it asks for, a confirmation and work that came back.
  */
-type QuestionKind =
-  'acceptance' | 'cancel' | 'choice' | 'condition' | 'confirm' | 'goal' | 'return' | 'triage'
+export type QuestionKind =
+  'cancel' | 'choice' | 'condition' | 'confirm' | 'goal' | 'return' | 'review' | 'task' | 'triage'
 
 export interface QuestionRecord {
   /** Empty for a choice of options, which its form answers. */
@@ -42,12 +46,44 @@ export interface KindAnswer {
   answer: InputAnswers
   label: string
   /**
+   * Why it cannot be sent now, which stands under the answers; absent while it can. It is set over
+   * what the form holds (`answersOver`).
+   */
+  blocked?: string
+  /**
+   * It cancels work the server may list first: once a refusal has handed it the list of what the
+   * cancel closes, its confirmed retry sends that list's token as the value of this field.
+   */
+  cancels?: { field: string }
+  /** Its label names how many of its ticks are ticked once that is fewer than all of them. */
+  counts?: true
+  /**
    * It puts the question off: its first press opens the choice of a day to come back to it, and
    * the day goes as the value of this text field of the question.
    */
   later?: { field: string }
+  /** The server refuses it with nothing ticked in its field of ticks, so it waits for a tick. */
+  needsTicked?: true
+  /** It sends what is ticked in this field of ticks (`ticked`). */
+  ticks?: Ticks
   /** Its first press writes nothing and asks in place, as Don't answer does. */
   twoStep?: true
+}
+
+/**
+ * A field of ticks a kind shows in its content: its options stand ticked as the question
+ * recommends them (`initial`) until the person ticks or unticks one, out of `total`.
+ */
+export interface Ticks {
+  field: string
+  initial: readonly string[]
+  total: number
+}
+
+/** What is ticked in a field of ticks: what the person left there, or what stands at first. */
+export function ticked(ticks: Ticks, draft: RequestDraft): readonly string[] {
+  const value = draft.answers[ticks.field]
+  return Array.isArray(value) ? value : ticks.initial
 }
 
 /** A question as the record of a choice of options, which is what every question is today. */
@@ -56,13 +92,15 @@ export function choiceRecord(entry: InputRequestEntry): QuestionRecord {
 }
 
 /**
- * What one answer of a kind sends with what the form holds: its own values over the form's, and
- * no day another answer would put the question off to.
+ * What one answer of a kind sends with what the form holds: its own values over the form's, what
+ * is ticked where it sends ticks, the token of the list a refusal handed it (`listToken`) where it
+ * cancels work, and no day another answer would put the question off to.
  */
 export function kindAnswerDraft(
   answers: readonly KindAnswer[],
   index: number,
   draft: RequestDraft,
+  listToken = '',
 ): RequestDraft {
   const chosen = answers[index]
   if (!chosen) return draft
@@ -74,7 +112,33 @@ export function kindAnswerDraft(
     ),
   )
   const kept = Object.entries(draft.answers).filter(([id]) => !others.has(id))
-  return { ...draft, answers: { ...Object.fromEntries(kept), ...chosen.answer } }
+  const ticks = chosen.ticks ? { [chosen.ticks.field]: [...ticked(chosen.ticks, draft)] } : {}
+  const token = chosen.cancels && listToken ? { [chosen.cancels.field]: listToken } : {}
+  return {
+    ...draft,
+    answers: { ...Object.fromEntries(kept), ...ticks, ...token, ...chosen.answer },
+  }
+}
+
+/**
+ * The answers as their buttons say them over what the form holds: one that counts its ticks says
+ * how many go once fewer than all of them are ticked, in the words `counted` gives, and one that
+ * needs a tick is blocked while none is, for the reason `unticked` gives, so no press sends what
+ * the server refuses.
+ */
+export function answersOver(
+  answers: readonly KindAnswer[],
+  draft: RequestDraft,
+  counted: (label: string, count: number) => string,
+  unticked: string,
+): readonly KindAnswer[] {
+  return answers.map((answer) => {
+    if (!answer.ticks) return answer
+    const { length } = ticked(answer.ticks, draft)
+    const label =
+      answer.counts && length < answer.ticks.total ? counted(answer.label, length) : answer.label
+    return { ...answer, label, ...(answer.needsTicked && !length ? { blocked: unticked } : {}) }
+  })
 }
 
 type Fields = InputRequestEntry['request']['fields']

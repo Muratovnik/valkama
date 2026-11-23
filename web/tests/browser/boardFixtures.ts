@@ -134,6 +134,7 @@ export function chainOf(space: Brief[]) {
     workable: members.filter((item) => item.workable).length,
     by_category: {},
     by_container_state: {},
+    by_project: [],
     origins: [
       {
         parent_reference: 'MAIN-401',

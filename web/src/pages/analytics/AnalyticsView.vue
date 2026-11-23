@@ -97,8 +97,10 @@ const props = withDefaults(
     projectId?: string | null
     /** The module's part of the address: what `writeAddress` wrote, or nothing. */
     routeState?: Readonly<Record<string, string | number | boolean>>
+    /** The space the page is scoped to, by its key; every figure is of the work its board holds. */
+    space?: string | null
   }>(),
-  { routeState: undefined, projectId: null, covered: false },
+  { routeState: undefined, projectId: null, space: null, covered: false },
 )
 /** The view's new address: a change in place, or a new place in the history (`push`). */
 const emit = defineEmits<{
@@ -142,12 +144,14 @@ function narrowToPeriod(span: OwnPeriod, label: string, framed = false) {
 }
 
 /** The page's reads, asked once however many of its parts ask them (`useSharedUsage`). */
-const shared = provideSharedUsage({ view: () => view.value, projectId: () => props.projectId })
+/** What the context strip narrows every read of the page to; the quota is an account's and is not. */
+const scope = () => ({ space: props.space, projectId: props.projectId })
+const shared = provideSharedUsage({ view: () => view.value, scope })
 /** What the page's colours are ranked over: the period without its filters (`useColourPlaces`). */
 const places = provideColourPlaces({
   shared,
   view: () => view.value,
-  projectId: () => props.projectId,
+  scope,
 })
 /** The page's one status region for its read waits: it says the word while any of them shows. */
 const { shown: readWaitShown } = provideReadWaits()
@@ -155,7 +159,7 @@ const read = useUsageRead({
   places,
   shared,
   view: () => view.value,
-  projectId: () => props.projectId,
+  scope,
 })
 
 const today = computed(() => localDay(read.askedAt.value))
@@ -245,7 +249,7 @@ const { tiles: usageTiles, refresh: refreshTiles } = useRailTiles({
   overview: () => read.state.value,
   overviewAt: () => read.askedAt.value,
   places,
-  projectId: () => props.projectId,
+  scope,
   shared,
   view: () => view.value,
 })

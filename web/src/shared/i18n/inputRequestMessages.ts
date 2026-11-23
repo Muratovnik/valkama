@@ -1,5 +1,6 @@
 import { commentListMessages } from '@/shared/i18n/commentListMessages.ts'
 import { inputRequestReviewMessages } from '@/shared/i18n/inputRequestReviewMessages.ts'
+import { questionKindMessages } from '@/shared/i18n/questionKindMessages.ts'
 import { questionRecordMessages } from '@/shared/i18n/questionRecordMessages.ts'
 import { requestHubMessages } from '@/shared/i18n/requestHubMessages.ts'
 
@@ -7,7 +8,14 @@ export const inputRequestMessages = {
   en: {
     requests: {
       title: 'Needs my answer',
-      scope: 'Pending blocks of questions across mapped projects',
+      scopeSpace: 'On the board of {space}',
+      scopeProject: 'On the board of {space}, project {project}',
+      scopeAll: 'Show every space’s questions, not only those of {space}',
+      scopeAllTasks: 'Show every space’s questions, not only those on the chosen tasks',
+      scopeTasks: '{scope}, only on tasks {tasks}',
+      scopeTasksOnly: 'Only on tasks {tasks}',
+      tasksOfKind: 'of kind {kind}',
+      tasksLabelled: 'with the label {label}',
       close: 'Close questions',
       error: 'Questions could not be refreshed. Your drafts are kept.',
       errorBare: 'Questions could not be refreshed.',
@@ -101,12 +109,20 @@ export const inputRequestMessages = {
       review: inputRequestReviewMessages.en.review,
       list: commentListMessages.en.list,
       record: questionRecordMessages.en.record,
+      kinds: questionKindMessages.en.kinds,
     },
   },
   ru: {
     requests: {
       title: 'Ждут моего ответа',
-      scope: 'Открытые блоки вопросов во всех связанных проектах',
+      scopeSpace: 'На доске пространства {space}',
+      scopeProject: 'На доске пространства {space}, проект {project}',
+      scopeAll: 'Показать вопросы всех пространств, а не только {space}',
+      scopeAllTasks: 'Показать вопросы всех пространств, а не только на выбранных задачах',
+      scopeTasks: '{scope}, только на задачах {tasks}',
+      scopeTasksOnly: 'Только на задачах {tasks}',
+      tasksOfKind: 'вида «{kind}»',
+      tasksLabelled: 'с меткой «{label}»',
       close: 'Закрыть вопросы',
       error: 'Не удалось обновить вопросы. Черновики сохранены.',
       errorBare: 'Не удалось обновить вопросы.',
@@ -198,6 +214,7 @@ export const inputRequestMessages = {
       review: inputRequestReviewMessages.ru.review,
       list: commentListMessages.ru.list,
       record: questionRecordMessages.ru.record,
+      kinds: questionKindMessages.ru.kinds,
     },
   },
 }

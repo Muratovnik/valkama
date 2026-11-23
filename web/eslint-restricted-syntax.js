@@ -4,9 +4,9 @@
  * They sit beside `eslint.config.ts` rather than in it for the reason the
  * stylelint presets do: a rule that needs a page of argument buries forty rules
  * that need none, and the config was two lines under its own `max-lines` ceiling
- * before any of these lists grew. All three are spent through `no-restricted-syntax`
- * — one through the plugin's template-aware copy, two through the core rule — so
- * this file holds the arguments and the config holds the wiring.
+ * before any of these lists grew. All are spent through `no-restricted-syntax` —
+ * the template's through the plugin's template-aware copy, the script's through the
+ * core rule — so this file holds the arguments and the config holds the wiring.
  */
 
 // Vue's own style guide, under "Simple expressions in templates", asks that a
@@ -142,3 +142,24 @@ export const watchSources = [
       'Watch an array of sources — watch([a, b], cb) — not a getter returning a fresh array: an array literal is a new reference every evaluation, so the watcher fires on any dependency touch instead of on a change.',
   },
 ]
+
+// A focus the browser places itself is shown by centring its target, across as
+// well as down, and in a frame that scrolls sideways that takes the reader's
+// place away: the board slid 441px at a phone's width when opening a folded
+// column gave focus to the button that folds it again. `placeFocus` keeps such a
+// frame where it stood and shows the target up and down, so every focus the app
+// places goes through it, and a bare `focus()` is refused. A call that names its
+// options has said how it scrolls: `{ preventScroll: true }` where the caller
+// scrolls for itself, and `placeFocus`'s own call. Syntax cannot see a receiver's
+// type, so a component's handle that takes focus is named otherwise
+// (`takeFocus`), and a bare call is always the element's.
+export const scriptedFocus = [
+  {
+    selector: "CallExpression[arguments.length=0] > MemberExpression.callee[property.name='focus']",
+    message:
+      'Place a scripted focus with placeFocus (shared/lib/scriptedFocus.ts), which keeps a frame that scrolls sideways where it stood; pass { preventScroll: true } where the caller scrolls for itself.',
+  },
+]
+
+/** What the app's script may not hold: every list above that reads script, not a template. */
+export const appScript = [...componentChannels, ...watchSources, ...scriptedFocus]

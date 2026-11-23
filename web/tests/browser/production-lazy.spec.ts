@@ -5,6 +5,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { LOADING_DELAY_MS } from '@/shared/ui/loadingPresence.ts'
 
 import { installBackend } from './backend.ts'
+import { CARD_CHUNK } from './cardCode.ts'
 import { watchLoading } from './loadingWatch.ts'
 import { spaceScope, workItem, workItemRef } from './planningFixtures.ts'
 import { asked, installQuestions } from './questionBackend.ts'
@@ -20,7 +21,6 @@ import { test } from './test.ts'
 
 const GRAPH_CHUNK = /\/assets\/GraphView-[\w-]+\.js$/
 const SETTINGS_CHUNK = /\/assets\/SettingsView-[\w-]+\.js$/
-const CARD_CHUNK = /\/assets\/WorkItemInspector-[\w-]+\.js$/
 const QUESTIONS_CHUNK = /\/assets\/RequestList-[\w-]+\.js$/
 
 function shot(info: TestInfo, name: string) {

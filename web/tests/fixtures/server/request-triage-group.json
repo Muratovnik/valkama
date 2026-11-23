@@ -15,6 +15,13 @@
     "title": "Group of export findings",
     "kind": "question",
     "prompt": "Group of 2 items: «Group of export findings»",
+    "prompt_message": {
+      "key": "group_asked",
+      "values": {
+        "count": 2,
+        "title": "Group of export findings"
+      }
+    },
     "fields": [
       {
         "id": "answer",
@@ -60,7 +67,7 @@
       {
         "description": "The agent puts it off until 2026-12-01; left empty, that stands.",
         "id": "until",
-        "label": "Until: a day YYYY-MM-DD or the item it waits on",
+        "label": "Until: a day YYYY-MM-DD, a count such as 3 comments, both as 2026-12-01 or 3 comments, or the item it waits on",
         "options": [],
         "required": false,
         "type": "text",

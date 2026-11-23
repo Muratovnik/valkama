@@ -1,4 +1,5 @@
 import { pressedLast, takesTyping } from '@/shared/lib/pressFocus.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 
 /**
  * Takes focus somewhere in answer to what the reader did, ringed as their hand asks.
@@ -13,7 +14,7 @@ import { pressedLast, takesTyping } from '@/shared/lib/pressFocus.ts'
  * where typing goes: a field shows focus after a press as after a key (`takesTyping`).
  *
  * Only for a move that answers a press or a change. Focus placed on an opening or put
- * back on a closing stays a plain `focus()`: a ring there would stand around something
+ * back on a closing stays a plain `placeFocus`: a ring there would stand around something
  * nobody pressed.
  */
 export function moveFocus(
@@ -21,5 +22,16 @@ export function moveFocus(
   options: FocusOptions = {},
 ) {
   if (!target) return
-  target.focus(takesTyping(target) ? options : { ...options, focusVisible: !pressedLast() })
+  placeFocus(target, takesTyping(target) ? options : { ...options, focusVisible: !pressedLast() })
+}
+
+/**
+ * Takes focus where the reader walked with the arrows, and shows it by the nearest edge both
+ * ways, up and down as well as across, where a placed focus is shown up and down as the
+ * browser shows it (`placeFocus`). Ringed as `moveFocus` rings.
+ */
+export function walkFocus(target: HTMLElement | SVGElement | null | undefined) {
+  if (!target) return
+  moveFocus(target, { preventScroll: true })
+  target.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
 }

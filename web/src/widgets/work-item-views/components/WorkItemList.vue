@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
- * The same work as rows, sortable by the columns that decide what to pick up.
+ * The same work as rows, in the queue's order unless the view says another, and
+ * sortable by the columns that decide what to pick up.
  *
  * A table rather than a wall, because a list answers a different question:
  * across every state at once, what is urgent, what is unheld, what moved last.
@@ -10,7 +11,9 @@
  * leave; they are as wide as what they hold, and the holder, whose values run
  * long, stops at a measure and ends in an ellipsis with the whole name on
  * hover. Where the list is too narrow for every column, columns give way in a
- * stated order rather than being pushed off the edge (`listColumns.ts`).
+ * stated order rather than being pushed off the edge (`listColumns.ts`). «Project»
+ * stands only where the host gives the space's projects: a space of several, with no
+ * project chosen, as a tile marks its project.
  *
  * The rows are one Tab stop, as the board's tiles are: the row last focused.
  * Enter on it or a click anywhere in a row opens the card, and closing the
@@ -41,29 +44,34 @@
  * level and place come from `treeRows.ts` alone. Which of the two the list is
  * is decided when it is made, so its host makes it again to change it.
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { useResizeObserver } from '@vueuse/core'
-
-import { listRefCell } from '@/widgets/work-item-views/components/listRefCell.ts'
+import { listFindWords } from '@/widgets/work-item-views/components/listFindWords.ts'
+import { listGroupCell, listRefCell } from '@/widgets/work-item-views/components/listRefCell.ts'
+import { listUnderTitle } from '@/widgets/work-item-views/components/listUnderTitle.ts'
 import WorkItemListFind from '@/widgets/work-item-views/components/WorkItemListFind.vue'
 import WorkItemListHead from '@/widgets/work-item-views/components/WorkItemListHead.vue'
 import WorkItemListTreeWords from '@/widgets/work-item-views/components/WorkItemListTreeWords.vue'
+import { useListFit } from '@/widgets/work-item-views/composables/useListFit.ts'
+import { useListGoalSpend } from '@/widgets/work-item-views/composables/useListGoalSpend.ts'
 import { useListRuns } from '@/widgets/work-item-views/composables/useListRuns.ts'
-import { useListSort } from '@/widgets/work-item-views/composables/useListSort.ts'
 import { useListTreeRows } from '@/widgets/work-item-views/composables/useListTreeRows.ts'
+import type { ListTreeScope } from '@/widgets/work-item-views/composables/useListTreeRows.ts'
 import { useListWords } from '@/widgets/work-item-views/composables/useListWords.ts'
-import { fitFor, isFolded, LIST_COLUMNS } from '@/widgets/work-item-views/utils/listColumns.ts'
+import type { SpaceProject } from '@/widgets/work-item-views/utils/boardLanes.ts'
+import { drawnColumns, isFolded } from '@/widgets/work-item-views/utils/listColumns.ts'
 import type { SortKey } from '@/widgets/work-item-views/utils/listColumns.ts'
-import { factsOf, ROW_FACETS, rowWords } from '@/widgets/work-item-views/utils/listRowWords.ts'
+import { ROW_FACETS } from '@/widgets/work-item-views/utils/listRowWords.ts'
+import { orderedWork, QUEUE_ORDER } from '@/widgets/work-item-views/utils/workOrder.ts'
+import type { ViewSort } from '@/widgets/work-item-views/utils/workOrder.ts'
 
-import { holderRef, surfaceMarks } from '@/entities/work-item/utils/facets.ts'
 import { EMPTY_WORK_FILTER } from '@/entities/work-item/utils/workFilter.ts'
 import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
 import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { treeGridAttrs, treeRowAttrs } from '@/shared/lib/treeRows.ts'
+import { useStandingName } from '@/shared/lib/useStateName.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
@@ -77,38 +85,49 @@ const props = withDefaults(
     links: PlanningEdge[]
     /** The filter in force, so a mark already in it offers to come out. */
     filter?: WorkFilter
+    /** A goal's row says what it spent: the list's work is in the store the read answers for. */
+    goalVolumes?: boolean
     /**
-     * The list grouped by goal: the whole scope before the filter, whether a
-     * filter is in force, which makes `items` what it let through, and the space
-     * whose fold choices it keeps. Null for the flat list.
+     * The space's projects where a row names its own; null where the list draws no
+     * «Project». Read as the list is made, as `tree` is: its host makes it again to change it.
      */
-    tree?: { filtered: boolean; scope: WorkItemBrief[]; space: string } | null
+    projects?: readonly SpaceProject[] | null
+    /** The order the rows stand in, which the host keeps; in a tree, inside each container. */
+    sort?: ViewSort
+    /** The whole space, where each row's goal and stages are found; the rows' own by default. */
+    spaceItems?: WorkItemBrief[]
+    /**
+     * The list grouped by goal or by project: the whole scope before the filter,
+     * whether a filter is in force, which makes `items` what it let through, and the
+     * space whose fold choices it keeps. Null for the flat list.
+     */
+    tree?: ListTreeScope | null
   }>(),
-  { filter: () => EMPTY_WORK_FILTER, tree: null },
+  { filter: () => EMPTY_WORK_FILTER, tree: null, sort: () => QUEUE_ORDER },
 )
 
-const emit = defineEmits<{ filter: [token: WorkFilterToken]; open: [reference: string] }>()
+/** A mark asks for a filter; a row opens a card by its reference; a column header asks for an order. */
+const emit = defineEmits<{ filter: [WorkFilterToken]; open: [string]; sort: [ViewSort] }>()
 
 const { t, locale } = useI18n()
 
 /** The items a row can stand for: in a tree, the path to a match as well. */
 const source = computed(() => props.tree?.scope ?? props.items)
-const { ariaSort, descending, rows: sorted, sortBy, sortKey } = useListSort(() => source.value)
+const stateName = useStandingName()
+const space = () => props.spaceItems ?? source.value
+const sorted = computed(() => orderedWork(source.value, props.sort, stateName, { space: space() }))
+
+/** The tree by goal shows where a row stands by its place, so it draws no «Goal and stage». */
+const drawsGoal = !props.tree || props.tree.grouping === 'project'
+/** The list by project names a row's project by its group. */
+const projects = () => (props.tree?.grouping === 'project' ? null : (props.projects ?? null))
+const drawsProject = Boolean(projects())
+const columns = drawnColumns({ goal: drawsGoal, project: drawsProject })
 
 const root = ref<HTMLElement | null>(null)
-const width = ref(0)
-useResizeObserver(root, ([entry]) => {
-  width.value = entry.contentRect.width
-})
-/**
- * The rows are drawn once the list knows its own width. Drawn before, a phone
- * drew a thousand rows with every column and at once drew them all again with
- * the columns folded, which doubled what opening the list cost there.
- */
-const measured = ref(false)
-const fit = computed(() => fitFor(width.value))
-const wide = computed(() => fit.value === 'wide')
-const narrow = computed(() => fit.value === 'narrow')
+// The table's own width decides the fit: drawn from the rows, in a language and an order.
+const order = () => `${locale.value} ${props.sort.key} ${props.sort.descending}`
+const { fit, level, measured, narrow, width } = useListFit(root, { order, rows: () => rows.value })
 
 const tree = useListTreeRows({
   items: () => props.items,
@@ -116,19 +135,17 @@ const tree = useListTreeRows({
   ordered: () => sorted.value,
   tree: () => props.tree,
 })
-const { cellTab, isPath, matchingOf, nameId } = tree
-const { rows, treeOf, underOf } = tree
+const { cellTab, isGroup, isPath, matchingOf, nameId, rows, treeOf, underOf } = tree
 
-const { holderOf, updatedOf, widths } = useListWords(() => source.value, tree.indentOf)
+const words = useListWords(() => source.value, tree.indentOf, space, projects)
+const { goalCellOf, goalOf, holderOf, projectCellOf, projectOf, updatedOf, widths } = words
 
 // One listener each for the whole list rather than three on every row: a
 // space of a thousand rows paid for three thousand of them on every opening.
-const keys = useListKeys(
-  root,
-  () => list,
-  (reference) => emit('open', reference),
-  tree.focus,
-)
+// A group's row is named by its id where a card's is by its reference: it folds instead.
+const openRow = (reference: string) =>
+  tree.isGroup({ work_item_id: reference }) ? keys.toggle(reference) : emit('open', reference)
+const keys = useListKeys(root, () => list, openRow, tree.focus)
 const tabStop = (item: WorkItemBrief) => keys.tabStop(item.work_item_id)
 const list = useWindowRows<WorkItemBrief>({
   columns: widths,
@@ -139,12 +156,10 @@ const list = useWindowRows<WorkItemBrief>({
   rows: () => rows.value,
   ...tree.window,
 })
-onMounted(() => {
-  width.value = root.value?.clientWidth ?? 0
-  measured.value = true
-})
 const entries = computed(() => (measured.value ? list.entries.value : []))
 const { rowCount } = list
+const spend = useListGoalSpend(props, entries, tree)
+const spendLine = spend.line
 
 const runs = useListRuns({
   filter: () => props.filter,
@@ -154,16 +169,16 @@ const runs = useListRuns({
   onFilter: (token) => emit('filter', token),
   width,
 })
-const { context, fact, facts, filtering, lead, priorityWord, readWidth, waiting, word } = runs
+const { fact, lead, priorityWord, readWidth, waiting, word } = runs
 
-const { HOLDER, STATE, STEPS, UNDER } = ROW_FACETS
+const { HOLDER, STATE, STEPS } = ROW_FACETS
 
 const folded = (key: SortKey) => isFolded(fit.value, key)
 /** A row's first cell, drawn with the row rather than as a component of its own. */
 const refCell = listRefCell({ after: () => folded('priority'), glyph: lead, keys, tree })
-const shownColumns = computed(() => LIST_COLUMNS.filter((column) => !folded(column.key)))
-const foldedColumns = computed(() => LIST_COLUMNS.filter((column) => folded(column.key)))
-const factFacets = computed(() => factsOf(fit.value))
+const shownColumns = computed(() => columns.filter((column) => !folded(column.key)))
+const groupCell = listGroupCell({ columns: () => shownColumns.value.length, keys, tree })
+const foldedColumns = computed(() => columns.filter((column) => folded(column.key)))
 
 /**
  * What a row depends on; walking a thousand rows redraws only the two focus moved
@@ -175,8 +190,10 @@ function memo(entry: ListEntry<WorkItemBrief>): unknown[] {
   return [
     ...tree.memoOf(item),
     item,
+    goalOf(item),
     list.held(item),
     tabStop(item),
+    spend.memoOf(item),
     waiting.value.get(item.work_item_id),
     fit.value,
     readWidth.value,
@@ -188,7 +205,6 @@ function memo(entry: ListEntry<WorkItemBrief>): unknown[] {
 const rowClass = (entry: ListEntry<WorkItemBrief>) =>
   entry.kind === 'gap' ? 'list-gap' : ['list-row', { 'list-row-held': list.held(entry.row) }]
 const gapOf = (gap: { height: number }) => `${gap.height}px`
-
 /**
  * What a row says to a reader: in a flat list its place where a window is
  * drawn; in a tree, from `treeRows.ts`, its level, its place beside its
@@ -203,7 +219,7 @@ function rowAttrs(entry: ListEntry<WorkItemBrief>) {
     'aria-description': tree.describedBy(row),
     'aria-labelledby': tree.labelledBy(entry.row),
     'data-id': row.id,
-    'data-reference': entry.row.reference,
+    'data-reference': tree.referenceOf(entry.row),
     'tabindex': tabStop(entry.row),
   }
 }
@@ -212,16 +228,18 @@ const tableAttrs = computed(() =>
     ? treeGridAttrs({ rowCount: rowCount.value ?? 0, windowed: rowCount.value !== undefined })
     : { 'aria-rowcount': rowCount.value },
 )
+/** What a row prints under its title; «Goal › Stage» leads it where its column folded. */
+const underTitle = listUnderTitle({
+  fit: () => fit.value,
+  folded,
+  goal: (item) => (drawsGoal && folded('goal') ? goalOf(item) : ''),
+  project: (item) => (drawsProject && folded('project') ? projectOf(item) : ''),
+  runs,
+  updated: updatedOf,
+})
 
 /** A row's words for the list's find, as the template below draws them. */
-const said = (item: WorkItemBrief) =>
-  rowWords(item, {
-    context: context(item),
-    fit: fit.value,
-    tree: [matchingOf(item), underOf(item)].filter(Boolean),
-    updated: updatedOf(item),
-    words: runs.words,
-  })
+const said = listFindWords({ drawsGoal, drawsProject, fit, runs, spend, tree, words })
 </script>
 
 <template>
@@ -247,13 +265,11 @@ const said = (item: WorkItemBrief) =>
           }}
         </caption>
         <WorkItemListHead
-          :sort-state="ariaSort"
           :columns="shownColumns"
-          :descending="descending"
           :folded="foldedColumns"
-          :narrow="narrow"
-          :sort-key="sortKey"
-          @sort="sortBy"
+          :level="level"
+          :sort="props.sort"
+          @sort="emit('sort', $event)"
         />
         <tbody>
           <tr
@@ -269,6 +285,10 @@ const said = (item: WorkItemBrief) =>
               v-if="entry.kind === 'gap'"
               class="list-gap-cell"
               :style="{ height: gapOf(entry) }"
+            />
+            <component
+              :is="groupCell(entry.row)"
+              v-else-if="isGroup(entry.row)"
             />
             <template v-else>
               <component
@@ -290,32 +310,24 @@ const said = (item: WorkItemBrief) =>
                   :matching="matchingOf(entry.row)"
                   :parent="underOf(entry.row)"
                 />
-                <span
-                  v-if="wide"
-                  class="list-under"
-                  ><component
-                    :is="filtering(surfaceMarks('list', entry.row, context(entry.row), UNDER))"
-                /></span>
-                <span
-                  v-else
-                  class="list-facts"
-                >
-                  <component :is="facts(entry.row, factFacets, context(entry.row))" />
-                  <!-- A dash says "nobody" under a heading; on a line of facts it says nothing. -->
-                  <component
-                    :is="facts(entry.row, HOLDER)"
-                    v-if="holderRef(entry.row)"
-                  />
-                  <component
-                    :is="facts(entry.row, STEPS)"
-                    v-if="folded('checklist') && entry.row.checklist.length"
-                  />
-                  <span
-                    v-if="folded('updated')"
-                    class="list-fact"
-                    >{{ updatedOf(entry.row) }}</span
-                  >
-                </span>
+                <component :is="underTitle(entry.row)" />
+                <component :is="spendLine(entry.row)" />
+              </td>
+              <td
+                v-if="drawsGoal && !folded('goal')"
+                v-tooltip.clipped="goalOf(entry.row)"
+                class="list-cell list-goal one-line"
+                :tabindex="cellTab"
+              >
+                {{ goalCellOf(entry.row) }}
+              </td>
+              <td
+                v-if="drawsProject && !folded('project')"
+                v-tooltip.clipped="projectOf(entry.row)"
+                class="list-cell list-project one-line"
+                :tabindex="cellTab"
+              >
+                {{ projectCellOf(entry.row) }}
               </td>
               <td
                 v-if="!folded('state')"
@@ -374,10 +386,12 @@ const said = (item: WorkItemBrief) =>
 /* A row focused from the keyboard stops below the sticky head rather than
    under it. Where a reference starts in its cell — the cell's inset and the
    two glyph slots before it — is declared here for the head, which starts the
-   reference's heading there rather than over the glyphs. */
+   reference's heading there; the cells and the sorts share one inset, halved on a
+   narrow list, as DESIGN.md says under «Work». */
 .work-item-list {
+  --space-list-inset: var(--space-3);
   --list-slot-size: var(--size-control-inline);
-  --list-reference-start: calc(var(--space-3) + var(--list-slot-size) + var(--space-1));
+  --list-reference-start: calc(var(--space-list-inset) + var(--list-slot-size) + var(--space-1));
 
   height: 100%;
   min-height: 0;
@@ -393,7 +407,9 @@ const said = (item: WorkItemBrief) =>
   }
 
   &[data-fit='narrow'] {
+    --space-list-inset: var(--space-2);
     --list-slot-size: var(--space-4);
+    --list-title-least: 16ch;
   }
 }
 
@@ -439,14 +455,15 @@ const said = (item: WorkItemBrief) =>
 
 .list-cell {
   vertical-align: baseline;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-list-inset);
   color: var(--color-text-muted);
   font: var(--font-line);
   white-space: nowrap;
 }
 
 .list-title {
-  min-width: 16ch;
+  /* 36 characters but in the narrowest fit (`useListFit.ts`), counting the cell's inset. */
+  min-width: var(--list-title-least, 36ch);
   color: var(--color-text);
   overflow-wrap: anywhere;
   white-space: normal;
@@ -458,14 +475,11 @@ const said = (item: WorkItemBrief) =>
   color: var(--color-text-muted);
 }
 
-/* An open blocker and the labels, on their own line under the title. */
-.list-under {
+/* An open blocker and the labels, on their own line under the title; empty, an inline
+   box that takes no room. */
+.list-under:not(:empty) {
   display: block;
   padding-top: var(--space-1);
-
-  &:empty {
-    display: none;
-  }
 }
 
 /* The columns folded under the title, as one muted line of facts that wraps
@@ -487,11 +501,13 @@ const said = (item: WorkItemBrief) =>
   min-width: 0;
 }
 
-/* The one column whose values run long stops at a measure, and the cell's
-   padding is outside it; the cell is one line (`.one-line`), and the whole name is its
+/* The columns whose values run long stop at a measure, and the cell's padding is
+   outside it; the cell is one line (`.one-line`), and the whole name or path is its
    hover while the cell cuts it. */
-.list-holder {
-  max-width: calc(10rem + 2 * var(--space-3));
+.list-holder,
+.list-goal,
+.list-project {
+  max-width: calc(10rem + 2 * var(--space-list-inset));
 }
 
 .list-claim {

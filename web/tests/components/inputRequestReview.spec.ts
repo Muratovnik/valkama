@@ -121,7 +121,7 @@ describe('a point', () => {
   it('draws code in its label as code', () => {
     const label = point(card(), 'P1 ').get('.request-point-label')
     expect(label.text()).not.toContain('`')
-    expect(label.get('code').text()).toBe('shell-guard')
+    expect(label.get('code').text()).toBe('wind-tap')
   })
 
   it('says the recommendation in words while undecided or decided otherwise', async () => {
@@ -159,7 +159,7 @@ describe('a point', () => {
 describe('accepting a point with steps', () => {
   it('fills the recommended steps, leaving focus in the segments, and counts them', async () => {
     const wrapper = card()
-    expect(wrapper.text()).not.toContain('Mark the 14 refusals')
+    expect(wrapper.text()).not.toContain('Mark the 14 bad frames')
     const accept = segment(point(wrapper, 'P4 '), 'Accept')
     ;(accept.element as HTMLElement).focus()
     await accept.trigger('click')
@@ -186,12 +186,12 @@ describe('accepting a point with steps', () => {
     const wrapper = card()
     await fold(wrapper, 'P10 ')
     await decide(wrapper, 'P10 ', 'Accept')
-    expect(ticked(wrapper)).toEqual(['lock', 'dirty', 'managed', 'click', 'mutant'])
+    expect(ticked(wrapper)).toEqual(['lock', 'damp', 'sealed', 'press', 'spare'])
     await wrapper.get('input[value="lock"]').setValue(false)
     await decide(wrapper, 'P10 ', 'Later')
     expect(ticked(wrapper)).toEqual([])
     await decide(wrapper, 'P10 ', 'Accept')
-    expect(ticked(wrapper)).toEqual(['dirty', 'managed', 'click', 'mutant'])
+    expect(ticked(wrapper)).toEqual(['damp', 'sealed', 'press', 'spare'])
   })
 
   it('counts the steps left ticked in its line once closed again', async () => {
@@ -207,11 +207,22 @@ describe('accepting a point with steps', () => {
     const wrapper = card()
     await decide(wrapper, 'P13 ', 'Accept')
     expect(point(wrapper, 'P13 ').get('.request-point-way').text()).toBe(
-      'Way: The standard vue/max-lines-per-block · recommended',
+      'Way: The standard cfg/max-lines-per-block · recommended',
     )
     await fold(wrapper, 'P13 ')
     const radio = wrapper.get<HTMLInputElement>('input[type="radio"][value="per_block"]')
     expect(radio.element.checked).toBe(true)
+  })
+
+  it('a way asked as a question is named in the line with no colon after its mark', async () => {
+    const fields = reviewFields.map((field) =>
+      field.id === 'p13-way' ? { ...field, label: 'Which way?' } : field,
+    )
+    const wrapper = card(asked(fields))
+    await decide(wrapper, 'P13 ', 'Accept')
+    expect(point(wrapper, 'P13 ').get('.request-point-way').text()).toBe(
+      'Which way? The standard cfg/max-lines-per-block · recommended',
+    )
   })
 })
 
@@ -293,7 +304,7 @@ describe('sending', () => {
     const entry = asked()
     vi.mocked(answerInputRequest).mockReturnValue(new Promise(() => {}))
     const wrapper = card(entry)
-    await press(wrapper, 'Comment: P9 Labels in a list row and a filter by label')
+    await press(wrapper, 'Comment: P9 Units in a table row and a filter by unit')
     await point(wrapper, 'P9 ').get('textarea').setValue('Labels only, no filtering')
     expect(head(wrapper).text()).toContain('Decided 1 of 18')
     await press(wrapper, 'Accept recommended')
@@ -313,11 +324,11 @@ describe('the form in the thread', () => {
     const wrapper = card()
     const headings = wrapper.findAll('.request-group-toggle')
     expect(headings.map((node) => node.text())).toEqual([
-      'Hooks and client modsdecided 0 of 3',
-      'Checks and skill textsdecided 0 of 2',
-      'Instructionsdecided 0 of 5',
-      'Valkama: codedecided 0 of 6',
-      'Lab and small thingsdecided 0 of 2',
+      'Wind and rain sensorsdecided 0 of 3',
+      'Calibration and tablesdecided 0 of 2',
+      'Power budgetdecided 0 of 5',
+      'Station: codedecided 0 of 6',
+      'Display and the menudecided 0 of 2',
     ])
     const first = present(headings[0], 'first heading')
     expect(first.attributes('aria-expanded')).toBe('true')

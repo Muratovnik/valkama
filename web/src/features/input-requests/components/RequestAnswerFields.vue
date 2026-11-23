@@ -49,7 +49,7 @@ const emit = defineEmits<{
 }>()
 const { t } = useI18n()
 const previewing = ref(false)
-const controls: Record<string, { focus: () => void } | null> = {}
+const controls: Record<string, { takeFocus: () => void } | null> = {}
 const questionNote = ref<InstanceType<typeof RequestNote> | null>(null)
 const {
   open: noteOpen,
@@ -79,7 +79,7 @@ async function focusField(id: string) {
   }
   previewing.value = false
   await nextTick()
-  controls[id]?.focus()
+  controls[id]?.takeFocus()
 }
 defineExpose({ focusField, noteOpen, noteWritten, pressNote, structured, undecided })
 </script>
@@ -102,7 +102,7 @@ defineExpose({ focusField, noteOpen, noteWritten, pressNote, structured, undecid
     <RequestField
       v-for="field in plainFields"
       :key="field.id"
-      :ref="(control) => (controls[field.id] = control as { focus: () => void } | null)"
+      :ref="(control) => (controls[field.id] = control as { takeFocus: () => void } | null)"
       v-model:preview="previewing"
       :field="field"
       :model-value="draft.answers[field.id]"

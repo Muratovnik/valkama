@@ -283,6 +283,14 @@ MAX_CHECKLIST = 100
 # A step is a sentence, not a title. The store this migrates from holds one
 # of 213 characters, so borrowing the title's limit refused real work.
 MAX_CHECKLIST_TEXT = 1000
+#: An item's anchor into the document it was raised from.
+MAX_SOURCE = 512
+#: The name a caller gives itself as `author`, and a holder as a list filters by it.
+MAX_AUTHOR = 128
+#: The length of a UUID this module mints, in its canonical text.
+UUID_LENGTH = 36
+#: The longest space key, the prefix of every reference in the space.
+MAX_SPACE_KEY = 8
 #: The step field that marks a tick made by a holder whose lease lapsed.
 PREVIOUS_HOLDER = "by_previous_holder"
 
@@ -399,7 +407,7 @@ def new_id() -> str:
 def identifier(value: object, field: str) -> str:
     """A UUID this module minted, refused as text rather than coerced."""
 
-    text = text_field(value, field, limit=36)
+    text = text_field(value, field, limit=UUID_LENGTH)
     try:
         parsed = UUID(text)
     except ValueError as error:
@@ -432,6 +440,19 @@ def multiline_field(value: object, field: str, *, limit: int = MAX_DESCRIPTION) 
     return value.strip()
 
 
+#: A stop, a question or exclamation mark or an ellipsis, with any closing quotes or
+#: brackets after it: the end of a sentence a person or an agent wrote.
+_SENTENCE_END = re.compile(r"[.!?…][\"'»\u201d\u2019)\]]*$")
+
+
+def sentence(text: object) -> str:
+    """`text` as a sentence of a composed message: closed by a full stop unless it ends
+    one of its own. A title or a reason often does, and a stop after it read `E11..`."""
+
+    said = str(text).strip()
+    return said if _SENTENCE_END.search(said) else f"{said}."
+
+
 #: The largest integer SQLite binds; a larger one is an error it cannot answer.
 MAX_COUNT = 2**63 - 1
 
@@ -457,7 +478,7 @@ def enum_field(value: object, allowed: frozenset[str], field: str) -> str:
 def space_key(value: object) -> str:
     """The prefix a human identifier is built from, such as `MAIN`."""
 
-    text = text_field(value, "planning_space.key", limit=8)
+    text = text_field(value, "planning_space.key", limit=MAX_SPACE_KEY)
     if not _SPACE_KEY.match(text):
         raise PlanningError("planning_space.key must be 2 to 8 uppercase letters or digits")
     return text
@@ -579,7 +600,7 @@ def actor(value: object, field: str = "author") -> str:
 
     if value is None or value == "":
         return "agent"
-    return text_field(value, field, limit=128)
+    return text_field(value, field, limit=MAX_AUTHOR)
 
 
 def labels(value: object, field: str = "work_item.labels") -> list[str]:

@@ -3,13 +3,14 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import HistoryFilterBar from '@/widgets/work-item-inspector/components/HistoryFilterBar.vue'
-import { eventWords } from '@/widgets/work-item-inspector/utils/eventWords.ts'
+import { eventWords, stateNamer } from '@/widgets/work-item-inspector/utils/eventWords.ts'
 import {
   groupHistory,
   matchesRecorded,
 } from '@/widgets/work-item-inspector/utils/historyRecords.ts'
 import { buildActivity } from '@/widgets/work-item-inspector/utils/inspectorActivity.ts'
 import type { ActivityEntry } from '@/widgets/work-item-inspector/utils/inspectorActivity.ts'
+import { usePutOffDay } from '@/widgets/work-item-inspector/utils/usePutOffDay.ts'
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { PlanningWorkflow, WorkItem } from '@/shared/api/planningModel.ts'
@@ -20,6 +21,7 @@ import RichText from '@/shared/ui/RichText.vue'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
 import SessionStart from '@/shared/ui/SessionStart.vue'
 import VButton from '@/shared/ui/VButton.vue'
+import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -74,10 +76,8 @@ function title(entry: ActivityEntry) {
 }
 const stateName = useStateName()
 /** A transition's key as the reader sees its state, through the card's workflow. */
-function nameState(key: string) {
-  const state = props.workflow?.states.find((one) => one.key === key)
-  return state ? stateName(state) : null
-}
+const nameState = computed(() => stateNamer(props.workflow?.states, stateName))
+const putOffDay = usePutOffDay()
 /** The row's second line in words; the recorded line stays in the entry for the search. */
 function detail(entry: ActivityEntry) {
   return entry.kind === 'event'
@@ -86,9 +86,17 @@ function detail(entry: ActivityEntry) {
         t,
         questions: props.questions,
         mentions: props.item.mentions,
-        nameState,
+        nameState: nameState.value,
+        day: putOffDay,
       })
     : entry.detail
+}
+/**
+ * The mark of an event an agent's own decision recorded: the point's kind, in the words the Agent
+ * decisions page names it by, so a decision read here is found there by the same name.
+ */
+function decisionMark(entry: ActivityEntry) {
+  return entry.point ? t('history.ownDecision', { point: t(`decisionPoints.${entry.point}`) }) : ''
 }
 const groups = computed(() => {
   const { category, author } = selected.value
@@ -97,7 +105,7 @@ const groups = computed(() => {
       (entry) =>
         (!category || entry.kind === category) &&
         (!author || entry.author === author) &&
-        matchesRecorded([entry, title(entry), detail(entry)], query.value),
+        matchesRecorded([entry, title(entry), detail(entry), decisionMark(entry)], query.value),
     ),
     (entry) => entry.at,
   )
@@ -153,6 +161,16 @@ function referenceValue(entry: ActivityEntry) {
             <span class="entry-title">{{ title(entry) }}</span>
             <span class="entry-at">{{ when(entry.at) }}</span>
           </div>
+          <p
+            v-if="entry.point"
+            class="entry-point"
+          >
+            <VIcon
+              name="agent"
+              :size="14"
+            />
+            {{ decisionMark(entry) }}
+          </p>
           <RichText
             v-if="detail(entry)"
             class="entry-detail"
@@ -237,6 +255,15 @@ function referenceValue(entry: ActivityEntry) {
   color: var(--color-text-tertiary);
   font: var(--font-count);
   font-variant-numeric: tabular-nums;
+}
+
+.entry-point {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+  margin: 0;
+  color: var(--color-text-muted);
+  font: var(--font-detail);
 }
 
 .entry-detail {

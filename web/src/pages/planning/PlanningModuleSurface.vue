@@ -60,6 +60,7 @@ import { withoutUnreadValues } from '@/pages/planning/utils/savedViewReads.ts'
 
 import { provideDefaultProject } from '@/widgets/work-item-inspector/utils/memorySource.ts'
 
+import { triageState } from '@/features/work-item-compose/composerChoices.ts'
 import WorkItemComposer from '@/features/work-item-compose/WorkItemComposer.vue'
 
 import type { WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
@@ -69,7 +70,7 @@ import type { PlanningConnectionState } from '@/shared/api/planningApi.ts'
 import type { PlanningReadModel } from '@/shared/api/planningModel.ts'
 import type { PlatformContextReady } from '@/shared/api/platformApiTypes.ts'
 import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
-import { planningWorkItemEntity, sameSpace } from '@/shared/api/platformPlanningRefs.ts'
+import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import type { OperatingScope, PlatformRoute } from '@/shared/api/platformRoute.ts'
 import { uiError, uiLoading, uiUnavailable } from '@/shared/api/platformUiState.ts'
@@ -111,31 +112,19 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const {
+  listedSpace,
   open,
   openIdentity,
   projectId,
   selection: routeSelection,
   space: boundSpace,
   spaceResourceRef: boundSpaceResourceRef,
+  workspaceProject,
 } = usePlanningRouteSelection({
   route: () => props.route,
   scope: () => props.scope,
+  context: () => props.context,
 })
-
-/** The space the scope names as this workstation lists it; undefined at the top or when absent. */
-const listedSpace = computed(() => {
-  const space = boundSpace.value
-  return space && props.context?.spaces.find((item) => sameSpace(item, space))
-})
-
-/**
- * The project the card's Memory searches: the one the scope narrows to, else the space's
- * default one. A space with no project has none to search, and an empty string is what the
- * card renders as that, where `undefined` would be a missing prop.
- */
-const inspectorProjectId = computed(
-  () => projectId.value ?? listedSpace.value?.default_project ?? '',
-)
 provideDefaultProject(() => projectId.value === undefined)
 
 const view = computed<PlanningViewMode>(() => viewOf(props.route.state))
@@ -268,7 +257,7 @@ const shownCard = computed((): PlanningCardProps | null =>
     ? {
         reference: open.value,
         resourceRef: boundSpaceResourceRef.value,
-        projectId: inspectorProjectId.value,
+        projectId: workspaceProject.value,
         refreshToken: cardVersion.value,
         agentsToken: agentsVersion.value,
         workflow: model.value?.workflow ?? null,
@@ -493,6 +482,7 @@ defineExpose({ refresh, selectedId })
     <PlanningWorkspace
       ref="workspace"
       :model="shownModel ?? model ?? readingModel"
+      :project="projectId"
       :reading="!model"
       :route-state="route.state"
       :state-bytes="stateBytes"
@@ -553,6 +543,9 @@ defineExpose({ refresh, selectedId })
     :open="composerOpen"
     :space="model.planning_space.planning_space_id"
     :items="model.work_items"
+    :projects="model.planning_space.projects"
+    :project="workspaceProject"
+    :triage="triageState(model.workflow?.states ?? [])"
     @close="composerOpen = false"
     @created="itemCreated"
   />

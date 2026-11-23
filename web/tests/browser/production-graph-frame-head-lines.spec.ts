@@ -192,7 +192,9 @@ function bandFoot(frame: Locator) {
   })
 }
 
-for (const width of [1280, 390]) {
+// The narrow case is a window whose workspace is not a phone's: on a phone-wide field the
+// camera goes no further out than its cards read, so it never reaches the overview there.
+for (const width of [1280, 700]) {
   test(`zoomed out, a band's grown words stay inside its header at ${width}px`, async ({
     page,
   }) => {

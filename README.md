@@ -66,7 +66,7 @@ uncommitted work never reaches a client session. Run `launcher install` again to
 publish newer commits. [Installation and setup](docs/guides/installation.md#what-the-launcher-pins)
 explains releases, going back to one and moving the clone.
 
-This release opens only a store at schema 23. It refuses the store Valkama 2.9 left,
+This release opens only a store at schema 24. It refuses the store Valkama 2.9 left,
 at schema 18, or 17 from a 2.9 build before 2.9.0, until you carry it over once with
 `valkama migrate work-model`, every session stopped at least three minutes
 before, since it refuses while a server may still hold the store. It also refuses
@@ -135,8 +135,8 @@ python valkama.py git-hook install
    python valkama.py serve
    ```
 
-   Open `http://127.0.0.1:8642/`. You should see Work, Analytics and Settings
-   navigation and an empty Planning directory. Stop the server with `Ctrl+C` —
+   Open `http://127.0.0.1:8642/`. You should see Work, Analytics, Agent decisions,
+   Volumes and Settings navigation and an empty Planning directory. Stop the server with `Ctrl+C` —
    agents spawn their own copy and do not need this one running. On Windows the
    [desktop app](docs/guides/installation.md#the-desktop-app-windows) starts the
    server for you.

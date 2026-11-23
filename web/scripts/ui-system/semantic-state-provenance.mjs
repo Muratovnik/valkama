@@ -1,25 +1,21 @@
+/**
+ * Where a value in a component comes from, as far as the semantic-state rules
+ * need it: a presentation from the canonical uiSystem helpers and its `tone`,
+ * a fixed string, a `computed` or a `ref`. Names resolve through
+ * `semantic-state-bindings.mjs`, so a value written in a composable or a helper
+ * module the component imports is read where it is written.
+ */
+
+import { bindingIndex, unwrapExpression } from './semantic-state-bindings.mjs'
+
 const UI_SYSTEM_SOURCE = '@/shared/lib/uiSystem.ts'
 const PRESENTATION_HELPERS = new Set(['semanticStatePresentation', 'statePresentation'])
-/**
- * The attributes of a tree's table and rows, bound whole with `v-bind`: they
- * say a role and where a row stands, never a style, and only their owner
- * writes those (`tree-roles.mjs`).
- */
-const TREE_ATTRIBUTES_SOURCE = '@/shared/lib/treeRows.ts'
-const TREE_ATTRIBUTES = new Set(['treeGridAttrs', 'treeRowAttrs'])
 
-/** Visit a tree when every match matters rather than only the first one. */
-export function visitNodes(node, visitor) {
-  if (!node || typeof node !== 'object') return
-  visitor(node)
-  for (const [key, value] of Object.entries(node)) {
-    if (key === 'parent') continue
-    if (Array.isArray(value)) {
-      for (const entry of value) visitNodes(entry, visitor)
-    } else if (value && typeof value === 'object') {
-      visitNodes(value, visitor)
-    }
-  }
+/** The imports read as what they are rather than followed into their module. */
+function canonicalCall(source, imported) {
+  if (source === 'vue' && (imported === 'computed' || imported === 'ref')) return imported
+  if (source === UI_SYSTEM_SOURCE && PRESENTATION_HELPERS.has(imported)) return 'presentation'
+  return null
 }
 
 function namedProperty(node) {
@@ -29,233 +25,157 @@ function namedProperty(node) {
   return null
 }
 
-export function unwrapExpression(node) {
-  let current = node
-  const wrappers =
-    /^(?:Chain|Parenthesized|TSAs|TSInstantiation|TSNonNull|TSTypeAssertion)Expression$/u
-  while (current && wrappers.test(current.type)) current = current.expression
-  return current
-}
-
 function returnedExpression(callback) {
   const body = unwrapExpression(callback)?.body
   return body?.type === 'BlockStatement' ? null : body
 }
 
-function importName(specifier) {
-  return specifier.imported?.name ?? specifier.imported?.value ?? null
-}
+const UNKNOWN_STRINGS = { unknown: true, values: new Set() }
 
-function registerImport(context, source, specifier) {
-  if (specifier.importKind === 'type' || specifier.type !== 'ImportSpecifier') return
-  if (source === UI_SYSTEM_SOURCE && PRESENTATION_HELPERS.has(importName(specifier)))
-    context.helpers.add(specifier.local.name)
-  if (source === 'vue' && importName(specifier) === 'computed')
-    context.computed.add(specifier.local.name)
-  if (source === 'vue' && importName(specifier) === 'ref') context.refs.add(specifier.local.name)
-  if (source === TREE_ATTRIBUTES_SOURCE && TREE_ATTRIBUTES.has(importName(specifier)))
-    context.styleless.add(specifier.local.name)
-}
-
-function registerProgramStatement(context, statement) {
-  if (statement.type === 'ImportDeclaration' && statement.importKind !== 'type') {
-    for (const specifier of statement.specifiers)
-      registerImport(context, statement.source.value, specifier)
-    return
-  }
-  if (statement.type === 'FunctionDeclaration' && statement.id)
-    context.functions.set(statement.id.name, statement)
-  if (statement.type !== 'VariableDeclaration' || statement.kind !== 'const') return
-  for (const declaration of statement.declarations)
-    if (declaration.init && declaration.id.type === 'Identifier')
-      context.definitions.set(declaration.id.name, declaration.init)
-}
-
-function setupScriptRange(source) {
-  const open = /<script\b[^>]*\bsetup\b[^>]*>/iu.exec(source)
-  if (!open) return null
-  const start = open.index + open[0].length
-  const close = source.indexOf('</script>', start)
-  return close < 0 ? null : [start, close]
-}
-
-function insideRange(node, range) {
-  return Boolean(range && node.range?.[0] >= range[0] && node.range?.[1] <= range[1])
-}
-
-function provenanceContext(program, source) {
-  const context = {
-    assignments: new Map(),
-    computed: new Set(),
-    definitions: new Map(),
-    functions: new Map(),
-    helpers: new Set(),
-    refs: new Set(),
-    /** Imported functions whose attributes carry no style. */
-    styleless: new Set(),
-  }
-  const setupRange = setupScriptRange(source)
-  for (const statement of program.body)
-    if (insideRange(statement, setupRange)) registerProgramStatement(context, statement)
-  visitNodes(program, (node) => {
-    if (!insideRange(node, setupRange)) return
-    if (node.type !== 'AssignmentExpression' || node.operator !== '=') return
-    const left = unwrapExpression(node.left)
-    if (
-      left?.type !== 'MemberExpression' ||
-      left.object?.type !== 'Identifier' ||
-      namedProperty(left) !== 'value'
-    )
-      return
-    const entries = context.assignments.get(left.object.name) ?? []
-    entries.push(node.right)
-    context.assignments.set(left.object.name, entries)
-  })
-  return context
-}
-
-function patternBinds(pattern, name) {
-  if (!pattern) return false
-  if (pattern.type === 'Identifier') return pattern.name === name
-  if (pattern.type === 'RestElement') return patternBinds(pattern.argument, name)
-  if (pattern.type === 'AssignmentPattern') return patternBinds(pattern.left, name)
-  if (pattern.type === 'ArrayPattern')
-    return pattern.elements.some((element) => patternBinds(element, name))
-  if (pattern.type === 'ObjectPattern')
-    return pattern.properties.some((property) =>
-      property.type === 'RestElement'
-        ? patternBinds(property.argument, name)
-        : patternBinds(property.value, name),
-    )
-  return false
-}
-
-/** A canonical import name is not canonical when a lexical binding owns it. */
-export function identifierIsShadowed(identifier, scope) {
-  if (identifier?.type !== 'Identifier') return false
-  if (scope) {
-    const reference = scope.references?.find((entry) => entry.id === identifier)
-    if (!reference || reference.variable) return true
-  }
-  let current = identifier.parent
-  while (current && current !== scope) {
-    if (
-      /^(?:ArrowFunction|Function)Expression$/u.test(current.type) &&
-      current.params.some((parameter) => patternBinds(parameter, identifier.name))
-    )
-      return true
-    if (current.type === 'CatchClause' && patternBinds(current.param, identifier.name)) return true
-    current = current.parent
-  }
-  return false
-}
-
-function callProvenance(expression, context, resolving, scope) {
-  const callee = unwrapExpression(expression.callee)
-  if (
-    callee?.type === 'Identifier' &&
-    context.helpers.has(callee.name) &&
-    !identifierIsShadowed(callee, scope)
+/**
+ * The provenance of every file of the tree. `provenanceOf(file)` answers for
+ * one component or module; each answer may lead into another file's.
+ */
+export function presentationIndex(sourceByFile) {
+  const bindings = bindingIndex(
+    sourceByFile,
+    (source, imported) => canonicalCall(source, imported) !== null,
   )
-    return 'presentation'
-  const isComputed =
-    callee?.type === 'Identifier' &&
-    context.computed.has(callee.name) &&
-    !identifierIsShadowed(callee, scope)
-  return isComputed
-    ? provenanceKind(returnedExpression(expression.arguments[0]), context, resolving, scope)
-    : null
-}
+  const byOwner = new Map()
 
-function provenanceKind(node, context, resolving = new Set(), scope = null) {
-  const expression = unwrapExpression(node)
-  if (!expression) return null
-  if (expression.type === 'CallExpression')
-    return callProvenance(expression, context, resolving, scope)
-  if (expression.type === 'Identifier') {
-    if (identifierIsShadowed(expression, scope)) return null
-    const definition = context.definitions.get(expression.name)
-    return !definition || resolving.has(expression.name)
-      ? null
-      : provenanceKind(definition, context, new Set(resolving).add(expression.name), null)
+  function provenanceFor(owner) {
+    if (byOwner.has(owner)) return byOwner.get(owner)
+    const provenance = ownerProvenance(owner)
+    byOwner.set(owner, provenance)
+    return provenance
   }
-  if (expression.type === 'MemberExpression') {
-    const owner = provenanceKind(expression.object, context, resolving, scope)
-    return namedProperty(expression) === 'tone' && owner === 'presentation' ? 'tone' : null
-  }
-  return null
-}
 
-function interpolationParts(node, context, scope) {
-  const expression = unwrapExpression(node)
-  if (!expression) return { hasTone: false, safe: false }
-  if (provenanceKind(expression, context, new Set(), scope) === 'tone')
-    return { hasTone: true, safe: true }
-  if (expression.type === 'Literal' && typeof expression.value === 'string')
-    return { hasTone: false, safe: true }
-  let nodes = null
-  if (expression.type === 'TemplateLiteral') nodes = expression.expressions
-  else if (expression.type === 'BinaryExpression' && expression.operator === '+')
-    nodes = [expression.left, expression.right]
-  if (!nodes) return { hasTone: false, safe: false }
-  const parts = nodes.map((entry) => interpolationParts(entry, context, scope))
-  return {
-    hasTone: parts.some((part) => part.hasTone),
-    safe: parts.every((part) => part.safe),
+  /** What a callee is read as: `computed`, `ref`, a presentation helper, or null. */
+  function callKind(owner, callee, scope) {
+    const binding = bindings.bindingOf(owner, unwrapExpression(callee), scope)
+    return binding?.kind === 'import' ? canonicalCall(binding.source, binding.imported) : null
   }
-}
 
-function staticStringOptions(node, context, resolving = new Set(), scope = null) {
-  const expression = unwrapExpression(node)
-  if (!expression) return { unknown: true, values: new Set() }
-  if (expression.type === 'Literal' && typeof expression.value === 'string')
-    return { unknown: false, values: new Set([expression.value]) }
-  if (expression.type === 'TemplateLiteral' && expression.expressions.length === 0)
-    return { unknown: false, values: new Set([expression.quasis[0]?.value?.cooked ?? '']) }
-  if (expression.type === 'ConditionalExpression') {
-    const branches = [expression.consequent, expression.alternate].map((branch) =>
-      staticStringOptions(branch, context, resolving, scope),
-    )
+  /** A `const`'s initializer with its file, or null for any other binding. */
+  function constant(owner, identifier, scope) {
+    const binding = bindings.bindingOf(owner, identifier, scope)
+    return binding?.kind === 'const' ? binding : null
+  }
+
+  function callProvenance(owner, expression, resolving, scope) {
+    const kind = callKind(owner, expression.callee, scope)
+    if (kind === 'presentation') return 'presentation'
+    return kind === 'computed'
+      ? provenanceKind(owner, returnedExpression(expression.arguments[0]), resolving, scope)
+      : null
+  }
+
+  function provenanceKind(owner, node, resolving = new Set(), scope = null) {
+    const expression = unwrapExpression(node)
+    if (!expression) return null
+    if (expression.type === 'CallExpression')
+      return callProvenance(owner, expression, resolving, scope)
+    if (expression.type === 'Identifier') {
+      const binding = constant(owner, expression, scope)
+      return !binding || resolving.has(binding.variable)
+        ? null
+        : provenanceKind(binding.owner, binding.init, new Set(resolving).add(binding.variable))
+    }
+    if (expression.type === 'MemberExpression') {
+      const kind = provenanceKind(owner, expression.object, resolving, scope)
+      return namedProperty(expression) === 'tone' && kind === 'presentation' ? 'tone' : null
+    }
+    return null
+  }
+
+  function interpolationParts(owner, node, scope) {
+    const expression = unwrapExpression(node)
+    if (!expression) return { hasTone: false, safe: false }
+    if (provenanceKind(owner, expression, new Set(), scope) === 'tone')
+      return { hasTone: true, safe: true }
+    if (expression.type === 'Literal' && typeof expression.value === 'string')
+      return { hasTone: false, safe: true }
+    let nodes = null
+    if (expression.type === 'TemplateLiteral') nodes = expression.expressions
+    else if (expression.type === 'BinaryExpression' && expression.operator === '+')
+      nodes = [expression.left, expression.right]
+    if (!nodes) return { hasTone: false, safe: false }
+    const parts = nodes.map((entry) => interpolationParts(owner, entry, scope))
     return {
-      unknown: branches.some((branch) => branch.unknown),
-      values: new Set(branches.flatMap((branch) => [...branch.values])),
+      hasTone: parts.some((part) => part.hasTone),
+      safe: parts.every((part) => part.safe),
     }
   }
-  if (expression.type === 'CallExpression') {
-    const callee = unwrapExpression(expression.callee)
-    if (
-      callee?.type === 'Identifier' &&
-      context.computed.has(callee.name) &&
-      !identifierIsShadowed(callee, scope)
-    )
-      return staticStringOptions(
-        returnedExpression(expression.arguments[0]),
-        context,
-        resolving,
-        scope,
-      )
-  }
-  if (expression.type !== 'Identifier' || identifierIsShadowed(expression, scope))
-    return { unknown: true, values: new Set() }
-  const definition = context.definitions.get(expression.name)
-  return !definition || resolving.has(expression.name)
-    ? { unknown: true, values: new Set() }
-    : staticStringOptions(definition, context, new Set(resolving).add(expression.name), null)
-}
 
-export function presentationProvenance(program, source) {
-  const context = provenanceContext(program, source)
+  function staticStringOptions(owner, node, resolving = new Set(), scope = null) {
+    const expression = unwrapExpression(node)
+    if (!expression) return UNKNOWN_STRINGS
+    if (expression.type === 'Literal' && typeof expression.value === 'string')
+      return { unknown: false, values: new Set([expression.value]) }
+    if (expression.type === 'TemplateLiteral' && expression.expressions.length === 0)
+      return { unknown: false, values: new Set([expression.quasis[0]?.value?.cooked ?? '']) }
+    if (expression.type === 'ConditionalExpression') {
+      const branches = [expression.consequent, expression.alternate].map((branch) =>
+        staticStringOptions(owner, branch, resolving, scope),
+      )
+      return {
+        unknown: branches.some((branch) => branch.unknown),
+        values: new Set(branches.flatMap((branch) => [...branch.values])),
+      }
+    }
+    if (expression.type === 'CallExpression')
+      return callKind(owner, expression.callee, scope) === 'computed'
+        ? staticStringOptions(owner, returnedExpression(expression.arguments[0]), resolving, scope)
+        : UNKNOWN_STRINGS
+    const binding = expression.type === 'Identifier' ? constant(owner, expression, scope) : null
+    return !binding || resolving.has(binding.variable)
+      ? UNKNOWN_STRINGS
+      : staticStringOptions(binding.owner, binding.init, new Set(resolving).add(binding.variable))
+  }
+
+  /** The values `identifier` can stand for, each with its file's provenance, or null. */
+  function values(owner, identifier, scope) {
+    const binding = bindings.bindingOf(owner, identifier, scope)
+    const found = binding && bindings.valuesOf(binding)
+    if (!found) return null
+    return {
+      key: binding.variable,
+      values: found.map((value) => ({ node: value.node, provenance: provenanceFor(value.owner) })),
+    }
+  }
+
+  /** The functions `callee` can name, each with its file's provenance, or null. */
+  function callables(owner, callee, scope) {
+    const found = bindings.callablesOf(owner, unwrapExpression(callee), scope)
+    return (
+      found?.map((entry) => ({ node: entry.node, provenance: provenanceFor(entry.owner) })) ?? null
+    )
+  }
+
+  function ownerProvenance(owner) {
+    return {
+      ast: owner.ast,
+      callKind: (callee, scope) => callKind(owner, callee, scope),
+      callables: (callee, scope) => callables(owner, callee, scope),
+      isToneInterpolation(node, scope) {
+        const parts = interpolationParts(owner, node, scope)
+        return parts.safe && parts.hasTone
+      },
+      kind: (node, scope) => provenanceKind(owner, node, new Set(), scope),
+      staticString(node, scope) {
+        const options = staticStringOptions(owner, node, new Set(), scope)
+        return !options.unknown && options.values.size === 1 ? [...options.values][0] : null
+      },
+      staticStrings: (node, scope) => staticStringOptions(owner, node, new Set(), scope),
+      values: (identifier, scope) => values(owner, identifier, scope),
+    }
+  }
+
   return {
-    context,
-    isToneInterpolation(node, scope) {
-      const parts = interpolationParts(node, context, scope)
-      return parts.safe && parts.hasTone
+    /** The provenance of one file of the tree, or null for a file it does not hold. */
+    provenanceOf(file) {
+      const owner = bindings.fileOf(file)
+      return owner ? provenanceFor(owner) : null
     },
-    kind: (node, scope) => provenanceKind(node, context, new Set(), scope),
-    staticString(node, scope) {
-      const options = staticStringOptions(node, context, new Set(), scope)
-      return !options.unknown && options.values.size === 1 ? [...options.values][0] : null
-    },
-    staticStrings: (node, scope) => staticStringOptions(node, context, new Set(), scope),
   }
 }

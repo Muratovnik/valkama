@@ -1,6 +1,7 @@
 import { inject, nextTick, provide } from 'vue'
 import type { InjectionKey } from 'vue'
 
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import { pageWasTouched } from '@/shared/ui/overlayStack.ts'
 
 const CONTENT_REPLACED: InjectionKey<() => void> = Symbol('overlay-content-replaced')
@@ -63,14 +64,14 @@ export function useOverlayFocus(options: {
     if (!options.active() || surface?.contains(document.activeElement)) return
     if (options.isDrawer() && !pageWasTouched()) {
       waitingOn = surface?.querySelector<HTMLElement>('[data-overlay-scroller]') ?? surface ?? null
-      waitingOn?.focus()
+      placeFocus(waitingOn)
       return
     }
-    ;(firstControl() ?? surface)?.focus()
+    placeFocus(firstControl() ?? surface)
   }
 
-  const roundToFirst = () => (focusable()[0] ?? options.surface())?.focus()
-  const roundToLast = () => (focusable().at(-1) ?? options.surface())?.focus()
+  const roundToFirst = () => placeFocus(focusable()[0] ?? options.surface())
+  const roundToLast = () => placeFocus(focusable().at(-1) ?? options.surface())
 
   /**
    * A Tab is the browser's to move, from where the reader is, and the trap holds only the
@@ -87,7 +88,7 @@ export function useOverlayFocus(options: {
       event.preventDefault()
       waitingOn = null
       if (event.shiftKey) roundToLast()
-      else (firstControl() ?? focusable()[0] ?? options.surface())?.focus()
+      else placeFocus(firstControl() ?? focusable()[0] ?? options.surface())
     } else if (focused instanceof HTMLElement && focused.tabIndex < 0) {
       focused.blur()
     }

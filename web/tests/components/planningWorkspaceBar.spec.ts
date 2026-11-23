@@ -20,7 +20,7 @@ import type { WorkFilter } from '@/entities/work-item/utils/workFilter.ts'
 import { messages, pluralRules } from '@/shared/i18n/index.ts'
 import type { MenuEntry } from '@/shared/ui/menuEntries.ts'
 
-const COUNTS = { held: 1, matchedClosed: 0, matchedOpen: 2, open: 2, total: 3 }
+const COUNTS = { elsewhere: 0, held: 1, matchedClosed: 0, matchedOpen: 2, open: 2, total: 3 }
 
 /** The view's menu as the bar hands it over: its name and its entries, each to be chosen. */
 const MenuStub = defineComponent({
@@ -130,6 +130,20 @@ describe('the work bar', () => {
     const wrapper = bar({ counts: { ...COUNTS, open, total } }, locale)
     expect(wrapper.get('.workspace-figures').text()).toBe(line)
   })
+
+  it.each([
+    ['en', false, '2 open of 3 and 2 from other spaces'],
+    ['ru', false, '2\u{A0}открытые из 3 и 2 из других пространств'],
+    ['en', true, '2 of 2 open and 2 from other spaces · Reset'],
+    ['ru', true, '2 из 2\u{A0}открытых и 2 из других пространств · Сбросить'],
+  ] as const)(
+    'says another space’s cards apart from this space’s work (%s, filtered: %s)',
+    (locale, filtered, line) => {
+      const filter = filtered ? { text: 'x' } : EMPTY_WORK_FILTER
+      const wrapper = bar({ counts: { ...COUNTS, elsewhere: 2 }, filter, filtered }, locale)
+      expect(wrapper.get('.workspace-figures').text()).toBe(line)
+    },
+  )
 
   it.each([
     ['en', 1, '1 parent as a row'],

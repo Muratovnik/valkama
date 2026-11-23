@@ -101,9 +101,17 @@ function tight(index: number, after = '') {
     'tight-end': Boolean(after) || (next?.kind === 'text' && /^\S/u.test(next.text)),
   }
 }
-/** A reference written as code stands on the code's ground inside the control. */
-const groundOf = (node: ReferenceNode, index: number) =>
-  node.code ? ['rich-code', tight(index, afterOf(node))] : undefined
+/** A work item's reference written as itself, which is one word to a reader. */
+const isWhole = ({ caption, code, reference }: ReferenceNode) =>
+  reference.kind === 'work-item' && !caption && !code
+/**
+ * A reference written as code stands on the code's ground inside the control; a work item's
+ * stands whole on its line.
+ */
+const groundOf = (node: ReferenceNode, index: number) => {
+  if (node.code) return ['rich-code', tight(index, afterOf(node))]
+  return isWhole(node) ? 'rich-whole' : undefined
+}
 /** Absent rather than false: a control that is not waiting makes no claim about it. */
 const busyOf = (reference: TextReference) => resolve(reference)?.busy || undefined
 
@@ -196,6 +204,10 @@ function releaseKey(event: KeyboardEvent, reference: TextReference) {
       ><ReferenceWords
         :path="isPath(node)"
         :text="node.reference.value" /></code
+    ><span
+      v-else-if="isWhole(node)"
+      class="rich-whole"
+      >{{ node.reference.value }}</span
     ><ReferenceWords
       v-else
       :path="isPath(node)"
@@ -273,6 +285,13 @@ function releaseKey(event: KeyboardEvent, reference: TextReference) {
   &:hover {
     text-decoration-thickness: 2px;
   }
+}
+
+/* A work item's reference is one word: a line breaks around it, never at its hyphen, as a
+   title's reference does (`WorkItemTitle`). It is no wider than a few letters, so it never
+   widens its line: broken, «MAIN-» ended a question's head on a phone and «314» began the next. */
+.rich-whole {
+  white-space: nowrap;
 }
 
 /* A ground is inset from its words, and beside a comma or a bracket written against it

@@ -36,6 +36,7 @@ import type { PlanningConnectionState } from '@/shared/api/planningApi.ts'
 import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
 import { failureMessage } from '@/shared/api/typedFailure.ts'
 import type { TypedFailure } from '@/shared/api/typedFailure.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import { provideSpaceNames } from '@/shared/lib/spaceNames.ts'
 import ReferencePreview from '@/shared/ui/ReferencePreview.vue'
 import TooltipHost from '@/shared/ui/TooltipHost.vue'
@@ -82,13 +83,22 @@ const {
 watch(activeModule, prefetchModule, { immediate: true })
 
 // A task opened from the finder, the questions or a text: see the composable.
-const { finderOpen, finderText, findText, requestsOpen, pendingRequestCount, openTarget } =
-  useGlobalWorkActions(writeRoute, questionsAsked, cardQuestionAsked, (target) =>
-    cardInPlace(activeManifest.value, route.value, target),
-  )
+const {
+  finderOpen,
+  finderText,
+  findText,
+  requestsOpen,
+  requestsScope,
+  openRequests,
+  pendingRequestCount,
+  openRoute,
+  openTarget,
+} = useGlobalWorkActions(writeRoute, questionsAsked, cardQuestionAsked, (target) =>
+  cardInPlace(activeManifest.value, route.value, target),
+)
 const mainContent = ref<HTMLElement | null>(null)
 function focusMainContent() {
-  mainContent.value?.focus()
+  placeFocus(mainContent.value)
 }
 
 const contextReady = computed(() =>
@@ -298,7 +308,7 @@ usePlatformEntryRestore({
       :live-target="liveTarget"
       @find="finderOpen = true"
       @go="(next) => writeRoute(next)"
-      @requests="requestsOpen = true"
+      @requests="openRequests()"
       @navigate="switchModule"
       @prefetch="prefetchModule"
       @home="goHome"
@@ -359,6 +369,7 @@ usePlatformEntryRestore({
           @notice="(message) => say(message, 'refused')"
           @open-space="openSpace"
           @question-taken="cardQuestionTaken"
+          @requests="openRequests"
           @state="updateModuleState"
           @locale="selectLocale"
         />
@@ -382,8 +393,11 @@ usePlatformEntryRestore({
   <AppRequestsHub
     v-if="documentPage === null"
     :open="requestsOpen"
+    :scope="requestsScope"
+    @all="requestsScope = null"
     @close="requestsOpen = false"
     @select="openTarget"
+    @open="openRoute"
     @count="(count) => (pendingRequestCount = count)"
   />
   <DocumentDrawer

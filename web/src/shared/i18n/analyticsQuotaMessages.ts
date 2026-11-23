@@ -12,7 +12,7 @@
  * heading names the stretch it covers, and work its organization did with no account known has
  * words of its own, never counted to the account. That it is the API price estimate and not quota
  * points, and which work it leaves out, is said once for the section (`spent.basis`), as is that
- * the period and the filters do not apply (`panel.intro`): both stand in the section's «ⓘ».
+ * the space, the period and the filters do not apply (`panel.intro`): both stand in the section's «ⓘ».
  */
 export const analyticsQuotaMessages = {
   en: {
@@ -83,7 +83,7 @@ export const analyticsQuotaMessages = {
     panel: {
       heading: 'Each account',
       intro:
-        'The period and the filters above do not apply to the quota, and no two accounts or windows are added.',
+        'The space, the period and the filters above do not apply to the quota, and no two accounts or windows are added.',
       noSource: 'No quota data in the past 7 days.',
       noWindow: {
         quota_five_hour: 'No five-hour reading in the past 7 days.',
@@ -214,7 +214,8 @@ export const analyticsQuotaMessages = {
     otherState: '{window}: {state}',
     panel: {
       heading: 'По аккаунтам',
-      intro: 'Период и фильтры выше к квоте не относятся; аккаунты и окна не складываются.',
+      intro:
+        'Пространство, период и фильтры выше к квоте не относятся; аккаунты и окна не складываются.',
       noSource: 'Нет данных квоты за 7 дней.',
       noWindow: {
         quota_five_hour: 'Нет показаний пятичасового окна за 7 дней.',

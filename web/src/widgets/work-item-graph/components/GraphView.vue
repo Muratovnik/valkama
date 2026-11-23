@@ -43,6 +43,7 @@ import {
 } from '@/widgets/work-item-graph/composables/useGraphMotion.ts'
 import { useGraphNodeMarks } from '@/widgets/work-item-graph/composables/useGraphNodeMarks.ts'
 import { useGraphProjection } from '@/widgets/work-item-graph/composables/useGraphProjection.ts'
+import type { OtherSpaceEnds } from '@/widgets/work-item-graph/composables/useGraphProjection.ts'
 import { GRAPH_FLOW_ID } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type {
   LiveWork,
@@ -71,6 +72,8 @@ const props = defineProps<{
   branch?: { head: string | null; members: readonly string[]; reference: string } | null
   /** The chain this field is scoped to, named in its header chip. */
   chain?: { members: readonly string[]; reference: string; total: number } | null
+  /** The far ends of the links with other spaces, which stand in their spaces' frames. */
+  ends?: OtherSpaceEnds
   /** The queue and the search the items were narrowed by; a new one frames the field afresh. */
   filter?: string
   /** Moves each time the host asks the field to take focus once it is framed. */
@@ -106,6 +109,7 @@ const {
   ready,
   showDone,
   toggle,
+  unread,
 } = useGraphProjection(
   () => ({
     edges: props.edges,
@@ -117,6 +121,7 @@ const {
     scopeKind: props.scopeKind,
     space: props.space,
     spaceItems: props.spaceItems,
+    ends: props.ends,
     version: props.version,
   }),
   () => props.selectedId ?? null,
@@ -355,6 +360,7 @@ function toggleFrame(frameId: string) {
           :keep-done="keepDone"
           :moving="anyMoving"
           :signs="liveSigns"
+          :unread="unread"
         />
       </template>
     </GraphBar>
@@ -392,6 +398,7 @@ function toggleFrame(frameId: string) {
           :motion="motion"
           :moving="anyMoving"
           :signs="liveSigns"
+          :unread="unread"
           @toggle-motion="toggleMotion"
         />
       </div>

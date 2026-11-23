@@ -26,12 +26,13 @@ from __future__ import annotations
 import contextlib
 import json
 import sqlite3
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 
 from . import (
     calls,
     closing,
+    composed,
     consent,
     decisions,
     deferral,
@@ -53,6 +54,10 @@ from . import (
 
 #: How many questions a read of one item carries; `questions.total` says the rest.
 ITEM_QUESTIONS = 5
+#: The longest prompt a question carries.
+PROMPT_LIMIT = 8000
+#: The longest session or execution id a question names.
+SESSION_ID_LIMIT = 128
 #: How many sessions an agent's call asks at once (`addressees`).
 MOST_ADDRESSEES = 5
 #: How often one session may ask one other session within the hour.
@@ -142,6 +147,9 @@ def _present(conn: sqlite3.Connection, row: sqlite3.Row, at: str) -> dict:
         "title": item["title"],
         "kind": row["kind"],
         "prompt": row["prompt"],
+        # The key and values of a prompt the service composed; null on one an agent wrote,
+        # on one stored before keys and on an attached store from before them.
+        "prompt_message": _prompt_message(row, columns),
         "fields": json.loads(row["fields_json"]),
         "answers": parts["answers"],
         "own": parts["own"],
@@ -172,6 +180,12 @@ def _present(conn: sqlite3.Connection, row: sqlite3.Row, at: str) -> dict:
         # The write waiting for the owner the question is about, only on such a question.
         **_action_part(conn, row),
     }
+
+
+def _prompt_message(row: sqlite3.Row, columns: Sequence[str]) -> dict | None:
+    if "prompt_key" not in columns or row["prompt_key"] is None:
+        return None
+    return {"key": row["prompt_key"], "values": json.loads(row["prompt_values"])}
 
 
 def _action_part(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
@@ -368,6 +382,7 @@ def list_page(
     lists: bool = True,
     addressed: bool = False,
     session: str | None = None,
+    within: tuple[Sequence[str], Sequence[object]] | None = None,
 ) -> dict:
     """One page of requests, at most `PAGE` of them, and whether more follow.
 
@@ -383,6 +398,8 @@ def list_page(
     session the call in progress proved, and refuses a call that proved none.
     `session` names that session instead, for a reader with no call of its own, the
     note a session start gets (`waiting_items`); no surface passes it.
+    `within` keeps the requests on the items that conditions on `work_items i` hold,
+    with their parameters, such as the items a read of a space holds as its board does.
     """
 
     if status is not None:
@@ -404,6 +421,9 @@ def list_page(
             raise model.PlanningError("work item is outside the exact planning space")
         clauses.append("r.work_item_id=?")
         parameters.append(item["work_item_id"])
+    if within is not None:
+        clauses.extend(within[0])
+        parameters.extend(within[1])
     after = request_model.timestamp(answered_after, "answered_after")
     if after is not None:
         # `resolved_at` of an answered row is when its current answer was given,
@@ -520,14 +540,14 @@ def _bindings(
     execution = None
     session = None
     if execution_id is not None:
-        execution = model.text_field(execution_id, "execution_id", limit=128)
+        execution = model.text_field(execution_id, "execution_id", limit=SESSION_ID_LIMIT)
         row = conn.execute(
             "SELECT work_item_id FROM executions WHERE execution_id=?", (execution,)
         ).fetchone()
         if row is None or row["work_item_id"] != item["work_item_id"]:
             raise model.PlanningError("execution must belong to this work item")
     if session_id is not None:
-        session = model.text_field(session_id, "session_id", limit=128)
+        session = model.text_field(session_id, "session_id", limit=SESSION_ID_LIMIT)
         exists = conn.execute("SELECT 1 FROM sessions WHERE id=?", (session,)).fetchone()
         linked = conn.execute(
             "SELECT 1 FROM execution_sessions l JOIN executions e ON e.execution_id=l.execution_id WHERE l.session_id=? AND e.work_item_id=?",
@@ -609,7 +629,7 @@ def _request_parts(kind: object, prompt: object, fields: object) -> tuple[str, s
     recommend an answer in every required field."""
 
     parsed_kind = model.enum_field(kind, frozenset({"question", "decision"}), "kind")
-    parsed_prompt = model.multiline_field(prompt, "prompt", limit=8000)
+    parsed_prompt = model.multiline_field(prompt, "prompt", limit=PROMPT_LIMIT)
     if not parsed_prompt:
         raise model.PlanningError("prompt is required")
     parsed_fields = request_model.fields(fields)
@@ -645,8 +665,11 @@ def _decide_by_recommendation(
         author=author,
         at=request_model.now(),
     )
-    chosen = ", ".join(f"«{label}»" for label in request_model.chosen_labels(fields, given))
-    decisions.mark(conn, event, "decision", f"chose {chosen}")
+    labels = request_model.chosen_labels(fields, given)
+    chosen = ", ".join(f"«{label}»" for label in labels)
+    decisions.mark(
+        conn, event, "decision", composed.decision("chose", f"chose {chosen}", labels=labels)
+    )
 
 
 def _close(
@@ -755,7 +778,7 @@ def _addressees(conn: sqlite3.Connection, sessions: object) -> list[str]:
     settings = participation.load(conn)
     asked: list[str] = []
     for value in sessions:
-        session = model.text_field(value, "sessions", limit=128)
+        session = model.text_field(value, "sessions", limit=SESSION_ID_LIMIT)
         if session in asked:
             raise model.PlanningError(f"session {session} is named twice; ask it once")
         if session == own:
@@ -914,7 +937,7 @@ def list_question(value: object) -> tuple[str, list[dict]]:
         or not 1 <= len(value["options"]) <= MAX_LIST_OPTIONS
     ):
         raise model.PlanningError("list requires label and options and takes nothing else")
-    label = model.text_field(value["label"], "list.label", limit=200)
+    label = model.text_field(value["label"], "list.label", limit=request_model.MAX_LABEL)
     field = {
         "id": LIST_FIELD,
         "label": label,

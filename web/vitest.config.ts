@@ -23,6 +23,7 @@ export default defineConfig({
           name: 'contracts',
           environment: 'node',
           include: ['tests/*.{test,spec}.{ts,mts,mjs}'],
+          setupFiles: ['tests/support/networkRefusal.ts'],
         },
       },
       {
@@ -30,7 +31,7 @@ export default defineConfig({
           name: 'components',
           environment: 'happy-dom',
           include: ['tests/components/**/*.{test,spec}.ts'],
-          setupFiles: ['tests/components/setup.ts'],
+          setupFiles: ['tests/support/networkRefusal.ts', 'tests/components/setup.ts'],
         },
       },
     ],

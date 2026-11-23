@@ -8,8 +8,9 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { playwrightEnvironment, realIo, runAllowed } from './browser/allowedRun.ts'
-import type { RunnerIo } from './browser/allowedRun.ts'
+import type { ProjectRule, RunnerIo } from './browser/allowedRun.ts'
 import { clipboardOptIn, clipboardSpecs } from './browser/clipboardSpecs.ts'
+import { timedList } from './browser/timedChecks.ts'
 import { spawnInherited } from './heavyLock.ts'
 
 // The process start the real runner goes through, stood in for: no Playwright starts here.
@@ -20,19 +21,35 @@ vi.mock('./heavyLock.ts', async (actual) => ({
 
 const allowed = ['production-settings.spec.ts', 'ui-buttons.spec.ts']
 const notes = 'production-card-notes.spec.ts'
+/** A spec file of the suite whose name no project's pattern takes. */
+const scratch = 'zz-scratch-shots.spec.ts'
+/** A spec file a project's pattern takes and its ignore list leaves out. */
+const ignored = 'production-legacy.spec.ts'
 
-/** A runner whose suite is `allowed` plus the clipboard specs, and whose lists are `lists`. */
-function runner(lists: Record<string, string> = {}) {
+const harnessMatch = /(?:^|[\\/])ui-[a-z0-9-]+\.spec\.ts$/
+const productionMatch = /(?:^|[\\/])production-[a-z0-9-]+\.spec\.ts$/
+const legacyIgnore = /(?:^|[\\/])production-legacy\.spec\.ts$/
+
+/** Two projects, as a configuration states them: by the start of a spec file's name. */
+const projects: ProjectRule[] = [
+  { name: 'harness', testMatch: [harnessMatch], testIgnore: [] },
+  { name: 'production', testMatch: [productionMatch], testIgnore: [legacyIgnore] },
+]
+
+/** A runner whose suite is `allowed`, the clipboard specs and `more`, and whose lists are `lists`. */
+function runner(lists: Record<string, string> = {}, more: readonly string[] = []) {
   const written: string[][] = []
   const said: string[] = []
-  const playwright = vi.fn((_args: readonly string[], _clipboard: boolean, _lock: string | null) =>
-    Promise.resolve(0),
+  const playwright = vi.fn(
+    (_args: readonly string[], _clipboard: boolean, _lock: string | null, _list: string) =>
+      Promise.resolve(0),
   )
   const io: RunnerIo = {
     playwright,
+    projects: () => Promise.resolve(projects),
     readList: (file) => lists[file] ?? null,
     say: (line) => said.push(line),
-    suiteSpecs: () => [...allowed, ...clipboardSpecs],
+    suiteSpecs: () => [...allowed, ...clipboardSpecs, ...more],
     writeList: (specs) => {
       written.push([...specs])
       return 'list.txt'
@@ -98,6 +115,69 @@ describe('the allowed browser run', () => {
     ])
   })
 
+  it('refuses a listed spec no project runs, naming it and the rule of each project', async () => {
+    const lists = { 'batch.txt': `ui-buttons.spec.ts\n${scratch}\nproduction-settings.spec.ts\n` }
+    const { io, playwright, said } = runner(lists, [scratch])
+    expect(await runAllowed(['--specs=batch.txt'], io)).toBe(2)
+    expect(playwright).not.toHaveBeenCalled()
+    expect(said).toEqual([
+      `Refused, no test ran: no project of playwright.config.ts runs ${scratch}: ` +
+        `harness runs a path matching ${harnessMatch}; ` +
+        `production runs a path matching ${productionMatch} but not ${legacyIgnore}`,
+    ])
+  })
+
+  it('refuses a listed spec a project takes by its pattern and leaves out by its ignore list', async () => {
+    const { io, playwright, said } = runner({ 'batch.txt': `${ignored}\n` }, [ignored])
+    expect(await runAllowed(['--specs=batch.txt'], io)).toBe(2)
+    expect(playwright).not.toHaveBeenCalled()
+    expect(said[0]).toContain(`no project of playwright.config.ts runs ${ignored}: `)
+  })
+
+  it('runs a list whole when a project runs each of its specs', async () => {
+    const lists = { 'batch.txt': 'ui-buttons.spec.ts\nproduction-settings.spec.ts\n' }
+    const { io, playwright, written } = runner(lists, [scratch, ignored])
+    expect(await runAllowed(['--specs=batch.txt'], io)).toBe(0)
+    expect(written).toEqual([['ui-buttons.spec.ts', 'production-settings.spec.ts']])
+    expect(playwright).toHaveBeenCalledOnce()
+  })
+
+  it('takes the projects from playwright.config.ts itself, as Playwright will load it', async () => {
+    vi.stubEnv('VALKAMA_BROWSER_STORE', undefined)
+    try {
+      const suite = realIo.suiteSpecs()
+      const harnessSpec = suite.find(
+        (name) => name.startsWith('ui-') && !clipboardSpecs.includes(name),
+      )
+      expect(harnessSpec).toBeDefined()
+      const valid = [harnessSpec, 'production-settings.spec.ts', 'production-locale.spec.ts', notes]
+      const lists = { 'scratch.txt': `${scratch}\n`, 'valid.txt': valid.join('\n') }
+      const io = {
+        ...runner(lists).io,
+        projects: realIo.projects,
+        suiteSpecs: () => [...suite, scratch],
+      }
+
+      const refused = { ...io, say: vi.fn() }
+      expect(await runAllowed(['--specs=scratch.txt'], refused)).toBe(2)
+      const { default: config } = await import('../playwright.config.ts')
+      const message = String(refused.say.mock.calls[0]?.[0])
+      expect(message).toContain(`runs ${scratch}: `)
+      expect(config.projects?.length).toBeGreaterThan(0)
+      for (const project of config.projects ?? [])
+        expect(message).toContain(
+          `${project.name} runs a path matching ${String(project.testMatch)}`,
+        )
+
+      const named = runner(lists)
+      const real = { ...named.io, projects: realIo.projects, suiteSpecs: () => suite }
+      expect(await runAllowed(['--specs=valid.txt', `--with-clipboard=${notes}`], real)).toBe(0)
+      expect(named.written).toEqual([valid])
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
   it('runs a clipboard spec only when --with-clipboard names it', async () => {
     const lists = { 'batch.txt': `${notes}\n` }
     const refused = runner(lists)
@@ -125,11 +205,20 @@ describe('the allowed browser run', () => {
 
   it('runs Playwright with the opt-in set only when asked, whatever the shell held', () => {
     const shell = { PATH: '/bin', [clipboardOptIn]: '1' }
-    expect(playwrightEnvironment(shell, false)).toEqual({ PATH: '/bin' })
-    expect(playwrightEnvironment({ PATH: '/bin' }, true)).toEqual({
+    expect(playwrightEnvironment(shell, false, 'list.txt')).toEqual({
       PATH: '/bin',
-      [clipboardOptIn]: '1',
+      [timedList]: 'list.txt',
     })
+    expect(
+      playwrightEnvironment({ PATH: '/bin', [timedList]: 'old.txt' }, true, 'list.txt'),
+    ).toEqual({ PATH: '/bin', [clipboardOptIn]: '1', [timedList]: 'list.txt' })
+  })
+
+  it('names the list it runs to Playwright, which runs the timed project whole', async () => {
+    const batch = runner({ 'batch.txt': 'ui-buttons.spec.ts\n' })
+    expect(await runAllowed(['--specs=batch.txt'], batch.io)).toBe(0)
+    expect(batch.playwright.mock.calls[0]?.[3]).toBe('list.txt')
+    expect(batch.playwright.mock.calls[0]?.[0]).toContain('--test-list=list.txt')
   })
 
   it('holds the heavy-test lock for a run, naming what it runs, and for --list holds none', async () => {
@@ -169,7 +258,9 @@ describe('the allowed browser run', () => {
   })
 
   it('runs Playwright through the gate declaring no CPUs, so it asks for the whole machine', async () => {
-    expect(await realIo.playwright(['--workers=4'], false, 'the whole browser suite')).toBe(0)
+    expect(
+      await realIo.playwright(['--workers=4'], false, 'the whole browser suite', 'list.txt'),
+    ).toBe(0)
     expect(spawnInherited).toHaveBeenCalledTimes(1)
     const [call] = vi.mocked(spawnInherited).mock.calls
     const command = call?.[0] ?? []

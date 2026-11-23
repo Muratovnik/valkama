@@ -39,6 +39,8 @@ import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/wor
 
 import type { LiveWork } from '@/shared/api/liveWorkModel.ts'
 import type { WorkflowState, WorkItemBrief } from '@/shared/api/planningModel.ts'
+import { walkFocus } from '@/shared/lib/moveFocus.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 
 /** Where a move left the tile, for the sentence that announces it. */
 export interface StackLanding {
@@ -62,6 +64,8 @@ const props = defineProps<{
   hintId?: string
   /** Draw only this many tiles; every item is still read. */
   limit?: number
+  /** The stage each tile stands under, by its id, which its second line names. */
+  stages?: ReadonlyMap<string, WorkItemBrief>
 }>()
 
 const emit = defineEmits<{
@@ -92,6 +96,7 @@ const stop = computed(() => {
 })
 
 const waitingOn = (item: WorkItemBrief) => props.waiting.get(item.work_item_id) ?? null
+const stageOf = (item: WorkItemBrief) => props.stages?.get(item.work_item_id) ?? null
 
 /**
  * The stack a drop ended in, with the dragged element standing in its place there.
@@ -234,18 +239,19 @@ function target(key: string, index: number): HTMLElement | undefined {
 
 /**
  * A walk past the last tile stays where it is. It does not fall through to the
- * scroller either, which would slide the focused tile away from the reader.
+ * scroller either, which would slide the focused tile away from the reader. A walk
+ * across to a column past the board's edge brings that column in (`walkFocus`).
  */
 function walked(event: KeyboardEvent, index: number) {
   if (!WALKS.has(event.key) || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey)
     return
   event.preventDefault()
-  target(event.key, index)?.focus()
+  walkFocus(target(event.key, index))
 }
 
 /** Focus the tile drawn at `index`, as the cell does with the first one it reveals. */
 function focusAt(index: number) {
-  if (list.value !== null) tilesOf(list.value)[index]?.focus()
+  if (list.value !== null) placeFocus(tilesOf(list.value)[index])
 }
 
 /** A walk that starts on the cell's toggle rather than on a tile. */
@@ -275,6 +281,7 @@ defineExpose({ focusAt, walkFrom })
     >
       <WorkItemTile
         :item="item"
+        :stage="stageOf(item)"
         :waiting-on="waitingOn(item)"
         :live="props.live[item.work_item_id] ?? null"
         :filter="props.filter"

@@ -6,16 +6,16 @@
 export const workItemNextStepMessages = {
   en: {
     nextStep: {
-      label: 'Next step',
+      label: 'Next condition',
       place: '{at} of {total}',
-      all: 'All steps',
+      all: 'All conditions',
     },
   },
   ru: {
     nextStep: {
-      label: 'Следующий шаг',
+      label: 'Следующее условие',
       place: '{at} из {total}',
-      all: 'Все шаги',
+      all: 'Все условия',
     },
   },
 } as const

@@ -55,8 +55,8 @@ const link = (index: number) => ({
   title: 'Related',
 })
 const ref = (index: number) => ({
-  kind: 'commit',
-  value: `c${index}`,
+  kind: 'url',
+  value: `https://example.com/${index}`,
   label: '',
   author: 'codex',
   at,
@@ -151,6 +151,7 @@ const planning = (payload: unknown) => ({
 const putOff = (reason: string) => ({
   until: at,
   until_item: null,
+  until_comments: null,
   reason,
   since: at,
   by: { author: 'user', session_id: null },

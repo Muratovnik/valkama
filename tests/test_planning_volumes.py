@@ -964,7 +964,7 @@ class EntryMomentTests(VolumesCase):
         with self.subTest("the stack"):
             self.assertEqual(expected, triage.entered(self.conn, drift))
             (waiting,) = triage.waiting(self.conn, self.trees["MAIN"].space_id)
-            self.assertEqual((drift, expected), (waiting.work_item_id, waiting.entered_at))
+            self.assertEqual((drift, expected), (waiting.work_item_id, waiting.since))
         with self.subTest("the volumes read"):
             oldest = self.categories(self.volumes("MAIN"))["triage"]["oldest"]
             self.assertEqual((drift, expected), (oldest["work_item_id"], oldest["since"]))

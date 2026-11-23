@@ -42,6 +42,7 @@ from . import (
     split,
     states,
     subscriptions,
+    task_filter,
     usage,
     views,
     volumes,
@@ -634,11 +635,15 @@ def _volumes(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> d
             400, "invalid_request", "utc_offset must be a whole number of minutes"
         ) from error
     period = volumes.period(_required(parameters, "from"), _required(parameters, "to"), minutes)
-    kept = volumes.work_filter(conn, parameters.get("kind", []), parameters.get("label", []))
-    return {
-        "interface_version": PLANNING_API_INTERFACE,
-        "volumes": volumes.read(conn, volumes.Request(scope, period, kept)),
-    }
+    with volumes.sources(conn, scope) as found:
+        kept = task_filter.of_store(
+            conn, parameters.get("kind", []), parameters.get("label", []), beside=found.stores
+        )
+        request = volumes.Request(scope, period, kept, found.stores, found.coverage)
+        return {
+            "interface_version": PLANNING_API_INTERFACE,
+            "volumes": volumes.read(conn, request),
+        }
 
 
 def _goal_volumes(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:

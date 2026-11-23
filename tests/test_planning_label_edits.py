@@ -253,5 +253,5 @@ class LabelEditTests(BatchCase):
         batch = declared["apply_work_item_changes"]["properties"]["update"]["properties"]
         for name in ("labels", "labels_add", "labels_remove"):
             self.assertEqual("array", batch[name]["type"], name)
-            self.assertEqual({"type": "string"}, batch[name]["items"], name)
+            self.assertEqual({"type": "string", "maxLength": 64}, batch[name]["items"], name)
         self.assertEqual({*model.UPDATABLE_FIELDS, "mentions"}, set(batch))

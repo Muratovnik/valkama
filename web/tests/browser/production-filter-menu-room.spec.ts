@@ -1,9 +1,10 @@
 /**
  * The filter's menu on a space shaped as real ones are: every state category, every kind, a dozen
- * holders and sixty labels. It opens on the facets, which stand whole with nothing scrolled, and
- * the labels' step has how they combine in sight as it opens. The menu is as tall as the window
- * lets it be. A scenario of a few entries once passed while the choice stood 37px below the menu
- * on a real space.
+ * holders and sixty labels. It opens on the facets, which stand whole with nothing scrolled where
+ * the window has their height, and on a shorter one scroll inside the window, each brought into
+ * sight as the arrows reach it; the labels' step has how they combine in sight as it opens. The
+ * menu is as tall as the window lets it be. A scenario of a few entries once passed while the
+ * choice stood 37px below the menu on a real space.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -50,45 +51,82 @@ function inSight(page: Page) {
 
 const ALL_IN_SIGHT = ['all: in sight', 'any: in sight']
 
+/** The facets' step: six conditions and seven facets, whatever the space holds. */
+async function facetRows(page: Page) {
+  const rows = menu(page).getByRole('option')
+  await expect(rows).toHaveCount(13)
+  return rows.all()
+}
+
+/** How far the facets' step scrolls. */
+const overflow = (page: Page) =>
+  menu(page).evaluate((node) => node.scrollHeight - node.clientHeight)
+
+/** A state category once, however many states stand in it; then the labels with their choice. */
+async function labelsCombine(page: Page, height: number) {
+  const list = menu(page)
+  // The scenario holds what a real space holds, or this says nothing.
+  await openFacet(page, 'State')
+  // The menu offers a state category once, however many states stand in it; and the way back.
+  await expect(list.getByRole('option')).toHaveCount(9)
+  await list.getByRole('option', { name: 'Back to the facets' }).click()
+  await openFacet(page, 'Kind')
+  await expect(list.getByRole('option')).toHaveCount(6)
+  await list.getByRole('option', { name: 'Back to the facets' }).click()
+
+  await openFacet(page, 'Label')
+  await expect(labelGroup(page).locator('.option-row')).toHaveCount(60)
+  expect(await list.evaluate((node) => node.scrollTop)).toBe(0)
+  expect(await inSight(page)).toEqual(ALL_IN_SIGHT)
+  // The menu stands inside the window and starts at the bar, whatever its height.
+  const box = await boxOf(list)
+  expect(box.y + box.height).toBeLessThanOrEqual(height)
+  const bar = await boxOf(page.locator('.work-filter'))
+  expect(box.y).toBeGreaterThanOrEqual(bar.y)
+}
+
 for (const [width, height] of [
   [1280, 800],
   [1440, 900],
   [1920, 1080],
   [390, 844],
-  // A window short enough that the first groups alone outrun it.
-  [1280, 420],
-  [390, 480],
 ]) {
   for (const states of [8, 16]) {
     test(`the facets stand whole and the labels can be seen to combine, nothing scrolled, ${states} states at ${width}x${height}`, async ({
       page,
     }) => {
       await openMenu(page, width, height, states)
-      const list = menu(page)
-      // Two presets and five facets, whatever the space holds.
-      const rows = list.getByRole('option')
-      await expect(rows).toHaveCount(7)
-      for (const row of await rows.all()) await expect(row).toBeInViewport({ ratio: 1 })
-      expect(await list.evaluate((node) => node.scrollHeight - node.clientHeight)).toBe(0)
+      for (const row of await facetRows(page)) await expect(row).toBeInViewport({ ratio: 1 })
+      expect(await overflow(page)).toBe(0)
+      await labelsCombine(page, height)
+    })
+  }
+}
 
-      // The scenario holds what a real space holds, or this says nothing.
-      await openFacet(page, 'State')
-      // The menu offers a state category once, however many states stand in it; and the way back.
-      await expect(list.getByRole('option')).toHaveCount(9)
-      await list.getByRole('option', { name: 'Back to the facets' }).click()
-      await openFacet(page, 'Kind')
-      await expect(list.getByRole('option')).toHaveCount(6)
-      await list.getByRole('option', { name: 'Back to the facets' }).click()
-
-      await openFacet(page, 'Label')
-      await expect(labelGroup(page).locator('.option-row')).toHaveCount(60)
-      expect(await list.evaluate((node) => node.scrollTop)).toBe(0)
-      expect(await inSight(page)).toEqual(ALL_IN_SIGHT)
-      // The menu stands inside the window and starts at the bar, whatever its height.
-      const box = await boxOf(list)
+// A window short enough that the first groups alone outrun it: the facets' twelve rows do not
+// fit under the bar, so the step scrolls inside the window instead.
+for (const [width, height] of [
+  [1280, 420],
+  [390, 480],
+]) {
+  for (const states of [8, 16]) {
+    test(`the facets come into sight as the arrows reach them and the labels can be seen to combine, ${states} states at ${width}x${height}`, async ({
+      page,
+    }) => {
+      await openMenu(page, width, height, states)
+      const rows = await facetRows(page)
+      expect(await overflow(page), 'the facets outrun this window').toBeGreaterThan(0)
+      const box = await boxOf(menu(page))
       expect(box.y + box.height).toBeLessThanOrEqual(height)
-      const bar = await boxOf(page.locator('.work-filter'))
-      expect(box.y).toBeGreaterThanOrEqual(bar.y)
+      for (const [at, row] of rows.entries()) {
+        await page.keyboard.press('ArrowDown')
+        await expect(row, `row ${at}`).toHaveAttribute('data-highlighted', 'true')
+        await expect(row, `row ${at}`).toBeInViewport({ ratio: 1 })
+      }
+      await menu(page).evaluate((node) => {
+        node.scrollTop = 0
+      })
+      await labelsCombine(page, height)
     })
   }
 }

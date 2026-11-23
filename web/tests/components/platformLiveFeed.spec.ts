@@ -53,6 +53,8 @@ it('loads only module authority and context, and never opens global feeds', asyn
   expect(feed.modules.value.map((module) => module.module_id)).toEqual([
     'planning',
     'analytics',
+    'decisions',
+    'volumes',
     'settings',
   ])
   expect(loadContext).toHaveBeenCalledOnce()
@@ -69,6 +71,8 @@ it('retains committed authority after refresh fails with safe typed copy', async
   expect(feed.modules.value.map((module) => module.module_id)).toEqual([
     'planning',
     'analytics',
+    'decisions',
+    'volumes',
     'settings',
   ])
   expect(feed.modulesAuthoritative.value).toBe(true)

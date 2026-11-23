@@ -132,14 +132,16 @@ when it comes back. The count takes every comment and reply written on the item
 after it was put off, a person's or an agent's, yours included. It loses its claims and its basis, and the queue gives
 none of it, nor of the work under a goal or stage put off; whoever holds work under
 one keeps it and hears that it was put off and that it came back. When the day
-comes, the count is reached (in the write of the comment that reaches it), or that
+comes, the count is reached (as the write of the comment that reaches it ends), or that
 item completes, is cancelled or deleted, the work comes back to triage by itself
 (the record's `returned` says why); an item merged away passes the
 wait to the one it merged into. Under goals and stages all accepted it stays put
 off and the owner is asked instead: do it, later or drop it. Until the owner
 answers, you can neither claim it nor move it anywhere but cancelled
 (`acceptance_question`): wait for the answer. A claim, or any move out of
-deferred, ends the wait, and so does merging it into work that is not put off.
+deferred, ends the wait, and so does merging it into work that is not put off; a
+comment sent in the same call as that claim, move or a new `defer` brings nothing
+back.
 
 ## Sources
 

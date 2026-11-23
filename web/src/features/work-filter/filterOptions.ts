@@ -12,6 +12,8 @@ import type { FacetMark } from '@/entities/work-item/utils/facets.ts'
 import {
   filterTokens,
   hasToken,
+  isFlag,
+  NO_PROJECT,
   WORK_FILTER_CONDITIONS,
 } from '@/entities/work-item/utils/workFilter.ts'
 import type {
@@ -19,15 +21,31 @@ import type {
   WorkFilter,
   WorkFilterToken,
 } from '@/entities/work-item/utils/workFilter.ts'
+import { ancestorsOf, WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
 
 import { PRIORITIES, WORK_ITEM_KINDS } from '@/shared/api/planningModel.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { actorName } from '@/shared/lib/actor.ts'
 import { byUse } from '@/shared/lib/byUse.ts'
+import { customDays, PERIODS } from '@/shared/lib/periodDays.ts'
 
 type Translate = (key: string, params?: Record<string, unknown>) => string
 type StateCategory = NonNullable<WorkItemBrief['state']>['category']
-type ValueFacet = Exclude<WorkFilterToken['facet'], 'ready' | 'held'>
+/** A facet the menu steps into; the conditions are values of their own group instead. */
+type ValueFacet = Exclude<
+  WorkFilterToken['facet'],
+  'asked' | 'elsewhere' | 'held' | 'ready' | 'triage'
+>
+
+/** Whether a picked token's facet is one the menu steps into, so a pick can stay there. */
+export const isValueFacet = (token: WorkFilterToken) =>
+  token.facet === 'closed' || (GROUP_ORDER as readonly string[]).includes(token.facet)
+
+/**
+ * What a project or a goal is called where its id or reference alone would say less: a
+ * project's name, a container's reference and title. Read from the work the bar counts.
+ */
+export type FilterWords = (token: WorkFilterToken) => string | undefined
 
 type FilterGroupId = 'conditions' | 'facets' | 'everywhere' | ValueFacet
 
@@ -100,14 +118,36 @@ type ValueGroup = Omit<FilterGroup, 'options'> & { options: ValueOption[] }
  * choice. Where text finds values of several facets at once, that head waits at the menu's lower
  * edge until the list reaches it (`OptionGroups`), so how labels combine stays in sight.
  */
-const GROUP_ORDER: readonly ValueFacet[] = ['category', 'kind', 'priority', 'holder', 'labels']
+const GROUP_ORDER: readonly ValueFacet[] = [
+  'category',
+  'kind',
+  'priority',
+  'holder',
+  'project',
+  'goal',
+  'labels',
+]
 
 /** The word for a token's value, in the reader's language. */
-function tokenValue(token: WorkFilterToken, t: Translate): string {
+function tokenValue(token: WorkFilterToken, t: Translate, words?: FilterWords): string {
   switch (token.facet) {
     case 'ready':
-    case 'held': {
+    case 'held':
+    case 'asked':
+    case 'triage':
+    case 'elsewhere': {
       return t(`workItem.facet.${token.facet}`)
+    }
+    case 'closed': {
+      return t(`workItem.filter.closedIn.${token.closed.period}`)
+    }
+    case 'project': {
+      return token.value === NO_PROJECT
+        ? t('workItem.filter.noProject')
+        : (words?.(token) ?? token.value)
+    }
+    case 'goal': {
+      return words?.(token) ?? token.value
     }
     case 'category': {
       return t(`workItem.category.${token.value}`)
@@ -125,12 +165,31 @@ function tokenValue(token: WorkFilterToken, t: Translate): string {
 }
 
 /** What a chip says: «Метка: coordinator», «Метка: не coordinator»; a condition by its own name. */
-export function tokenName(token: WorkFilterToken, t: Translate): string {
-  if (token.facet === 'ready' || token.facet === 'held') return tokenValue(token, t)
+export function tokenName(token: WorkFilterToken, t: Translate, words?: FilterWords): string {
+  if (isFlag(token)) return tokenValue(token, t)
+  if (token.facet === 'closed') return t(`workItem.filter.closedIn.chip.${token.closed.period}`)
+  if (token.facet === 'elsewhere')
+    return token.not ? t('workItem.facet.notElsewhere') : tokenValue(token, t)
   return t(token.not ? 'workItem.filter.chipNot' : 'workItem.filter.chip', {
     facet: t(`workItem.filter.facet.${token.facet}`),
-    value: tokenValue(token, t),
+    value: tokenValue(token, t, words),
   })
+}
+
+/** The words a project's and a goal's token is said in, from the work in sight. */
+export function filterWords(items: readonly WorkItemBrief[]): FilterWords {
+  const projects = new Map<string, string>()
+  for (const item of items)
+    for (const project of item.projects)
+      if (project.display_name) projects.set(project.project_id, project.display_name)
+  const containers = new Map(
+    items.filter((item) => WORK_ITEM_TREE.isContainer(item)).map((item) => [item.reference, item]),
+  )
+  return (token) => {
+    if (token.facet === 'project') return projects.get(token.value)
+    const item = token.facet === 'goal' ? containers.get(token.value) : undefined
+    return item && `${item.reference} · ${item.title}`
+  }
 }
 
 /**
@@ -163,6 +222,13 @@ function valuesOf(
   categories: readonly StateCategory[],
 ): string[] {
   switch (facet) {
+    case 'project': {
+      const named = byUse(items.flatMap((item) => item.projects.map((p) => p.project_id)))
+      return items.some((item) => item.projects.length === 0) ? [...named, NO_PROJECT] : named
+    }
+    case 'goal': {
+      return items.filter((item) => WORK_ITEM_TREE.isContainer(item)).map((item) => item.reference)
+    }
     case 'category': {
       return [...new Set(categories)]
     }
@@ -186,6 +252,18 @@ function valuesOf(
 }
 
 const pick = (token: WorkFilterToken) => ({ do: 'pick', token }) as const
+
+/** A goal's or a stage's path of references, «MAIN-1 › MAIN-4», where it stands under one. */
+function goalPath(items: readonly WorkItemBrief[]) {
+  const byId = new Map(items.map((item) => [item.work_item_id, item]))
+  const byReference = new Map(items.map((item) => [item.reference, item]))
+  return (reference: string): string | undefined => {
+    const item = byReference.get(reference)
+    if (!item) return undefined
+    const path = ancestorsOf(item, byId).reverse()
+    return path.length ? [...path, item].map((each) => each.reference).join(' › ') : undefined
+  }
+}
 
 /** A value of a closed vocabulary as the registry draws it; a label or a holder has no mark. */
 function markOf(token: WorkFilterToken, text: string): FacetMark | undefined {
@@ -211,8 +289,12 @@ export function filterGroups(input: {
   held: number | null
   items: readonly WorkItemBrief[]
   t: Translate
+  /** The day days of the reader's own first stand at, the week up to it; today by default. */
+  now?: Date
 }): ValueGroup[] {
   const { t } = input
+  const words = filterWords(input.items)
+  const path = goalPath(input.items)
   const conditions: ValueGroup = {
     id: 'conditions',
     name: t('workItem.filter.conditions'),
@@ -223,24 +305,44 @@ export function filterGroups(input: {
       ...(token.facet === 'held' && input.held !== null ? { detail: String(input.held) } : {}),
     })),
   }
+  // The period chosen keeps its days; days of the reader's own first stand at the past week.
+  const days = customDays(input.now ?? new Date())
+  const closed: ValueGroup = {
+    id: 'closed',
+    name: t('workItem.filter.closedIn.name'),
+    options: PERIODS.map((period) => {
+      const chosen = input.filter.closed?.period === period ? input.filter.closed : undefined
+      const own = period === 'custom' ? days : { from: '', to: '' }
+      const token: WorkFilterToken = { facet: 'closed', closed: chosen ?? { period, ...own } }
+      return { key: `closed:${period}`, action: pick(token), text: tokenValue(token, t) }
+    }),
+  }
   const picked = filterTokens(input.filter)
   const groups = GROUP_ORDER.map((facet) => {
     const values = valuesOf(facet, input.items, input.categories)
     for (const token of picked)
-      if (token.facet === facet && !values.includes(token.value)) values.push(token.value)
+      if ('value' in token && token.facet === facet && !values.includes(token.value))
+        values.push(token.value)
     return {
       id: facet,
       name: t(`workItem.filter.facet.${facet}`),
       options: values.map((value) => {
         const token = { facet, value } as WorkFilterToken
-        const text = tokenValue(token, t)
+        const text = tokenValue(token, t, words)
         const mark = markOf(token, text)
-        return { key: tokenKey(token), action: pick(token), text, ...(mark ? { mark } : {}) }
+        const detail = facet === 'goal' ? path(value) : undefined
+        return {
+          key: tokenKey(token),
+          action: pick(token),
+          text,
+          ...(mark ? { mark } : {}),
+          ...(detail ? { detail } : {}),
+        }
       }),
       ...choicesOf(facet, values, t),
     }
   })
-  return [conditions, ...groups].filter((group) => group.options.length)
+  return [conditions, closed, ...groups].filter((group) => group.options.length)
 }
 
 /**
@@ -307,20 +409,27 @@ export function stepGroups(
     return [{ ...values, back }, ...everywhere]
   }
   if (needle) return [...narrowGroups(groups, needle), ...everywhere]
-  const conditions = groups.filter((group) => group.id === 'conditions')
+  // «Closed in a period» is a condition whose row steps into its periods, as a facet's does.
+  const periods = groups.filter((group) => group.id === 'closed').map((group) => stepInto(group))
+  const conditions = groups
+    .filter((group) => group.id === 'conditions')
+    .map((group) => ({ ...group, options: [...group.options, ...periods] }))
   const steps: FilterGroup = {
     id: 'facets',
     name: t('workItem.filter.facets'),
     options: groups
-      .filter((group) => group.id !== 'conditions')
-      .map((group) => ({
-        key: `open:${group.id}`,
-        text: group.name,
-        action: { do: 'open', facet: group.id as ValueFacet },
-      })),
+      .filter((group) => group.id !== 'conditions' && group.id !== 'closed')
+      .map((group) => stepInto(group)),
   }
   return [...conditions, steps]
 }
+
+/** The row that steps into a group's values. */
+const stepInto = (group: FilterGroup): FilterOption => ({
+  key: `open:${group.id}`,
+  text: group.name,
+  action: { do: 'open', facet: group.id as ValueFacet },
+})
 
 /** Whether a value row's token is in the filter; a row that is no value is not chosen at all. */
 const picked = (filter: WorkFilter, option: FilterOption) =>

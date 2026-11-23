@@ -40,7 +40,17 @@ import sqlite3
 from collections import Counter
 from datetime import UTC, date, datetime, timedelta
 
-from . import item_tree, leases, model, participation, queue, read_model, states
+from . import (
+    item_projects,
+    item_tree,
+    leases,
+    model,
+    participation,
+    queue,
+    read_model,
+    standing,
+    states,
+)
 
 #: The scopes a chain is read in.
 SCOPES = ("chain", "tree")
@@ -93,21 +103,13 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
         " WHERE f.planning_space_id = ? OR t.planning_space_id = ? ORDER BY l.id",
         (space_id, space_id),
     ).fetchall()
-    closed_by_event: dict[str, str] = {}
-    for event in conn.execute(
-        "SELECT e.work_item_id, e.created_at FROM work_item_events e"
-        " JOIN work_items i ON i.work_item_id = e.work_item_id"
-        " WHERE i.planning_space_id = ? AND e.action = 'transitioned' ORDER BY e.id",
-        (space_id,),
-    ):
-        # Ordered by id, so the last one written wins even when two share a second.
-        closed_by_event[str(event["work_item_id"])] = str(event["created_at"])
-
     children: dict[str, list[str]] = {}
     for identity, row in rows.items():
         if row["parent_id"] is not None:
             children.setdefault(str(row["parent_id"]), []).append(identity)
     members = _members(root_id, scope, rows, children, links)
+    # A finished member closed when it last entered its finished state, as every read says.
+    closed_at = standing.entered(conn, [rows[m] for m in members if rows[m]["state_terminal"]])
     # How many members each scope holds, whichever was asked.
     totals = {
         other: len(members)
@@ -147,8 +149,8 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
                 if parent is not None and parent in rows
                 else None,
                 "created_at": row["created_at"],
-                "closed_at": closed_by_event.get(identity, row["updated_at"]) if terminal else None,
-                "workable": not queue.withheld(conn, row, tree),
+                "closed_at": closed_at.get(identity) if terminal else None,
+                "workable": not queue.withheld(conn, row, tree, settings=settings),
                 "queue_order": places.get(identity),
                 "_parent_id": parent,
             }
@@ -165,6 +167,7 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
         },
         "scope": scope,
         **_counts(found),
+        "by_project": _by_project(conn, [rows[m["work_item_id"]] for m in found]),
         "origins": _origins(found, root_id, rows, key),
         "series": series(found, utc_offset=0),
         "recent": recent(found, utc_now().date(), utc_offset=0),
@@ -247,6 +250,38 @@ def _counts(found: list[dict]) -> dict:
         "by_category": dict(sorted(categories.items())),
         "by_container_state": dict(sorted(derived.items())),
     }
+
+
+def _by_project(conn: sqlite3.Connection, members: list[sqlite3.Row]) -> list[dict]:
+    """How many member tasks change each project; the goals and stages among them are not counted.
+
+    A task counts once in the row of each project it names, so a task of two projects
+    stands in both and the rows add up to more than the tasks; a task that names none
+    stands in the row of no project, `project_id` null. Each project is named as an
+    item's projects are, with the registry's `display_name`. The most tasks first, then
+    by id, and the row of no project last whatever its count.
+    """
+
+    tasks = [row for row in members if row["kind"] != model.CONTAINER_KIND]
+    named = item_projects.of_items(conn, tasks)
+    counts: Counter[str | None] = Counter()
+    names: dict[str, str | None] = {}
+    for projects in named.values():
+        for project in projects:
+            counts[project["project_id"]] += 1
+            names[project["project_id"]] = project["display_name"]
+        if not projects:
+            counts[None] += 1
+    return [
+        {
+            "project_id": project,
+            "display_name": names.get(project) if project is not None else None,
+            "count": count,
+        }
+        for project, count in sorted(
+            counts.items(), key=lambda entry: (entry[0] is None, -entry[1], entry[0] or "")
+        )
+    ]
 
 
 def _origins(found: list[dict], root_id: str, rows: dict[str, sqlite3.Row], key: str) -> list[dict]:

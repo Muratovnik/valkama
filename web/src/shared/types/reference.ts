@@ -2,7 +2,8 @@
 
 import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
 
-export type RefKind = 'session' | 'commit' | 'memory' | 'url'
+/** What a ref may point at. A commit is no ref: an item carries its commits as a list of its own. */
+export type RefKind = 'session' | 'memory' | 'url'
 
 type SpaceRootStatus = 'mapped' | 'missing' | 'ambiguous' | 'malformed' | 'unavailable'
 
@@ -31,7 +32,8 @@ interface SpaceRootResolution {
 
 export interface ResolvedRef {
   detail: string
-  kind: RefKind
+  /** `commit` is the answer of `/api/commit`, read the same way. */
+  kind: RefKind | 'commit'
   resolved: boolean
   value: string
   at?: string

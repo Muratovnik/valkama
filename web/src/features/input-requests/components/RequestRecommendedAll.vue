@@ -36,7 +36,7 @@ const props = defineProps<{
   /** Fills one question as given and writes it through its record. */
   send: (answer: RecommendedAnswer) => Promise<Outcome>
 }>()
-const { t } = useI18n()
+const { t, te } = useI18n()
 const listId = useId()
 const open = ref(false)
 /** What Accept N sent, held while its writes are out. */
@@ -59,7 +59,7 @@ const resultText = computed(() => {
 const nameOf = ({ record }: RecommendedAnswer) =>
   `${record.entry.request.reference} · ${record.entry.request.title}`
 const chosen = ({ draft, record }: RecommendedAnswer) =>
-  unsentChoices(record.entry.request.fields, draft, t)
+  unsentChoices(record.entry.request, draft, t, te)
 
 function toggle() {
   if (sending.value) return

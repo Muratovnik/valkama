@@ -9,6 +9,9 @@
  * on an empty field removes, choosing a chosen one again takes it out, and with
  * `createLabel` the typed words can be added as a value the list did not have.
  *
+ * A host whose list is too long to hand over whole, such as a space's cards, fills `options`
+ * from what is typed: each search is told (`search`), as the list opens and as words change.
+ *
  * Reka's combobox owns the keys and the list's semantics; this owns the search, the
  * chips and Escape. Escape is caught on the field, because the dialog round a field
  * hears it on the document before the list would, and a dialog closing under an open
@@ -34,6 +37,7 @@ import {
   ComboboxRoot,
 } from 'reka-ui'
 
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import { choiceToken, freshToken, searchChoices, tokenValue } from '@/shared/ui/searchChoices.ts'
 import SearchComboboxChips from '@/shared/ui/SearchComboboxChips.vue'
@@ -79,7 +83,7 @@ const props = withDefaults(
     removeLabel: (label: string) => label,
   },
 )
-const emit = defineEmits<{ 'update:modelValue': [value: Value] }>()
+const emit = defineEmits<{ 'search': [query: string]; 'update:modelValue': [value: Value] }>()
 
 /**
  * Over the dialog, as every list portalled out of one is. Reka lifts its positioning
@@ -166,10 +170,12 @@ function chose(value: unknown) {
 function opened(value: boolean) {
   open.value = value
   search.value = ''
+  if (value) emit('search', '')
 }
 
 function typed(event: Event) {
   search.value = (event.target as HTMLInputElement).value
+  emit('search', search.value)
 }
 
 /**
@@ -200,7 +206,7 @@ function keydown(event: KeyboardEvent) {
 
 function remove(index: number) {
   emit('update:modelValue', chosen.value.filter((_, place) => place !== index) as Value)
-  field.value?.$el.focus()
+  placeFocus(field.value?.$el)
 }
 
 /**
@@ -211,7 +217,7 @@ function remove(index: number) {
  */
 function show() {
   const input = field.value?.$el
-  input?.focus()
+  placeFocus(input)
   input?.click()
 }
 
@@ -223,7 +229,7 @@ function pressBox(event: MouseEvent) {
   const input = field.value?.$el
   if (props.disabled || !input || event.target === input) return
   if ((event.target as Element).closest('button')) return
-  input.focus()
+  placeFocus(input)
   input.click()
 }
 

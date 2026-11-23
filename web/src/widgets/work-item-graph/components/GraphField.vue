@@ -119,6 +119,10 @@ const PRESS_SLOP = 4
   /* The field's floor, written over from `GRAPH_FIELD_FLOOR` by the template. */
   --graph-field-floor: 0px;
 
+  /* Whether the workspace is phone-wide, read by the camera (`graphZoomFloor.ts`): there it
+     goes no further out than the cards read. */
+  --graph-phone-wide: 0;
+
   /* As tall as the row the canvas leaves it between its strips (`GraphView`), and never
      shorter than its floor (`GRAPH_FIELD_FLOOR`): the row grows to the floor and the section
      scrolls, so the floor cannot run the field over the camera's strip, as a 360px floor the
@@ -219,6 +223,13 @@ const PRESS_SLOP = 4
 
 :deep(.vue-flow__edge.graph-edge.recessed) {
   opacity: 0.16;
+}
+
+/* The width at which the bar becomes one row and the controls give up their air. */
+@container workspace (width <= 586px) {
+  .graph-flow {
+    --graph-phone-wide: 1;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

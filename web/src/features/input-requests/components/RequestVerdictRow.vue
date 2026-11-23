@@ -152,7 +152,7 @@ async function pressComment() {
     open.value = true
     await nextTick()
     if (noteOpen.value) {
-      noteEditor.value?.focus()
+      noteEditor.value?.takeFocus()
       return
     }
   }
@@ -160,10 +160,10 @@ async function pressComment() {
 }
 const hangs = computed(() => open.value && (Boolean(slots.under) || noteOpen.value))
 /** Moves focus to what is to be fixed, the segments. */
-function focus() {
+function takeFocus() {
   moveFocus(root.value?.querySelector<HTMLElement>('[role="radiogroup"] [tabindex="0"]'))
 }
-defineExpose({ focus })
+defineExpose({ takeFocus })
 </script>
 
 <template>

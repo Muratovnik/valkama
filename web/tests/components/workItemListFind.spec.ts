@@ -22,6 +22,8 @@ import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import { claimOverlayOwnership, releaseOverlayOwnership } from '@/shared/ui/overlayStack.ts'
 
 import { boardItem } from '../fixtures/board.ts'
+import { keptOrder } from '../support/listOrder.ts'
+import { measuredBoxes } from '../support/measuredBoxes.ts'
 import { i18n } from '../support/workItemBoardHarness.ts'
 
 vi.mock('@/widgets/work-item-views/utils/listRowWords.ts', async (original) => {
@@ -65,11 +67,14 @@ const items = titles.map((title, index) =>
 async function list(locale: 'en' | 'ru' = 'en', shown: WorkItemBrief[] = items) {
   const plugin = i18n()
   plugin.global.locale.value = locale
-  const wrapper = mount(WorkItemList, {
-    attachTo: document.body,
-    global: { plugins: [plugin] },
-    props: { items: shown, links: [] },
-  })
+  const host = keptOrder()
+  const wrapper = host.hold(
+    mount(WorkItemList, {
+      attachTo: document.body,
+      global: { plugins: [plugin] },
+      props: { items: shown, links: [], ...host.props },
+    }),
+  )
   await flushPromises()
   return wrapper
 }
@@ -104,34 +109,6 @@ async function open(wrapper: List, term: string) {
   await flushPromises()
   if (!field()) throw new Error('Ctrl+F opened no find bar')
   await typeIn(term)
-}
-
-/** Boxes measured as a hand sets them: the list is as wide as `resizeList` last said. */
-function measuredBoxes() {
-  const observers: { report: ResizeObserverCallback; targets: Element[] }[] = []
-  vi.stubGlobal(
-    'ResizeObserver',
-    class {
-      readonly watch: { report: ResizeObserverCallback; targets: Element[] }
-      constructor(report: ResizeObserverCallback) {
-        this.watch = { report, targets: [] }
-        observers.push(this.watch)
-      }
-      observe(target: Element) {
-        this.watch.targets.push(target)
-      }
-      unobserve() {}
-      disconnect() {}
-    },
-  )
-  return async function resizeList(width: number) {
-    const list = document.querySelector('.work-item-list')
-    if (!list) throw new Error('no list to resize')
-    const entry = { contentRect: { width }, target: list } as unknown as ResizeObserverEntry
-    for (const { report, targets } of observers)
-      if (targets.includes(list)) report([entry], {} as ResizeObserver)
-    await flushPromises()
-  }
 }
 
 async function press(init: KeyboardEventInit) {
@@ -265,7 +242,7 @@ describe('the words of the rows', () => {
     await resizeList(1000)
     const read = reads.mock.calls.length
     // Still the same columns, and still wide enough for the labels.
-    for (const width of [1010, 1100, 1240]) await resizeList(width)
+    for (const width of [1010, 1050, 1099]) await resizeList(width)
     expect(reads).toHaveBeenCalledTimes(read)
     // Narrower than the labels need: the rows read again.
     await resizeList(880)
@@ -298,6 +275,22 @@ describe('a term in the bar', () => {
     expect(marks).toHaveLength(items.length)
     // Each mark is the state's word as its row writes it, whatever its case.
     for (const mark of marks) expect(mark.text.toLowerCase()).toBe('backlog')
+  })
+
+  it('finds a row by its goal and stage, in its column and wherever it folds', async () => {
+    const resizeList = measuredBoxes()
+    const goal = boardItem(5, 'backlog', { kind: 'goal', title: 'Orbit' })
+    const task = boardItem(6, 'backlog', { title: 'Plan', parent_id: goal.work_item_id })
+    const wrapper = await list('en', [...items, goal, task])
+    for (const width of [1280, 1000, 700]) {
+      await resizeList(width)
+      await open(wrapper, 'orbit')
+      // The goal's own title and the path its task's row prints.
+      expect(count(), `${width}px`).toBe('1 of 2')
+      const marks = [...current(), ...others()].map((mark) => mark.text)
+      expect(marks, `${width}px`).toEqual(['Orbit', 'Orbit'])
+      await press({ key: 'Escape' })
+    }
   })
 
   it('says so when nothing matches, and the steps go nowhere', async () => {

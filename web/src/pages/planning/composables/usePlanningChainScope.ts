@@ -1,6 +1,7 @@
 import { computed, onScopeDispose, shallowRef, watch } from 'vue'
 
 import type { PlanningViewMode } from '@/pages/planning/PlanningWorkspace.vue'
+import { sortOf, withSort } from '@/pages/planning/utils/viewSortRoute.ts'
 
 import { fetchWorkItemChain } from '@/shared/api/planningChainApi.ts'
 import type { ChainScope, WorkItemChain } from '@/shared/api/planningChainApi.ts'
@@ -72,13 +73,28 @@ export function viewOf(state: RouteState | undefined): PlanningViewMode {
 
 /**
  * How a view is grouped: by goal (`goal`) — the board into a lane per goal, the
- * list into a tree — or not at all.
+ * list into a tree — by the nearest goal or stage (`stage`, the board's alone), by
+ * project (`project`), or not at all.
  */
-export type ViewGrouping = 'goal' | 'none'
+export type ViewGrouping = 'goal' | 'none' | 'project' | 'stage'
+
+/**
+ * The groupings each view offers, in the order the menu lists them. The list has no
+ * grouping by stage, since its tree already shows each card's nearest parent; the
+ * graph none, since its frames show the structure.
+ */
+export const VIEW_GROUPINGS: Readonly<Record<PlanningViewMode, readonly ViewGrouping[]>> = {
+  kanban: ['none', 'goal', 'stage', 'project'],
+  list: ['none', 'goal', 'project'],
+  graph: [],
+}
+
+const GROUPINGS: readonly string[] = VIEW_GROUPINGS.kanban
 
 /** The grouping as the route state carries it; a value this build does not know is none. */
 export function groupingOf(state: RouteState | undefined): ViewGrouping {
-  return state?.group === 'goal' ? 'goal' : 'none'
+  const value = state?.group
+  return typeof value === 'string' && GROUPINGS.includes(value) ? (value as ViewGrouping) : 'none'
 }
 
 /**
@@ -88,10 +104,13 @@ export function groupingOf(state: RouteState | undefined): ViewGrouping {
  */
 export function lookAcrossScopes(state: RouteState | undefined): RouteState {
   const view = viewOf(state)
-  return {
-    ...(view === 'kanban' ? {} : { view }),
-    ...withGrouping(undefined, groupingOf(state)),
-  }
+  return withSort(
+    {
+      ...(view === 'kanban' ? {} : { view }),
+      ...withGrouping(undefined, groupingOf(state)),
+    },
+    sortOf(state),
+  )
 }
 
 /** The same state grouped so; the default leaves the key out. */

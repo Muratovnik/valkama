@@ -176,3 +176,49 @@ test('readiness has one label in each language, wherever it is printed', () => {
     )
   }
 })
+
+/** Every text of a catalogue by its whole key. */
+function texts(value: unknown, prefix = ''): [string, string][] {
+  return value && typeof value === 'object'
+    ? Object.entries(value as Record<string, unknown>).flatMap(([key, child]) =>
+        texts(child, prefix ? `${prefix}.${key}` : key),
+      )
+    : [[prefix, String(value)]]
+}
+
+test('a point of acceptance is a condition in both languages, never a step of a checklist', () => {
+  // The owner's word for it is «Условия», «Следующее условие»; the card and the list said
+  // «Чек-лист», «Шаги», «Следующий шаг» and «Все шаги». A step of the plan that opens a
+  // session is another thing, and so is an app «out of step» with the server; a placeholder
+  // is a name in the code, not a word on the screen.
+  const elsewhere = new Set([
+    'open.refused.invalid-step',
+    'health.finding.desktop-app-differs.title',
+  ])
+  const retired = { ru: /чек-лист|шаг/iu, en: /checklist|\bsteps?\b/iu }
+  for (const locale of ['en', 'ru'] as const) {
+    const said = texts(messages[locale])
+      .filter(([key]) => !elsewhere.has(key))
+      .filter(([, text]) => retired[locale].test(text.replaceAll(/\{\w+\}/gu, '')))
+    assert.deepEqual(said, [], locale)
+  }
+  assert.equal(messages.ru.workItem.checklist, 'Условия')
+  assert.equal(messages.ru.workItem.list.checklist, 'Условия')
+  assert.equal(messages.ru.workItem.nextStep.label, 'Следующее условие')
+  assert.equal(messages.en.workItem.checklist, 'Conditions')
+})
+
+test('the filter calls nothing of its own a condition, the word for a point of acceptance', () => {
+  // Its group of ready-made filters was «Условия», "Conditions", beside a card's «Условия».
+  const word = { ru: /услови/iu, en: /condition/iu }
+  for (const locale of ['en', 'ru'] as const) {
+    const said = texts(messages[locale].workItem.filter)
+    assert.ok(said.length > 20, locale)
+    assert.deepEqual(
+      said.filter(([, text]) => word[locale].test(text)),
+      [],
+      locale,
+    )
+  }
+  assert.equal(messages.ru.workItem.filter.conditions, 'Фильтры')
+})

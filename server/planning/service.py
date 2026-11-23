@@ -28,6 +28,7 @@ from . import (
     baselines,
     calls,
     closing,
+    composed,
     decisions,
     deferral,
     images,
@@ -70,6 +71,9 @@ MAX_LIST_PAGE = 1000
 
 #: The same bound for one page of a search.
 MAX_SEARCH_PAGE = 200
+
+#: The longest query a search reads.
+MAX_QUERY = 200
 
 # -- reading -----------------------------------------------------------------
 
@@ -491,7 +495,7 @@ def search_work_items(
     an earlier build wrote -- every query is read as a phrase.
     """
 
-    text = model.text_field(query, "query", limit=200)
+    text = model.text_field(query, "query", limit=MAX_QUERY)
     space_id = (
         str(read_model.space_row(conn, space)["planning_space_id"]) if space is not None else None
     )
@@ -831,7 +835,7 @@ def create_work_item(
         started=True if starts else None,
         description=model.multiline_field(description, "work_item.description"),
         labels=tagged,
-        source=model.text_field(source, "work_item.source", limit=512, required=False),
+        source=model.text_field(source, "work_item.source", limit=model.MAX_SOURCE, required=False),
     )
     item_projects.replace(conn, item_id, changes)
     opened = target["category"] == model.SERVICE_CATEGORY
@@ -961,7 +965,7 @@ class Decided:
     recorded the move, its `accepted` or its `transitioned`."""
 
     point: str
-    what: str
+    what: composed.Text
 
 
 def _accepted(
@@ -997,19 +1001,25 @@ def _accepted(
     return accepted
 
 
-def _accepted_what(conn: sqlite3.Connection, identity: str, *, ruled: str | None = None) -> str:
+def _accepted_what(
+    conn: sqlite3.Connection, identity: str, *, ruled: str | None = None
+) -> composed.Text:
     """What the summary of decisions says of an acceptance: `accepted MAIN-12`, with the
     goal or stage it stands under (`under MAIN-3`) or the label a rule took it by
     (`by the label docs`)."""
 
     row = read_model.item_by_id(conn, identity)
-    said = f"accepted {read_model.reference(conn, row)}"
+    reference = read_model.reference(conn, row)
+    said = f"accepted {reference}"
     if ruled is not None:
-        return f"{said} by the label {ruled}"
+        return composed.decision(
+            "accepted", f"{said} by the label {ruled}", reference=reference, under=None, label=ruled
+        )
+    under = None
     if row["parent_id"] is not None:
-        parent = read_model.item_by_id(conn, str(row["parent_id"]))
-        said += f" under {read_model.reference(conn, parent)}"
-    return said
+        under = read_model.reference(conn, read_model.item_by_id(conn, str(row["parent_id"])))
+        said += f" under {under}"
+    return composed.decision("accepted", said, reference=reference, under=under, label=None)
 
 
 def _last_event(conn: sqlite3.Connection, identity: str, action: str) -> int:
@@ -1048,41 +1058,54 @@ def _ask_about_task(
         proposal = pending.Proposal(
             "transition",
             {"parent": goal_id, **move.params()},
-            f"accepted {reference} under {goal}",
+            _under_what("accepted", reference, goal),
             seen={"parent": goal_id},
             reason=move.reason or None,
         )
-        prompt = (
+        prompt = composed.question(
+            "task_moved_to",
             f"An agent moves the task {reference}, lying in {goal}, to {move.state}:"
-            f" {row['title']}. Take it on and move it there, put it off, move it out of the"
-            " goal, or drop it."
+            f" {model.sentence(row['title'])} Take it on and move it there, put it off, move it"
+            " out of the goal, or drop it.",
+            reference=reference,
+            goal=goal,
+            state=move.state,
+            title=str(row["title"]),
         )
     elif moved_from is None:
         # It lies under the goal: moved away before the answer, it is no longer asked about.
         proposal = pending.Proposal(
             "accept",
             {"parent": goal_id},
-            f"accepted {reference} under {goal}",
+            _under_what("accepted", reference, goal),
             seen={"parent": goal_id},
         )
-        prompt = (
-            f"An agent files the task {reference} in {goal}: {row['title']}. Take it on, put"
-            " it off, move it out of the goal, or drop it."
+        prompt = composed.question(
+            "task_filed",
+            f"An agent files the task {reference} in {goal}: {model.sentence(row['title'])}"
+            " Take it on, put it off, move it out of the goal, or drop it.",
+            reference=reference,
+            goal=goal,
+            title=str(row["title"]),
         )
     else:
         done = "moved" if moved_from["acceptance"] is not None else "accepted"
         proposal = pending.Proposal(
             "parent",
             {"parent": goal_id},
-            f"{done} {reference} under {goal}",
+            _under_what(done, reference, goal),
             seen={
                 "parent": moved_from["parent_id"],
                 "accepted": moved_from["acceptance"] is not None,
             },
         )
-        prompt = (
-            f"An agent moves the task {reference} into {goal}: {row['title']}. Take it on,"
-            " put it off, leave it where it was, or drop it."
+        prompt = composed.question(
+            "task_moved_in",
+            f"An agent moves the task {reference} into {goal}: {model.sentence(row['title'])}"
+            " Take it on, put it off, leave it where it was, or drop it.",
+            reference=reference,
+            goal=goal,
+            title=str(row["title"]),
         )
     return pending.ask(
         conn,
@@ -1106,19 +1129,34 @@ def _ask_about_goal(
     row = read_model.item_by_id(conn, identity)
     reference = read_model.reference(conn, row)
     if by_agent:
-        prompt = f"An agent proposes the goal {reference}: {row['title']}."
+        said = f"An agent proposes the goal {reference}: {model.sentence(row['title'])}"
     else:
-        prompt = f"The goal {reference} came back from being put off: {row['title']}."
+        said = f"The goal {reference} came back from being put off: {model.sentence(row['title'])}"
     return pending.ask(
         conn,
         identity,
         "proposed_goal",
         pending.Proposal("accept", {}, _accepted_what(conn, identity)),
         purpose="goal",
-        prompt=prompt + " Take it on, put it off, or drop it.",
+        prompt=composed.question(
+            "goal_proposed" if by_agent else "goal_came_back",
+            said + " Take it on, put it off, or drop it.",
+            reference=reference,
+            title=str(row["title"]),
+        ),
         fields=request_model.fields(request_model.goal_fields(recommend=by_agent)),
         author=author,
     )
+
+
+def _under_what(done: str, reference: str, goal: str) -> composed.Text:
+    """What the summary of decisions would say of a task taken into a goal: `accepted
+    MAIN-12 under MAIN-3`, or `moved` for one already accepted elsewhere."""
+
+    said = f"{done} {reference} under {goal}"
+    if done == "moved":
+        return composed.decision("moved", said, reference=reference, under=goal)
+    return composed.decision("accepted", said, reference=reference, under=goal, label=None)
 
 
 def _insert_item(
@@ -1263,7 +1301,9 @@ def update_work_item(
         parameters.append(model.multiline_field(description, "work_item.description"))
     if source is not None:
         updates.append("source = ?")
-        parameters.append(model.text_field(source, "work_item.source", limit=512, required=False))
+        parameters.append(
+            model.text_field(source, "work_item.source", limit=model.MAX_SOURCE, required=False)
+        )
     if priority is not None:
         updates.append("priority = ?")
         parameters.append(model.priority(priority))
@@ -1731,7 +1771,12 @@ def file_part(conn: sqlite3.Connection, row: sqlite3.Row, part: Part, author: st
     )
     item_projects.replace(conn, identity, part.projects)
     if part.deferred is not None:
-        deferral.restore(conn, identity, part.deferred)
+        # A part has no comments yet, so its count starts from none: a baseline kept
+        # from the task's comments could outlast them, which a delete of the task takes.
+        kept = part.deferred
+        if kept.until_comments is not None:
+            kept = dataclasses.replace(kept, comments_after=0)
+        deferral.restore(conn, identity, kept)
     _log(conn, identity, "created", str(part.state["key"]), author)
     if part.basis is not None:
         _log(conn, identity, "accepted", part.basis, author)
@@ -2141,7 +2186,7 @@ def _transition(
     ruled: str | None = None,
     following: object = None,
     gated: bool = False,
-    agreed: str | None = None,
+    agreed: composed.Text | str | None = None,
     decided: Decided | None = None,
 ) -> dict:
     """`transition_work_item`, sparing the refusals named in `spared`; `ruled` is the
@@ -2346,10 +2391,12 @@ def defer_work_item(
     gated: bool = False,
     decided: Decided | None = None,
 ) -> dict:
-    """Put an item off until a day, a time or another item's close (`deferral`).
+    """Put an item off until a day, a time, a count of new comments, a count or a day or
+    time whichever comes first, or another item's close (`deferral`).
 
     It moves to the first deferred state its workflow reaches, and the move records
-    `deferred: until 2026-12-01: <reason>`; like every move there it takes the basis
+    `deferred: until 2026-12-01: <reason>` (`until 3 comments`, `until 2026-12-01 or 3
+    comments`); like every move there it takes the basis
     away and ends the claims. The condition is written beside it in the same write,
     under the call that put it off. An item put off already takes the new condition,
     and the question whether to take it up again ends with the old one. A claim of
@@ -2373,7 +2420,8 @@ def defer_work_item(
             f"[{deferral.TAG}] {named} is closed: reopen it before putting it off"
         )
     why = _put_off_reason(reason)
-    until_at, until_item, said = _condition(conn, row, until)
+    condition = _condition(conn, row, until)
+    said = condition.said
     target: sqlite3.Row | None = (
         current if current["category"] == "deferred" else states.reachable(conn, row, "deferred")
     )
@@ -2392,7 +2440,7 @@ def defer_work_item(
         transitions.refuse([found for found in refusals if found[0] not in _DEFER_SPARES], False)
         answer = read_model.present(conn, row, full=True)
         answer["warnings"] = warnings
-        answer["waits_for_owner"] = _ask_about_put_off(conn, row, said, why, author).answer()
+        answer["waits_for_owner"] = _ask_about_put_off(conn, row, condition, why, author).answer()
         return answer
     answer = _transition(
         conn,
@@ -2408,14 +2456,15 @@ def defer_work_item(
             conn,
             _last_event(conn, identity, "transitioned"),
             "goal_defer",
-            _put_off_what(named, said, why),
+            _put_off_what(named, condition, why),
         )
     questions.end(conn, identity, "withdrawn", author, purpose=deferral.RETURN)
     deferral.put(
         conn,
         identity,
-        until_at=until_at,
-        until_item_id=until_item,
+        until_at=condition.until_at,
+        until_item_id=condition.until_item,
+        until_comments=condition.comments,
         reason=why,
         call_id=calls.call_id(conn, identity),
         since=deferral.stamp(leases.utc_now()),
@@ -2434,8 +2483,8 @@ def defer_again(conn: sqlite3.Connection, identity: str, until: object) -> None:
     """Put work that came back off again until `until`, as the owner's answer `later` says.
 
     The item stays where it stands; its condition is the new one, set by the call of
-    the answer, not yet come, with the reason and the start it was put off with. The
-    answer's own event is the history of it.
+    the answer, not yet come, with the reason and the start it was put off with. A count
+    of new comments starts with the answer. The answer's own event is the history of it.
     """
 
     row = _row_for_write(conn, identity, None)
@@ -2444,12 +2493,13 @@ def defer_again(conn: sqlite3.Connection, identity: str, until: object) -> None:
         raise model.PlanningError(
             f"[{deferral.TAG}] {read_model.reference(conn, row)} is not put off"
         )
-    until_at, until_item, _said = _condition(conn, row, until)
+    condition = _condition(conn, row, until)
     deferral.put(
         conn,
         identity,
-        until_at=until_at,
-        until_item_id=until_item,
+        until_at=condition.until_at,
+        until_item_id=condition.until_item,
+        until_comments=condition.comments,
         reason=kept.reason,
         call_id=calls.call_id(conn, identity),
         since=kept.since,
@@ -2461,9 +2511,10 @@ def return_due(
 ) -> int:
     """Bring back the put-off work whose condition came and nothing acted on; how much.
 
-    A day or time that passed, or an item that closed by a path that did not bring
-    its waiting back. Read with `leases.utc_now`, at most `limit` items, of one
-    space's items when `space_id` names it. The sweep's `returns` step and the
+    A day or time that passed, a count of comments reached by a write that did not bring
+    it back, or an item that closed by a path that did not bring its waiting back. Read
+    with `leases.utc_now`, at most `limit` items, of one space's items when `space_id`
+    names it. The sweep's `returns` step and the
     take-next queue call it; a read never does.
     """
 
@@ -2473,6 +2524,26 @@ def return_due(
     for due in found:
         return_deferred(conn, due)
     return len(found)
+
+
+def _return_counted(conn: sqlite3.Connection, identity: str) -> None:
+    """Bring the item back when a comment just written on it brought its condition: the
+    count it waits for, or a moment that passed before it, which came first.
+
+    Inside `one_write` the item waits for that write's end, as `_settle` does: a later
+    step of the same write may take it out of deferred or put it off anew, and then
+    nothing comes back and nobody is asked."""
+
+    counted = _COUNTED.get()
+    if counted is not None:
+        counted.setdefault(identity, None)
+        return
+    _return_counted_now(conn, identity)
+
+
+def _return_counted_now(conn: sqlite3.Connection, identity: str) -> None:
+    for due in deferral.due(conn, deferral.stamp(leases.utc_now()), 1, work_item_id=identity):
+        return_deferred(conn, due)
 
 
 def _return_waiting(conn: sqlite3.Connection, items: list[str], because: str) -> list[str]:
@@ -2492,7 +2563,7 @@ def return_deferred(conn: sqlite3.Connection, due: deferral.Due) -> str | None:
     The return is Valkama's own call (`deferral.RETURN_TOOL`), so the history names
     the server and why. Under no accepted chain the item moves to the first triage
     state it reaches, with `transitioned` (`triage: returned, date 2026-12-01`) and
-    `returned` (`date 2026-12-01`, `completed MAIN-12`) side by side, and its
+    `returned` (`date 2026-12-01`, `comments 3`, `completed MAIN-12`) side by side, and its
     condition goes with the move; a goal, where the owner decides on goals an agent
     proposes, waits there on the owner's question about it, as such a goal does.
     Under goals and stages all accepted and open, or
@@ -2521,21 +2592,33 @@ def return_deferred(conn: sqlite3.Connection, due: deferral.Due) -> str | None:
                 gone=due.because == deferral.DELETED,
             ):
                 return None
-            condition = deferral.said(str(due.until_at)) if item is None else f"{item} closed"
+            moment = deferral.said(str(due.until_at)) if due.because == deferral.DATE else None
+            counted = due.until_comments if due.because == deferral.COMMENTS else None
+            if moment is not None:
+                condition = moment
+            elif counted is not None:
+                condition = f"{counted} new comment{'' if counted == 1 else 's'}"
+            else:
+                condition = f"{item} closed"
             questions.ask(
                 conn,
                 due.work_item_id,
                 kind="question",
-                prompt=(
+                prompt=composed.question(
+                    "put_off_came",
                     f"{reference} was put off until {condition}; that has come. Do it, put it"
-                    " off again, or drop it."
+                    " off again, or drop it.",
+                    reference=reference,
+                    until=moment,
+                    item=None if moment is not None or counted is not None else item,
+                    comments=counted,
                 ),
                 fields=request_model.fields(list(request_model.RETURN_FIELDS)),
                 author=deferral.AUTHOR,
                 purpose=deferral.RETURN,
             )
             return reference
-        said = deferral.because_text(due.because, due.until_at, item)
+        said = deferral.because_text(due, item)
         _transition(
             conn,
             due.work_item_id,
@@ -2586,20 +2669,32 @@ def _goal_defer(conn: sqlite3.Connection, row: sqlite3.Row) -> str | None:
     return participation.load(conn).mode(str(row["planning_space_id"]), "goal_defer")
 
 
-def _put_off_what(reference: str, until: str, why: str) -> str:
+def _put_off_what(reference: str, condition: _Condition, why: str) -> composed.Text:
     """What the summary of decisions says of putting a goal or stage off."""
 
-    return f"put off {reference} until {until}: {why}"
+    return composed.decision(
+        "put_off",
+        f"put off {reference} until {condition.said}: {why}",
+        reference=reference,
+        until=condition.named,
+        comments=condition.comments,
+        reason=why,
+    )
 
 
 def _ask_about_put_off(
-    conn: sqlite3.Connection, row: sqlite3.Row, until: str, why: str, author: str | None
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    condition: _Condition,
+    why: str,
+    author: str | None,
 ) -> pending.Waiting:
     """Ask the owner whether to put off an accepted goal or stage an agent puts off until
-    `until`, which waits on the answer (`requests.carry_out`): keep it, put it off, the
+    `condition`, which waits on the answer (`requests.carry_out`): keep it, put it off, the
     agent's condition standing when the answer names none, or drop it."""
 
     reference = read_model.reference(conn, row)
+    until = condition.said
     return pending.ask(
         conn,
         str(row["work_item_id"]),
@@ -2607,45 +2702,70 @@ def _ask_about_put_off(
         pending.Proposal(
             "defer",
             {"until": until, "reason": why},
-            _put_off_what(reference, until, why),
+            _put_off_what(reference, condition, why),
             reason=why,
             proposed={"until": until},
         ),
         purpose="goal",
-        prompt=(
-            f"An agent puts off {reference}, an accepted {_container_word(row)}: {row['title']}."
-            f" Until {until}. Its reason: {why}. Keep it, put it off, or drop it."
+        prompt=composed.question(
+            "put_off_asked",
+            f"An agent puts off {reference}, an accepted {_container_word(row)}:"
+            f" {model.sentence(row['title'])} Until {until}. Its reason: {model.sentence(why)}"
+            " Keep it, put it off, or drop it.",
+            reference=reference,
+            kind=_container_word(row),
+            title=str(row["title"]),
+            until=condition.named,
+            comments=condition.comments,
+            reason=why,
         ),
         fields=request_model.fields(request_model.put_off_fields(until)),
         author=author,
     )
 
 
-def _condition(
-    conn: sqlite3.Connection, row: sqlite3.Row, until: object
-) -> tuple[str | None, str | None, str]:
-    """The condition `until` names for the item: the moment or the item it waits on,
-    and how a person reads it."""
+@dataclasses.dataclass(frozen=True)
+class _Condition:
+    """The condition `until` named for an item: the moment, the count of new comments or
+    both, or the item it waits on alone; how a person reads it (`said`), and the moment or
+    reference a composed text names beside the count (`named`, null for a count alone)."""
+
+    until_at: str | None
+    until_item: str | None
+    comments: int | None
+    said: str
+    named: str | None
+
+
+def _condition(conn: sqlite3.Connection, row: sqlite3.Row, until: object) -> _Condition:
+    """The condition `until` names for the item, refused with what it may name."""
 
     if until is None or (isinstance(until, str) and not until.strip()):
         raise model.PlanningError(
-            f"[{deferral.TAG}] defer needs until: a day YYYY-MM-DD, a time with its zone, or"
-            " the reference of the open item it waits on"
+            f"[{deferral.TAG}] defer needs until: a day YYYY-MM-DD, a time with its zone, a"
+            " count of new comments such as 3 comments, a count or a day whichever comes"
+            " first such as 2026-12-01 or 3 comments, or the reference of the open item it"
+            " waits on"
         )
-    text = model.text_field(until, "until", limit=64)
-    at = deferral.moment(text, leases.utc_now())
-    if at is not None:
-        return at, None, deferral.said(at)
+    text = model.text_field(until, "until", limit=deferral.UNTIL_LIMIT)
+    found = deferral.until(text, leases.utc_now())
+    if found is not None:
+        moment = None if found.until_at is None else deferral.said(found.until_at)
+        return _Condition(found.until_at, None, found.comments, found.said(), moment)
     try:
         waited = read_model.item_row(conn, text)
     except model.PlanningError as error:
         raise model.PlanningError(
-            f"[{deferral.TAG}] until {text} is no day, time or work item: send a day"
-            " YYYY-MM-DD, a time with its zone such as 2026-12-01T09:00:00Z, or an item's"
-            " reference"
+            f"[{deferral.TAG}] until {text} is no day, time, count of comments or work item:"
+            f" send {deferral.FORMS}"
         ) from error
     deferral.check_item(conn, row, waited)
-    return None, str(waited["work_item_id"]), read_model.reference(conn, waited)
+    reference = read_model.reference(conn, waited)
+    return _Condition(None, str(waited["work_item_id"]), None, reference, reference)
+
+
+#: The longest `cancels`, the list_token a refusal of a cancel names.
+CANCELS_LIMIT = 64
 
 
 def _cancel_listing(
@@ -2679,7 +2799,7 @@ def _cancel_listing(
                 " leave it out"
             )
         return None
-    sent = None if cancels is None else model.text_field(cancels, "cancels", limit=64)
+    sent = None if cancels is None else model.text_field(cancels, "cancels", limit=CANCELS_LIMIT)
     listing = closing.cancel_list(conn, row)
     if listing is None:
         return None
@@ -2736,6 +2856,10 @@ def filed_by_caller(conn: sqlite3.Connection, identity: str) -> bool:
     )
 
 
+#: The longest `following`, the request_id of the answer a cancel follows.
+FOLLOWING_LIMIT = 64
+
+
 def _following(
     conn: sqlite3.Connection, row: sqlite3.Row, following: object, cancel: bool
 ) -> str | None:
@@ -2754,7 +2878,7 @@ def _following(
             "[participation] following names the owner's answer a cancel follows from:"
             " leave it out of any other move"
         )
-    named = model.text_field(following, "following", limit=64)
+    named = model.text_field(following, "following", limit=FOLLOWING_LIMIT)
     chain = [
         identity for identity, _kind, _category in item_tree.above(conn, str(row["work_item_id"]))
     ]
@@ -2811,12 +2935,15 @@ def _cancel_point(
     return _CancelGate("cancel_outside", mode)
 
 
-def _cancel_what(conn: sqlite3.Connection, row: sqlite3.Row, followed: str | None) -> str:
+def _cancel_what(conn: sqlite3.Connection, row: sqlite3.Row, followed: str | None) -> composed.Text:
     """What the summary of decisions says of a cancel: `cancel MAIN-12`, and the
     question it follows (`following question <id>`)."""
 
-    said = f"cancel {read_model.reference(conn, row)}"
-    return said if followed is None else f"{said} following question {followed}"
+    reference = read_model.reference(conn, row)
+    said = f"cancel {reference}"
+    if followed is not None:
+        said += f" following question {followed}"
+    return composed.decision("cancelled", said, reference=reference, question=followed)
 
 
 #: What the owner's question says of the item an agent cancels, at each point.
@@ -2825,16 +2952,45 @@ _CANCEL_ASKED = {
     "cancel_shared": "which other sessions work on",
 }
 #: What the question then asks the owner to do.
-CANCEL_OR_KEEP = " Cancel it, or keep it."
+_CANCEL_OR_KEEP = " Cancel it, or keep it."
 
 
-def cancel_asked(conn: sqlite3.Connection, row: sqlite3.Row, point: str, reason: str | None) -> str:
-    """The owner's question about an agent's cancel at `point`, up to what it asks them to
-    do: the item, why it is the owner's to decide, and the agent's reason."""
+def cancel_asked(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    point: str,
+    reason: str | None,
+    *,
+    sessions_asked: bool = False,
+    objections: Sequence[tuple[str, str]] = (),
+    unanswered: Sequence[str] = (),
+) -> composed.Text:
+    """The owner's question about an agent's cancel at `point`: the item, why it is the
+    owner's to decide, and the agent's reason; that the sessions at work are asked as well
+    (`sessions_asked`), or, when their round passed it to the owner, what they said: each
+    session that objected with its reason (`objections`), or those that did not answer
+    within a day (`unanswered`); and what it asks the owner to do."""
 
-    return (
-        f"An agent cancels {read_model.reference(conn, row)}, {_CANCEL_ASKED[point]}:"
-        f" {row['title']}.{_reason_said(reason)}"
+    reference = read_model.reference(conn, row)
+    said = (
+        f"An agent cancels {reference}, {_CANCEL_ASKED[point]}:"
+        f" {model.sentence(row['title'])}{_reason_said(reason)}"
+    )
+    if sessions_asked:
+        said += " The sessions are asked as well, and their answers show here."
+    said += "".join(f" {label} objects: {model.sentence(why)}" for label, why in objections)
+    if unanswered:
+        said += f" Not every session answered within a day: {', '.join(unanswered)} did not."
+    return composed.question(
+        "cancel_asked",
+        said + _CANCEL_OR_KEEP,
+        reference=reference,
+        point=point,
+        title=str(row["title"]),
+        reason=reason or None,
+        sessions_asked=sessions_asked,
+        objections=[{"session": label, "reason": why} for label, why in objections],
+        unanswered=list(unanswered),
     )
 
 
@@ -2871,15 +3027,13 @@ def _ask_about_cancel(
         proposed={"state": "cancelled"},
     )
     action, fresh = pending.hold(conn, identity, gate.point, proposal)
-    asked = cancel_asked(conn, row, gate.point, reason)
     question = pending.owner_question(conn, action)
     if fresh and gate.mode == participation.HUMAN:
-        shown = " The sessions are asked as well, and their answers show here." if gate.busy else ""
         question = pending.ask_owner(
             conn,
             action,
             purpose="cancel",
-            prompt=asked + shown + CANCEL_OR_KEEP,
+            prompt=cancel_asked(conn, row, gate.point, reason, sessions_asked=bool(gate.busy)),
             fields=request_model.fields(request_model.cancel_fields()),
             author=author,
         )
@@ -2888,16 +3042,23 @@ def _ask_about_cancel(
             conn,
             action,
             list(gate.busy),
-            prompt=f"Another session's agent cancels {read_model.reference(conn, row)}, work"
-            f" you take part in: {row['title']}.{_reason_said(reason)} Answer agree, object with a"
-            " reason, or move your work out of it with move_out and answer moved_out.",
+            prompt=composed.question(
+                "cancel_consent",
+                f"Another session's agent cancels {read_model.reference(conn, row)}, work"
+                f" you take part in: {model.sentence(row['title'])}{_reason_said(reason)} Answer"
+                " agree, object with a reason, or move your work out of it with move_out and"
+                " answer moved_out.",
+                reference=read_model.reference(conn, row),
+                title=str(row["title"]),
+                reason=reason or None,
+            ),
             author=author,
         )
     answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
     answer["warnings"] = warnings
     if question:
         answer["waits_for_owner"] = pending.Waiting(
-            action.id, gate.point, question, action.what
+            action.id, gate.point, question, composed.plain(action.what)
         ).answer()
     else:
         answer["waits_for_sessions"] = pending.round_of(conn, action).answer()
@@ -2907,7 +3068,7 @@ def _ask_about_cancel(
 def _reason_said(reason: str | None) -> str:
     """The agent's reason, as a question about its cancel says it."""
 
-    return f" Its reason: {reason}." if reason else ""
+    return f" Its reason: {model.sentence(reason)}" if reason else ""
 
 
 def cancel_agreed(
@@ -2917,7 +3078,7 @@ def cancel_agreed(
     *,
     reason: str,
     cancels: str | None,
-    what: str,
+    what: composed.Text | str,
     author: str | None,
 ) -> dict:
     """Make a cancel the sessions whose work it ends agreed to, as Valkama's write: the
@@ -2952,29 +3113,35 @@ def _goal_close(
 _SUMMARY_SHOWN = 1000
 
 
-def _close_what(conn: sqlite3.Connection, row: sqlite3.Row) -> str:
+def _close_what(conn: sqlite3.Connection, row: sqlite3.Row) -> composed.Text:
     """What the summary of decisions says of a goal's close: `close MAIN-3`."""
 
-    return f"close {read_model.reference(conn, row)}"
+    reference = read_model.reference(conn, row)
+    return composed.decision("closed", f"close {reference}", reference=reference)
 
 
-def _close_asked(reference: str, summary: Mapping[str, object], *, waits: bool) -> str:
-    """The first line of the owner's question about an agent's close of a goal: what stands
-    under it, the agent's summary quoted without its own final full stop, and what the
-    answers do. A goal with nothing under it has no period of waiting, so leaving it hands
-    it to no session: it stays open."""
+def _close_asked(
+    reference: str, part: dict, steps: list[str], summary: Mapping[str, object], *, waits: bool
+) -> composed.Text:
+    """The owner's question about an agent's close of a goal. Its first line says what
+    stands under it, the agent's summary quoted with one stop of its own at most, and what
+    the answers do; a goal with nothing under it has no period of waiting, so leaving it
+    hands it to no session: it stays open. The lines under it are the confirmation's."""
 
-    done = str(summary.get("done") or "").strip()[:_SUMMARY_SHOWN].rstrip().removesuffix(".")
+    done = str(summary.get("done") or "").strip()[:_SUMMARY_SHOWN].rstrip()
     said = f", and its summary says: {done}" if done else ""
     if waits:
-        return (
-            f"An agent confirms {reference}: all work under it is closed{said}."
-            " Confirm it, or leave it to the next session that takes work in this space."
+        head = (
+            model.sentence(f"An agent confirms {reference}: all work under it is closed{said}")
+            + " Confirm it, or leave it to the next session that takes work in this space."
         )
-    return (
-        f"An agent closes {reference}, which has nothing under it{said}."
-        " Confirm it, or leave it open."
-    )
+    else:
+        head = (
+            model.sentence(f"An agent closes {reference}, which has nothing under it{said}")
+            + " Confirm it, or leave it open."
+        )
+    key = "confirm_agent" if waits else "confirm_agent_empty"
+    return closing.prompt(reference, part, steps, head=head, key=key, summary=done or None)
 
 
 def _ask_about_close(
@@ -3019,9 +3186,7 @@ def _ask_about_close(
                 conn,
                 action,
                 purpose=closing.CONFIRM,
-                prompt=closing.prompt(
-                    reference, part, steps, head=_close_asked(reference, summary, waits=waits)
-                ),
+                prompt=_close_asked(reference, part, steps, summary, waits=waits),
                 fields=request_model.fields(
                     list(
                         request_model.CONFIRM_FIELDS if waits else request_model.CONFIRM_OPEN_FIELDS
@@ -3033,7 +3198,7 @@ def _ask_about_close(
     answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
     answer["warnings"] = warnings
     answer["waits_for_owner"] = pending.Waiting(
-        action.id, action.point, question, action.what
+        action.id, action.point, question, composed.plain(action.what)
     ).answer()
     return answer
 
@@ -3113,11 +3278,11 @@ def _to_check(value: object, into_review: bool, target: sqlite3.Row) -> str:
             f"to_check goes with a move into review, which asks it; a move to {target['name']}"
             " asks nothing: leave it out"
         )
-    return model.multiline_field(value, "to_check", limit=_TO_CHECK_LIMIT)
+    return model.multiline_field(value, "to_check", limit=TO_CHECK_LIMIT)
 
 
 #: The most characters `to_check` holds: as many as any question's prompt.
-_TO_CHECK_LIMIT = 8000
+TO_CHECK_LIMIT = 8000
 
 
 def _destination(
@@ -3540,11 +3705,17 @@ def _say_started(
 _UNSETTLED: contextvars.ContextVar[dict[str, tuple[str | None, str]] | None] = (
     contextvars.ContextVar("planning_unsettled", default=None)
 )
+#: The items a write of several steps wrote a comment on, whose put-off condition its
+#: end reads (`_return_counted`); None outside one. A dict, for the order they came in.
+_COUNTED: contextvars.ContextVar[dict[str, None] | None] = contextvars.ContextVar(
+    "planning_counted", default=None
+)
 
 
 @contextlib.contextmanager
 def one_write(conn: sqlite3.Connection) -> Iterator[list[str]]:
-    """Hold the holder rule and the container marks to the end of several steps that are one write.
+    """Hold the holder rule, put-off work's count and the container marks to the end of
+    several steps that are one write.
 
     A batch is one write: a task at work that lost its last holder in one step and
     went to review in the next went from work to review, not by way of ready. So
@@ -3552,6 +3723,12 @@ def one_write(conn: sqlite3.Connection) -> Iterator[list[str]]:
     settles each item once, as the last step left it. The goals and stages the steps
     changed the work under are settled after that, once (`marking`), and the list
     this yields names, after the block, those that came to await confirmation.
+
+    So too a comment that reaches the count of put-off work, or finds its day passed:
+    the work comes back, or the owner is asked, at the end of the block, after the
+    write's own move. A write that comments and takes the work up, closes it or puts
+    it off anew in one call has decided where it stands, and the condition that move
+    ended or replaced brings nothing back.
 
     A block inside another joins it: the outer block's end settles both, and the
     inner one's list stays empty.
@@ -3562,10 +3739,17 @@ def one_write(conn: sqlite3.Connection) -> Iterator[list[str]]:
             yield entered
             return
         unsettled: dict[str, tuple[str | None, str]] = {}
+        counted: dict[str, None] = {}
         token = _UNSETTLED.set(unsettled)
+        counting = _COUNTED.set(counted)
         try:
             yield entered
+            # A return moves its item through `_transition`, whose holder rule this
+            # block's end still settles.
+            for identity in list(counted):
+                _return_counted_now(conn, identity)
         finally:
+            _COUNTED.reset(counting)
             _UNSETTLED.reset(token)
         for identity, (author, reason) in unsettled.items():
             _hand_back(conn, identity, author, reason)
@@ -4231,9 +4415,8 @@ def set_checklist(
         *(entry.before for entry in reworded if entry.clarifies or not held),
     ):
         _log(conn, identity, "checklist_removed", str(text)[:120], author)
-    said = _steps_what(removed, changed, why) + [entry.said() for entry in clarified]
-    if point and said:
-        decisions.mark(conn, replaced, "condition", "; ".join(said))
+    if point and (removed or changed or clarified):
+        decisions.mark(conn, replaced, "condition", _steps_what(removed, changed, why, clarified))
     overridden = record_overrides(conn, identity, guards, author)
     # A step completed or dropped here ends its claim, which may have been the last holder.
     _settle(conn, identity, author, "steps replaced")
@@ -4254,9 +4437,14 @@ class _Reworded:
     after: str
     clarifies: bool
 
+    @property
+    def change(self) -> str:
+        """The change the summary of decisions names: `clarified`, or `rewrote`."""
+
+        return "clarified" if self.clarifies else "rewrote"
+
     def said(self) -> str:
-        verb = "clarified" if self.clarifies else "rewrote"
-        return f"{verb} step «{self.before}» → «{self.after}»"
+        return f"{self.change} step «{self.before}» → «{self.after}»"
 
 
 #: What a step says to only clarify its wording, sent beside its id and new text.
@@ -4312,14 +4500,33 @@ def _steps_detail(replacement: list[dict], clarified: list[_Reworded], why: str 
     return detail[:EVENT_DETAIL_LIMIT]
 
 
-def _steps_what(removed: list[dict], changed: list[_Reworded], why: str | None) -> list[str]:
-    """What the summary of decisions says of steps removed or reworded: each, then why."""
+def _steps_what(
+    removed: list[dict],
+    changed: list[_Reworded],
+    why: str | None,
+    clarified: Sequence[_Reworded] = (),
+) -> composed.Text:
+    """What the summary of decisions says of steps removed or reworded: each, then why,
+    and each step whose wording was only clarified after them."""
 
     said = [f"removed step «{step['text']}»" for step in removed]
     said += [entry.said() for entry in changed]
     if said and why:
         said[-1] += f": {why}"
-    return said
+    said += [entry.said() for entry in clarified]
+    changes = [
+        {"change": "removed", "before": str(step["text"]), "after": None} for step in removed
+    ]
+    changes += [
+        {"change": entry.change, "before": entry.before, "after": entry.after}
+        for entry in (*changed, *clarified)
+    ]
+    return composed.decision(
+        "steps",
+        "; ".join(said),
+        changes=changes,
+        reason=why if removed or changed else None,
+    )
 
 
 def _steps_proposal(
@@ -4334,7 +4541,7 @@ def _steps_proposal(
             "rewrite": [{"id": entry.id, "to": entry.after} for entry in changed],
             "force": force,
         },
-        "; ".join(_steps_what(removed, changed, why)),
+        _steps_what(removed, changed, why),
         reason=why,
         proposed={
             "removed": [{"id": str(step["id"]), "text": str(step["text"])} for step in removed],
@@ -4385,29 +4592,43 @@ def _ask_about_steps(
     or stage: what was and what would be, and why (`requests.carry_out`). The same write
     sent again while it waits answers that wait and asks nothing more."""
 
+    what = composed.plain(action.what)
     if not fresh:
-        return pending.Waiting(
-            action.id, action.point, pending.owner_question(conn, action), action.what
-        )
+        return pending.Waiting(action.id, action.point, pending.owner_question(conn, action), what)
     reference = read_model.reference(conn, row)
-    lines = [f"- remove «{entry['text']}»" for entry in action.proposed["removed"]]
-    lines += [f"- «{entry['from']}» → «{entry['to']}»" for entry in action.proposed["rewritten"]]
+    removed = [str(entry["text"]) for entry in action.proposed["removed"]]
+    rewritten = [
+        {"from": str(entry["from"]), "to": str(entry["to"])}
+        for entry in action.proposed["rewritten"]
+    ]
+    lines = [f"- remove «{text}»" for text in removed]
+    lines += [f"- «{entry['from']}» → «{entry['to']}»" for entry in rewritten]
     prompt = "\n".join(
         [
-            f"An agent changes the steps of {reference}, a {_container_word(row)}: {row['title']}.",
+            f"An agent changes the steps of {reference}, a {_container_word(row)}:"
+            f" {model.sentence(row['title'])}",
             *lines,
-            f"Its reason: {action.reason}.{_STEPS_ASKED}",
+            f"Its reason: {model.sentence(action.reason)}{_STEPS_ASKED}",
         ]
     )
     question = pending.ask_owner(
         conn,
         action,
         purpose="condition",
-        prompt=prompt[: closing.PROMPT_LIMIT],
+        prompt=composed.question(
+            "steps_asked",
+            prompt[: closing.PROMPT_LIMIT],
+            reference=reference,
+            kind=_container_word(row),
+            title=str(row["title"]),
+            removed=removed,
+            rewritten=rewritten,
+            reason=str(action.reason),
+        ),
         fields=request_model.fields(request_model.condition_fields()),
         author=author,
     )
-    return pending.Waiting(action.id, action.point, question, action.what)
+    return pending.Waiting(action.id, action.point, question, what)
 
 
 def _write_checklist(
@@ -4634,6 +4855,8 @@ def link_work_items(
 
 #: The most items one merge folds into the item that survives it.
 MAX_MERGE_ITEMS = 20
+#: The longest reason a merge records on both sides.
+MERGE_REASON_LIMIT = 512
 
 
 @_marked
@@ -4693,7 +4916,7 @@ def merge_work_items(
                 " has no cancelled state it can move to"
             )
         cancels.append(target)
-    note = model.text_field(reason, "reason", limit=512, required=False)
+    note = model.text_field(reason, "reason", limit=MERGE_REASON_LIMIT, required=False)
     conn.execute("SAVEPOINT planning_merge")
     try:
         answer = _fold(
@@ -5112,6 +5335,11 @@ def _counts(moved: dict[str, int]) -> str:
     return f"{', '.join(parts[:-1])} and {parts[-1]}"
 
 
+#: The longest value and label a ref carries.
+REF_VALUE_LIMIT = 512
+REF_LABEL_LIMIT = 200
+
+
 def attach_ref(
     conn: sqlite3.Connection,
     reference: str,
@@ -5128,8 +5356,8 @@ def attach_ref(
         (
             str(row["work_item_id"]),
             model.ref_kind(kind),
-            model.text_field(value, "work_item_ref.value", limit=512),
-            model.text_field(label, "work_item_ref.label", limit=200, required=False),
+            model.text_field(value, "work_item_ref.value", limit=REF_VALUE_LIMIT),
+            model.text_field(label, "work_item_ref.label", limit=REF_LABEL_LIMIT, required=False),
             model.actor(author),
             calls.call_id(conn, str(row["work_item_id"])),
         ),
@@ -5139,6 +5367,12 @@ def attach_ref(
         "kind": model.ref_kind(kind),
         "value": value,
     }
+
+
+#: The longest comment body.
+COMMENT_LIMIT = 8000
+#: The longest `reply_to_request`, the id of the question a reply answers.
+REPLY_TO_REQUEST_LIMIT = 64
 
 
 def comment_work_item(
@@ -5158,6 +5392,8 @@ def comment_work_item(
     the same item. Threads are one level deep, so a reply to a reply stands under
     that reply's root, and the answer names the root it joined. `awaits_reply`
     says the writer waits for an answer in that thread; a read says whether one came.
+    Work put off until a count of new comments that this one reaches comes back in the
+    same write (`deferral`), as it ends: in a batch, after the batch's own move.
     """
 
     if not conn.in_transaction:
@@ -5179,7 +5415,7 @@ def comment_work_item(
         (
             str(row["work_item_id"]),
             model.actor(author),
-            model.multiline_field(body, "comment.body", limit=8000),
+            model.multiline_field(body, "comment.body", limit=COMMENT_LIMIT),
             step["id"] if step else None,
             step["text"] if step else None,
             calls.call_id(conn, str(row["work_item_id"])),
@@ -5189,6 +5425,7 @@ def comment_work_item(
         ),
     )
     words.bring_current(conn)
+    _return_counted(conn, str(row["work_item_id"]))
     # Both parents always: the root a reply joined, and null for a new root.
     return {
         "work_item": read_model.reference(conn, row),
@@ -5217,7 +5454,9 @@ def _thread_parent(
         raise model.PlanningError("reply_to and reply_to_request exclude each other")
     identity = str(row["work_item_id"])
     if reply_to_request is not None:
-        question = model.text_field(reply_to_request, "reply_to_request", limit=64)
+        question = model.text_field(
+            reply_to_request, "reply_to_request", limit=REPLY_TO_REQUEST_LIMIT
+        )
         found = conn.execute(
             "SELECT 1 FROM work_item_requests WHERE request_id = ? AND work_item_id = ?",
             (question, identity),
@@ -5395,6 +5634,7 @@ def report_work_item(
         raise
     conn.execute("RELEASE planning_report")
     words.bring_current(conn)
+    _return_counted(conn, identity)
     return read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
 
 

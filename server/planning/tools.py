@@ -21,6 +21,8 @@ from . import (
     acknowledgements,
     api,
     calls,
+    commits,
+    deferral,
     groups,
     images,
     item_projects,
@@ -31,6 +33,7 @@ from . import (
     request_model,
     requests,
     service,
+    states,
     triage,
     waiting,
     words,
@@ -41,9 +44,17 @@ WRITES = {"readOnlyHint": False, "destructiveHint": False, "openWorldHint": Fals
 DESTRUCTIVE = {"readOnlyHint": False, "destructiveHint": True, "openWorldHint": False}
 
 _STR = {"type": "string"}
+
+
+def _text(limit: int, **rest: object) -> dict:
+    """A string field held to `limit` characters, the limit the server refuses past."""
+
+    return {"type": "string", "maxLength": limit, **rest}
+
+
 _INT = {"type": "integer"}
 _BOOL = {"type": "boolean"}
-_LABELS = {"type": "array", "items": {"type": "string"}}
+_LABELS = {"type": "array", "items": _text(model.MAX_LABEL_LENGTH)}
 #: The three ways an edit names labels: the whole set, or a change of the set the item has.
 _EDITED_LABELS = {
     "labels": _LABELS
@@ -65,20 +76,23 @@ _EDITED_LABELS = {
 #: The projects an item changes, by their ids in the registry: the whole set.
 _PROJECTS = {
     "type": "array",
-    "items": {"type": "string"},
+    "items": _text(item_projects.PROJECT_ID_LIMIT),
     "maxItems": item_projects.MAX_PROJECTS,
 }
 WORK_ITEM_REFERENCE = {
     "type": "string",
+    "maxLength": read_model.REFERENCE_LIMIT,
     "description": "A work item, by its reference (MAIN-142) or its work_item_id.",
 }
 _SPACE = {
     "type": "string",
+    "maxLength": read_model.SPACE_REFERENCE_LIMIT,
     "description": "Planning space, by key (MAIN), name, or planning_space_id.",
 }
 #: What an item names as the work it stands under.
 _PARENT = {
     "type": "string",
+    "maxLength": read_model.REFERENCE_LIMIT,
     "description": "The goal or stage it stands under, by its reference (MAIN-142) or its"
     " work_item_id: an open goal or stage of the same space, at any depth, never the"
     " item itself or one under it. An accepted item does not move under a goal or stage"
@@ -99,6 +113,7 @@ _ACCEPTANCE = {
 }
 _STATE = {
     "type": "string",
+    "maxLength": states.REFERENCE_LIMIT,
     "description": "Workflow state, by key or state_id, or by a category ("
     + ", ".join(model.PUBLIC_CATEGORIES)
     + ") when exactly one state of the workflow has it. The states belong to the"
@@ -113,6 +128,7 @@ _EXPECTED_REVISION = {
 }
 _AUTHOR = {
     "type": "string",
+    "maxLength": model.MAX_AUTHOR,
     "description": "Your name for this call, recorded in the history. A claim or a"
     " checklist step is held by the session your client proved, whatever this"
     " says; author is the holder only for a call with no confirmed session.",
@@ -134,12 +150,13 @@ _VERBOSE = {
     "description": "Answer with the item's card instead of the short acknowledgement.",
 }
 #: One checklist step as a caller sends it: its text, or its text and whether it is done.
+_STEP_TEXT = _text(model.MAX_CHECKLIST_TEXT)
 _STEP = {
     "anyOf": [
-        {"type": "string"},
+        _STEP_TEXT,
         {
             "type": "object",
-            "properties": {"text": _STR, "done": _BOOL},
+            "properties": {"text": _STEP_TEXT, "done": _BOOL},
             "required": ["text"],
         },
     ]
@@ -165,10 +182,15 @@ _EDITED_STEPS = {
     " says the new text only clarifies its wording.",
     "items": {
         "anyOf": [
-            {"type": "string"},
+            _STEP_TEXT,
             {
                 "type": "object",
-                "properties": {"id": _STR, "text": _STR, "done": _BOOL, "clarifies": _BOOL},
+                "properties": {
+                    "id": _text(model.UUID_LENGTH),
+                    "text": _STEP_TEXT,
+                    "done": _BOOL,
+                    "clarifies": _BOOL,
+                },
                 "required": ["text"],
             },
         ]
@@ -197,6 +219,7 @@ _REPLY_TO = {
 }
 _REPLY_TO_REQUEST = {
     "type": "string",
+    "maxLength": service.REPLY_TO_REQUEST_LIMIT,
     "description": "The id of the question this replies to. Not together with reply_to.",
 }
 #: What a resolved mark takes, in the single tool and in the batch's group.
@@ -207,6 +230,7 @@ _RESOLVED_ROOT = {
 }
 _RESOLUTION = {
     "type": "string",
+    "maxLength": service.MAX_RESOLUTION,
     "description": "The decision, one line, in words such as: moved to MAIN-14, postponed,"
     " declined. Leave it out when the thread says it. Not together with reopen.",
 }
@@ -223,8 +247,8 @@ _WHY = {
 _REQUEST_FIELD = {
     "type": "object",
     "properties": {
-        "id": _STR,
-        "label": _STR,
+        "id": _text(request_model.MAX_KEY),
+        "label": _text(request_model.MAX_LABEL),
         "type": {
             "type": "string",
             "enum": ["text", "choice", "multi_choice", "boolean", "verdict"],
@@ -241,7 +265,7 @@ _REQUEST_FIELD = {
         "group": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 200,
+            "maxLength": request_model.MAX_LABEL,
             "description": "The section heading; the fields of one group stand together."
             " A field under another leaves it out.",
         },
@@ -267,8 +291,8 @@ _REQUEST_FIELD = {
             "items": {
                 "type": "object",
                 "properties": {
-                    "id": _STR,
-                    "label": _STR,
+                    "id": _text(request_model.MAX_KEY),
+                    "label": _text(request_model.MAX_LABEL),
                     "description": {
                         "type": "string",
                         "minLength": 1,
@@ -299,6 +323,7 @@ _REQUEST_FIELDS = {
 #: What got in the way of the work, kept apart from what the work did.
 _FRICTION = {
     "type": "string",
+    "maxLength": model.SUMMARY_LIMIT,
     "description": "What hindered the work itself: none, or one line per hindrance. A"
     " closing summary ends its friction here, not in done, next or why.",
 }
@@ -319,12 +344,23 @@ _COMMENT_FORM = (
     " that reply's root, and applied names the root it joined in reply_to or"
     " reply_to_request. A reply carries no checklist_item_id; its root does."
 )
+#: What `until` takes wherever work is put off: a defer, and a later group, which puts
+#: its items off as a defer does.
+_UNTIL = _text(
+    deferral.UNTIL_LIMIT,
+    description="A day YYYY-MM-DD, coming back at 00:00 UTC; a time with its zone, such as"
+    " 2026-12-01T09:00:00Z; a count of new comments from 1 to 999, such as 3 comments; a"
+    " count and a day or time, whichever comes first, such as 2026-12-01 or 3 comments; or"
+    " the reference or work_item_id of the open item whose close it waits on.",
+)
 #: What a batch's defer takes, and what putting work off does.
 _DEFER_FORM = (
-    "Put the item off until a day (YYYY-MM-DD, returning at 00:00 UTC), a time, or"
-    " another open item's close: until and reason are both required. It moves to its"
-    " deferred state, loses its basis and its claims; nothing takes it from the queue."
-    " When the day comes or that item closes, is cancelled or deleted, it returns to"
+    "Put the item off until a day (YYYY-MM-DD, returning at 00:00 UTC), a time, a count"
+    " of new comments on it, a count or a day whichever comes first, or another open"
+    " item's close: until and reason are both required. It moves to its deferred state,"
+    " loses its basis and its claims; nothing takes it from the queue. When the day comes,"
+    " the count of comments and replies written after the put-off, a person's or an"
+    " agent's, is reached, or that item closes, is cancelled or deleted, it returns to"
     " triage, or, under goals and stages all accepted, waits as a question to the owner:"
     " do it, later or drop it. An item merged away passes the wait to the item it merged"
     " into. A claim or any transition out of deferred, a cancel included, ends the wait,"
@@ -403,7 +439,7 @@ _LIST = {
     " options; the answer adds list_request_id. Nobody waits for it: no alert, and it"
     " does not hold the item open. Refused on a reply and beside a closing transition.",
     "properties": {
-        "label": _STR,
+        "label": _text(request_model.MAX_LABEL),
         "options": {
             "type": "array",
             "minItems": 1,
@@ -411,9 +447,9 @@ _LIST = {
             "items": {
                 "type": "object",
                 "properties": {
-                    "id": _STR,
-                    "label": _STR,
-                    "description": _STR,
+                    "id": _text(request_model.MAX_KEY),
+                    "label": _text(request_model.MAX_LABEL),
+                    "description": _text(request_model.MAX_OPTION_DESCRIPTION),
                     "recommended": _BOOL,
                     "why": _WHY,
                 },
@@ -427,7 +463,7 @@ _LIST = {
 _MENTIONS = {
     "type": "array",
     "maxItems": mention_records.MAX_AGENT_MENTIONS,
-    "items": {"type": "string"},
+    "items": _text(read_model.REFERENCE_LIMIT),
     "description": "Other items to tell, by reference: each one's holders hear this comment at"
     " their next tool call, and it stays on the item for whoever takes it. A number in the body"
     f" tells nobody. A session names one item at most {mention_records.MAX_PER_HOUR} times an"
@@ -510,7 +546,7 @@ TOOLS = [
         " the name unless you name one. A project joins a space through the registry"
         " command: valkama projects bind <project> --space <KEY>.",
         WRITES,
-        {"name": _STR, "key": _STR},
+        {"name": _text(model.MAX_TITLE), "key": _text(model.MAX_SPACE_KEY)},
         ["name"],
     ),
     _tool(
@@ -550,7 +586,7 @@ TOOLS = [
         WRITES,
         {
             "space": _SPACE,
-            "title": _STR,
+            "title": _text(model.MAX_TITLE),
             "state": _STATE,
             "kind": {"type": "string", "enum": list(model.PUBLIC_KINDS)},
             "priority": {
@@ -558,11 +594,12 @@ TOOLS = [
                 "enum": list(model.PRIORITIES),
                 "description": _PRIORITY_MEANING,
             },
-            "description": _STR,
+            "description": _text(model.MAX_DESCRIPTION),
             "labels": _LABELS,
             "projects": _PROJECTS,
             "source": {
                 "type": "string",
+                "maxLength": model.MAX_SOURCE,
                 "description": "Anchor into the owning document, e.g."
                 " docs/plan.md#kb:a7f3. Point at the immutable <!-- kb:xxxx -->"
                 " comment; never copy the plan text into the item.",
@@ -632,9 +669,8 @@ TOOLS = [
                     },
                     "answer": {"type": "string", "enum": list(groups.ANSWERS)},
                     "until": {
-                        "type": "string",
-                        "description": "With later alone: a day YYYY-MM-DD or the item it"
-                        " waits on.",
+                        **_UNTIL,
+                        "description": "With later alone. " + _UNTIL["description"],
                     },
                     "why": {"type": "string", "maxLength": groups.WHY_LIMIT},
                 },
@@ -683,7 +719,7 @@ TOOLS = [
         " in_progress or awaiting_confirmation. workable says whether its space's queue may"
         " give it now and withheld why not: goal_or_stage, not_ready, held, waits,"
         " question, no_start, ancestor_triage, ancestor_deferred, ancestor_cancelling,"
-        " ancestor_waits or ancestor_closed. claim.expires_at is when the claim lapses if its session stays"
+        " ancestor_waits, ancestor_closed or queue_off. claim.expires_at is when the claim lapses if its session stays"
         " silent, or, for a claim no session proved, the owner's own included, if the item"
         " stays quiet; null while an open question to the owner stops that count. A"
         " checklist step with by_previous_holder was ticked by a holder whose claim"
@@ -774,17 +810,20 @@ TOOLS = [
             "kind": {"type": "string", "enum": list(model.PUBLIC_KINDS)},
             "owner": {
                 "type": "string",
+                "maxLength": model.MAX_AUTHOR,
                 "description": "Only items held by this holder, spelled exactly as"
                 " claim_ref is: a confirmed session holds as 'codex (session <id>)',"
                 " which a claim's acknowledgement returns.",
             },
             "parent": {
                 "type": "string",
+                "maxLength": read_model.REFERENCE_LIMIT,
                 "description": "Only the children of this item, by its reference (MAIN-142)"
                 " or its work_item_id.",
             },
             "project": {
                 "type": "string",
+                "maxLength": item_projects.PROJECT_ID_LIMIT,
                 "description": "Only the items that name this project, by its id in the"
                 " project registry.",
             },
@@ -802,7 +841,8 @@ TOOLS = [
         " transitively, every item discovered from it or from a member and every child"
         " of a member; relates-to, duplicates and blocks never widen it. Answers with"
         " total, closed, open, workable, by_category, by_container_state (accepted"
-        " goals and stages by what they derive), origins (members grouped by parent),"
+        " goals and stages by what they derive), by_project (member tasks per project,"
+        " a task of several projects in each), origins (members grouped by parent),"
         f" the newest {CHAIN_SERIES_ENTRIES} entries of series (one per day with a"
         " change) and recent: the last 7 UTC"
         " days' created and closed and a trend of growing, converging or steady."
@@ -839,7 +879,7 @@ TOOLS = [
         f" A page holds at most {service.MAX_SEARCH_PAGE} items." + _PAGING,
         READ_ONLY,
         {
-            "query": _STR,
+            "query": _text(service.MAX_QUERY),
             "space": _SPACE,
             "limit": _INT,
             "offset": _OFFSET,
@@ -909,17 +949,20 @@ TOOLS = [
             "space": _SPACE,
             "within": {
                 "type": "string",
+                "maxLength": read_model.REFERENCE_LIMIT,
                 "description": "A goal or stage, by its reference (MAIN-142) or its"
                 " work_item_id: only the tasks under it, at any depth. Beside space it must"
                 " be of that space.",
             },
             "label": {
                 "type": "string",
+                "maxLength": model.MAX_LABEL_LENGTH,
                 "description": "Only the tasks that carry this label themselves, not through a"
                 " goal or stage over them.",
             },
             "project": {
                 "type": "string",
+                "maxLength": item_projects.PROJECT_ID_LIMIT,
                 "description": "Only the tasks that name this project, by its id in the project"
                 " registry; a task that names none is kept by no project.",
             },
@@ -941,7 +984,7 @@ TOOLS = [
         WRITES,
         {
             "id": WORK_ITEM_REFERENCE,
-            "item_id": _STR,
+            "item_id": _text(model.UUID_LENGTH),
             "author": _AUTHOR,
             "force": _FORCE,
             "release": _BOOL,
@@ -970,6 +1013,7 @@ TOOLS = [
         {
             "id": {
                 "type": "string",
+                "maxLength": read_model.REFERENCE_LIMIT,
                 "description": "The item that survives, by its reference (MAIN-142) or"
                 " its work_item_id.",
             },
@@ -977,11 +1021,12 @@ TOOLS = [
                 "type": "array",
                 "minItems": 1,
                 "maxItems": service.MAX_MERGE_ITEMS,
-                "items": {"type": "string"},
+                "items": _text(read_model.REFERENCE_LIMIT),
                 "description": "The items that merge into id and close as its duplicates.",
             },
             "reason": {
                 "type": "string",
+                "maxLength": service.MERGE_REASON_LIMIT,
                 "description": "Why they are one change; recorded on both sides.",
             },
             "force": _FORCE,
@@ -1049,10 +1094,11 @@ TOOLS = [
                 "description": "Edit the fields a state transition does not own;"
                 " applied.update names the fields sent.",
                 "properties": {
-                    "title": _STR,
-                    "description": _STR,
+                    "title": _text(model.MAX_TITLE),
+                    "description": _text(model.MAX_DESCRIPTION),
                     "source": {
                         "type": "string",
+                        "maxLength": model.MAX_SOURCE,
                         "description": "Anchor into the owning document, e.g."
                         " docs/plan.md#kb:a7f3. Update the existing marker without"
                         " changing the item's identity or copying plan text into it.",
@@ -1090,7 +1136,7 @@ TOOLS = [
                         " nobody holds leaves when this is sent: its title, the task's own"
                         " when left out, and the item_ids of the steps that go there.",
                         "properties": {
-                            "title": _STR,
+                            "title": _text(model.MAX_TITLE),
                             "steps": {"type": "array", "items": _STR, "maxItems": 100},
                         },
                     },
@@ -1134,7 +1180,11 @@ TOOLS = [
                 " by_previous_holder.",
                 "items": {
                     "type": "object",
-                    "properties": {"item_id": _STR, "done": _BOOL, "force": _FORCE},
+                    "properties": {
+                        "item_id": _text(model.UUID_LENGTH),
+                        "done": _BOOL,
+                        "force": _FORCE,
+                    },
                     "required": ["item_id"],
                 },
             },
@@ -1151,8 +1201,8 @@ TOOLS = [
                     "type": "object",
                     "properties": {
                         "kind": {"type": "string", "enum": sorted(model.REF_KINDS)},
-                        "value": _STR,
-                        "label": _STR,
+                        "value": _text(service.REF_VALUE_LIMIT),
+                        "label": _text(service.REF_LABEL_LIMIT),
                     },
                     "required": ["kind", "value"],
                 },
@@ -1171,7 +1221,7 @@ TOOLS = [
                     "properties": {
                         "repository": _STR,
                         "hash": _STR,
-                        "label": _STR,
+                        "label": _text(commits.LABEL_LIMIT),
                         "remove": _BOOL,
                     },
                     "required": ["repository", "hash"],
@@ -1199,8 +1249,8 @@ TOOLS = [
                 "type": "object",
                 "description": _COMMENT_FORM,
                 "properties": {
-                    "body": _STR,
-                    "checklist_item_id": _STR,
+                    "body": _text(service.COMMENT_LIMIT),
+                    "checklist_item_id": _text(model.UUID_LENGTH),
                     "reply_to": _REPLY_TO,
                     "reply_to_request": _REPLY_TO_REQUEST,
                     "list": _LIST,
@@ -1218,10 +1268,10 @@ TOOLS = [
                 "items": {
                     "type": "object",
                     "properties": {
-                        "body": _STR,
-                        "checklist_item_id": _STR,
+                        "body": _text(service.COMMENT_LIMIT),
+                        "checklist_item_id": _text(model.UUID_LENGTH),
                         "reply_to": _INT,
-                        "reply_to_request": _STR,
+                        "reply_to_request": _text(service.REPLY_TO_REQUEST_LIMIT),
                         "list": _LIST,
                         "mentions": _MENTIONS,
                         "awaits_reply": _AWAITS_REPLY,
@@ -1261,16 +1311,16 @@ TOOLS = [
                     "type": "object",
                     "properties": {
                         "kind": {"type": "string", "enum": ["question", "decision"]},
-                        "prompt": _STR,
+                        "prompt": _text(requests.PROMPT_LIMIT),
                         "fields": _REQUEST_FIELDS,
-                        "execution_id": _STR,
-                        "session_id": _STR,
+                        "execution_id": _text(requests.SESSION_ID_LIMIT),
+                        "session_id": _text(requests.SESSION_ID_LIMIT),
                         "expires_at": _STR,
                         "addressees": {
                             "type": "array",
                             "minItems": 1,
                             "maxItems": requests.MOST_ADDRESSEES,
-                            "items": _STR,
+                            "items": _text(requests.SESSION_ID_LIMIT),
                             "description": "Top-level agent session ids to ask instead of the"
                             " owner, as create_work_item_request takes them.",
                         },
@@ -1284,9 +1334,9 @@ TOOLS = [
                 " why only when the choice is not obvious. A terminal state needs it; it"
                 " is what the next agent reads instead of re-deriving the work. " + _OUTCOME_FORM,
                 "properties": {
-                    "done": _STR,
-                    "next": _STR,
-                    "why": _STR,
+                    "done": _text(model.SUMMARY_LIMIT),
+                    "next": _text(model.SUMMARY_LIMIT),
+                    "why": _text(model.SUMMARY_LIMIT),
                     "friction": _FRICTION,
                     "list": _LIST,
                     "mentions": _TEXT_MENTIONS,
@@ -1309,7 +1359,7 @@ TOOLS = [
                     "acceptance": _ACCEPTANCE,
                     "to_check": {
                         "type": "string",
-                        "maxLength": 8000,
+                        "maxLength": service.TO_CHECK_LIMIT,
                         "description": "With a move into review only: what the owner is to"
                         " check, asked as the owner's question on the item. The owner's"
                         " answer completes the item or returns it to work; the answer names"
@@ -1317,7 +1367,7 @@ TOOLS = [
                     },
                     "cancels": {
                         "type": "string",
-                        "maxLength": 64,
+                        "maxLength": service.CANCELS_LIMIT,
                         "description": "With cancelling a goal or stage only: the list_token"
                         " of the cancel_list refusal, confirming that list. Everything open"
                         " under it is cancelled in the same write, and the answer names it"
@@ -1326,7 +1376,7 @@ TOOLS = [
                     },
                     "following": {
                         "type": "string",
-                        "maxLength": 64,
+                        "maxLength": service.FOLLOWING_LIMIT,
                         "description": "With a cancel only: the request_id of the owner's"
                         " answered question, on this item or a goal or stage over it, that"
                         " the cancel follows from. Such a cancel asks the owner nothing, and"
@@ -1339,14 +1389,8 @@ TOOLS = [
                 "type": "object",
                 "description": _DEFER_FORM,
                 "properties": {
-                    "until": {
-                        "type": "string",
-                        "maxLength": 64,
-                        "description": "A day YYYY-MM-DD, coming back at 00:00 UTC; a time"
-                        " with its zone, such as 2026-12-01T09:00:00Z; or the reference or"
-                        " work_item_id of the open item whose close it waits on.",
-                    },
-                    "reason": _STR,
+                    "until": _UNTIL,
+                    "reason": _text(service.PUT_OFF_REASON_LIMIT),
                     "force": _FORCE,
                 },
                 "required": ["until", "reason"],
@@ -1401,17 +1445,17 @@ TOOLS.extend(
             {
                 "id": WORK_ITEM_REFERENCE,
                 "kind": {"type": "string", "enum": ["question", "decision"]},
-                "prompt": _STR,
+                "prompt": _text(requests.PROMPT_LIMIT),
                 "fields": _REQUEST_FIELDS,
                 "author": _AUTHOR,
-                "execution_id": _STR,
-                "session_id": _STR,
+                "execution_id": _text(requests.SESSION_ID_LIMIT),
+                "session_id": _text(requests.SESSION_ID_LIMIT),
                 "expires_at": _STR,
                 "addressees": {
                     "type": "array",
                     "minItems": 1,
                     "maxItems": requests.MOST_ADDRESSEES,
-                    "items": _STR,
+                    "items": _text(requests.SESSION_ID_LIMIT),
                     "description": "Top-level agent session ids to ask instead of the person;"
                     " the answer is requests, each request_id with its addressee.",
                 },
@@ -1429,7 +1473,7 @@ TOOLS.extend(
             " Valkama's interface, false for any other call, null while none has. No argument"
             " sets it; a process holding the interface's credentials counts as the interface.",
             READ_ONLY,
-            {"id": _STR},
+            {"id": _text(model.UUID_LENGTH)},
             ["id"],
         ),
         _tool(
@@ -1496,7 +1540,7 @@ TOOLS.extend(
             " answered once, by the session it asks.",
             WRITES,
             {
-                "id": _STR,
+                "id": _text(model.UUID_LENGTH),
                 "answers": {
                     "type": "object",
                     "description": "Field id to answer, each checked against its field.",
@@ -1539,7 +1583,11 @@ TOOLS.extend(
             " question of a write that waits for the owner takes that write back; only the"
             " session that asked can.",
             WRITES,
-            {"id": _STR, "expected_revision": _EXPECTED_REVISION, "author": _AUTHOR},
+            {
+                "id": _text(model.UUID_LENGTH),
+                "expected_revision": _EXPECTED_REVISION,
+                "author": _AUTHOR,
+            },
             ["id", "expected_revision"],
         ),
     ]

@@ -48,7 +48,7 @@ onMounted(() => editor.value?.focusAtTop())
 function send() {
   if (!props.pending && !empty.value) emit('submit')
 }
-defineExpose({ focus: () => editor.value?.focusAtTop() })
+defineExpose({ takeFocus: () => editor.value?.focusAtTop() })
 </script>
 
 <template>

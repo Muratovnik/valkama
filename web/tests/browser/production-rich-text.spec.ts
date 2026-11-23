@@ -9,20 +9,12 @@
  */
 import { expect } from '@playwright/test'
 
-import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { asRoot } from '../support/threads.ts'
 import { installDiscussionBackend } from './discussionBackend.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import {
-  blockedWorkItem,
-  now,
-  planningSpace,
-  spaceRef,
-  spaceScope,
-  workItem,
-} from './planningFixtures.ts'
+import { blockedWorkItem, now, planningSpace, spaceScope, workItem } from './planningFixtures.ts'
 import { pointerBand } from './pointerBand.ts'
 import { test } from './test.ts'
 
@@ -46,18 +38,25 @@ const report = [
   '[Notes](https://example.org/notes) and [bad](javascript:alert(1)) <b>raw</b>',
 ].join('\n')
 
+/** The commit the card carries, attached by the server when its session made it. */
+const ATTACHED = {
+  repository: 'alpha',
+  display_name: 'Alpha',
+  hash: 'a1b2c3d4e5f6',
+  subject: 'fix: wire contract',
+  committed_at: now,
+  session: '',
+  agent: '',
+  attached_by: 'server' as const,
+  label: '',
+}
+
 test('a long markdown report holds on a whole line, opens, and links what resolves', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   const backend = await installDiscussionBackend(page)
-  backend.item.refs.push({
-    kind: 'commit',
-    value: 'a1b2c3d4e5f6',
-    label: 'fix: wire contract',
-    author: 'agent',
-    at: now,
-  })
+  backend.item.commits = [ATTACHED]
   backend.item.comments.push({
     id: 1,
     kind: 'report',
@@ -70,14 +69,14 @@ test('a long markdown report holds on a whole line, opens, and links what resolv
     checklist_item_text: null,
   })
   const lookups: URLSearchParams[] = []
-  await page.route('**/api/ref?*', (route) => {
+  await page.route('**/api/commit?*', (route) => {
     lookups.push(new URL(route.request().url()).searchParams)
     return route.fulfill({
       json: {
         kind: 'commit',
         value: 'a1b2c3d4e5f6',
         resolved: true,
-        repository: '/work/repo',
+        repository: 'alpha',
         detail: 'a1b2c3d agent\nfix: wire contract\n src/a.ts | 2 +-',
       },
     })
@@ -138,14 +137,14 @@ test('a long markdown report holds on a whole line, opens, and links what resolv
   await expect(notes).toBeInViewport()
   await expectNoSilentClipping(page, 'Markdown report at 1440px')
 
-  // A commit the card carries opens its record; the dialog closes back onto the card.
+  // A commit the card carries opens it; the dialog closes back onto the card.
   await entry.getByRole('button', { name: 'a1b2c3d' }).click()
   const record = page.getByRole('dialog', { name: 'Commit' })
   await expect(record).toContainText('fix: wire contract')
   await expect(record).toContainText('src/a.ts | 2 +-')
-  // Asked with the card's exact space, so the project's own repository is searched.
-  expect(lookups.map((query) => [query.get('value'), query.get('space')])).toEqual([
-    ['a1b2c3d4e5f6', planningSpaceEntity(spaceRef).resource_id],
+  // Asked by its repository and its hash, so git is asked in that repository alone.
+  expect(lookups.map((query) => [query.get('repository'), query.get('hash')])).toEqual([
+    ['alpha', 'a1b2c3d4e5f6'],
   ])
   await page.keyboard.press('Escape')
   await expect(record).toHaveCount(0)
@@ -161,20 +160,14 @@ test('a long markdown report holds on a whole line, opens, and links what resolv
 test('a line that holds a reference is as tall as a line of plain text', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   const backend = await installDiscussionBackend(page)
-  backend.item.refs.push({
-    kind: 'commit',
-    value: 'a1b2c3d4e5f6',
-    label: 'fix: wire contract',
-    author: 'agent',
-    at: now,
-  })
-  await page.route('**/api/ref?*', (route) =>
+  backend.item.commits = [ATTACHED]
+  await page.route('**/api/commit?*', (route) =>
     route.fulfill({
       json: {
         kind: 'commit',
         value: 'a1b2c3d4e5f6',
         resolved: true,
-        repository: '/work/repo',
+        repository: 'alpha',
         detail: '',
       },
     }),

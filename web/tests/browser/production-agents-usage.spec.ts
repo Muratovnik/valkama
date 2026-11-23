@@ -50,12 +50,14 @@ test('the head says the whole, and each figure says what it counts', async ({ pa
     'Cost ≈\u{A0}$240.67',
     // A kind nobody reported adds nothing, and the cached reads stay apart.
     'Tokens 17.9M',
+    'Sessions 1',
   ])
   // What each figure counts is its description and its why, and not a line under the figures.
   await expect(figure(/^Work/u)).toHaveAccessibleDescription(/history is rebuilt from transcripts/u)
   await expect(figure(/^All agents/u)).toHaveAccessibleDescription(/Agents worked in parallel/u)
   await expect(figure(/^Cost/u)).toHaveAccessibleDescription(/at API prices and not a bill/u)
   await expect(figure(/^Tokens/u)).toHaveAccessibleDescription(/Reads from the cache are counted/u)
+  await expect(figure(/^Sessions/u)).toHaveAccessibleDescription(/each once/u)
   await expect(section.locator('.work-usage-note')).toHaveCount(0)
   await figure(/^Cost/u).hover()
   await expect(page.getByRole('tooltip')).toContainText('not a bill')

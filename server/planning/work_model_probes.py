@@ -216,6 +216,10 @@ _POLLED: dict[str, object] = {"organization": "probe", "session_id": None}
 #: The probes of each clause no listed form covers, by table and the clause's text:
 #: the changes to the table's row that it must refuse, and those it must take.
 _WRITTEN: dict[tuple[str, str], tuple[_Values, _Values]] = {
+    ("agent_decisions", "(what_key IS NULL) = (what_values IS NULL)"): (
+        ({"what_key": "closed"}, {"what_values": "{}"}),
+        ({"what_key": "closed", "what_values": "{}"},),
+    ),
     (
         "analytics_surface_uses",
         "day GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'",
@@ -287,9 +291,34 @@ _WRITTEN: dict[tuple[str, str], tuple[_Values, _Values]] = {
     ),
     ("work_items", "number >= 1"): (({"number": 0},), ()),
     ("work_item_baselines", "tasks >= 0"): (({"tasks": -1},), ({"tasks": 3},)),
-    ("work_item_deferrals", "(until_at IS NULL) <> (until_item_id IS NULL)"): (
-        ({"until_at": None}, {"until_item_id": "probe"}),
+    (
+        "work_item_deferrals",
+        "until_item_id IS NULL OR (until_at IS NULL AND until_comments IS NULL)",
+    ): (
+        (
+            {"until_item_id": "probe"},
+            {"until_at": None, "until_item_id": "probe", "until_comments": 3, "comments_after": 0},
+        ),
         ({"until_at": None, "until_item_id": "probe"},),
+    ),
+    (
+        "work_item_deferrals",
+        "until_at IS NOT NULL OR until_item_id IS NOT NULL OR until_comments IS NOT NULL",
+    ): (
+        ({"until_at": None},),
+        ({"until_at": None, "until_comments": 3, "comments_after": 0},),
+    ),
+    ("work_item_deferrals", "(until_comments IS NULL) = (comments_after IS NULL)"): (
+        ({"until_comments": 3}, {"comments_after": 0}),
+        ({"until_comments": 3, "comments_after": 0},),
+    ),
+    ("work_item_deferrals", "until_comments IS NULL OR until_comments BETWEEN 1 AND 999"): (
+        ({"until_comments": 0, "comments_after": 0}, {"until_comments": 1000, "comments_after": 0}),
+        ({"until_comments": 1, "comments_after": 0}, {"until_comments": 999, "comments_after": 5}),
+    ),
+    ("work_item_requests", "(prompt_key IS NULL) = (prompt_values IS NULL)"): (
+        ({"prompt_key": "goal_proposed"}, {"prompt_values": "{}"}),
+        ({"prompt_key": "goal_proposed", "prompt_values": "{}"},),
     ),
     ("work_item_waiting_notices", "(delivered_call IS NULL) = (delivered_at IS NULL)"): (
         ({"delivered_call": 1}, {"delivered_at": "probe"}),

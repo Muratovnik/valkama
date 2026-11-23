@@ -9,7 +9,7 @@ import { mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import GraphFrame from '@/widgets/work-item-graph/components/GraphFrame.vue'
-import { NO_PARENT_FRAME } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+import { NO_PARENT_FRAME, spaceFrameId } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { FrameProgress, PlacedFrame } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 
 import { messages, pluralRules } from '@/shared/i18n/index.ts'
@@ -136,11 +136,35 @@ describe("a frame's header", () => {
     })
     expect(wrapper.find('button.graph-frame-open').exists()).toBe(false)
     expect(wrapper.find('[data-walk-target="frame:none"]').exists()).toBe(false)
-    expect(wrapper.get('.graph-frame-title').text()).toBe('No parent')
+    expect(wrapper.get('.graph-frame-title').text()).toBe('No goal')
     expect(wrapper.get('.graph-frame-fold').attributes('aria-label')).toBe(
-      'Collapse the work under no parent',
+      'Collapse the work under no goal',
     )
     expect(wrapper.get('.graph-frame-fold').attributes('data-walk-target')).toBe('frame:none:fold')
+    await wrapper.get('.graph-frame-open').trigger('click')
+    expect(wrapper.emitted('open')).toBeUndefined()
+  })
+
+  it('says «Без цели» over the work under no goal, as the board’s lane and the list’s group do', () => {
+    const none = frame({ id: NO_PARENT_FRAME, goal: null, folded: true })
+    const wrapper = header({ frame: none }, 'ru')
+    expect(wrapper.get('.graph-frame-title').text()).toBe('Без цели')
+    expect(wrapper.get('.graph-frame-fold').attributes('aria-label')).toMatch(
+      /^Развернуть работу без цели · /u,
+    )
+  })
+
+  it('names another space’s frame as the list’s group of that space, and opens nothing there', async () => {
+    const space = { key: 'BETA', name: 'Beta' }
+    const wrapper = header(
+      { frame: frame({ id: spaceFrameId('BETA'), goal: null, space, folded: true }) },
+      'ru',
+    )
+    expect(wrapper.get('.graph-frame-title').text()).toBe('Пространство BETA · Beta')
+    expect(wrapper.find('button.graph-frame-open').exists()).toBe(false)
+    expect(wrapper.get('.graph-frame-fold').attributes('aria-label')).toMatch(
+      /^Развернуть работу пространства BETA · Beta · /u,
+    )
     await wrapper.get('.graph-frame-open').trigger('click')
     expect(wrapper.emitted('open')).toBeUndefined()
   })

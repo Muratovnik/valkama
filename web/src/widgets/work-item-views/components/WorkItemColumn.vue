@@ -14,8 +14,12 @@
  * only the first four could be seen. The column draws a page of them, and the
  * next page once the end of what is drawn comes within reach of the scroll. The
  * count in the header is always the whole state's.
+ *
+ * A column that folds (`useColumnFolds`) says so in its head, after its count: the press
+ * folds it to a strip.
  */
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { useIntersectionObserver } from '@vueuse/core'
 
@@ -30,6 +34,9 @@ import type { WorkflowState, WorkItemBrief } from '@/shared/api/planningModel.ts
 import { useStateName } from '@/shared/lib/useStateName.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
+import VButton from '@/shared/ui/VButton.vue'
+import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
   emptyLabel: string
@@ -40,18 +47,23 @@ const props = defineProps<{
   state: WorkflowState
   waiting: Map<string, string>
   writable: boolean
+  /** The column folds to a strip, and its head offers that. */
+  foldable?: boolean
   hintId?: string
 }>()
 
 const emit = defineEmits<{
   dragging: [active: boolean]
   filter: [token: WorkFilterToken]
+  fold: []
   open: [reference: string]
   place: [move: BoardMove, landing: StackLanding]
 }>()
 
 const stateName = useStateName()
 const name = computed(() => stateName(props.state))
+const { t } = useI18n()
+const foldLabel = computed(() => t('workItem.columnFold.fold', { state: name.value }))
 
 /** Tiles drawn at first, and added each time the end of them comes near. */
 const PAGE = 30
@@ -72,6 +84,7 @@ useIntersectionObserver(
 <template>
   <section
     class="work-item-column"
+    :data-column-track="props.state.state_id"
     :data-state="props.state.key"
     :data-category="props.state.category"
   >
@@ -86,6 +99,24 @@ useIntersectionObserver(
         <span class="visually-hidden">{{ name }}</span>
       </h2>
       <span class="column-count">{{ props.items.length }}</span>
+      <VButton
+        v-if="props.foldable"
+        v-tooltip.name="foldLabel"
+        class="column-fold-button"
+        variant="ghost"
+        size="inline"
+        aria-expanded="true"
+        :aria-label="foldLabel"
+        :data-column-fold="props.state.state_id"
+        icon
+        reach
+        @click="emit('fold')"
+      >
+        <VIcon
+          name="chevron-left"
+          :size="16"
+        />
+      </VButton>
     </header>
     <div
       ref="scroll"
@@ -165,6 +196,10 @@ useIntersectionObserver(
     color: var(--color-text-muted);
     font: var(--font-count);
     font-variant-numeric: tabular-nums;
+  }
+
+  .column-fold-button {
+    margin-inline-start: auto;
   }
 }
 

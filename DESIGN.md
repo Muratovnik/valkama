@@ -440,10 +440,46 @@ and only fades the end of a strip that scrolls on past it.
   its `option` slot and `OptionGroups` through its `text` slot; neither knows a facet.
   `production-choice-marks.spec.ts` compares each row with its button.
 - **A form asks in the order the card reads.** The new-task dialog asks for the title,
-  then the kind and the priority, then the labels and the parent, and the description
-  last: its rows come from `FACET_ORDER` (`COMPOSER_ROWS`), the order every surface
-  reads an item's facets in, and the description follows the facts as it does on the
-  card. It used to ask for the description between the two pairs.
+  then the kind and the priority, then the project and the labels, then the parent on a
+  row of its own, and the description last: its rows come from `FACET_ORDER`
+  (`COMPOSER_ROWS`), the order every surface reads an item's facets in, the project before
+  the labels as what the work changes before how it is marked, and the description follows
+  the facts as it does on the card. The project and the labels share a row where each has
+  240px and stand one under the other on a phone, where a chip and the input took two lines
+  in half the dialog; the project is named above its input as the labels are, so the two
+  inputs stand level. It used to ask for the description between the two pairs.
+- **«Новая работа» says what the new work is and where it starts.** A stage is a goal
+  under a parent, so the kind offers no stage of its own: «Цель» chosen with a parent reads
+  «Этап», with a stage's mark, and is sent as a goal, which the server makes a stage
+  (`composerKinds`). A stage offered on its own was refused for want of a parent. The
+  project field starts on the project the workspace stands on, the one the scope narrows
+  to or else the space's default, and offers the space's projects; the dialog names a
+  project only where another than the default is chosen, and the server reads the default
+  otherwise. A goal or stage holds the work of any project and names none, which the server
+  enforces, so for one the field says «Любой проект», takes no choice and says why in its
+  accessible description. A space with no project, or whose projects were not read, draws
+  no field. A switch under the description, «В „Не разобрано“», named by the workflow's
+  one triage state as the interface names it, leaves the new card there, for work raised
+  before it is sorted: the owner's own write otherwise lands where the workflow puts it. A
+  workflow with no such state, or two, draws no switch (`triageState`). Every field starts
+  over each time the dialog opens.
+- **«Новая работа» chooses its parent from the tree.** The field offers «Без цели» first,
+  then every goal and stage of the space at any depth, laid out by the tree's model
+  (`treeRows`) as the list draws them: each under the one it stands in, open before
+  closed and the newest first among the ones beside it. An option's note is the path
+  above it, the references of the goals and stages it stands in, and its state, and
+  the search reads the note too, so a stage five levels down is found by its title or
+  by the number of any goal above it. Another space's goal is not offered: it holds
+  work only in its own space. A space with no goal or stage offers «Без цели» alone.
+  Only goals at the top level were offered, so a stage could not be chosen at all.
+- **A failed write keeps the dialog as it was typed.** The title, the kind, the
+  priority, the labels, the parent and the description all stay, and the reason
+  stands below them in the dialog's own words: «Работа не создана:» and the server's
+  reason where it refused, «сервер не ответил» with a request to try again where it
+  did not answer or failed itself, and «Работа не создана» alone for an answer the
+  client could not read. The dialog showed the error as the client caught it, the
+  server's sentence bare or `HTTP 503`, which named no work and said nothing of what
+  to do next.
 - Corners stay at 8px for controls, 10px for panels and 12px for the one shell
   corner; small status chips may round fully. Depth is primarily tonal; shadow
   is reserved for an overlay that must be distinguished from its owner surface.
@@ -573,7 +609,11 @@ and only fades the end of a strip that scrolls on past it.
   `production-density.spec.ts` holds this where it is drawn.
 - A KPI figure is the one step above the scale, at 28px, and every figure in a
   strip is the same size. Which one leads is said by order and column width; a
-  second larger figure only adds a third size to a row of four numbers.
+  second larger figure only adds a third size to a row of four numbers. Every
+  figure of a row of tiles stands at one height, in both languages and at every
+  width: where a tile's name may take more lines than another's, the figure
+  stands over the name, at the tile's top. Under names of one, two and three
+  lines, Volumes' figures stood up to 34px apart in one row.
 - The module is named once, by the context bar. A page does not repeat that
   name in a display heading, and a section heading inside a page is a section
   size, not a page size.
@@ -730,11 +770,14 @@ and only fades the end of a strip that scrolls on past it.
   stands on the edge and the target reaches outward. Inside a panel with a surface of its
   own, a menu, the headings take the rows' inset instead. A chain's rows once stood 8px in
   from their headings, a session 8px in from its label and a step's box 6px in from the
-  checklist's heading, three edges in one column. `production-card-list-edges.spec.ts`
-  measures them. A row whose box is laid out in every state, as Analytics' rail entries,
+  checklist's heading, three edges in one column; a list without marks is no indent either,
+  where a question's conditions stood 20px in from their label, and a refusal's list of the
+  work it would cancel 20px in from its first line. `production-card-list-edges.spec.ts` and
+  `production-question-cancel-edges.spec.ts` measure them. A row whose box is laid out in every state, as Analytics' rail entries,
   ranked rows and table rows are, draws that box first: the box stands on the edge and its
   words take the inset inside it, since a box that reached past the column in one state read
-  as an entry pushed out of it (Analytics).
+  as an entry pushed out of it (Analytics). A question's options and findings are such rows,
+  on a ground in every state: the ground stands on the edge and the box is 12px inside it.
 - A disclosure's chevron is the icon layer's `disclosure-closed` and `disclosure-open`: the
   set's chevron drawn from its square's start edge, so the square stands on the column's
   edge, the stroke starts there in both states, and the words after the square keep their
@@ -785,7 +828,14 @@ same way, not a record that could not be loaded.
 
 The context bar holds the scope in two choices, at its end in fixed positions. The first
 is «All spaces» or one space, named by its key with its name under it; «All spaces» lists
-every space with its work count and its projects, each card opening the whole space. The
+every space with its work count and its projects, each card opening the whole space. A card
+shows four numbers under the space's name, counted as the space's Volumes page counts them:
+its cards in triage, its tasks ready and in progress, and the questions waiting for the owner.
+They stand in two rows of two, since a card is never wide enough for four whole names in a
+row, a number never narrower than its longest word. A space without them shows each as «—», never 0, and says why: an
+earlier build wrote its store, which is «No data», or its store could not be read. «Open
+space» stands at the card's foot: a row of cards is as tall as its tallest, and its ways in
+stand on one line, where after each card's own words one row's stood 78px apart. The
 second stands only in a space with more than one project to choose, and an address that
 narrows to a project keeps it on show: «All projects», the space's own projects, then the
 projects of other spaces that its items name, each with its own space's key beside its
@@ -903,7 +953,31 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
 ## Shared component grammar
 
 - **Rows and tables:** repeated comparable records use aligned columns. The
-  whole row is the disclosure target when it opens a detail surface.
+  whole row is the disclosure target when it opens a detail surface. A row's
+  action stands under the words that name the row, in the columns read first,
+  never in a column of its own at the row's end: a table wider than its frame
+  scrolls that column out of sight, and «Attach to a card» stood past the frame
+  at 1280px and three frames' width away on a phone. Whether a table's columns
+  fit its frame decides how it stands, never the window's width
+  (`useTableFit`): it is laid out at each step in turn and stands at the first
+  that keeps every column inside the frame. A table of figures has three: its
+  headings on one line; the headings over figures on two; and every column at
+  the least that breaks no word, the headings over figures as narrow as their
+  longest word and the page's words, such as a goal's title, giving way to
+  theirs. A table of records read as words rather than compared as figures, as
+  Agent decisions' and the commits on no card, stands as one block a record as
+  soon as its columns do not fit, at any width, its cells on lines one after
+  another and its headings a line of sort buttons over them (`SectionTable`'s
+  `stack`). The work outside goals in Volumes, a table of figures, stacks the
+  same way where even its least does not fit, each figure beside its
+  category's name; scrolling, its last categories stood out of sight until the
+  table's end. Sideways scroll is the last resort: only a table of figures whose
+  least does not fit and that does not stack scrolls, at its second step, its
+  names held at the frame's start. Analytics' tables take no third step: their owner chose a
+  second line and the sideways scroll for them. Stacked by a phone's width alone, Agent decisions left «What
+  was decided» past the frame at 1024 and 760; held to their widths, the goals
+  of Volumes left «Left ≈» past it at 1280, under a scroll bar below the
+  fold.
 - **Status:** one semantic-state primitive owns label, dot/badge geometry, and
   palette across work items, executions, references, and Settings.
 - **Choice controls:** one accessible custom control owns search, icons,
@@ -921,7 +995,8 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   and to the close, and focus moves to the new content's first control as it
   does on an open. A panel opened by no input, from an address or a reload, holds
   focus on what it is read with until a Tab, so that no control stands ringed for
-  something nobody pressed and the keys that scroll work at once. A card an
+  something nobody pressed and the keys that scroll work at once. That Tab goes on to
+  the first control, on a card the first of Back, «…» and Close its bar holds. A card an
   address opens does not wait for its space: it reads its own record beside the
   space's read, and what it takes from the space — the states it may move to,
   its parent's reference — comes in later into places already held for it, the
@@ -1340,7 +1415,27 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   arrows show a panel as they reach its tab where it shows at once, and only
   move focus where showing it starts slow work, as Settings' diagnostics do. A
   row of `aria-pressed` buttons, `radio` or `tab` roles styled locally is the
-  same control built again, and `check:ui-system` rejects one.
+  same control built again, and `check:ui-system` rejects one. A segment not
+  pressed takes the hovered ground and the main ink under the pointer, a step
+  under the pressed one's ground; the ink alone was a step of grey a reader
+  pointing at a two-segment row did not see. A row of choices wider than half a
+  settings row is a wide row (`SettingsRow`'s `wide`): the choice stands beside
+  the name in the half every row's control stands in where its words fit there,
+  and under the name, as every row of a narrow workspace does, where they do not;
+  it wraps only where that line cannot hold it either. Wrapped, a row of
+  segments (`SegmentedControl`'s `wrap`) stands in columns of one width on the
+  fewest lines the room allows, and in the fewest columns that keep to that many
+  lines (`segmentColumns`): every line but the last is full, and the last, short
+  only where no number of columns divides the segments, keeps its segments under
+  the columns above. Four stand two over two, never three over one; five in room
+  for three or four stand three over two, and in room for two, two, two and one;
+  where not even two columns fit, one column. Held to the half, Participation's
+  set wrapped onto a second line at 1280px; reaching toward the name instead, the
+  choices of one column started at three edges at 1024px. Each wrapped line
+  sharing its own room, the set broke a phone's two lines 17px apart and stood
+  three over one at 430px. Held to columns that fill every line, the five
+  periods of Analytics would have had none but one, five lines tall in a bar that
+  stays on the screen.
 - **Menus:** `VMenu` owns a menu behind a button — a card's «…», a view's settings — as
   the WAI-ARIA APG menu button. The trigger is a ghost `VButton`, its sign alone with the
   menu's name as its hint, or its sign and words; Enter, Space and ArrowDown open it on its
@@ -1364,7 +1459,7 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   level, set size and position; a component binds them whole, as
   `v-bind="treeRowAttrs(row)"` and `treeGridAttrs`. `TreeRowLead` draws a row's
   start: an indent of 24px a level, 16px on a narrow list, that stops at the
-  fifth level, the third on a narrow list, and the arrow that folds or opens the
+  fifth level, the second on a narrow list, and the arrow that folds or opens the
   row. The arrow stays out of the Tab order, because ← and → do the same.
   `useFoldChoices` keeps a reader's fold or opening against a rule, per space,
   and forgets a choice once it agrees with the rule. The board's lanes, the
@@ -1444,8 +1539,11 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   the next line whole, left the line before a long path half empty and could leave the
   comma after it alone on a line. So it breaks with the words, a path also after each
   `/`, which a browser does not offer by itself, and what is written against it stays
-  on its last line; padding that takes no room in the line gives its words a pointer
-  target as tall as their line, 24px in reading text, without reaching the words above. One
+  on its last line. A work item's number is the exception: one word of a few letters, it
+  breaks around itself and never at its hyphen, as in a title, linked or not, since a
+  question's head on a phone ended one line on «MAIN-» and began the next on «314».
+  Padding that takes no room in the line gives its words a pointer target as tall as
+  their line, 24px in reading text, without reaching the words above. One
   that leads to a card or a document is a link to that address (`/open/<number>`, the
   document's page): a plain press opens it in place through its owner, and a press with
   a modifier or the middle button is the browser's, as on any link. The desktop app has
@@ -1572,15 +1670,43 @@ The bar above the views is two rows and no more: the view and its menu, then the
 filter, then the one primary action, every control of the row at one compact
 height, and under them what is drawn and how much of it. The view's menu, «View»
 by the view because it arranges what is drawn, holds how the view is arranged and
-the views kept: the grouping is a choice in it, offered only where the view has one
-(the board's «No grouping» or «By goal»); «Save view…» keeps the address's state —
-the view, its grouping and the filter — under a name, per space, in the interface's
+the views kept. The grouping is a choice in it, offered by view: the board's «No
+grouping», «By goal», «By stage» and «By project»; the list's «No grouping», a flat list
+of the whole scope in one order, «By goal», its tree, and «By project»; the graph has
+none, its frames are its grouping. The order follows as two choices: «Sort» — «Queue
+order», the default and the order the take-next queue gives work in, «Updated»,
+«Created», «Priority» — and «Direction», whose words say what comes first («Newest
+first», «First in the queue first») rather than an arrow's. A list header sorts into the
+same order, and the menu names a column's order a header chose among the four. The
+address keeps the order as `sort` and `desc`, the queue's from the start writing
+neither. «Save view…» keeps the address's state —
+the view, its grouping, its order and the filter — under a name, per space, in the interface's
 own settings, and a kept view is a choice the menu marks while the address holds it
 exactly; choosing it puts its state back, and the marked one can be deleted. A
 space never lists another space's views. Nothing in the row is a pressed filter of
 its own any more: everything to the right of the field narrows it, and the two
 conditions that once stood beside it as presets, «Workable» and «Has an
-assignee», are the first group of the filter's menu. A usable filter is as wide as a
+assignee», are the first group of the filter's menu, with «Waiting for my answer», a task
+whose question to the owner keeps the queue from giving it, «Awaiting triage», a card of
+the space's own triage stack that no review has marked, exactly the cards the line «time to
+triage» of «Needs my answer» counts for the space, and «From another space», a
+card another space holds; that one is a value, so its chip's «≠» keeps every such card
+out instead. «Awaiting triage» reads the mark the list read gives each stack card: a card
+another space holds stands in that space's stack, so it is not taken. The last condition,
+«Closed in a period», is a row with a chevron that steps into its periods, those of the
+period bar — «Today», «This week», «Past 4 weeks» and «Days of my own» — one at a time: a
+card that came to be completed or cancelled within the period's days, each whole on the
+reader's calendar, a preset to the end of today. It keeps exactly the cards the Volumes read
+counts as Done and Cancelled for those days, by the moment the read counts by, when the card
+came to stand where it is, so with the state beside it «Done in a period» and «Cancelled in a
+period» are each one address. Its chip says the period, «Closed this week»; for days of the
+reader's own the chip says «Closed on my days» and the period bar's two day fields stand after
+the chips, the first and the last day taken in, a day set anew narrowing the work at once.
+The address keeps it as the period pages keep theirs: `period`, and `from` and `to` for days of
+the reader's own. «Workable» is the list read's own answer for each card, the one the queue
+gives by, so the filter lets through what claim-ready hands out and follows a rule the
+server adds without a copy of it here: where the owner hands out work by hand, the queue gives
+nothing and no card there reads workable. A usable filter is as wide as a
 phone's, 108px with the longest words; where the view's segments and the action
 cannot stand beside that, the bar takes its phone form, where the menu is its sign
 alone. The filter's
@@ -1590,8 +1716,12 @@ and short where it would be cut. The field is the way into the filter's menu, wi
 press in it, `/`, ↓ or a letter typed opens it, and Tab or focus coming back by
 itself does not, since Tab passes through to what the menu would cover. The menu takes
 two steps, as Linear's does: it opens on the facets — state, kind, priority, holder,
-label — under the two conditions, and a facet's row, marked with a chevron, steps into
-that facet's values. Every value of every facet at once was a list a real space's
+project, goal or stage, label — under the conditions, and a facet's row, marked with a
+chevron, steps into
+that facet's values. «Project» offers the projects the work names, by name, and «No
+project»; «Goal or stage» offers each container as «MAIN-12 · title» with its path of
+references after it, «MAIN-1 › MAIN-12», and keeps the container's whole subtree, the
+container included. Every value of every facet at once was a list a real space's
 labels made thousands of rows long. The values' step heads its list with the facet's
 name as the way back; ← or Backspace from the start of the text goes back too, and
 the highlight lands on the facet it left. Typing in the facets' step still finds a
@@ -1629,16 +1759,32 @@ working session's sign, «◌ 5», and the reference is cut before the mark goes
 whole, since then nothing on the field says work is running. The header's hover text says
 it whole, as a zoomed-out card's does, and so does its button's name: over the work under no
 parent, whose one button is the fold, the fold's.
-On a phone the list's folded orders are one choice in the title's heading, in the
-heading's font and with the least around it, and an order's name is never cut: the
-longest takes a line of its own under the title's sort.
+Wherever the list folds the state, the priority and the holder, its folded orders are one
+choice in the title's heading, in the heading's font, and an order's name is never cut. So the
+head folds before it wraps: as a run of buttons after the title's sort those five took three
+lines of a phone's head, and a second line of the head at 1024px once «Steps» became
+«Conditions». The two that fold first, «Goal and stage» and «Project», stay a run. A heading
+holds one line. Where even the narrowest fit's does not, the list stands that fit once more
+with the choice bare: its chevron alone, the words it shows otherwise still the value
+assistive technology reads and its hint's name. A tree's lead and an urgent glyph widened the
+reference column of a phone's list until the title kept 136px, and «Порядок» beside the
+title's sort needed 158, so the choice took a second line of the head. Only a title too narrow
+even for the bare choice lets its heading wrap, since that level gives way to none.
 Cards do not reserve empty tag or source regions.
 A board tile prints exceptions, not defaults. Its first line is a kind glyph
 when the item is not a plain task, the reference, a priority glyph when the
 priority is not medium, and at its end only what stops the work — the open
 blocker it waits on, drawn as its glyph and its reference («⛔ MAIN-12», named
 «Ждёт MAIN-12»); the line never wraps, and an exception short of room keeps
-its glyph and says its words on hover. The title follows, at most three lines,
+its glyph and says its words on hover. A tile that stands ready and that the take-next
+queue would still not give is muted: its title takes the finished tile's muted ink, and
+its first line ends with the blocker, or, with none open, a sign and a word for the queue's
+first reason — «ждёт ответа», «вручную», «отложено выше», «другое пространство» — whose
+whole sentence, «Очередь её не выдаёт: она ждёт ответа владельца», is its name and its
+hover text. Tone alone means nothing and a hint is not seen, so the word is on the tile; a
+line short of room keeps the sign. Elsewhere the column says why: work in triage, put off or
+at work is not ready, and a ready tile the queue gives is the norm and says nothing.
+The title follows, at most three lines,
 its whole words laid over them while they cut it (Hints), while the pointer rests
 on its lines rather than anywhere on the sheet, and on the focus a key brings it,
 then the labels on one line — as many whole ones as it holds, up to three, then
@@ -1680,13 +1826,26 @@ them. The reference is set in the line's own figures, not tabular ones: no
 column of digits lines up on a tile. So urgent, an improvement, a four-digit
 reference and «⛔» with another hold whole in a desktop column when the space's
 key is three letters; a longer key folds as any exception short of room does.
+A goal or a stage stands as a tile only while it is not accepted, in «Triage» or «Deferred»;
+accepted or closed, it stands in no column: an accepted one derives its state from the work under
+it, and the board shows it as a lane where it groups by goal or stage.
 The board grouped by goal gives a lane to each goal, the root of a line of work, and
-one to the work under none, «No parent» («Без
-родителя»). A goal's lane holds all the work under it, through its stages at any
-depth; a stage heads no lane and is work of its goal's lane, a tile there while it
-stands in a column, so no item is drawn twice. The lanes name the goal, as the card
-does; the branch map's lane under none and the graph's frame under none are named
-the same way.
+one to the work under none, «No goal» («Без цели»). A goal's lane holds all the work
+under it, through its stages at any depth; a stage heads no lane and is work of its
+goal's lane, a tile there while it stands in a column, so no item is drawn twice. A tile
+filed under a stage names that stage on its second line, «Stage MAIN-12 · title», in the
+quiet tone, since the lane names only the goal. The lanes name the goal, as the card
+does. Grouped by stage, every goal and stage heads a lane named by its path, «Goal ›
+Stage», stands as no tile, and work stands in the lane of its nearest container. Each part
+of the path is a press that opens that part's card, and the chevron alone folds the lane.
+A lane's counts are «closed N of M» («закрыто N из M»): its work closed out of all of it,
+one population, as the list's group rows count. A card
+of another space, which has no parent here, stands by goal and by stage in a lane of
+its space, «Space ALPHA · name», after this space's lanes. Grouped by project, a lane is
+each project of the space, in the space's order and kept while empty, then «Several
+projects» for a card naming more than one, drawn once there so its drag, its focus and
+the counts stay whole, then «No project»; an accepted open goal or stage stands in no
+column and so in no lane.
 On the board grouped by goal a cell with no tile drawn takes no ground until a
 tile of its lane is dragged and could land there, and a finished cell's offer of
 its tiles is a line of text. A goal's row is one line: its reference, its title
@@ -1728,8 +1887,16 @@ ring's reach above its arrow, and the board keeps it at its edges. A tile the bo
 view under the row's heading, by the keyboard or by opening it, stands below
 the heading at the gap the lane keeps under it, however many lines the heading
 takes.
-The Done column, and a lane's Done cell, stand newest closed first, by the time
-of the item's latest transition; nothing there is planned, so the order of work
+The «Deferred» column («Отложено») starts folded to a strip as narrow as a control, its name
+running down it over its count, so work put off holds no column's width; a press on the strip
+opens it, the same press on its open head folds it, and a reader's choice against that rule is
+kept per space and forgotten once it agrees with it. Under a filter a column nobody folded opens
+when it holds a match, so a search never hides what it found; folded, its count still says it.
+Grouped, the row of state names holds the strip as its chevron and count, the name its hover
+text, and every lane keeps the narrow track empty until it opens. Focus follows the press to
+the control that undoes it.
+The Done column, and a lane's Done cell, stand newest closed first, by when the
+item last entered its finished state; nothing there is planned, so the order of work
 the other columns stand in does not apply. No tile is placed by hand in any
 column: a drop within its own column changes nothing, and a tile dropped in
 another column moves to that state, standing last until the board reads the
@@ -1744,14 +1911,73 @@ in and about its scrolled window, and gaps hidden from a reader hold the height
 of the rest, so the scroll bar is as long as the whole list. Its columns are as
 wide as all the rows need wherever it scrolls; a sort and a filter act on every
 row; ↑/↓, Home/End and Page Up/Page Down move by a row's place in the whole list
-and bring the row into view; the Tab stop and the row focus is in stay in the
+and bring the row into view; the rows are the list's one Tab stop, and the head's sorts
+and its choice of orders are none of their own, since Tab came to the rows only after a
+stop at every sort, seven for a reader before the first row: ↑ from the first row goes to
+the heading above the cell focus was in, ← and →, Home and End walk the head, and ↓ goes
+back to the rows; nothing in the list or around it listens for a press but its controls,
+since a browser names a listening element clickable to a reader, and the list's box was
+read as «clickable» before its table; the Tab stop and the row focus is in stay in the
 page wherever the list scrolls; the table tells a reader how many rows it has
 and each row where it stands; a printed list prints every row; and Ctrl+F finds
 in every row, as the next rule says. The cost, for now: on a list that long, a
 screen reader's browse mode reaches only the rows in the page.
+After its title a list row's «Goal and stage» («Цель и этап») names the goal and the
+stages it stands under, goal first, «Launch › Beta», read from the whole space, so a
+filter that leaves the goal out of the rows still names it. Work under no goal says a
+dash; a card of another space says nothing there, since this space's read does not name
+that card's goal. The column sorts by the path. It gives way first: beside every other
+column a list of 900px left the title 20 characters and pushed the table past its edge.
+Folded, the path leads what the row prints under its title, on one line cut at the row's
+edge and whole on hover: a line of its own above an open blocker and the labels while the
+state, the priority and the holder stand, and the first fact of the line of facts once they
+fold with it. The list by goal draws
+no such column, since a row's place there is its goal; the list by project does.
+After it «Project» («Проект») names what a row changes, drawn by the rule of a tile's
+project mark: the space has several projects and «All projects» is chosen. It says the one
+project of this space the row names, «Several projects» for one naming more, as the board's
+lane by project does, and a dash for work naming none; a card of another space is named by
+this space's projects alone. It sorts by the project's name, work naming none first and
+work naming several last. The list by project draws no such column, since a row's group
+names it. It folds with «Goal and stage» and follows the path wherever that leads, a name
+saying nothing for work naming none. Each of the two is at most 10rem wide.
+The list stands the widest of its four fits — every column; all but those two; the
+reference, the title, the conditions and the date; the reference and the title — whose table
+its own box holds. A fit's table is as wide as its columns need: each as wide as its widest
+row and its heading, the first column of a tree with its lead, the arrow and the indent of
+its deepest row, and the title 36 characters with its heading on one line. A fit that needs
+more pushes the table past the list and gives way to the next within the frame, so a reader
+sees only the one that holds. The narrowest keeps the title 16 characters and what the
+reference leaves, and gives way only to itself with its choice of order bare, as the head
+says above. Fixed widths decided before, 1100 and 1270 for
+every column, 920 for all but two and 560 for more than the reference and the title, set
+where a typical title kept its 36 characters beside a flat list's first column: a
+migrated store's longer states, holders and dates left a flat list of a 1280px window its
+title 172px and its head two lines, and a list by goal three levels deep at 1280px, measured
+on the width alone, left its title 131px with words broken inside and ran 24px past its
+frame. A narrow list's cells take half the inset, 8px, as its head's sorts do,
+so a heading's word starts where its column's words do: at 12px a tree five levels deep at
+390px left its title 16 characters, broke «Переосмысление» inside, and stood «Название» 4px
+left of the titles under it. The priority's glyph that follows a reference where its column
+has folded is counted in the first column's width, and a narrow list's indent stops at the
+second level, a row deeper naming its parent under its title: counted as nothing, an urgent
+row five levels deep at 390px stood its glyph 6px past its cell over the title's inset, and
+counted with the indent at the third level, the table ran 9px past its frame. A group's row wraps between words and keeps each count whole, its
+wrapped lines starting under its name: held to one line, a project's long name stood the
+table 574px wide in a list of 302 on a phone.
 Grouped «By goal», the list is a tree grid. A goal stands at the top, with its
 stages and tasks under it by depth, and rows that share a parent stand in the
-list's sort order. The view menu offers «By goal» on the list and on the board alike. A goal or stage with more than 20 open items, or with none open,
+list's sort order. Grouped «By project», it is a tree of one level: a row per group, as
+the board's lanes by project are, its name and counts across the columns, and the cards
+under it in the list's order. A group's row opens nothing: Enter, a press on its arrow, ←
+and → fold and open it. A card of another space, which has no parent here, stands by goal
+in a group of its space, «Space ALPHA · name», one a space, after this space's rows, as the
+board's lane and the graph's frame of that space do: a group's row, its cards under it as a
+list with no tree inside, so another space's goal opens nothing here. A card there with a
+parent names it under its title, «in ALPHA-4», as a row below the indent's last level
+names its own: the read names that parent, which lies in the card's space and among none
+of this space's rows. «From another space»
+negated keeps those cards out and their groups with them. The view menu offers «By goal» on the list and on the board alike. A goal or stage with more than 20 open items, or with none open,
 starts folded. A reader's choice against that rule is kept per space and is
 forgotten once it agrees with the rule. A filter lays out the whole scope and
 shows what it let through with the path to it: a path row is quiet, a reader is
@@ -1761,11 +1987,21 @@ the rule folds nothing. Below the indent's last level a row names its parent,
 Up/Page Down move by place in the whole tree. → opens a folded row and
 otherwise goes to the row's first cell. ← folds an open row and otherwise goes
 to its parent. In a cell, ← and → go to the cell beside it, and ← from the
-first cell returns to the row. Enter opens the card. Folding a row that holds
+first cell returns to the row. Enter opens the card. A press on a row's arrow takes no
+focus: it moves focus to the row and then folds or opens it, as the keys do, so a reader
+hears the row and then its change; on the arrow the row took focus from inside itself and
+a reader heard neither. Folding a row that holds
 the focused row moves focus to the folded row. The tree draws its window from
 300 rows it could show, folded rows included, not from the rows it shows. Its
 first column is as wide as the deepest reference needs after its indent, so
 neither a fold nor a scroll moves a column.
+A goal's or a stage's row says under its title what it spent, as its row on the Volumes page
+says it: «Spent», without the cancelled work, and «With cancelled», each agent time and the
+tokens processed anew, «—» with its hint where usage was not counted, never 0. The list reads
+those rows in one read for the goals and stages it draws, a list that draws more as it scrolls
+asking for the new ones, and a row without its figures yet, or whose read failed, has no line:
+the list never waits on them. A space of an attached store, which that read does not answer
+for, draws none.
 The list has a find of its own, because the browser's reached only the rows in
 the page. While the list is what the page shows, with no card, dialog or finder
 over it and no menu, choice list or other popup open, Ctrl+F (⌘F) opens the
@@ -1808,7 +2044,7 @@ for want of room does the priority (but medium) follow the reference as its
 glyph, because a blank cell in a sortable column
 reads as unknown; the holder column
 says nobody with a dash, never «Workable»; the labels sit under the title
-from 900px of list; an open blocker is named, «Waiting on MAIN-12», wherever it
+while the state, the priority and the holder stand; an open blocker is named, «Waiting on MAIN-12», wherever it
 lives. A graph node leads with the kind, says its state as a dot and a name
 in the hue of its chain edge, says workable quietly in the state's place and
 never in heavier ink, and reads high or urgent after its reference; its glyphs are read,
@@ -1825,6 +2061,16 @@ of the list shares, on the title's first line with every dot on one edge, and un
 title, at its edge, where the list is a phone's. The state followed its title in a row that
 wrapped, so down a list it jumped between the end of a short title's line and a line of its
 own under a long one, and groups that sized their own columns put it at another edge in each.
+The evidence ends with the item's commits, «Коммиты», newest first: each named by its
+repository and the start of its hash, «valkama · a3cc0de4», the pair that finds it, with its
+subject, then its project's name, when it was committed and, for a commit attached by hand,
+«прикреплён вручную». The server attaches a commit itself when a session makes it, which is
+the norm and says nothing. Its name opens what git says of it in a dialog, asked by that
+repository and hash (`GET /api/commit`) in the repository's registered root alone; a
+commit of no known repository says git has nowhere to be asked. A hash written in the
+card's text opens the same dialog where it names one commit the card carries, and is text
+where it names none or could name two. A commit is not a ref: the refs above it are
+sessions, memory records and links.
 A card's chain is a tab of its own, «Цепочка», in the order Обзор · Агенты · Цепочка ·
 Исполнение · Память · Связи · Системные события, of which a card shows those it offers.
 The card offers it only where there is a chain — an item with children, or one work was
@@ -1834,12 +2080,31 @@ a card on the tab whose next read finds no chain steps back to «Обзор». T
 under every link of a goal; the map and its hundreds of rows had held Overview's first
 screen between the next step and the description before that. The tab names it, so it has
 no heading of its own: it opens on its «Состав | Цепочка» switch and «На графе», and Back from
-the graph opens the card on this tab. The switch stands only where the two answer
-differently, by the counts the chain read gives for both scopes: where the work grew nothing
-past the root's children the two are one list, and a root with no children has no contents
-to read. An item of an attached store has the tab only where it has children, and there it
-says that its chain is read in the primary store.
-The section leads with a branch map: one lane per origin of work,
+the graph opens the card on this tab. A goal or a stage opens on «Состав», what it holds,
+and a task on «Цепочка», what grew from it: a task holds no work. The switch stands only
+where the two answer differently, by the counts the chain read gives for both scopes: where
+the work grew nothing past the root's children the two are one list, and a task with no
+children has no contents to read. A goal or a stage with no children keeps it, since it
+opens on its empty contents and the switch is its one way to its chain. The reader's choice
+holds while the card is open and comes back with it by Back. An item of an attached store
+has the tab only where it has children, and there it says that its chain is read in the
+primary store.
+«Состав» says first how much of the work under the root stands in each state, the chain
+read's counts in scope `tree` and none counted by the interface: tasks by their state's
+category, then, on a line of their own, the goals and stages under it by the state they
+derive, since «В работе» is said by both; then «По проектам», its tasks by the project each
+changes, the most first and «без проекта» last. A task of two projects counts in both, so
+that line adds up to more than the tasks; a project the registry does not name shows its
+id. Under the counts the work is the list's tree of
+rows: the root's stages and tasks at the top, each stage opening down to its tasks, in the
+order the read gives. A row says its reference, its title on one line, its state and who
+holds it while it is open; at a phone's width the holder gives way. A stage with open work
+opens and one with none starts folded, as in the list, and a fold the reader chose is kept
+with the list's, so a stage folded in one is folded in the other. One Tab stop, ↑ ↓, → and ←
+walk the rows as in the list, and Enter or a press opens a row's card. A root with nothing
+under it says «Внутри пока нет задач.» and draws no tree. «Состав» draws no branch map and
+no groups: its rows are the root's own work, and the map's lanes are origins of a chain.
+In «Цепочка» the section leads with a branch map: one lane per origin of work,
 one equal-width segment per member, finished work then current work then what
 is ahead, so a lane's length is its volume. Chain views colour with the
 board's hues — finished green, in progress blue, review amber, ahead grey,
@@ -1896,7 +2161,19 @@ the size the field has now: past it a header is a pixel or two and the map a smu
 The button, the wheel and a pinch stop there and the button says so, and a narrowing,
 a fold or a resize that leaves the camera further out brings it up to that zoom; a
 refresh still moves nothing. The fit is worked out from the drawing and the field and
-never reads that limit, or a field that grew could not be fitted. The
+never reads that limit, or a field that grew could not be fitted. In a phone-wide
+workspace the camera also goes no further out than the zoom at which a card's smallest
+text stands at the ramp's floor: 12px over that text's 13, both read from the tokens
+(`graphZoomFloor.ts`). At 390px the whole space fitted only where a card's words were specks.
+The floor is not the 13px reading floor, the card's own size: a card and the air the keyboard
+keeps clear round it would then be wider than a 390px window's field, and every step into the
+field would move the camera the operator had placed. There «Fit whole graph» shows the
+drawing from its beginning at that zoom, as it is read, and the rest is a pan away;
+«Zoom out», the wheel and a pinch stop there, the button
+turning off as at any limit; and «Fit whole graph», which stays pressable, says why in its
+hint, which is also its accessible description, since a button turned off takes neither the
+pointer nor the focus. A drawing that fits at that zoom is fitted whole, as anywhere, and a
+wider workspace keeps the rule above unchanged. The
 2.1.0 rule that framed the field afresh on every new queue or search was
 withdrawn by the owner after use: each narrowing cost the operator their place
 and their zoom. The keys to the chain list its
@@ -1923,10 +2200,24 @@ the chain's history stand one action away, and the action's state comes back wit
 the card's other reading on Back. The scope rides the heading's row.
 
 Over the whole space the graph stands in frames. A goal or a stage is drawn as a
-frame round its work, and the work filed under no parent has
-a frame of its own, «Без родителя» (`none`), so every open item stands somewhere on
-the field. A frame is told by tone and draws no line: it is ground a step above the
-field and its cards a step above it, and a frame inside a frame is a well cut a
+frame round its work, at any depth, a stage five levels down as a frame inside four, and the
+work filed under no goal has a frame of its own, «Без цели» (`none`), as the board's lane
+and the list's group of that work are named, so every open item stands somewhere on
+the field. Another space's work the read holds — its cards that name this space's project,
+and the far end of each link between the spaces — stands in a frame of that space, one a
+space, after this space's frames, the spaces by key, named as the list's group of that
+space is, «Пространство ALPHA · Alpha» (`space:<key>`). Such a card has a parent, only in
+its own space, so «Без цели» would say the wrong thing about it, and another space's goal
+is a card there rather than a frame, since it holds nothing in this space. That frame's
+header is the work under no goal's: a fold and the name, with nothing to open, and it folds
+by the same rule. The counts line says another space's cards apart, after this space's
+work: «8 открытых из 9 и 2 из других пространств», since they are in the read and drawn on
+the field but are not this space's work; under a filter it says what the filter let through
+of them, and «≠ Из другого пространства» leaves none, nor any of their frames or the links
+to them. The far end of a link is counted nowhere above the field, in that part or any
+other: the read holds it only to end the link. The census behind the line is the one
+every view reads (`usePlanningCensus`). A frame is told by tone and draws no line: it is
+ground a step above the field and its cards a step above it, and a frame inside a frame is a well cut a
 step below the one it stands in. Without a filter the field draws every frame with
 open work and every open goal, and in «All» every goal; under a filter, as on the
 board, only a frame the filter found something in. So every item is on the field,
@@ -1938,16 +2229,17 @@ lines, with the counts right under it, and the layout leaves it the room that sa
 header takes when drawn; the chevron leads its reference line, and everything in the
 header starts at one left edge, the one its cards start at. Zoomed out past reading, the header is the
 goal's reference grown with the field, as a zoomed-out card's is, with the count of
-work moving under it at the far end and a thicker edge beneath; the work under no parent
-keeps its name instead. The header is two buttons with one action each, as a card
+work moving under it at the far end and a thicker edge beneath; the work under no goal
+keeps its name instead, as another space's frame does. The header is two buttons with one action each, as a card
 is one: the chevron folds or opens the frame, and the rest opens the goal's card;
-over the work under no parent the rest is plain text, with no parent to open. At the scale
+over the work under no goal and another space's work the rest is plain text, with no goal
+to open. At the scale
 the field opens at, the chevron is a 28px target under a fine pointer and 44px under a
 finger or at a phone's width, reaching up and back into the header's padding and the air
 round the frame and never onto the goal's words, so the header is drawn no taller; each
 button's focus ring goes round its own drawing with air and no further, and the fold's face
 under the pointer covers its chevron alone, zoomed out too, where its target is the whole band
-of the work under no parent: never that band's words or its edge. Zoomed out, the chevron is as
+of the work under no goal: never that band's words or its edge. Zoomed out, the chevron is as
 tall as the band's first row and grows with it, and the ring round any of the band's buttons
 keeps the share of its words it has at reading size, so the focus reads as they do. The field
 opens with as much air above its first row as between two frames, so no edge cuts a fold's
@@ -1965,7 +2257,7 @@ A frame starts folded by its structure alone — how much open work it holds —
 never by who is working on it, or every agent's turn would lay the field out again.
 A frame holding more than 20 open items starts folded and shows its progress in its
 header instead, and so does a goal with nothing open; the frame of the work under
-no parent with nothing open folds only past 20 drawn cards, so «All» on a space with
+no goal with nothing open folds only past 20 drawn cards, so «All» on a space with
 a few finished items draws them. Every frame between those starts open, so the
 links of its work are seen at once. What the operator chooses for a frame, folded or
 open, outranks that default and is kept per space in this browser (`localStorage`,
@@ -1976,13 +2268,13 @@ field out again, and the camera follows across, at the operator's zoom, so the
 frame's header stays where it stood on the screen and what was pressed does not
 move from under the hand (`toggled`). The arrows reach a header's two buttons as
 they reach cards, the fold on its left (`frame:<id>:fold`) and the goal across the
-rest (`frame:<id>`); the work under no parent has only the first. Right from the fold
+rest (`frame:<id>`); the work under no goal has only the first. Right from the fold
 is the goal's button beside it and Left from that button is the fold, however wide
 the header, since measured from centres a wide header's second button stands further
 off than the first card under the fold. Once a fold hides
 the target the keyboard stood on, the field's Tab stop is the fold button of the
 innermost frame round it that is still drawn. Zoomed out past reading the fold is
-hidden and is no target, except over the work under no parent, whose header has no
+hidden and is no target, except over the work under no goal, whose header has no
 other button and keeps it (`foldIsTarget`): the arrows, the Tab stop and the way in read one
 list of the targets the field draws at its zoom, so Tab never rests on a button
 that takes no focus and the field stays one stop at any zoom. Focus on a fold the zoom
@@ -2014,7 +2306,10 @@ A header says how its work stands in words, a number beside each word and never
 rounded to «99+»: «8 из 21 выполнено», then how many are in review, in progress and
 blocked, each only when it is not zero, and how many are being worked on now. The
 goal's standing is said once its work has moved, and quietly on a closed goal that still
-holds open work. Only the title gives way when the row is short; the counts are
+holds open work. Its reference line is as wide as a folded frame lets it, and a folded frame
+is wide enough for the longest standing a goal or stage derives, «Ждёт подтверждения», to
+stand whole beside a reference with a five-digit number: a state waiting for its owner is
+read at once, not when a pointer finds its hint. Only the title gives way when the row is short; the counts are
 never cut, and take a row under the name before they would be. Under the row a 3px
 edge draws the same counts as a chain's lane is drawn: finished, review, under way,
 blocked, then what is ahead (ready, untriaged and deferred work, and a nested goal or
@@ -2032,7 +2327,12 @@ rather than being dropped, and a line to work folded away ends on the frame that
 holds it. Frames lie under the lines and cards over them, so a line runs across a
 frame and into the card it ends on. A link between an item and a frame it stands in
 is not drawn, since the frame already says it, nor one whose end is hidden finished
-work or lives in another space. A line runs the way the work went, and the layout
+work. A link with another space is drawn as any other, to the card in that space's frame or
+to the frame folded round it. A link whose far end the read holds neither as a card nor as
+an end lies in a space the read could not read: it is not drawn, and the key says so first,
+«Связи с GAMMA не прочитаны» by the key the link names its source with, or «Связи с другим
+пространством не прочитаны» where nothing names it. That line is a fact about the field, so
+a screen reader hears it, while the rest of the key stays a picture's key it does not read. A line runs the way the work went, and the layout
 ranks its start before its arrow, over the whole space as in a chain: a block from the
 blocker to the work it holds, and a discovery from the work it was found in to the work
 that grew out of it, so a chain's root stands before what was discovered from it and the
@@ -2116,8 +2416,10 @@ in one tertiary line — the kind (glyph and word, in its own colour), the refer
 when it last changed and, where the item has one, its plan anchor as an icon, whose
 whole path stands in Relations with the item's other references, both opening the
 document at the anchor — and on its right
-Back, «…» and Close. «…» holds what a person does with the item that is no fact of it: the
-pin that keeps it in the side panel's «Работа», a setting checked while it is on. The pin
+Back, «…» and Close. «…» holds what a person does with the item that is no fact of it: first
+what changes what the item is part of, only where its place allows it (see «Dividing work from
+its card»), then the pin that keeps it in the side panel's «Работа», a setting checked while it
+is on. The pin
 stood in the identity line between the link and the date, read as one more fact there. The
 link to copy stays beside the reference: it is the reference's twin, in the head as on the
 hover card, and what it did is said at the end of that line. The scroller holds the rest and moves it 1:1: the title, the facts, the
@@ -2128,7 +2430,10 @@ one heap of state, priority, holder and tags. The rows stand in the registry's o
 (`FACET_ORDER`), the order the new-task dialog asks in and every surface reads an item's
 facets in; the template only draws each row, and the parent once stood before the labels
 because the template put it there. The state is its own transition menu, said
-once, so a move the server refuses leaves the chip naming where the item is, then, while a
+once, so a move the server refuses leaves the chip naming where the item is. A move that closes
+work or puts it off asks first rather than going as it is chosen: putting off opens «Отложить»,
+cancelling a task asks its reason in the band under the bar, and cancelling a goal or a stage at
+work opens the window of what closes with it (**Closing work from its card**). Then, while a
 question waits, «Ответить» with the question's sign: a verb that goes to the question on
 Overview, in the state chip's word and on its baseline. It was drawn as the status «Ждёт ответа», a state that acted when pressed, and
 that the agent waits the state's dot already says. The priority is a menu as well, urgent to low, each
@@ -2140,7 +2445,7 @@ parent was once called by the one container word under its sign, a task holding 
 an item link, the same link a number in text is: a press opens the parent through the card's
 departure, its draft guard and Back, and resting on it shows its hover card; its number is
 trimmed to its letters as every value of the facts is, so it stands on its name's baseline.
-The new-task dialog's field is «Родитель» as well, offering «Без родителя» first. A ↳ and a
+The new-task dialog's field is «Родитель» as well, offering «Без цели» first. A ↳ and a
 bare number there led nowhere. Every item a fact names is such a link. The holder is bare words, shortened to its name and the start
 of its session with the whole value and its lease in a tooltip — on a holder that is a
 session's button, in what a screen reader hears after its name, since its hover says what a
@@ -2148,7 +2453,23 @@ press does — and a warning dot once nobody is behind it; a plate there read as
 sessions that follow the item, each as its claim's holder would print, a name moving to
 the next line whole and one wider than the line wrapping between its own words, read whole
 with no ellipsis, since plain words offer no hover to a keyboard or a finger; with nobody
-following there is no such row. A label chip only filters, its words in its middle with
+following there is no such row. A goal or a stage is held by nobody, its work being its tasks: its
+state row says the state it derives from them, «Не начато», «В работе» or «Ждёт
+подтверждения», and its menu offers only what can be done to it, «Подтвердить закрытие» while it
+awaits that, «Отложить…» and «Отменить…», each where the workflow has a state it leads to;
+«Подтвердить закрытие» stands beside «Ждёт подтверждения» as a button too. Where the read of the item names sessions
+working under it the holder's row is «Работают: N», those sessions printed as the followers
+are, each with the tasks it holds in its tooltip, and no «Взять». A task waiting to be taken
+in «Не разобрано», «Отложено» or «Готово к работе» that was taken before says «начата»
+beside its state, quieter than it; a goal never does, its start being its first task's.
+Accepted work ends the rows with «Принято»: who decided it is to be done, «владелец», «по
+поручению», «как часть цели», «по правилу метки», «решение агента» or «принято до 3.0», and
+when; work nobody accepted has no such row. On Overview a step its former holder marked says
+«отмечено прежним исполнителем» on a line of its own under the one who marked it: that holder's
+lease lapsed, and the mark waits for a fresh one before review or a close, the mark in the amber
+of a decision waiting. «Подтвердить» under the mark is that fresh tick, the reader's own, on a
+card the client can change. Neither stands in the holder's line, which never wraps: there they
+left a phone's holder a letter a line. A label chip only filters, its words in its middle with
 the same room at either end, at rest and under the pointer alike. The labels are changed
 in one place, the picker the new-task dialog asks with: the «+» that ends the row, or a
 press on the row beside the chips, opens it in the row's place over the space's labels,
@@ -2184,16 +2505,71 @@ What has to be answered or read wherever the reader is — a refusal in the serv
 a failed write, the question before a takeover or before a draft is lost — stands in a
 band between the bar and the scroller, at full width, however far down the write was made.
 Its height follows what it says and never the scroller. The body names only blockers
-that are still open.
-Overview opens with the next step, when there is one: a quiet line, «Следующий шаг · 3 из
-9», whose number is the step's place in the list and not how many are done, then the step's
-words as a description reads, with no heading over one sentence. «Все шаги» at the end of
-that line goes to the checklist and puts focus on its heading; the only step has neither
-the number nor a way to itself.
+that are still open. Overview opens with what stops the work: work put off says «Отложено до 20
+ноября» or «Отложено до закрытия MAIN-12» and why it waits, then each open blocker, «Ждёт MAIN-12».
+**Closing work from its card.** Each write that closes work or puts it off asks before it goes,
+and a refusal keeps what was chosen with the server's reason under it. «Отложить» asks «До даты»
+or «До закрытия карточки», one choice of the two, the card found by its number or title among the
+space's open cards, and why it waits, which the server takes nothing without; «Отложить» is
+unavailable, the reason under the fields, until both are said and for a day already gone. A
+task's cancel asks its reason in the band under the bar, the caret in the field, then «Отменить
+MAIN-12? Карточка закроется как «Отменено».» with «Отменить задачу»; the reason is the move's and
+the summary's why, since a close needs a summary. A goal's or a stage's cancel at work opens
+«Отменить цель»: what closes with it, each row its number, its title, its state and its holder,
+then the cards outside it that wait on one of it, then the reason every card it closes keeps,
+and «Отменить N карточек». The list is the server's, read as the window opens and confirmed by
+its token; work that changed in between is refused again with the new list, which the window
+shows with «Список изменился…» above it and the new and changed rows marked, the press naming the
+new count, so nothing closes that was not seen. A goal or a stage with nothing open under it is
+cancelled in place, as a task is, and one the server answers with a list goes on in the window,
+its reason kept. «Подтвердить закрытие» shows the conditions of the whole as boxes, those done
+ticked, or «Условий нет: проверяется по описанию» and the description, then what was cancelled
+or moved out from under it with each reason; «Подтвердить» waits for every box, ticks the open
+ones and the marked ones as the reader's, writes the owner's summary where there is none, and
+completes it in one write. Work that opened under it while the window was open makes the server
+refuse that write: the window then says «Цель снова в работе, под ней открыта работа: MAIN-12.
+Подтверждать нечего.», naming what the refusal names, with «Закрыть» alone, and closing it any way
+reads the card again. No press says «Вернуть в работу»: the state is what the work under it
+derives, and no write answers to such a press.
+**Dividing work from its card.** «…» offers a task outside review «Отделить часть…» while a
+condition is still open and «Превратить в этап» under a goal or a stage or «Превратить в цель» at
+the top level, the word its place gives; a goal or a stage «Вернуть в задачу» once the card's read
+finds nothing under it, closed work included; and work under a goal or a stage «Вынести из
+цели…». Nothing is offered that the server refuses for what the card already knows, and closed
+work is offered none. «Отделить часть» is a window: the new card's title, empty, and the task's
+open conditions as boxes, none ticked; «Создать» is unavailable, the reason under the fields,
+until the part is named and takes one. The part stands under the same parent, accepted as the
+task is, so the window asks neither; a done condition stays with the task. The other three ask
+in the band under the bar, as a task's cancel does: «Превратить MAIN-12 в этап?» says what stays,
+and that a held task's claims end and their work becomes a task inside it, or that a task nobody
+holds drops its projects; «Вернуть этап MAIN-12 в задачу?» says nothing is inside it; «Вынести
+MAIN-12 из MAIN-3?» names the triage state it lands in at the top level and asks its reason in a
+field first, the caret in it, since the goal keeps that reason. After each the card reads its item
+again. A task that conditions left says where they went in «Связи», under «Условия ушли в»: each
+card that took some, by its number, with how many, a press opening it.
+Overview opens with the next condition, when there is one: a quiet line, «Следующее условие
+· 3 из 9», whose number is the condition's place in the list and not how many are done, then
+its words as a description reads, with no heading over one sentence. «Все условия» at the end
+of that line goes to the conditions and puts focus on their heading; the only condition has
+neither the number nor a way to itself.
 A section of a card that holds nothing and offers nothing is absent, rather than a
-heading and a sentence saying so on the first screen: the «Agents» tab and «Checklist»
+heading and a sentence saying so on the first screen: the «Agents» tab and «Conditions»
 stand only while they have something in them, and a step arriving with the live stream's next
 frame brings its section back with no reload.
+What work on a card took stands as one quiet line under its facts: the time, the estimated cost
+and the tokens processed anew, the whole tree's on a goal or a stage. A goal's or a stage's card
+adds a line under it with both numbers of its row on the Volumes page, «Spent», without the
+cancelled work, and «With cancelled», read for the card alone and said in that page's words, so a
+goal reads the same on its card, in the list and on the page. The «Agents» tab's head adds the
+sessions that worked on the item, its why saying they count every session that spent on it or
+wrote to it and can be more than the card lists, and, under the organizations, «Weekly quota»:
+one line per account and week, the latest first, the account by the starts of its ids, the day
+its week resets and the item's part of that week, «≈ 10% of the week», whose hint says the share
+of the account's cost that week and how much of the week is spent. A week without a reading of
+it, or whose account's work cost nothing, says so in place of a figure. Lines of different
+weeks are never added up. A line under them says the figure assumes a quota is spent in
+proportion to the API price and leans high, and another how much of the cost is on no account
+that can be shown, when any is.
 A step's discussion stands at the end of its first line and comes up as a row's actions do
 (**Actions that come up**): standing on every step at rest, it repeated one icon down the list.
 A question has no section of its own: it stands in the discussion and reads as a
@@ -2283,13 +2659,17 @@ no focus, and neither the pointer nor focus stands in it or after it in the list
 would move from under them. Selecting does nothing but select, and nothing is chosen for
 the person but at their own press: Send is what sends. Accepting what the agent recommends is
 that press, in one block of a review or in all the blocks of a choice that wait, and it fills
-only what the person has not chosen and sends nothing by itself. Across blocks, «Accept
-recommended in all» is offered only where the list's host turns it on, which «Needs my answer»
-does not yet; where it is offered, it opens in place the list of what would go, a line per block with its task's
-number, its title and what would be chosen in it, says how many blocks it leaves out because
-their recommendation does not answer them, and sends only on «Accept N»; each block is filled
-and written by its own question, so one that went folds and one that did not keeps what was
-filled, with the reason in its foot. Every choice is a full-width row
+only what the person has not chosen and sends nothing by itself. Across blocks, «Needs my answer»
+offers «Accept recommended in all» over the blocks of a choice that wait in the tab shown, the
+one press that chooses for the person in several blocks, and still only on that press: it opens
+in place the list of what would go, a line per block with its task's number, its title and what
+would be chosen in it, says how many blocks it leaves out because their recommendation does not
+answer them, and sends only on «Accept N» at the list's foot. Each block is filled and written
+by its own question, one write each, so a block refused does not hold the others back: one that
+went folds, and one that did not keeps what was filled, with the reason in its foot, and the
+line beside the press says how many went of how many. A read of the list that crosses an answer
+leaves every block once: one read while its answer is out keeps what was filled, and a read begun
+before an answer landed says nothing over it. Every choice is a full-width row
 whatever their number: its label, a quiet word on the recommended one, and as much of
 its description as leaves the labels scannable, so that the first screen still says what
 is asked and what the choices are. A description of one line stands whole under its
@@ -2327,11 +2707,76 @@ kind's answers where Don't answer and Send do: a row of buttons, each writing at
 says, through the same write as Send. Nobody declines such a question. An answer that cannot be
 taken back asks first, as Don't answer does: its own box says Back, the box beside it says the
 answer in the danger's ink, the asking stands where Don't answer's does, and every box holds room
-for each word it can come to say. «Later…» opens in place the day to come back to the question and
-«Put off», unavailable with the reason under it until a day from today on is chosen; the day is
-part of the draft. Where the listing names the question's space and project, the head's first line
-says them around the task's number, the space before it and the project after. A question its
-task's closing withdrew folds on «Question withdrawn: MAIN-12 was closed».
+for each word it can come to say; «Cancel» and «Don't do» are such answers. «Later…» opens in
+place «Until a day» and «Until a card closes», a search over the open cards of the question's own
+space, and «Put off», unavailable with the reason under it until a day from today on or a card is
+chosen; the one chosen last is what the question waits for, and it is part of the draft. Where the
+listing names the question's space and project, the head's first line says them around the task's
+number, the space before it and the project after. A question its task's closing withdrew folds on
+«Question withdrawn: MAIN-12 was closed».
+The kind follows the question's purpose: a review shows the task's outcome under what to check
+and answers Accept or Return to work; a group of findings shows the goal it proposes with its
+conditions, its findings and why, and a goal its description, conditions and how much open work
+stands under it, both answering Do, Later… or Don't do; a task in a goal shows its description,
+its goal by number and title and the goal's conditions, and adds Move out of the goal, or Leave it
+where it was for a task an agent moves into the goal, which stands where it was until then; a
+condition
+shows what is removed and what each rewritten step was and becomes, with the reason, and answers Allow or Keep; a cancel shows what closes, who holds it
+and what the sessions at work answered, and answers Cancel or Keep; a confirmation answers I
+confirm or Leave it open, which says both things the server does on that answer, handing the goal
+to the next session in its space or, with nothing under it, only not closing it; and a return
+answers as a goal does. What Valkama itself asks names its answers in these words, and its card's
+form offers them in these words too: «Делать, позже или не делать?» over Делать, Позже… and Не
+делать, where it read «отложить» over «Позже…» and, in English, «Take it on, put it off, or drop
+it» over Do, Later… and Don't do. It stands under a head that already names its card by number and
+title, so it calls that card «this» and says neither again: repeated, the title filled the lines
+a phone shows before «Show all», and the ask at the end folded away under it. The ask follows the
+first sentence, before the agent's reason and what the sessions answered, which may run long. A
+question of any
+other purpose, or without the field its kind answers in, stays a choice of options. What the
+question does not carry, as a card's outcome or description, is read from its card when the
+record first comes into view. A task's goal is read after that card, by the reference the card
+names it by beside its `parent_id` (`parent`), with the exact read of one item, since that read
+takes a reference and no id; where the read fails, or the task stands in no goal now, one line in
+the goal's place says so, and the question is answered all the same.
+A group's findings are rows with a box each, a question's rows, all ticked at first and none with
+the recommended word, since the server recommends every one. Ticking only ticks. A finding left
+unticked leaves the group and goes back to triage whatever the answer, so every answer sends what
+is ticked, and once any is unticked Do names how many go: «Do: 7». The server takes Do and
+«Later…» only with a finding ticked, so with none ticked both wait for one: they are unavailable,
+and the reason stands under the answers, as it stands under an unavailable «Put off»; a choice of a
+day already open keeps its «Put off» unavailable for the same reason. «Don't do» stays, and drops
+the whole group.
+«Later…» puts the goal off with the findings ticked, to a day or until a card closes. «Don't do»
+asks first, as every answer that cancels does. Where open work stands under the goal that the
+question did not ask about, the server refuses it with the list of that work; the list stands
+over the answers, what closes with who holds it and what waits on it, the reference it waits on
+never split at its hyphen, focus goes to its first
+line, which says the answer cancels that work too, and the asking stands again, its buttons
+brought back into view. A list taller than the room the panel leaves over the answers, under the
+block's head, is held to that room and scrolls inside itself, stopping at its ends, so its first
+line and the answers both stay in view and scrolling it moves no answer; the keys scroll it from
+that line, and while it scrolls it is a stop of the keyboard. A scroll of the panel the reader
+makes still moves the answers and ends the asking. Confirming it
+sends that list's token, never the one the question was asked with, which listed the findings the
+answer cancels first; a list that changed meanwhile is refused and shown again the same way.
+Where the list holds more than one kind, tabs over it offer All and each kind it holds, each with
+how many of it wait; a kind it holds none of has no tab, and All alone would only repeat the one
+kind, so a list of one kind has none. A tab shows only its kind's questions, the answered ones
+put aside among them, and «Question N of M» counts what it shows. When the kind shown empties, as
+its last question is answered elsewhere, the tab goes and the list falls back to All.
+Over All and the triage tab stands the line «time to triage», one for each space whose stack of
+work waiting for a triage review has grown past the owner's thresholds: «Пора разобрать · Main:
+ждут разбора 120, старшая — 3 дн. 4 ч», how many of the stack's cards no review has marked and
+how long the oldest has waited, counted from when it entered, since the read carries no clock of
+the server. It stands on a quiet ground of its own, as a line of the window and no question:
+nothing answers it, no number counts it, and focus never goes to it after an answer. A space
+whose triage reminder is off has no line, since the server leaves it out. Its one control,
+«Показать находки» («Show findings») at the line's end, or on a row of its own where the words
+leave it no room, closes the window and opens that space's board filtered by «Awaiting
+triage», the cards the line counts. The space is the line's own, in the store the read found it
+in, whatever scope the window was opened over, «All spaces» included; its accessible name adds
+the space's name, since every line's word is the same.
 A review's point is one row: a chevron and the point's label, which are one press that opens the
 point, the three words of the verdict at the row's end and the comment's glyph after them; under
 the label, from its edge to the row's end, one quiet line of what the point comes to. Accepted
@@ -2364,7 +2809,12 @@ same without closing the card or the list. Choosing or writing anything takes th
 so that Send is Send again by the time it is pressed. The step lasts only while attention is on
 its question: a press or focus landing outside it ends it, so a page holds one step at most, and
 so does its buttons moving for any reason, a question folding above or a scroll, since what the
-person pressed no longer stands where they left it. What is asked lies on nothing, so that a
+person pressed no longer stands where they left it. What moved them before the step began is the
+screen's, not the person's: the list a refused answer brings stands over its buttons as the
+asking stands again, and on a phone it pushed them past the fold, so the scroll to them ended the
+step meant to confirm it. The step therefore brings its buttons into view, by no more than it
+takes, before it takes their place, and a scroll the person makes after that ends it as any
+other. What is asked lies on nothing, so that a
 person refuses seeing the end of what will not go, and moves nothing: it takes the place of
 Check status, since a press on it would end the step anyway, and that
 place is kept as wide as the asking needs on two lines beside the answers. On a row as narrow as
@@ -2507,6 +2957,13 @@ Analytics is a monitor of what agent work spent, and it fills the window: a bar 
 and a panel. Nothing in it moves under the pointer or when an answer arrives; a hint lies over
 the page and shifts nothing, and a part that has nothing to say yet keeps the room it will need.
 
+The page reads within the scope the context bar chose. In a space every figure is the work on
+the items the space's board holds, its own and the items of other spaces that name its projects,
+and the work on no item whose session stands in one of its projects; a project chosen there
+narrows it as it narrows the board, and «All spaces» reads every space of the store this
+service writes, the one store usage is counted in. The quota is each
+account's and no space's: no scope narrows it.
+
 Each column has one scroll: the rail scrolls, the panel scrolls, and inside the panel only a
 dimension's table scrolls up and down, in its own frame about the window's height. Only a row
 of periods or a table wider than its column scrolls sideways, in a frame of its own. Held to
@@ -2560,16 +3017,25 @@ the reader's own period at the start of the second row and the
 freshness with the refresh at its end. One row cannot hold them there: at 1024px the line is
 about 712px, and the periods and two date fields alone take 693px of it in Russian. Standing
 beside the periods, the ends pushed the filters and then the freshness onto a third row, and the
-panel moved down 44px when a span of days was chosen. On a phone the bar is three rows of one
-height whatever period is chosen: the periods, scrolling sideways, with the freshness at their
-end; the filter, a failure and the refresh; and the room of the reader's own days, which took a
-row of their own and moved the panel 44px when chosen. A refresh that fails keeps what is shown
-and says so in words before the age at every width, «Could not refresh» with a retry: given up
-on a short line, its words had left a red disc with no hint. The retry is reached at every width
-too: where the line has no room for «· Retry», the words themselves are the retry, named
-«Could not refresh · Retry» with «Retry» as their hint, and take no room the words did not.
-Dropped there, a phone and a span of days in Russian offered no retry of its own, only the
-refresh beside it. Reading another period or filter dims what is shown until its answer comes, after a moment so that a quick answer does not flicker;
+panel moved down 44px when a span of days was chosen. On a phone the bar is two rows: the periods
+across the whole first row, wrapping onto more lines of their track where one has no room for
+them, in columns of one width, as every wrapped row of segments does (Segmented choice); then the
+filter, a failure, the freshness and the refresh. Each wrapped line sharing its own room, the breaks
+of two lines missed each other: at 390px Analytics' five periods stood three over two.
+The reader's own days take a third row once chosen, which moves the panel down by it. The periods
+scrolled sideways beside the freshness, opening with «Now» cut and «Custom» past the edge, and a row
+held for the reader's own days under every other period stood as an empty band of 72px over the
+panel; the period bar of Agent decisions and Volumes is the same bar. On the narrowest phone, a
+window of about 375px or less, Analytics' freshness stands at the end of the periods' row instead,
+the periods wrapping in what it leaves: beside the filter, the freshness and the refresh, a failed
+refresh in Russian had room only for three lines there and ran 2px past the row's end. A refresh
+that fails keeps what is shown and says so in words before the age at every width, «Could not
+refresh» with a retry: given up on a short line, its words had left a red disc with no hint. The
+retry is reached at every width too: where the line has no room for «· Retry», the words themselves
+are the retry, named «Could not refresh · Retry» with «Retry» as their hint, and take no room the
+words did not. Dropped there, a phone and a span of days in Russian offered no retry of its own,
+only the refresh beside it. Reading another space, period or filter dims what is shown until its
+answer comes, after a moment so that a quick answer does not flicker;
 a refresh of the same view dims nothing. Records reach the store in batches, so the age is in
 seconds and the minutes after the newest record are hatched, as every figure not final yet is,
 and say «no data yet» in their hint rather than being drawn as a drop.
@@ -2707,9 +3173,10 @@ figure counts add up to it and are the sectors of its ring, or its ranked bars, 
 ring; cache reads close the chart under its legend or its bars, no part of any share, and
 reasoning is part of output.
 
-The quota's two sections read where each account's quota stands now, which no period or
-filter changes, and read it again on the live interval whatever the period; that the period and
-the filters do not reach it, and that its shares do not add up, the section's «ⓘ» says once.
+The quota's two sections read where each account's quota stands now, which no space, period or
+filter changes, and read it again on the live interval whatever the period; that the space, the
+period and the filters do not reach it, and that its shares do not add up, the section's «ⓘ» says
+once.
 Each tile names the tightest window of its kind across accounts — the most spent of those whose
 reset is still ahead, a fresh one before a silent one at the same share — by its account's
 name, with its share, its state in words beside the section's name and a thin `WindowBar` with
@@ -2823,6 +3290,188 @@ anew and never summed into them. In a table, the tokens a cost leaves without a 
 quieter second line under its amount, which keeps to the row's line, and a window too narrow for
 them may scroll the table sideways with its names kept in place.
 
+### Agent decisions
+
+Agent decisions is where a person reads what agents decided on their own: each decision a
+participation point let an agent take without asking, and the work it took up by assignment.
+It stands in the rail's Understand group beside Analytics and, like it, fills the window: a bar
+over one table.
+
+Its scope is the context bar's, as on every page that reads a space: a space, a project of it
+or every space at the top, that of the store this service writes, where decisions are recorded.
+The page has no choice of space or project of its own, so the scope
+is chosen once and a page never disagrees with the bar over it.
+
+Its own filters are the period and the point. The bar is the period strip Analytics stands on:
+today, this week, the past four weeks or days of the reader's own, chosen in the bar with the
+same fields and the same refusal of a last day before the first. Beside it «Participation
+point» narrows the table to one point, «All points» until one is chosen, and the refresh reads
+the view again as of now. The period, the point and the days are the page's address, so a
+reload or a link reads the same view; a choice rewrites the address in place, so Back leaves
+the page instead of stepping through its choices.
+
+The table is the section table Analytics stands on: it takes the rest of the window under the
+bar, wherever the bar's rows end, and scrolls inside its own frame under a heading row that
+stays, while the bar stays above it and the module's frame has nothing to scroll; a window too
+short for its least scrolls the page under the bar instead. Its columns are when, the point, the card — its reference over its
+title — the session that decided and what was decided, newest first; each heading sorts by its
+column, the moment newest first and words A to Z first. Over the table a line counts the view's
+decisions. The page reads them page by page of 200, the first page drawn as soon as it lands
+with «Read 200 of 1000…» over it, so a long period of a thousand decisions shows its newest at
+once and ends as one table; past 5000 it shows the newest and says how many there are in all.
+Where its columns do not fit the frame, at any width, a decision is a block of its own: when and
+the point on its first line, the point breaking between its words beside the moment, the card
+under them, then the session and what was decided, with the headings a line of sort buttons over
+the blocks (Rows and tables).
+
+Its states are the shared panel's. The first read waits in it and, failing, is its error with
+«Retry»; a period with no decision says «The agents decided nothing on their own in this
+period» and offers a longer period or another point, the bar above it being how it is left. A
+choice of another view dims the last one until its first page lands, so the last view is never
+shown as the current one; a refresh replaces the rows only once it has read them whole, and a
+refresh that fails keeps them and says so over them.
+
+A row's card is a link: a plain press opens the card over the page on its System events, as the
+address names it, so Back closes it and gives the page back as it was left; a press with a
+modifier or the middle button opens it in a new tab. A card opened from that card opens on its
+own first section, and a card Back returns to opens where it was left.
+
+In a card's System events, an event an agent's own decision recorded carries a mark under its
+title, the agent's sign and «Agent's own decision · Goal closed»: the point's kind, in the words
+of the page's point filter and its table, so a decision read on the card is found on the page by
+the same name, and the history's search finds the event by them. An event no decision marked
+carries nothing, and the mark is the record's own: the event's point as the full record has it.
+
+### Volumes
+
+Volumes is where a person reads how much work stands in each state of a scope, what each goal
+took and has left, the work outside goals, how work flowed in a period and the done work
+estimates are judged by. Analytics stays the place of spend and quota: Volumes says what a goal
+spent only as the sum its rows carry. It stands in the rail's Understand group beside Analytics
+and Agent decisions and, like them, fills the window: a bar over a panel of sections that
+scrolls under it, the bar staying where it is.
+
+Its scope is the context bar's, as on Agent decisions: a space, a project of it or every space
+at the top, chosen once. Every space at the top is every space the bar's picker offers, those of
+attached stores too: the eight categories and «Waiting for me» count them all, as the
+portfolio's cards count each of them. What only this service writes — what work spent, the
+owner's decisions and the commits — is counted in its own store alone, so the goals, the work
+outside goals, the flow, the estimates and «Commits on no card» are that store's, as Analytics
+and Agent decisions read it. While a store attached beside it holds work, which the numbers count
+and those sections do not, one line over the goals says so, nearer the goals than the numbers:
+«Goals, work outside goals, the flow and the estimates count the main store's spaces only.»; with
+no such store nothing is said. A store the numbers could not read is said over them as the
+questions window says one it skipped, from the same list of sources and in the same words:
+«Results are incomplete. Some sources are unavailable.» and, for each space not read, its name
+and why («BETA: Store could not be opened»). A read with no work that left a source out shows its
+zeros under those words rather than «There is no work in this scope». Its own filters are the period — the period strip Analytics
+stands on, today, this week, the past four weeks or days of the reader's own — and the kind and the label
+of a task, «All kinds» and «All labels» until one is chosen. The label's choice offers the
+labels the page's read itself names, and the one chosen: there is no read of labels of its own,
+and a label the read does not name would narrow nothing. Under the kind and label filter only
+matching tasks add up, in the numbers and in each goal's row, and a goal's count at acceptance
+stands as «—» with its reason, since it was taken of the whole goal. The period, the kind, the
+label and the days are the page's address; a choice rewrites it in place.
+
+On top stand ten numbers: one for each of the eight categories, in the model's order, then
+«Waiting for me» and «Commits on no card». A number is its figure over its name, so the figures
+of a row stand at one height whatever lines the names take. Under an open category's name stands the
+age of its oldest card, under «Waiting for me» that of the question asked first; Done and Cancelled
+count what came to a close in the period and say «in the period». A category's number counts
+its tasks, goals and stages, as the board's filter by category shows them, and its hint says
+how many of each; under a filter it counts the matching tasks alone. The numbers stand in one
+row while the page has room for every name, and in as many rows as the names need where it has
+not, as on a phone, a row sharing its width among its numbers. A number is never narrower than
+the longest word of its name, which is never broken, and the numbers never scroll sideways: in
+a frame of their own they did on a phone, and opening the commits' list under them scrolled the
+frame to the pressed number, moving every other one. Opening that list moves nothing over it.
+
+A number opens the place that shows exactly what it counts. An open category's opens the board
+of the same scope narrowed to the category, with the page's kind and label; a label alone names
+the three kinds of a task there, so no goal carrying it comes in. Done and Cancelled count what
+came to a close in the period, so they open the Work list of the same scope, ungrouped, with
+the category, the page's kind and label, and the filter's condition «Closed in a period» for the
+page's period, which keeps exactly the cards they count and names the period on its chip. At the
+top they stay figures, as every category does there. «Waiting for me» counts
+questions, two questions on one card being two, so it opens the questions window, in a space
+and at the top alike, rather than the board, where two questions on one card would be one row.
+The window lists exactly the questions the number counts, read narrowed so by the server.
+Opened from a space, those on the cards the space's board holds, its own and other spaces'
+cards that name one of its projects; opened from a project, those of them on the cards that
+name the project. Under the page's kind and label the window takes them too and keeps the
+questions on the matching tasks alone, by the one rule the number counts by, so a question on
+a goal or a stage is never among them; at the top, where it otherwise lists every space's,
+the kind and label narrow every space's questions the same way, an attached store's as the
+number counts them. Its subtitle says the scope
+and the filter («…, only on tasks of kind Bug with the label ui»), and a chip over the list
+names the space, the project after it by the name the context bar gives it, and then the kind
+and the label («Main · Alpha app · Bug · ui»; at the top «Bug · ui»). A project the bar does
+not offer in the space is named by its id, as the bar names it. Removing the chip lists every
+space's questions again, with no filter. At the top with no kind or label it lists every
+space's, with no chip. The rail's count stays every space's while the list is narrowed, and the
+narrowing ends when the window closes, so the rail opens it on every space's.
+A number that opens nothing is a figure, not a control, and its hint says why: every space has
+no board of its own, the portfolio standing there, so at the top no category opens. «Commits
+on no card» is «—» where their list cannot be read for the scope.
+
+«Commits on no card» shows their list under the numbers and hides it again, the number saying
+which. A row is a commit, the newest first: its hash as its short form at the row's start, its
+subject, the repository, the session as its short form with the whole one in the hint, and when
+it was committed. «Attach to a card» stands under the subject, and the repository's name wraps
+between its words. Where its columns do not fit the frame, a commit is a block of its own (Rows
+and tables): the hash and the subject on its first line, the action under the subject, then the
+repository, and the session and the time on the last; as columns scrolling sideways, a phone's
+frame cut the repository's name inside a word and kept the time three frames' width away. It
+opens a line under the row where the card is found by its number or the words of
+its title: the scope's space's cards, closed ones too, since a commit belongs to the card it was
+made for, and every space's at the top. «Attach» is the person's attach, the module's own
+action: the commit leaves the list, the attach is said aloud, and the page reads its numbers
+again, so the number drops by the commit. An attach the server refuses keeps the row and its
+line, the server's reason under the field. Past the most one read answers, the list shows the
+newest and says how many there are; a list that could not be read says so with a retry, and the
+number says «—» until it is read.
+
+The goals are a tree in the section table: each goal, its stages under it to any depth, on the
+tree's rows, folded as every tree folds them. One Tab stop holds the table: ↑ and ↓ move through
+the rows, → opens a folded row, ← folds an open one or goes to its parent, and Enter or a press
+opens the card. A row says where the goal stands, «closed N of M», how many tasks stood under it
+at acceptance (or at the start of work, which its hint says), what its work spent without the
+cancelled and with them — agent time and the tokens processed anew, the server's sums of
+everything under it — and what its open tasks have left by their estimates, rounded and marked
+«≈», with the done tasks the estimate is judged by under it. A heading sorts the rows that share
+a parent by its column. A row past the fifth level stands at the fifth indent and names its
+parent. A row's name is its reference over its title, and what the row says of itself, the
+parent it names among it, stands under the title on the title's edge; the words keep a width of
+their own whatever the indent takes while the table has room for them, so a deep goal's title
+reads on lines as long as a shallow one's. Beside the reference, a goal six levels down kept some
+54px of a 276px column and broke into six lines, and its parent stood at the cell's start, 182px
+left of its title. Where the table is too narrow for its headings on one line, a spend stands on
+two, its time over its tokens, and the column of names takes the room that gives; where even that
+leaves a column past the frame, the words come down to their longest word and the figures' words
+to theirs, so at 1280 every column stands in the frame (Rows and tables). The table's frame is held to the panel's
+height, which the page's layout gives it, so a long tree scrolls in its frame under a heading row
+that stays, whatever rows the bar takes.
+
+Under the goals, the work outside goals: the scope's tasks under no goal, by project and by
+label, each row saying how many stand in each category, the count of them beside the heading.
+Where its columns do not fit the frame even at their least, a row is a block of its own (Rows and
+tables): its name across it, then its figures in columns alike in every block, each beside its
+category's name.
+Then the flow: how many tasks came in and came to a close in the period, the owner's decisions
+and the commits, for the period and day by day, newest first, with the pace of the scope's tasks
+over them in the words of a chain's. Then the estimates: the done tasks they are judged by,
+whether there are enough, and the table by project and kind, each label's row under its own.
+
+A figure the read has no data for is «—» with a hint saying why, never 0: a goal's count at
+acceptance the read does not give — under a filter, with part of its work outside the scope, not
+yet accepted, accepted empty and not started, or accepted before counts at acceptance were kept;
+spending of tasks begun before usage was first counted to a card; an estimate of open tasks none
+of which has one. Work counted that spent nothing says «nothing spent». Its states are the
+shared panel's: the first read waits in it and, failing, is its error with «Retry»; a scope with
+no work says «There is no work in this scope»; a scope without goals says so in the goals'
+place, its work outside goals counted below. A choice of another view dims the last one until
+its answer lands; a refresh that fails keeps what is shown and says «Could not refresh».
+
 ### Settings
 
 Settings uses one section anatomy and one type scale, and its groups read as
@@ -2858,6 +3507,38 @@ and a cleared one; a field keeps what was typed until its save holds. Analytics 
 account by that name, with no hint of its id, and a session by the title its client gave it,
 with the id in the hint.
 
+Participation, the tab between General and Diagnostics, says at which points an agent's
+decision waits for the owner. A scope choice heads it: «Общие значения» («Shared values») and
+«Пространство MAIN» («Space MAIN»), the space chosen in the context bar, which it starts on;
+with all spaces chosen there it has the shared segment alone and a line under it saying a
+space is chosen at the top, not by a second choice of space on the page. Under it stand the
+set, then the groups «Кто решает» («Who decides»), a row per point with «Агент | Человек»
+(«Agent | Person»), «Очередь и сроки» («Queue and periods»), the queue and triage switches and
+four number fields, «Метки» («Labels») and, in a space, «Место запуска» («Launch place»). A row's
+hint says what happens at the value in force, and changes with it. The set is four segments;
+when the rows match none, none is chosen and the hint says «Свой набор: отличается в N
+строках» («Custom set: differs in N rows»): there is no «Custom» segment, since it could not be
+chosen. In a space a row inherits the shared value until its «Своё значение» («Own value»)
+switch is on: inheriting, it says the shared value in words and draws no choice; owning, its
+choice starts from the shared value and its name carries a quiet «своё» («own»); switching it
+off inherits again, and no separate reset exists. A set chosen in a space gives every row a value
+of the space's own. Labels lists only those with a rule or a description — whether their
+findings are ready at once, and a description field — and «Добавить правило метке» («Add a rule
+to a label») finds one among the labels the space's work carries or takes it typed whole. A
+rule's two fields inherit one by one: changing one in a space leaves the other as the space's own
+record has it, so a field the space never set keeps following the shared rule. In the shared
+scope a rule has «Убрать правило» («Remove rule»); its row leaves with the server's answer, the
+focus going to «Добавить правило метке», and a refused removal keeps the row with the reason
+under it. A space gives its rule back by switching «Своё значение» off. Every
+change is written at once and nothing is disabled while it is out; a number is written when its
+field is left or Enter is pressed. A newer change replaces only the waiting change of its own
+row, so changing a second row never drops the first. A save that does not hold puts back the
+value the server last confirmed and says why under its row, focus staying on the control. The
+launch place, «Из пространства | Из проекта карточки» («From the space | From the card's
+project»), is a field of the space's own record: it writes, takes back and refreshes on its own,
+and a refused participation write never touches it. A first read that fails says «Не удалось
+прочитать настройки участия» with a retry.
+
 ## Accessibility
 
 The target is WCAG 2.1 AA: full keyboard reach, a visible focus ring, semantic
@@ -2880,7 +3561,16 @@ title in the list of everything waiting describe or name the question, which tak
 and the ring. Words that stay where focus lands, because taking it to their whole would send
 the next Tab to the start of a long form — why a write or a read did not go through, a reply
 just written, a list's heading — carry `.focus-landing` from `base.css`: the ring stands 4px
-clear of the words and turns at a control's corner, so one line never closes into a capsule. A text field shows focus by turning its own
+clear of the words and turns at a control's corner, so one line never closes into a capsule.
+Wherever the interface puts focus (`placeFocus`; lint refuses a bare `focus()` in the app), a
+frame that scrolls sideways moves only as far as it must to show what takes focus and its ring,
+by the nearest edge, and not at all when that is in sight; up and down it is shown as the
+browser shows it. Opening the board's folded column at 390px once slid the board 441px to
+centre the button that folds it again, and the tiles' links went off the screen; held where
+it stood instead, the board left that column, the button and its ring past its end. So the
+board brings a column it opens or folds in whole by its nearest edge before focus lands on
+what undoes it, and a walk with the arrows takes a frame across as far as the place walked to
+needs. A text field shows focus by turning its own
 edge the focus colour, for a press as for Tab, and that colour holds 3:1 on every
 ground and fill it stands against.
 

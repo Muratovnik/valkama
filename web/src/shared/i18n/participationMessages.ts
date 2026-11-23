@@ -1,0 +1,196 @@
+/* The words of the Participation tab of Settings: who decides at each point, and when. */
+
+export const participationMessages = {
+  en: {
+    loadFailed: 'Could not read the participation settings.',
+    saveFailed: 'Not saved: {reason}',
+    set: {
+      label: 'Set',
+      hint: 'Every row as the «{name}» set has it.',
+      names: {
+        minimal: 'Minimal',
+        default: 'Default',
+        maximal: 'Maximal',
+        manual: 'Manual work',
+      },
+    },
+    deciders: { agent: 'Agent', human: 'Person' },
+    decides: {
+      title: 'Who decides',
+      agent: 'The agent decides; the decision goes to Agent decisions.',
+      human: 'The agent asks the owner and waits for the answer.',
+    },
+    points: {
+      finding: 'A finding outside the goal: do it or not',
+      proposed_goal: 'A goal the agent proposed itself',
+      task_in_goal: 'A task inside an accepted goal',
+      decision: 'Choosing how to solve accepted work',
+      cancel_outside: 'Cancelling a card filed outside the current work',
+      cancel_shared: 'Cancelling a goal, stage or task others work on',
+      condition: 'Taking off or rewriting a condition of a goal or stage',
+      goal_close: 'Closing a goal',
+      goal_defer: 'Putting off an accepted goal or stage',
+    },
+    timing: { title: 'Queue and periods' },
+    on: 'On',
+    off: 'Off',
+    switches: {
+      queue: {
+        label: 'Agents take work from the queue',
+        on: 'An agent takes the next ready work itself.',
+        off: 'The owner hands out work by hand.',
+      },
+      triage_reminder: {
+        label: 'Remind about triage',
+        on: 'A «time to triage» line stands among the questions once a threshold below is passed.',
+        off: 'No line reminds about triage.',
+      },
+    },
+    numbers: {
+      triage_age_days: {
+        label: 'Remind about triage: the oldest card waits',
+        hint: 'The reminder comes once the oldest card has waited for triage {count} day. | The reminder comes once the oldest card has waited for triage {count} days.',
+        words: '{count} day | {count} days',
+      },
+      triage_count: {
+        label: 'Remind about triage: cards waiting',
+        hint: 'The reminder comes once {count} card waits for triage. | The reminder comes once {count} cards wait for triage.',
+        words: '{count}',
+      },
+      lease_quiet_days: {
+        label: 'Release a claim after silence',
+        hint: 'A claim is released once its session has been silent {count} day. | A claim is released once its session has been silent {count} days.',
+        words: '{count} day | {count} days',
+      },
+      recent_close_minutes: {
+        label: 'Recently closed: a commit with no task is attached to it within',
+        hint: 'A commit with no task goes to the task its session closed up to {count} minute before. | A commit with no task goes to the task its session closed up to {count} minutes before.',
+        words: '{count} min',
+      },
+    },
+    labels: {
+      title: 'Labels',
+      empty: 'No label has a rule or a description yet.',
+      ready: 'Findings with this label are ready for work at once.',
+      waits: 'Findings with this label wait for triage, as the rest do.',
+      readyName: 'Ready at once: {label}',
+      readyOn: 'Ready at once',
+      readyOff: 'Wait for triage',
+      description: 'Description of {label}',
+      describe: 'What the label means',
+      add: 'Add a rule to a label',
+      find: 'Find a label',
+      none: 'No such label yet: type it whole',
+      create: 'Add «{label}»',
+      remove: 'Remove rule',
+      removeName: 'Remove the rule of {label}',
+    },
+    launch: {
+      title: 'Launch place',
+      label: 'Launch place',
+      loadFailed: 'Could not read the space’s launch place.',
+      places: { space: 'From the space', item_project: 'From the card’s project' },
+      hints: {
+        space: 'A launch runs in the folder of the space’s default project.',
+        item_project:
+          'A launch runs in the folder of the card’s one project; with none or several, in the space’s.',
+      },
+    },
+  },
+  ru: {
+    loadFailed: 'Не удалось прочитать настройки участия.',
+    saveFailed: 'Не сохранено: {reason}',
+    set: {
+      label: 'Набор',
+      hint: 'Значения всех строк набора «{name}».',
+      names: {
+        minimal: 'Минимальное',
+        default: 'По умолчанию',
+        maximal: 'Максимальное',
+        manual: 'Ручная работа',
+      },
+    },
+    deciders: { agent: 'Агент', human: 'Человек' },
+    decides: {
+      title: 'Кто решает',
+      agent: 'Решает агент; решение попадёт в «Решения агентов».',
+      human: 'Агент спросит владельца и подождёт ответа.',
+    },
+    points: {
+      finding: 'Находка вне цели: делать или нет',
+      proposed_goal: 'Цель, которую агент предложил сам',
+      task_in_goal: 'Задача внутри принятой цели',
+      decision: 'Выбор варианта решения',
+      cancel_outside: 'Отмена карточки не из текущей работы',
+      cancel_shared: 'Отмена цели, этапа или задачи, над которыми работают другие',
+      condition: 'Снять или переписать условие цели и этапа',
+      goal_close: 'Закрытие цели',
+      goal_defer: 'Отложить принятую цель или этап',
+    },
+    timing: { title: 'Очередь и сроки' },
+    on: 'Включено',
+    off: 'Выключено',
+    switches: {
+      queue: {
+        label: 'Агенты берут работу из очереди',
+        on: 'Агент сам берёт следующую готовую работу.',
+        off: 'Работу раздаёт владелец вручную.',
+      },
+      triage_reminder: {
+        label: 'Напоминать о разборе',
+        on: 'Строка «пора разобрать» встанет среди вопросов, когда пройден порог ниже.',
+        off: 'Строки о разборе нет.',
+      },
+    },
+    numbers: {
+      triage_age_days: {
+        label: 'Напоминать о разборе: самая старая карточка ждёт',
+        hint: 'Напоминание придёт, когда самая старая карточка ждёт разбора {count} день. | Напоминание придёт, когда самая старая карточка ждёт разбора {count} дня. | Напоминание придёт, когда самая старая карточка ждёт разбора {count} дней.',
+        words: '{count} дн.',
+      },
+      triage_count: {
+        label: 'Напоминать о разборе: карточек ждёт',
+        hint: 'Напоминание придёт, когда разбора ждёт {count} карточка. | Напоминание придёт, когда разбора ждут {count} карточки. | Напоминание придёт, когда разбора ждут {count} карточек.',
+        words: '{count}',
+      },
+      lease_quiet_days: {
+        label: 'Снимать захват после тишины',
+        hint: 'Захват снимается, если сессия молчит {count} день. | Захват снимается, если сессия молчит {count} дня. | Захват снимается, если сессия молчит {count} дней.',
+        words: '{count} дн.',
+      },
+      recent_close_minutes: {
+        label: 'Недавно закрыта: коммит без задачи прикрепляется к ней в течение',
+        hint: 'Коммит без задачи прикрепится к задаче, которую его сессия закрыла не раньше чем {count} минуту назад. | Коммит без задачи прикрепится к задаче, которую его сессия закрыла не раньше чем {count} минуты назад. | Коммит без задачи прикрепится к задаче, которую его сессия закрыла не раньше чем {count} минут назад.',
+        words: '{count} мин',
+      },
+    },
+    labels: {
+      title: 'Метки',
+      empty: 'Ни у одной метки пока нет правила или описания.',
+      ready: 'Находки с этой меткой сразу готовы к работе.',
+      waits: 'Находки с этой меткой ждут разбора, как остальные.',
+      readyName: 'Сразу готовы: {label}',
+      readyOn: 'Сразу готовы',
+      readyOff: 'Ждут разбора',
+      description: 'Описание метки {label}',
+      describe: 'Что значит метка',
+      add: 'Добавить правило метке',
+      find: 'Найти метку',
+      none: 'Такой метки пока нет: введите её целиком',
+      create: 'Добавить «{label}»',
+      remove: 'Убрать правило',
+      removeName: 'Убрать правило метки {label}',
+    },
+    launch: {
+      title: 'Место запуска',
+      label: 'Место запуска',
+      loadFailed: 'Не удалось прочитать место запуска пространства.',
+      places: { space: 'Из пространства', item_project: 'Из проекта карточки' },
+      hints: {
+        space: 'Запуск идёт в папке проекта пространства по умолчанию.',
+        item_project:
+          'Запуск идёт в папке единственного проекта карточки; без проекта или с несколькими — в папке пространства.',
+      },
+    },
+  },
+}

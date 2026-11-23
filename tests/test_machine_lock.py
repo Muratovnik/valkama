@@ -565,12 +565,58 @@ class CommandTests(LockCase):
         self.assertIn(b"a browser batch in", found.stdout)
         self.assertIn(b"process 4242", found.stdout)
 
-    def test_a_command_that_cannot_start_fails_and_gives_the_lock_back(self) -> None:
+    def test_a_command_that_cannot_start_fails_before_it_waits_for_a_place(self) -> None:
         missing = str(self.path.parent / "no-such-program")
-        with contextlib.redirect_stdout(io.StringIO()):
+        with (
+            mock.patch.object(machine_lock, "held") as held,
+            contextlib.redirect_stdout(io.StringIO()) as said,
+        ):
             code = machine_lock.main(["run", "--run", "x", "--path", str(self.path), "--", missing])
         self.assertEqual(127, code)
+        self.assertIn("no such program", said.getvalue())
+        held.assert_not_called()
         goes_in_at_once(self, self.path)
+
+    @unittest.skipUnless(sys.platform == "win32", "PATHEXT is how Windows names a script")
+    def test_a_program_found_by_its_pathext_extension_starts_by_its_path(self) -> None:
+        # `npx` is `npx.cmd`: Windows starts only an `.exe` by a bare name.
+        folder = self.path.parent / "bin"
+        folder.mkdir()
+        (folder / "probe-script.cmd").write_text("@exit /b 7\r\n", encoding="ascii")
+        path = os.pathsep.join([str(folder), os.environ.get("PATH", "")])
+        with (
+            mock.patch.dict(os.environ, {"PATH": path}),
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            code = machine_lock.main(
+                ["run", "--run", "x", "--path", str(self.path), "--", "probe-script", "a"]
+            )
+        self.assertEqual(7, code)
+        goes_in_at_once(self, self.path)
+
+    @unittest.skipUnless(sys.platform == "win32", "only Windows has a timeout of its own")
+    def test_the_windows_timeout_is_refused_before_the_run_waits(self) -> None:
+        windows = Path(os.environ["SYSTEMROOT"])
+        found = {"timeout": str(windows / "System32" / "TIMEOUT.EXE")}
+        with (
+            mock.patch.object(machine_lock.shutil, "which", side_effect=found.get),
+            mock.patch.object(machine_lock, "held") as held,
+            contextlib.redirect_stderr(io.StringIO()) as said,
+            self.assertRaises(SystemExit),
+        ):
+            machine_lock.main(["run", "--run", "x", "--", "timeout", "900", "npx", "playwright"])
+        self.assertIn("is the Windows timeout", said.getvalue())
+        held.assert_not_called()
+        # A `timeout` found elsewhere on the path, as Git's, is the one the command means.
+        found = {"timeout": str(self.path.parent / "usr" / "bin" / "timeout.exe")}
+        with (
+            mock.patch.object(machine_lock.shutil, "which", side_effect=found.get),
+            mock.patch.object(machine_lock, "held") as held,
+            mock.patch.object(machine_lock.subprocess, "run") as ran,
+        ):
+            ran.return_value.returncode = 0
+            machine_lock.main(["run", "--run", "x", "--", "timeout", "900", "npx"])
+        self.assertEqual([found["timeout"], "900", "npx"], ran.call_args.args[0])
 
     def test_the_command_passes_the_cpus_a_run_declares_and_refuses_none(self) -> None:
         with mock.patch.object(machine_lock, "held") as held:

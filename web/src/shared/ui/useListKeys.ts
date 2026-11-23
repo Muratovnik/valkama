@@ -11,7 +11,12 @@
  *
  * The rows are one Tab stop: the row last focused while it is still shown,
  * otherwise, in a tree, the nearest ancestor of it shown, and otherwise the
- * first, held by id so it follows a row a sort moved. ↑ and ↓ walk the rows,
+ * first, held by id so it follows a row a sort moved. The head's controls are
+ * no Tab stops of their own: Tab came to the rows only after a stop at every
+ * sort, seven for a reader before the first row. ↑ from the first row goes to
+ * the head, to the heading above the cell focus was in; there ← and →, Home and
+ * End move along the head's controls, and ↓ goes back to the rows' Tab stop.
+ * ↑ and ↓ walk the rows,
  * Home and End go to the ends, and Page Down and Page Up move focus a screen of
  * rows at a time: left to the browser, they scrolled the rows and left focus on
  * one scrolled out of sight, so the next arrow jumped back to where the page had
@@ -25,14 +30,24 @@
  *
  * A click anywhere in a row opens its card, as Enter does, except a click that
  * ends a text selection, so a title can still be copied, and a click on a tree
- * row's arrow, which folds or opens it (`toggle`). Folding a row that holds the
- * row focus is in moves focus to the row folded, so focus is never left on a
- * row that went.
+ * row's arrow, which folds or opens it (`toggle`). The list hears clicks at the
+ * document, not on its own box: a browser names an element that listens for a
+ * click clickable to a reader, and the list's box was read as «clickable» before
+ * its table.
+ *
+ * Folding or opening a row moves focus to it first and then changes it, by the
+ * keys and by a press on its arrow alike, so a reader hears the row and then
+ * its change, as ← and ← say them. The arrow takes no focus from a press: on
+ * it, the row then took focus from inside itself, and a reader in browse mode
+ * heard nothing of either. Focus is never left on a row a fold hid.
  */
 import { computed, nextTick, shallowRef } from 'vue'
 import type { Ref } from 'vue'
 
 import { useEventListener } from '@vueuse/core'
+
+import { walkFocus } from '@/shared/lib/moveFocus.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 
 /** The list's rows by place, drawn or not. */
 interface ListRows {
@@ -64,6 +79,7 @@ export type ListFocus = { kind: 'opener' } | { kind: 'row'; tree: TreeKeys }
 
 const OPENER = '.list-open'
 const ROW = 'tbody tr[data-id]'
+const HEAD = 'thead button'
 
 function within(event: Event, selector: string): HTMLElement | null {
   const target = event.target as Partial<Element> | null
@@ -132,7 +148,7 @@ export function useListKeys(
     // A row the window placed is focused once it is drawn as one: it may not be
     // drawn yet, or drawn collapsed for its widths, which takes no focus.
     if (list().reveal(index)) void nextTick(() => targetOf(id)?.focus({ preventScroll: true }))
-    else targetOf(id)?.focus()
+    else placeFocus(targetOf(id))
   }
 
   function screen(): number {
@@ -156,17 +172,53 @@ export function useListKeys(
   }
 
   /**
-   * Fold or open a tree's row. Where focus is in the list, it goes to that row:
-   * the row focus was on may be under it and gone with the fold, and an arrow
-   * pressed keeps no focus of its own.
+   * Fold or open a tree's row, focused before it changes: the row focus was on
+   * may be under it and gone with the fold, and an arrow pressed keeps no focus
+   * of its own. A row not drawn yet is focused once it is.
    */
   function toggle(id: string) {
     if (!tree) return
-    const inList = root.value?.contains(document.activeElement) ?? false
-    tree.toggle(id)
-    if (!inList) return
     active.value = id
-    void nextTick(() => targetOf(id)?.focus({ preventScroll: true }))
+    const row = targetOf(id)
+    row?.focus({ preventScroll: true })
+    tree.toggle(id)
+    if (!row) void nextTick(() => targetOf(id)?.focus({ preventScroll: true }))
+  }
+
+  /** The head's controls a key can reach: not one in a part of the head that is hidden. */
+  const headControls = () =>
+    [...(root.value?.querySelectorAll<HTMLElement>(HEAD) ?? [])].filter(
+      (control) => !control.closest('[hidden]'),
+    )
+
+  /** ↑ from the first row: the heading above the cell focus was in, or the head's first control. */
+  function enterHead(event: KeyboardEvent): boolean {
+    const controls = headControls()
+    if (controls.length === 0) return false
+    const cell = within(event, 'td')
+    // By its place among the row's cells, which a row of cards has one a heading.
+    const place = cell ? [...(cell.parentElement?.children ?? [])].indexOf(cell) : -1
+    const above = root.value?.querySelectorAll('thead th')[place]
+    placeFocus(above?.querySelector<HTMLElement>('button') ?? controls[0])
+    return true
+  }
+
+  /** The keys in the head; true where the key was the head's. */
+  function headKey(event: KeyboardEvent): boolean {
+    const controls = headControls()
+    const at = controls.indexOf(event.target as HTMLElement)
+    if (at < 0) return false
+    if (event.key === 'ArrowDown') {
+      const place = list().placeOf(tabStopId.value ?? '')
+      if (place >= 0) reach(place)
+      return true
+    }
+    const to = { ArrowLeft: at - 1, ArrowRight: at + 1, End: controls.length - 1, Home: 0 }[
+      event.key
+    ]
+    if (to === undefined) return false
+    walkFocus(controls[Math.min(Math.max(to, 0), controls.length - 1)])
+    return true
   }
 
   /** ← and → on a tree's row and in its cells; true where the key was the tree's. */
@@ -176,12 +228,12 @@ export function useListKeys(
     const cell = event.target === row ? null : within(event, 'td')
     if (cell) {
       const next = besideCell(cell, forward) ?? (forward ? null : row)
-      next?.focus()
+      walkFocus(next)
       return true
     }
     const expanded = tree.expanded(id)
     if (forward && expanded === false) toggle(id)
-    else if (forward) row.querySelector<HTMLElement>('td')?.focus()
+    else if (forward) walkFocus(row.querySelector<HTMLElement>('td'))
     else if (expanded === true) toggle(id)
     else {
       const parent = tree.parentOf(id)
@@ -193,6 +245,11 @@ export function useListKeys(
 
   useEventListener(root, 'keydown', (event: KeyboardEvent) => {
     if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
+    // A choice in the head opens its list on ↓ and says so by taking the key.
+    if (!event.defaultPrevented && headKey(event)) {
+      event.preventDefault()
+      return
+    }
     const holder = within(event, target)
     const id = holder?.dataset.id
     const from = id === undefined ? -1 : list().placeOf(id)
@@ -211,6 +268,7 @@ export function useListKeys(
     if (next === undefined) return
     event.preventDefault()
     if (next !== null) reach(next)
+    else if (event.key === 'ArrowUp') enterHead(event)
   })
 
   useEventListener(root, 'focusin', (event: FocusEvent) => {
@@ -221,7 +279,8 @@ export function useListKeys(
     if (held !== undefined) entered.value = held
   })
 
-  useEventListener(root, 'click', (event: MouseEvent) => {
+  useEventListener(document, 'click', (event: MouseEvent) => {
+    if (!(event.target instanceof Node) || !root.value?.contains(event.target)) return
     const direct = tree ? null : within(event, OPENER)
     // The facts folded under a title are part of the row, and the whole row opens it.
     if (!direct && selecting()) return

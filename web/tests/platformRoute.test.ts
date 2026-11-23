@@ -145,10 +145,45 @@ test('syntactically valid future module routes await persisted authority', () =>
   assert.throws(() => resolvePlatformRoute('/modules/adapter.fake/global'), /invalid module id/)
 })
 
-test('base64url tokens reject aliases, padding, pollution keys, and excessive depth', () => {
+const stateOf = (written: string) =>
+  parsePlatformRoute(`/modules/planning/global?state=${written}`).state
+
+// The service writes base64url without padding; a link spelled by hand or by another encoder
+// pads it, or uses standard base64, whose `+` and `/` name the same sextets as `-` and `_`.
+test('a state is read in base64url with padding or without, and in standard base64', () => {
+  const view = { view: 'graph' } // `{"view":"graph"}`, two characters of padding
+  assert.deepEqual(stateOf('eyJ2aWV3IjoiZ3JhcGgifQ'), view)
+  assert.deepEqual(stateOf('eyJ2aWV3IjoiZ3JhcGgifQ=='), view)
+  assert.deepEqual(stateOf('eyJ2aWV3IjoiZ3JhcGgifQ%3D%3D'), view)
+  const plus = { q: '?>~' } // standard `eyJxIjoiPz5+In0=`, base64url `eyJxIjoiPz5-In0`
+  assert.deepEqual(stateOf('eyJxIjoiPz5-In0'), plus)
+  assert.deepEqual(stateOf('eyJxIjoiPz5-In0='), plus)
+  assert.deepEqual(stateOf('eyJxIjoiPz5%2BIn0%3D'), plus)
+  // A bare `+` in a query reads as a space, which is in neither alphabet.
+  assert.deepEqual(stateOf('eyJxIjoiPz5+In0='), plus)
+  const slash = { q: '~~?' } // standard `eyJxIjoifn4/In0=`, base64url `eyJxIjoifn4_In0`
+  assert.deepEqual(stateOf('eyJxIjoifn4_In0'), slash)
+  assert.deepEqual(stateOf('eyJxIjoifn4/In0='), slash)
+})
+
+test('a state is refused where its padding is wrong or its bits name another spelling', () => {
+  for (const written of [
+    'eyJ2aWV3IjoiZ3JhcGgifQ=', // one character short of the last quartet
+    'eyJ2aWV3IjoiZ3JhcGgifQ===',
+    'e30==', // padding past the last quartet
+    'e3=0', // padding inside the value
+    '=',
+  ])
+    assert.throws(() => stateOf(written), /base64url/, written)
+  // `e31` decodes to {} too, but carries unused bits that are not zero: padded or not, and
+  // in either alphabet, it is not the one spelling of {}.
+  for (const alias of ['e31', 'e31=']) assert.throws(() => stateOf(alias), /canonical/, alias)
+  assert.deepEqual(stateOf('e30='), {})
+})
+
+test('base64url tokens reject aliases, pollution keys, and excessive depth', () => {
   const alias = 'e31' // decodes to {} but carries non-zero unused base64 bits
   assert.throws(() => parsePlatformRoute(`/modules/planning/global?state=${alias}`), /canonical/)
-  assert.throws(() => parsePlatformRoute('/modules/planning/global?state=e30='), /base64url/)
   const pollution = Buffer.from('{"__proto__":1}', 'utf8').toString('base64url')
   assert.throws(
     () => parsePlatformRoute(`/modules/planning/global?state=${pollution}`),

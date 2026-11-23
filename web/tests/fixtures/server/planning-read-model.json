@@ -381,7 +381,8 @@
       "lapsed_claim": null,
       "comment_count": 0,
       "queue_order": null,
-      "other_space": null
+      "other_space": null,
+      "parent": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000005",
@@ -423,7 +424,8 @@
       "lapsed_claim": null,
       "comment_count": 7,
       "queue_order": null,
-      "other_space": null
+      "other_space": null,
+      "parent": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000001",
@@ -468,7 +470,8 @@
       "lapsed_claim": null,
       "comment_count": 0,
       "queue_order": null,
-      "other_space": null
+      "other_space": null,
+      "parent": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000035",
@@ -513,7 +516,8 @@
       "lapsed_claim": null,
       "comment_count": 0,
       "queue_order": null,
-      "other_space": null
+      "other_space": null,
+      "parent": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000036",
@@ -554,7 +558,8 @@
       "lapsed_claim": null,
       "comment_count": 0,
       "queue_order": null,
-      "other_space": null
+      "other_space": null,
+      "parent": "MAIN-15"
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000037",
@@ -596,7 +601,8 @@
       "lapsed_claim": null,
       "comment_count": 0,
       "queue_order": null,
-      "other_space": null
+      "other_space": null,
+      "parent": "MAIN-16"
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000038",
@@ -644,7 +650,8 @@
       "lapsed_claim": null,
       "comment_count": 0,
       "queue_order": 1,
-      "other_space": null
+      "other_space": null,
+      "parent": "MAIN-11"
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000040",
@@ -686,7 +693,8 @@
       "lapsed_claim": null,
       "comment_count": 0,
       "queue_order": 2,
-      "other_space": null
+      "other_space": null,
+      "parent": "MAIN-10"
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000042",
@@ -731,7 +739,8 @@
       "lapsed_claim": null,
       "comment_count": 0,
       "queue_order": null,
-      "other_space": null
+      "other_space": null,
+      "parent": "MAIN-5"
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000010",
@@ -801,7 +810,8 @@
       "lapsed_claim": null,
       "comment_count": 2,
       "queue_order": null,
-      "other_space": null
+      "other_space": null,
+      "parent": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000044",
@@ -847,7 +857,8 @@
       "lapsed_claim": null,
       "comment_count": 0,
       "queue_order": null,
-      "other_space": null
+      "other_space": null,
+      "parent": "MAIN-7"
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000045",
@@ -891,7 +902,8 @@
       "lapsed_claim": null,
       "comment_count": 1,
       "queue_order": null,
-      "other_space": null
+      "other_space": null,
+      "parent": "MAIN-9"
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000043",
@@ -929,7 +941,8 @@
       "lapsed_claim": null,
       "comment_count": 0,
       "queue_order": null,
-      "other_space": null
+      "other_space": null,
+      "parent": "MAIN-4"
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000017",
@@ -967,7 +980,8 @@
       "lapsed_claim": null,
       "comment_count": 0,
       "queue_order": null,
-      "other_space": null
+      "other_space": null,
+      "parent": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000046",
@@ -1011,7 +1025,8 @@
       "lapsed_claim": null,
       "comment_count": 0,
       "queue_order": null,
-      "other_space": null
+      "other_space": null,
+      "parent": null
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000041",
@@ -1055,7 +1070,8 @@
       "lapsed_claim": null,
       "comment_count": 0,
       "queue_order": null,
-      "other_space": null
+      "other_space": null,
+      "parent": "MAIN-9"
     },
     {
       "work_item_id": "00000000-0000-4000-8000-000000000039",
@@ -1099,7 +1115,8 @@
       "lapsed_claim": null,
       "comment_count": 0,
       "queue_order": null,
-      "other_space": null
+      "other_space": null,
+      "parent": "MAIN-10"
     }
   ],
   "links": [],

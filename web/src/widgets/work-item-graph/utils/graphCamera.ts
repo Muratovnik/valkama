@@ -52,18 +52,50 @@ function extent(boxes: readonly Box[]): {
 /** Everything drawn: the frames and the cards in them. */
 const drawing = (graph: GraphLayout): Box[] => [...graph.frames, ...graph.nodes]
 
-/** The zoom a framing may go down to is `GRAPH_ZOOM_MIN`, never the field's own limit. */
-function fitNodes(boxes: readonly Box[], dimensions: Dimensions): ViewportTransform {
+/**
+ * The field's size, and on a phone-wide field the zoom its cards read at (`floor`,
+ * `graphZoomFloor.ts`): no framing goes further out than that. A wide field has none.
+ */
+export interface GraphFieldSize extends Dimensions {
+  floor?: number
+}
+
+const floorOf = (field: GraphFieldSize) => field.floor ?? GRAPH_ZOOM_MIN
+
+/** The zoom the field is framed at to be read: reading size, or the floor where that is closer. */
+const readingOf = (field: GraphFieldSize) => Math.max(READABLE_ZOOM, floorOf(field))
+
+/**
+ * The framing of `boxes`, going no further out than `floor`: by default `GRAPH_ZOOM_MIN`,
+ * never the field's own limit, so a caller can tell whether a run fits at a zoom it reads
+ * at. A framing held at the floor is centred on the run, as a fit is.
+ */
+function fitNodes(
+  boxes: readonly Box[],
+  dimensions: Dimensions,
+  floor = GRAPH_ZOOM_MIN,
+): ViewportTransform {
   const { left, top, right, bottom } = extent(boxes)
   const options = graphFitViewOptions()
   return getTransformForBounds(
     { x: left, y: top, width: right - left, height: bottom - top },
     dimensions.width,
     dimensions.height,
-    GRAPH_ZOOM_MIN,
-    options.maxZoom,
+    floor,
+    Math.max(options.maxZoom, floor),
     options.padding,
   )
+}
+
+/** A run of boxes from its first box as it is read, at the top-left at `zoom`. */
+function startOf(boxes: readonly Box[], zoom: number): ViewportTransform {
+  const { padding } = graphFitViewOptions()
+  const [first] = [...boxes].sort(readingOrder)
+  return {
+    x: pixels(padding.left) - first.x * zoom,
+    y: pixels(padding.top) - first.y * zoom,
+    zoom,
+  }
 }
 
 /**
@@ -72,15 +104,18 @@ function fitNodes(boxes: readonly Box[], dimensions: Dimensions): ViewportTransf
  * Worked out from the drawing and the field alone. Vue Flow's own fit is held by the limit
  * in the flow's store, so with the limit set from the fit a field that grew could not be
  * fitted until the limit had moved, and the limit is this zoom: the one calculation serves
- * both and reads neither back. Null while there is nothing to frame.
+ * both and reads neither back. On a phone-wide field a drawing that fits only further out
+ * than its cards read is shown from its beginning at the floor instead,
+ * as it is read, and the rest is a pan away. Null while there is nothing to frame.
  */
 export function graphWholeView(
   graph: GraphLayout,
-  dimensions: Dimensions,
+  field: GraphFieldSize,
 ): ViewportTransform | null {
-  return drawing(graph).length && dimensions.width && dimensions.height
-    ? fitNodes(drawing(graph), dimensions)
-    : null
+  if (!drawing(graph).length || !field.width || !field.height) return null
+  const fit = fitNodes(drawing(graph), field)
+  const floor = floorOf(field)
+  return fit.zoom >= floor ? fit : keptOnDrawing(startOf(drawing(graph), floor), graph, field)
 }
 
 /** A branch of a chain the field is framed on: its drawn nodes, and the goal that heads it. */
@@ -162,16 +197,9 @@ export function graphAnchor(
  * size, otherwise its first box at the top-left at reading size, the rest
  * running on to the right and below.
  */
-function beginningView(boxes: readonly Box[], dimensions: Dimensions): ViewportTransform {
-  const whole = fitNodes(boxes, dimensions)
-  if (whole.zoom >= READABLE_ZOOM) return whole
-  const { padding } = graphFitViewOptions()
-  const [first] = [...boxes].sort(readingOrder)
-  return {
-    x: pixels(padding.left) - first.x * READABLE_ZOOM,
-    y: pixels(padding.top) - first.y * READABLE_ZOOM,
-    zoom: READABLE_ZOOM,
-  }
+function beginningView(boxes: readonly Box[], field: GraphFieldSize): ViewportTransform {
+  const whole = fitNodes(boxes, field)
+  return whole.zoom >= readingOf(field) ? whole : startOf(boxes, readingOf(field))
 }
 
 /**
@@ -248,7 +276,7 @@ function holdsOpenWork(graph: GraphLayout): (target: WalkTarget) => boolean {
  * field begins at its first open work instead, the finished frames before it
  * a pan away.
  */
-function openingView(graph: GraphLayout, dimensions: Dimensions): ViewportTransform {
+function openingView(graph: GraphLayout, dimensions: GraphFieldSize): ViewportTransform {
   const targets = walkTargets(graph)
   const start = keptOnDrawing(beginningView(targets, dimensions), graph, dimensions)
   const open = targets.filter(holdsOpenWork(graph))
@@ -266,7 +294,7 @@ function openingView(graph: GraphLayout, dimensions: Dimensions): ViewportTransf
  */
 export function graphCameraView(
   graph: GraphLayout,
-  dimensions: Dimensions,
+  dimensions: GraphFieldSize,
   options: AnchorOptions = {},
 ): ViewportTransform | null {
   if (!drawing(graph).length || !dimensions.width || !dimensions.height) return null
@@ -274,7 +302,7 @@ export function graphCameraView(
   if (branch.length) return keptOnDrawing(beginningView(branch, dimensions), graph, dimensions)
   const whole = fitNodes(drawing(graph), dimensions)
   const selected = graph.nodes.some((node) => node.work_item_id === options.selectedId)
-  if (!selected && whole.zoom >= READABLE_ZOOM) return whole
+  if (!selected && whole.zoom >= readingOf(dimensions)) return whole
   const anchor = graphAnchor(graph, options)
   if (!anchor || (!selected && anchor.id !== options.rootId)) return openingView(graph, dimensions)
 
@@ -288,7 +316,10 @@ export function graphCameraView(
     ...graph.frames.filter((frame) => contextIds.has(frame.id)).map((frame) => headerBox(frame)),
   ]
   const context = fitNodes(boxes, dimensions)
-  const framed = context.zoom >= READABLE_ZOOM ? context : fitNodes([anchor], dimensions)
+  const framed =
+    context.zoom >= readingOf(dimensions)
+      ? context
+      : fitNodes([anchor], dimensions, floorOf(dimensions))
   return keptOnDrawing(framed, graph, dimensions)
 }
 
@@ -385,14 +416,14 @@ function panOnto(
 export function graphCameraMove(
   cause: GraphCameraCause,
   graph: GraphLayout,
-  field: { camera: ViewportTransform; dimensions: Dimensions; held?: HeldFrame | null },
+  field: { camera: ViewportTransform; dimensions: GraphFieldSize; held?: HeldFrame | null },
   options: AnchorOptions = {},
 ): ViewportTransform | null {
   const { camera, dimensions } = field
-  if (!drawing(graph).length || !dimensions.width || !dimensions.height) return null
+  const whole = graphWholeView(graph, dimensions)
+  if (!whole) return null
   if (cause === 'open') return graphCameraView(graph, dimensions, options)
   if (cause === 'refresh') return null
-  const whole = fitNodes(drawing(graph), dimensions)
   const past = camera.zoom < whole.zoom
   if (cause === 'toggled' && field.held) {
     const zoom = past ? whole.zoom : camera.zoom

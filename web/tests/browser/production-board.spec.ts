@@ -33,12 +33,12 @@ for (const [width, oneRow] of [
     const lanes = page.locator('.board-lane')
     await expect(lanes).toHaveCount(4)
     await expect(lanes.locator('.lane-reference')).toHaveText(['MAIN-401', 'MAIN-410', 'MAIN-420'])
-    await expect(lanes.nth(3)).toHaveAttribute('aria-label', 'No parent')
+    await expect(lanes.nth(3)).toHaveAttribute('aria-label', 'No goal')
     await expect(lanes.locator('.lane-counts')).toHaveText([
-      '4 open · 1 closed',
-      '0 open · 0 closed',
-      '0 open · 2 closed',
-      '3 open · 0 closed',
+      '1 of 5 closed',
+      '0 of 0 closed',
+      '2 of 2 closed',
+      '0 of 3 closed',
     ])
     // Nothing open folds a lane until the reader says otherwise.
     const expanded = await lanes
@@ -163,12 +163,13 @@ test('a lane shows its goal’s chain on the board, in every view, and the chip 
   await expect(page.locator('.lane-cell[data-state="done"] .lane-more')).toHaveText('Show all · 1')
   await page.screenshot(shot(info, 'w-board-chain-1440.png'))
 
-  // Ungrouped, the root is a tile like its members; the chain stays.
+  // Ungrouped, the root goal is no tile, as no goal under way is: its members are; the chain
+  // stays.
   await chooseGrouping(page, 'No grouping')
   await expect
     .poll(() => routeState(page))
     .toEqual({ view: 'kanban', chain: 'MAIN-401', chain_scope: 'chain' })
-  await expect(tiles(page.locator('.work-item-board'))).resolves.toHaveLength(6)
+  await expect(tiles(page.locator('.work-item-board'))).resolves.toHaveLength(5)
   await page.getByRole('radio', { name: 'List', exact: true }).click()
   await expect(page.locator('tbody tr')).toHaveCount(6)
   await expect(chip).toHaveText('Chain MAIN-401 · 6')
@@ -271,7 +272,7 @@ test('an empty cell draws no ground at rest, and its lane’s cells do while a t
   await serve(page)
   await openBoard(page)
   const goal = lane(page, LONG_GOAL)
-  const loose = lane(page, 'No parent')
+  const loose = lane(page, 'No goal')
   await loose.scrollIntoViewIfNeeded()
   const empty = loose.locator('.lane-cell.empty').first()
   await expect(empty).toBeVisible()
@@ -308,7 +309,7 @@ test('a lane is as tall as its tiles: an empty cell stays a low ground', async (
   await installBackend(page)
   await serve(page)
   await openBoard(page)
-  const loose = lane(page, 'No parent')
+  const loose = lane(page, 'No goal')
   // A lane out of sight skips its layout, so it is measured in view.
   await loose.scrollIntoViewIfNeeded()
   const height = async (state: string) => {

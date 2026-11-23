@@ -72,7 +72,7 @@ const ACCEPTANCE_BASES = [
 ] as const
 export const PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const
 export const LINK_KINDS = ['blocks', 'discovered-from', 'duplicates', 'relates-to'] as const
-const REF_KINDS = ['commit', 'memory', 'session', 'url'] as const
+const REF_KINDS = ['memory', 'session', 'url'] as const
 
 /** `MAIN-142`: what a person types and what a URL carries. */
 export const WORK_ITEM_REFERENCE = /^[A-Z][A-Z0-9]{1,7}-[1-9]\d{0,8}$/u
@@ -164,8 +164,9 @@ const workItemBriefShape = {
   /** Whose claim the lease sweep released, until the next claim. */
   lapsed_claim: lapsedClaimField(),
   /**
-   * When a finished item closed: its latest transition. Null for open work, and
-   * absent from a server that predates it.
+   * When a finished item closed: when it last entered its finished state, its last state entry
+   * in history order or its creation, the moment the Volumes read counts it closed at. Null for
+   * open work, and absent from a server that predates it.
    */
   closed_at: boundedText(ISO, 96).nullable().optional(),
   /**
@@ -175,9 +176,17 @@ const workItemBriefShape = {
    */
   last_claim_ref: holderField().nullable().optional(),
 }
+/**
+ * The goal or stage an item stands under, by reference, or null for one under none: the exact
+ * read of one item carries it beside `parent_id`, by which that read cannot read the item over it,
+ * and so does each row of a space's read, where another space's card stands under a parent the
+ * read does not hold. A write's answer does not carry it.
+ */
+const parentField = () => boundedText(WORK_ITEM_REFERENCE, 20).nullable().optional()
 const workItemBriefSchema = recordObject({
   ...workItemBriefShape,
   comment_count: positiveInt(true),
+  parent: parentField(),
 })
 /**
  * A row of a list read, the board's among them: the brief record and its place in its
@@ -188,6 +197,7 @@ const workItemRowSchema = recordObject({
   ...workItemBriefShape,
   comment_count: positiveInt(true),
   queue_order: positiveInt().nullable(),
+  parent: parentField(),
 })
 
 export const summarySchema = strictObject({
@@ -404,8 +414,9 @@ const workItemAgentSchema = strictObject({
   executor: executorSchema.optional(),
 })
 
-const workItemSchema = recordObject({
+const workItemShape = {
   ...workItemBriefShape,
+  parent: parentField(),
   agents: z.array(workItemAgentSchema).optional(),
   claim: claimSchema.nullable(),
   /** Who `last_claim_ref` names and what opening them would reach: only the card reads it. */
@@ -451,9 +462,18 @@ const workItemSchema = recordObject({
   freed: z.array(boundedText(WORK_ITEM_REFERENCE, 20)).optional(),
   // The goals and stages a write left with nothing open under them.
   awaiting_confirmation: z.array(boundedText(WORK_ITEM_REFERENCE, 20)).optional(),
+}
+const workItemSchema = recordObject(workItemShape)
+/**
+ * The record a move answers with. A close that brought back work put off until it names those
+ * references in `returned`; any other answer carries the record's own `returned`, if any.
+ */
+const movedItemSchema = recordObject({
+  ...workItemShape,
+  returned: z.union([returnedField(), z.array(boundedText(WORK_ITEM_REFERENCE, 20))]).optional(),
 })
 
-const workflowSchema = strictObject({
+export const workflowSchema = strictObject({
   workflow_id: boundedText(UUID, 36),
   name: boundedText(TITLE, 200),
   initial_state_id: boundedText(UUID, 36),
@@ -555,6 +575,12 @@ export function validateReadModel(value: unknown, path = 'planning'): PlanningRe
 
 export function validateWorkItemRecord(value: unknown, path = 'planning.workItem'): WorkItem {
   return parseContract(workItemSchema, value, path, invalid)
+}
+
+export type MovedItem = z.infer<typeof movedItemSchema>
+/** The answer of a move: the item's record, with what a close brought back. */
+export function validateMovedItem(value: unknown, path = 'planning.workItem'): MovedItem {
+  return parseContract(movedItemSchema, value, path, invalid)
 }
 
 /** The brief record a space's list carries, as one item's preview reads it alone. */

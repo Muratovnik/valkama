@@ -1,0 +1,1301 @@
+{
+  "board": {
+    "revision": "0000000000000000000000000000000000000000000000000000000000000000",
+    "interface_version": "valkama-planning-read-model",
+    "planning_spaces": [
+      {
+        "planning_space_id": "00000000-0000-4000-8000-000000000062",
+        "name": "Alpha",
+        "key": "ALPHA",
+        "provider_kind": "local",
+        "launch_place": "space",
+        "work_items": 8,
+        "open": 1,
+        "active": 0,
+        "completed": 5,
+        "updated_at": "2026-01-02T03:04:05Z",
+        "projects": [],
+        "default_project": null
+      },
+      {
+        "planning_space_id": "00000000-0000-4000-8000-000000000002",
+        "name": "Contract",
+        "key": "MAIN",
+        "provider_kind": "local",
+        "launch_place": "item_project",
+        "work_items": 29,
+        "open": 27,
+        "active": 5,
+        "completed": 1,
+        "updated_at": "2026-01-02T03:04:05Z",
+        "projects": [
+          {
+            "project_id": "example-project",
+            "display_name": "example-project",
+            "root": "/workspace",
+            "default": true
+          }
+        ],
+        "default_project": "example-project"
+      }
+    ],
+    "planning_space": {
+      "planning_space_id": "00000000-0000-4000-8000-000000000062",
+      "name": "Alpha",
+      "key": "ALPHA",
+      "provider_kind": "local",
+      "launch_place": "space",
+      "projects": [],
+      "default_project": null
+    },
+    "workflow": {
+      "workflow_id": "00000000-0000-4000-8000-000000000063",
+      "name": "Delivery",
+      "initial_state_id": "00000000-0000-4000-8000-000000000064",
+      "states": [
+        {
+          "state_id": "00000000-0000-4000-8000-000000000064",
+          "key": "triage",
+          "name": "Triage",
+          "category": "triage",
+          "position": 0,
+          "is_terminal": false
+        },
+        {
+          "state_id": "00000000-0000-4000-8000-000000000065",
+          "key": "deferred",
+          "name": "Deferred",
+          "category": "deferred",
+          "position": 1,
+          "is_terminal": false
+        },
+        {
+          "state_id": "00000000-0000-4000-8000-000000000066",
+          "key": "ready",
+          "name": "Ready",
+          "category": "ready",
+          "position": 2,
+          "is_terminal": false
+        },
+        {
+          "state_id": "00000000-0000-4000-8000-000000000067",
+          "key": "dev",
+          "name": "Dev",
+          "category": "active",
+          "position": 3,
+          "is_terminal": false
+        },
+        {
+          "state_id": "00000000-0000-4000-8000-000000000068",
+          "key": "review",
+          "name": "Review",
+          "category": "review",
+          "position": 4,
+          "is_terminal": false
+        },
+        {
+          "state_id": "00000000-0000-4000-8000-000000000069",
+          "key": "done",
+          "name": "Done",
+          "category": "completed",
+          "position": 5,
+          "is_terminal": true
+        },
+        {
+          "state_id": "00000000-0000-4000-8000-000000000070",
+          "key": "blocked",
+          "name": "Blocked",
+          "category": "blocked",
+          "position": 6,
+          "is_terminal": false
+        },
+        {
+          "state_id": "00000000-0000-4000-8000-000000000071",
+          "key": "cancelled",
+          "name": "Cancelled",
+          "category": "cancelled",
+          "position": 7,
+          "is_terminal": true
+        }
+      ],
+      "transitions": [
+        {
+          "from": "00000000-0000-4000-8000-000000000064",
+          "to": "00000000-0000-4000-8000-000000000065"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000064",
+          "to": "00000000-0000-4000-8000-000000000066"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000064",
+          "to": "00000000-0000-4000-8000-000000000067"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000064",
+          "to": "00000000-0000-4000-8000-000000000068"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000064",
+          "to": "00000000-0000-4000-8000-000000000069"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000064",
+          "to": "00000000-0000-4000-8000-000000000070"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000064",
+          "to": "00000000-0000-4000-8000-000000000071"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000065",
+          "to": "00000000-0000-4000-8000-000000000064"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000065",
+          "to": "00000000-0000-4000-8000-000000000066"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000065",
+          "to": "00000000-0000-4000-8000-000000000067"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000065",
+          "to": "00000000-0000-4000-8000-000000000068"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000065",
+          "to": "00000000-0000-4000-8000-000000000069"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000065",
+          "to": "00000000-0000-4000-8000-000000000070"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000065",
+          "to": "00000000-0000-4000-8000-000000000071"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000066",
+          "to": "00000000-0000-4000-8000-000000000064"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000066",
+          "to": "00000000-0000-4000-8000-000000000065"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000066",
+          "to": "00000000-0000-4000-8000-000000000067"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000066",
+          "to": "00000000-0000-4000-8000-000000000068"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000066",
+          "to": "00000000-0000-4000-8000-000000000069"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000066",
+          "to": "00000000-0000-4000-8000-000000000070"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000066",
+          "to": "00000000-0000-4000-8000-000000000071"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000067",
+          "to": "00000000-0000-4000-8000-000000000064"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000067",
+          "to": "00000000-0000-4000-8000-000000000065"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000067",
+          "to": "00000000-0000-4000-8000-000000000066"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000067",
+          "to": "00000000-0000-4000-8000-000000000068"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000067",
+          "to": "00000000-0000-4000-8000-000000000069"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000067",
+          "to": "00000000-0000-4000-8000-000000000070"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000067",
+          "to": "00000000-0000-4000-8000-000000000071"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000068",
+          "to": "00000000-0000-4000-8000-000000000064"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000068",
+          "to": "00000000-0000-4000-8000-000000000065"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000068",
+          "to": "00000000-0000-4000-8000-000000000066"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000068",
+          "to": "00000000-0000-4000-8000-000000000067"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000068",
+          "to": "00000000-0000-4000-8000-000000000069"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000068",
+          "to": "00000000-0000-4000-8000-000000000070"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000068",
+          "to": "00000000-0000-4000-8000-000000000071"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000069",
+          "to": "00000000-0000-4000-8000-000000000064"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000069",
+          "to": "00000000-0000-4000-8000-000000000065"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000069",
+          "to": "00000000-0000-4000-8000-000000000066"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000069",
+          "to": "00000000-0000-4000-8000-000000000067"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000069",
+          "to": "00000000-0000-4000-8000-000000000068"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000069",
+          "to": "00000000-0000-4000-8000-000000000070"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000069",
+          "to": "00000000-0000-4000-8000-000000000071"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000070",
+          "to": "00000000-0000-4000-8000-000000000064"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000070",
+          "to": "00000000-0000-4000-8000-000000000065"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000070",
+          "to": "00000000-0000-4000-8000-000000000066"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000070",
+          "to": "00000000-0000-4000-8000-000000000067"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000070",
+          "to": "00000000-0000-4000-8000-000000000068"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000070",
+          "to": "00000000-0000-4000-8000-000000000069"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000070",
+          "to": "00000000-0000-4000-8000-000000000071"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000071",
+          "to": "00000000-0000-4000-8000-000000000064"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000071",
+          "to": "00000000-0000-4000-8000-000000000065"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000071",
+          "to": "00000000-0000-4000-8000-000000000066"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000071",
+          "to": "00000000-0000-4000-8000-000000000067"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000071",
+          "to": "00000000-0000-4000-8000-000000000068"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000071",
+          "to": "00000000-0000-4000-8000-000000000069"
+        },
+        {
+          "from": "00000000-0000-4000-8000-000000000071",
+          "to": "00000000-0000-4000-8000-000000000070"
+        }
+      ]
+    },
+    "work_items": [
+      {
+        "work_item_id": "00000000-0000-4000-8000-000000000072",
+        "planning_space_id": "00000000-0000-4000-8000-000000000062",
+        "reference": "ALPHA-8",
+        "number": 8,
+        "title": "Open since inside the period",
+        "kind": "task",
+        "priority": "medium",
+        "state": {
+          "state_id": "00000000-0000-4000-8000-000000000064",
+          "key": "triage",
+          "name": "Triage",
+          "category": "triage",
+          "is_terminal": false
+        },
+        "open": true,
+        "container_state": null,
+        "acceptance": null,
+        "triage_stack": {
+          "seen_at": null,
+          "seen_by": null
+        },
+        "started_at": null,
+        "waits_for": [],
+        "claim_ref": "",
+        "claim_state": null,
+        "parent_id": null,
+        "labels": [],
+        "projects": [],
+        "source": "",
+        "checklist": [],
+        "revision": 0,
+        "created_at": "2026-01-02T03:04:05Z",
+        "updated_at": "2026-01-02T03:04:05Z",
+        "closed_at": null,
+        "last_claim_ref": null,
+        "withheld": [
+          "not_ready"
+        ],
+        "workable": false,
+        "lapsed_claim": null,
+        "comment_count": 0,
+        "queue_order": null,
+        "other_space": null,
+        "parent": null
+      },
+      {
+        "work_item_id": "00000000-0000-4000-8000-000000000073",
+        "planning_space_id": "00000000-0000-4000-8000-000000000062",
+        "reference": "ALPHA-2",
+        "number": 2,
+        "title": "Finished a second before the period",
+        "kind": "task",
+        "priority": "medium",
+        "state": {
+          "state_id": "00000000-0000-4000-8000-000000000069",
+          "key": "done",
+          "name": "Done",
+          "category": "completed",
+          "is_terminal": true
+        },
+        "open": false,
+        "container_state": null,
+        "acceptance": {
+          "basis": "assignment",
+          "at": "2026-01-02T03:04:05Z"
+        },
+        "started_at": "2026-01-02T03:04:05Z",
+        "waits_for": [],
+        "claim_ref": "",
+        "claim_state": null,
+        "parent_id": null,
+        "labels": [],
+        "projects": [],
+        "source": "",
+        "checklist": [],
+        "revision": 2,
+        "created_at": "2026-01-02T03:04:05Z",
+        "updated_at": "2026-01-02T03:04:05Z",
+        "closed_at": "2026-11-11T20:59:59Z",
+        "last_claim_ref": null,
+        "withheld": [
+          "not_ready"
+        ],
+        "workable": false,
+        "lapsed_claim": null,
+        "comment_count": 1,
+        "queue_order": null,
+        "other_space": null,
+        "parent": null
+      },
+      {
+        "work_item_id": "00000000-0000-4000-8000-000000000074",
+        "planning_space_id": "00000000-0000-4000-8000-000000000062",
+        "reference": "ALPHA-1",
+        "number": 1,
+        "title": "Finished at the period's first moment",
+        "kind": "task",
+        "priority": "medium",
+        "state": {
+          "state_id": "00000000-0000-4000-8000-000000000069",
+          "key": "done",
+          "name": "Done",
+          "category": "completed",
+          "is_terminal": true
+        },
+        "open": false,
+        "container_state": null,
+        "acceptance": {
+          "basis": "assignment",
+          "at": "2026-01-02T03:04:05Z"
+        },
+        "started_at": "2026-01-02T03:04:05Z",
+        "waits_for": [],
+        "claim_ref": "",
+        "claim_state": null,
+        "parent_id": null,
+        "labels": [
+          "ui"
+        ],
+        "projects": [],
+        "source": "",
+        "checklist": [],
+        "revision": 2,
+        "created_at": "2026-01-02T03:04:05Z",
+        "updated_at": "2026-01-02T03:04:05Z",
+        "closed_at": "2026-11-11T21:00:00Z",
+        "last_claim_ref": null,
+        "withheld": [
+          "not_ready"
+        ],
+        "workable": false,
+        "lapsed_claim": null,
+        "comment_count": 1,
+        "queue_order": null,
+        "other_space": null,
+        "parent": null
+      },
+      {
+        "work_item_id": "00000000-0000-4000-8000-000000000075",
+        "planning_space_id": "00000000-0000-4000-8000-000000000062",
+        "reference": "ALPHA-3",
+        "number": 3,
+        "title": "Finished at the period's last second",
+        "kind": "task",
+        "priority": "medium",
+        "state": {
+          "state_id": "00000000-0000-4000-8000-000000000069",
+          "key": "done",
+          "name": "Done",
+          "category": "completed",
+          "is_terminal": true
+        },
+        "open": false,
+        "container_state": null,
+        "acceptance": {
+          "basis": "assignment",
+          "at": "2026-01-02T03:04:05Z"
+        },
+        "started_at": "2026-01-02T03:04:05Z",
+        "waits_for": [],
+        "claim_ref": "",
+        "claim_state": null,
+        "parent_id": null,
+        "labels": [],
+        "projects": [],
+        "source": "",
+        "checklist": [],
+        "revision": 2,
+        "created_at": "2026-01-02T03:04:05Z",
+        "updated_at": "2026-01-02T03:04:05Z",
+        "closed_at": "2026-11-18T20:59:59Z",
+        "last_claim_ref": null,
+        "withheld": [
+          "not_ready"
+        ],
+        "workable": false,
+        "lapsed_claim": null,
+        "comment_count": 1,
+        "queue_order": null,
+        "other_space": null,
+        "parent": null
+      },
+      {
+        "work_item_id": "00000000-0000-4000-8000-000000000076",
+        "planning_space_id": "00000000-0000-4000-8000-000000000062",
+        "reference": "ALPHA-7",
+        "number": 7,
+        "title": "Filed finished inside the period",
+        "kind": "task",
+        "priority": "medium",
+        "state": {
+          "state_id": "00000000-0000-4000-8000-000000000069",
+          "key": "done",
+          "name": "Done",
+          "category": "completed",
+          "is_terminal": true
+        },
+        "open": false,
+        "container_state": null,
+        "acceptance": {
+          "basis": "assignment",
+          "at": "2026-01-02T03:04:05Z"
+        },
+        "started_at": null,
+        "waits_for": [],
+        "claim_ref": "",
+        "claim_state": null,
+        "parent_id": null,
+        "labels": [
+          "ui"
+        ],
+        "projects": [],
+        "source": "",
+        "checklist": [],
+        "revision": 0,
+        "created_at": "2026-01-02T03:04:05Z",
+        "updated_at": "2026-01-02T03:04:05Z",
+        "closed_at": "2026-11-14T10:00:00Z",
+        "last_claim_ref": null,
+        "withheld": [
+          "not_ready"
+        ],
+        "workable": false,
+        "lapsed_claim": null,
+        "comment_count": 0,
+        "queue_order": null,
+        "other_space": null,
+        "parent": null
+      },
+      {
+        "work_item_id": "00000000-0000-4000-8000-000000000077",
+        "planning_space_id": "00000000-0000-4000-8000-000000000062",
+        "reference": "ALPHA-6",
+        "number": 6,
+        "title": "Goal finished inside the period",
+        "kind": "goal",
+        "priority": "medium",
+        "state": {
+          "state_id": "00000000-0000-4000-8000-000000000069",
+          "key": "done",
+          "name": "Done",
+          "category": "completed",
+          "is_terminal": true
+        },
+        "open": false,
+        "container_state": null,
+        "acceptance": {
+          "basis": "assignment",
+          "at": "2026-01-02T03:04:05Z"
+        },
+        "started_at": null,
+        "waits_for": [],
+        "claim_ref": "",
+        "claim_state": null,
+        "parent_id": null,
+        "labels": [
+          "ui"
+        ],
+        "projects": [],
+        "source": "",
+        "checklist": [],
+        "revision": 2,
+        "created_at": "2026-01-02T03:04:05Z",
+        "updated_at": "2026-01-02T03:04:05Z",
+        "closed_at": "2026-11-16T10:00:00Z",
+        "last_claim_ref": null,
+        "withheld": [
+          "goal_or_stage"
+        ],
+        "workable": false,
+        "lapsed_claim": null,
+        "comment_count": 1,
+        "queue_order": null,
+        "other_space": null,
+        "parent": null
+      },
+      {
+        "work_item_id": "00000000-0000-4000-8000-000000000078",
+        "planning_space_id": "00000000-0000-4000-8000-000000000062",
+        "reference": "ALPHA-5",
+        "number": 5,
+        "title": "Cancelled inside the period",
+        "kind": "task",
+        "priority": "medium",
+        "state": {
+          "state_id": "00000000-0000-4000-8000-000000000071",
+          "key": "cancelled",
+          "name": "Cancelled",
+          "category": "cancelled",
+          "is_terminal": true
+        },
+        "open": false,
+        "container_state": null,
+        "acceptance": null,
+        "started_at": null,
+        "waits_for": [],
+        "claim_ref": "",
+        "claim_state": null,
+        "parent_id": null,
+        "labels": [
+          "ui"
+        ],
+        "projects": [],
+        "source": "",
+        "checklist": [],
+        "revision": 2,
+        "created_at": "2026-01-02T03:04:05Z",
+        "updated_at": "2026-01-02T03:04:05Z",
+        "closed_at": "2026-11-15T10:00:00Z",
+        "last_claim_ref": null,
+        "withheld": [
+          "not_ready"
+        ],
+        "workable": false,
+        "lapsed_claim": null,
+        "comment_count": 1,
+        "queue_order": null,
+        "other_space": null,
+        "parent": null
+      },
+      {
+        "work_item_id": "00000000-0000-4000-8000-000000000079",
+        "planning_space_id": "00000000-0000-4000-8000-000000000062",
+        "reference": "ALPHA-4",
+        "number": 4,
+        "title": "Cancelled at the first moment after it",
+        "kind": "task",
+        "priority": "medium",
+        "state": {
+          "state_id": "00000000-0000-4000-8000-000000000071",
+          "key": "cancelled",
+          "name": "Cancelled",
+          "category": "cancelled",
+          "is_terminal": true
+        },
+        "open": false,
+        "container_state": null,
+        "acceptance": null,
+        "started_at": null,
+        "waits_for": [],
+        "claim_ref": "",
+        "claim_state": null,
+        "parent_id": null,
+        "labels": [],
+        "projects": [],
+        "source": "",
+        "checklist": [],
+        "revision": 2,
+        "created_at": "2026-01-02T03:04:05Z",
+        "updated_at": "2026-01-02T03:04:05Z",
+        "closed_at": "2026-11-18T21:00:00Z",
+        "last_claim_ref": null,
+        "withheld": [
+          "not_ready"
+        ],
+        "workable": false,
+        "lapsed_claim": null,
+        "comment_count": 1,
+        "queue_order": null,
+        "other_space": null,
+        "parent": null
+      }
+    ],
+    "links": [],
+    "other_space_ends": [],
+    "stale_claims": [],
+    "live_work": {}
+  },
+  "volumes": {
+    "interface_version": "valkama-planning-api",
+    "volumes": {
+      "scope": {
+        "kind": "space",
+        "space_ref": {
+          "data_scope_id": "00000000-0000-4000-8000-000000000004",
+          "space_key": "ALPHA"
+        },
+        "project_ref": null
+      },
+      "period": {
+        "from": "2026-01-02T03:04:05+03:00",
+        "to": "2026-01-02T03:04:05+03:00",
+        "utc_offset": 180
+      },
+      "filter": null,
+      "measured_from": "2026-01-02T03:04:05.000Z",
+      "coverage": [
+        {
+          "space_ref": {
+            "data_scope_id": "00000000-0000-4000-8000-000000000004",
+            "space_key": "ALPHA"
+          },
+          "status": "searched",
+          "reason": null
+        }
+      ],
+      "attached_work": false,
+      "counts": {
+        "categories": [
+          {
+            "category": "triage",
+            "tasks": 1,
+            "goals": 0,
+            "stages": 0,
+            "oldest": {
+              "work_item_id": "00000000-0000-4000-8000-000000000072",
+              "reference": "ALPHA-8",
+              "since": "2026-01-02T03:04:05Z"
+            }
+          },
+          {
+            "category": "deferred",
+            "tasks": 0,
+            "goals": 0,
+            "stages": 0,
+            "oldest": null
+          },
+          {
+            "category": "ready",
+            "tasks": 0,
+            "goals": 0,
+            "stages": 0,
+            "oldest": null
+          },
+          {
+            "category": "active",
+            "tasks": 0,
+            "goals": 0,
+            "stages": 0,
+            "oldest": null
+          },
+          {
+            "category": "review",
+            "tasks": 0,
+            "goals": 0,
+            "stages": 0,
+            "oldest": null
+          },
+          {
+            "category": "completed",
+            "tasks": 3,
+            "goals": 1,
+            "stages": 0,
+            "oldest": null
+          },
+          {
+            "category": "blocked",
+            "tasks": 0,
+            "goals": 0,
+            "stages": 0,
+            "oldest": null
+          },
+          {
+            "category": "cancelled",
+            "tasks": 1,
+            "goals": 0,
+            "stages": 0,
+            "oldest": null
+          }
+        ],
+        "waiting_owner": {
+          "count": 0,
+          "oldest": null
+        },
+        "unattached_commits": 0
+      },
+      "goals": [
+        {
+          "work_item_id": "00000000-0000-4000-8000-000000000077",
+          "reference": "ALPHA-6",
+          "title": "Goal finished inside the period",
+          "kind": "goal",
+          "state": {
+            "key": "done",
+            "name": "Done",
+            "category": "completed",
+            "is_terminal": true
+          },
+          "container_state": null,
+          "open": false,
+          "parent_reference": null,
+          "other_space": null,
+          "partial": false,
+          "tasks": {
+            "total": 0,
+            "closed": 0,
+            "completed": 0,
+            "cancelled": 0,
+            "by_category": {
+              "triage": 0,
+              "deferred": 0,
+              "ready": 0,
+              "active": 0,
+              "review": 0,
+              "completed": 0,
+              "blocked": 0,
+              "cancelled": 0
+            }
+          },
+          "baseline": null,
+          "baseline_absent": "not_started",
+          "spent": {
+            "agent_seconds": 0.0,
+            "tokens": {
+              "input": null,
+              "cached_read": null,
+              "cache_write_5m": null,
+              "cache_write_1h": null,
+              "output": null,
+              "reasoning": null
+            },
+            "estimated_api_cost_usd": null,
+            "unpriced_tokens": 0,
+            "quality": null,
+            "partly_measured": 0
+          },
+          "spent_with_cancelled": {
+            "agent_seconds": 0.0,
+            "tokens": {
+              "input": null,
+              "cached_read": null,
+              "cache_write_5m": null,
+              "cache_write_1h": null,
+              "output": null,
+              "reasoning": null
+            },
+            "estimated_api_cost_usd": null,
+            "unpriced_tokens": 0,
+            "quality": null,
+            "partly_measured": 0
+          },
+          "sessions": 0,
+          "commits": 0,
+          "commits_unknown_repository": 0,
+          "remaining": null,
+          "children": []
+        }
+      ],
+      "outside": {
+        "tasks": 5,
+        "by_project": [
+          {
+            "project": {
+              "id": null,
+              "unknown": false,
+              "name": null,
+              "combinations": null
+            },
+            "categories": {
+              "triage": 1,
+              "deferred": 0,
+              "ready": 0,
+              "active": 0,
+              "review": 0,
+              "completed": 3,
+              "blocked": 0,
+              "cancelled": 1
+            }
+          }
+        ],
+        "by_label": [
+          {
+            "label": "ui",
+            "categories": {
+              "triage": 0,
+              "deferred": 0,
+              "ready": 0,
+              "active": 0,
+              "review": 0,
+              "completed": 2,
+              "blocked": 0,
+              "cancelled": 1
+            }
+          },
+          {
+            "label": null,
+            "categories": {
+              "triage": 1,
+              "deferred": 0,
+              "ready": 0,
+              "active": 0,
+              "review": 0,
+              "completed": 1,
+              "blocked": 0,
+              "cancelled": 0
+            }
+          }
+        ]
+      },
+      "flow": {
+        "days": [
+          {
+            "day": "2026-11-12",
+            "created": 1,
+            "closed": 1,
+            "decisions": 0,
+            "commits": 0
+          },
+          {
+            "day": "2026-11-13",
+            "created": 1,
+            "closed": 0,
+            "decisions": 0,
+            "commits": 0
+          },
+          {
+            "day": "2026-11-14",
+            "created": 1,
+            "closed": 1,
+            "decisions": 0,
+            "commits": 0
+          },
+          {
+            "day": "2026-11-15",
+            "created": 1,
+            "closed": 1,
+            "decisions": 0,
+            "commits": 0
+          },
+          {
+            "day": "2026-11-16",
+            "created": 0,
+            "closed": 0,
+            "decisions": 0,
+            "commits": 0
+          },
+          {
+            "day": "2026-11-17",
+            "created": 0,
+            "closed": 0,
+            "decisions": 0,
+            "commits": 0
+          },
+          {
+            "day": "2026-11-18",
+            "created": 1,
+            "closed": 1,
+            "decisions": 0,
+            "commits": 0
+          }
+        ],
+        "totals": {
+          "created": 5,
+          "closed": 4,
+          "decisions": 0,
+          "commits": 0
+        },
+        "pace": {
+          "open": 1,
+          "recent": {
+            "days": 7,
+            "created": 0,
+            "closed": 0,
+            "trend": "steady"
+          },
+          "series": [
+            {
+              "day": "2026-11-11",
+              "created": 1,
+              "closed": 1,
+              "total": 1,
+              "closed_total": 1
+            },
+            {
+              "day": "2026-11-12",
+              "created": 1,
+              "closed": 1,
+              "total": 2,
+              "closed_total": 2
+            },
+            {
+              "day": "2026-11-13",
+              "created": 1,
+              "closed": 0,
+              "total": 3,
+              "closed_total": 2
+            },
+            {
+              "day": "2026-11-14",
+              "created": 1,
+              "closed": 1,
+              "total": 4,
+              "closed_total": 3
+            },
+            {
+              "day": "2026-11-15",
+              "created": 1,
+              "closed": 1,
+              "total": 5,
+              "closed_total": 4
+            },
+            {
+              "day": "2026-11-18",
+              "created": 1,
+              "closed": 1,
+              "total": 6,
+              "closed_total": 5
+            },
+            {
+              "day": "2026-11-19",
+              "created": 1,
+              "closed": 1,
+              "total": 7,
+              "closed_total": 6
+            }
+          ]
+        }
+      },
+      "estimates": {
+        "min_basis": 5,
+        "basis": 0,
+        "rows": []
+      }
+    }
+  },
+  "volumes_labelled": {
+    "interface_version": "valkama-planning-api",
+    "volumes": {
+      "scope": {
+        "kind": "space",
+        "space_ref": {
+          "data_scope_id": "00000000-0000-4000-8000-000000000004",
+          "space_key": "ALPHA"
+        },
+        "project_ref": null
+      },
+      "period": {
+        "from": "2026-01-02T03:04:05+03:00",
+        "to": "2026-01-02T03:04:05+03:00",
+        "utc_offset": 180
+      },
+      "filter": {
+        "kinds": [],
+        "labels": [
+          "ui"
+        ]
+      },
+      "measured_from": "2026-01-02T03:04:05.000Z",
+      "coverage": [
+        {
+          "space_ref": {
+            "data_scope_id": "00000000-0000-4000-8000-000000000004",
+            "space_key": "ALPHA"
+          },
+          "status": "searched",
+          "reason": null
+        }
+      ],
+      "attached_work": false,
+      "counts": {
+        "categories": [
+          {
+            "category": "triage",
+            "tasks": 0,
+            "goals": null,
+            "stages": null,
+            "oldest": null
+          },
+          {
+            "category": "deferred",
+            "tasks": 0,
+            "goals": null,
+            "stages": null,
+            "oldest": null
+          },
+          {
+            "category": "ready",
+            "tasks": 0,
+            "goals": null,
+            "stages": null,
+            "oldest": null
+          },
+          {
+            "category": "active",
+            "tasks": 0,
+            "goals": null,
+            "stages": null,
+            "oldest": null
+          },
+          {
+            "category": "review",
+            "tasks": 0,
+            "goals": null,
+            "stages": null,
+            "oldest": null
+          },
+          {
+            "category": "completed",
+            "tasks": 2,
+            "goals": null,
+            "stages": null,
+            "oldest": null
+          },
+          {
+            "category": "blocked",
+            "tasks": 0,
+            "goals": null,
+            "stages": null,
+            "oldest": null
+          },
+          {
+            "category": "cancelled",
+            "tasks": 1,
+            "goals": null,
+            "stages": null,
+            "oldest": null
+          }
+        ],
+        "waiting_owner": {
+          "count": 0,
+          "oldest": null
+        },
+        "unattached_commits": 0
+      },
+      "goals": [],
+      "outside": {
+        "tasks": 3,
+        "by_project": [
+          {
+            "project": {
+              "id": null,
+              "unknown": false,
+              "name": null,
+              "combinations": null
+            },
+            "categories": {
+              "triage": 0,
+              "deferred": 0,
+              "ready": 0,
+              "active": 0,
+              "review": 0,
+              "completed": 2,
+              "blocked": 0,
+              "cancelled": 1
+            }
+          }
+        ],
+        "by_label": [
+          {
+            "label": "ui",
+            "categories": {
+              "triage": 0,
+              "deferred": 0,
+              "ready": 0,
+              "active": 0,
+              "review": 0,
+              "completed": 2,
+              "blocked": 0,
+              "cancelled": 1
+            }
+          }
+        ]
+      },
+      "flow": {
+        "days": [
+          {
+            "day": "2026-11-12",
+            "created": 1,
+            "closed": 1,
+            "decisions": 0,
+            "commits": 0
+          },
+          {
+            "day": "2026-11-13",
+            "created": 0,
+            "closed": 0,
+            "decisions": 0,
+            "commits": 0
+          },
+          {
+            "day": "2026-11-14",
+            "created": 1,
+            "closed": 1,
+            "decisions": 0,
+            "commits": 0
+          },
+          {
+            "day": "2026-11-15",
+            "created": 1,
+            "closed": 1,
+            "decisions": 0,
+            "commits": 0
+          },
+          {
+            "day": "2026-11-16",
+            "created": 0,
+            "closed": 0,
+            "decisions": 0,
+            "commits": 0
+          },
+          {
+            "day": "2026-11-17",
+            "created": 0,
+            "closed": 0,
+            "decisions": 0,
+            "commits": 0
+          },
+          {
+            "day": "2026-11-18",
+            "created": 0,
+            "closed": 0,
+            "decisions": 0,
+            "commits": 0
+          }
+        ],
+        "totals": {
+          "created": 3,
+          "closed": 3,
+          "decisions": 0,
+          "commits": 0
+        },
+        "pace": {
+          "open": 0,
+          "recent": {
+            "days": 7,
+            "created": 0,
+            "closed": 0,
+            "trend": "steady"
+          },
+          "series": [
+            {
+              "day": "2026-11-12",
+              "created": 1,
+              "closed": 1,
+              "total": 1,
+              "closed_total": 1
+            },
+            {
+              "day": "2026-11-14",
+              "created": 1,
+              "closed": 1,
+              "total": 2,
+              "closed_total": 2
+            },
+            {
+              "day": "2026-11-15",
+              "created": 1,
+              "closed": 1,
+              "total": 3,
+              "closed_total": 3
+            }
+          ]
+        }
+      },
+      "estimates": {
+        "min_basis": 5,
+        "basis": 0,
+        "rows": []
+      }
+    }
+  }
+}

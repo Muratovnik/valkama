@@ -1369,6 +1369,27 @@ class CancelOutsideTests(SettingHarness):
         ).fetchone()
         self.assertEqual(("transitioned", f"cancelled: {REASON}"), tuple(marked))
 
+    def test_a_cancel_question_closes_a_title_and_a_reason_with_one_mark(self) -> None:
+        # A title or a reason that ends a sentence of its own takes no stop after it:
+        # the question said «… E11..» and «… ready?.».
+        asked = self.filed("Is the menu ready?", parent=self.goal, by=OTHER)
+        self.at(participation.MAXIMAL)
+        waits = self.tool(
+            "apply_work_item_changes",
+            id=asked,
+            summary=SUMMARY,
+            transition={"state": "cancelled", "reason": "Done in MAIN-11."},
+        )["waits_for_owner"]
+        self.assertEqual(
+            f"An agent cancels {asked}, filed outside its own work: Is the menu ready? Its"
+            " reason: Done in MAIN-11. Cancel it, or keep it.",
+            self.request(waits["question"])["prompt"],
+        )
+        self.assertEqual(
+            ["A title.", "Done?", "«Quoted.»", "Spaces."],
+            [model.sentence(text) for text in ("A title", "Done?", "«Quoted.»", " Spaces. ")],
+        )
+
     def test_cancelling_another_sessions_item_waits_at_maximal(self) -> None:
         before = self.card(self.task)
         waits = self.waits_at_maximal()

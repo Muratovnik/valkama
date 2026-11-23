@@ -3,9 +3,13 @@
 import { activityMessages } from '@/shared/i18n/activityMessages.ts'
 import { alertMessages } from '@/shared/i18n/alertMessages.ts'
 import { analyticsMessages } from '@/shared/i18n/analyticsMessages.ts'
+import { boardMessages } from '@/shared/i18n/boardMessages.ts'
 import { checklistCommentMessages } from '@/shared/i18n/checklistCommentMessages.ts'
 import { commentStepsMessages } from '@/shared/i18n/commentStepsMessages.ts'
+import { composedTextMessages } from '@/shared/i18n/composedTextMessages.ts'
 import { connectionMessages } from '@/shared/i18n/connectionMessages.ts'
+import { decisionPointMessages } from '@/shared/i18n/decisionPointMessages.ts'
+import { decisionsMessages } from '@/shared/i18n/decisionsMessages.ts'
 import { discussionThreadMessages } from '@/shared/i18n/discussionThreadMessages.ts'
 import { doctorCommitMessages } from '@/shared/i18n/doctorCommitMessages.ts'
 import { doctorDesktopMessages } from '@/shared/i18n/doctorDesktopMessages.ts'
@@ -29,10 +33,15 @@ import { shellScopeMessages } from '@/shared/i18n/shellScopeMessages.ts'
 import { timeMessages } from '@/shared/i18n/timeMessages.ts'
 import { treeRowMessages } from '@/shared/i18n/treeRowMessages.ts'
 import { viewMenuMessages } from '@/shared/i18n/viewMenuMessages.ts'
+import { volumesMessages } from '@/shared/i18n/volumesMessages.ts'
 import { workFilterMessages } from '@/shared/i18n/workFilterMessages.ts'
 import { workItemAgentMessages } from '@/shared/i18n/workItemAgentMessages.ts'
+import { workItemChainMessages } from '@/shared/i18n/workItemChainMessages.ts'
+import { workItemClosingMessages } from '@/shared/i18n/workItemClosingMessages.ts'
 import { workItemComposeMessages } from '@/shared/i18n/workItemComposeMessages.ts'
+import { workItemDividingMessages } from '@/shared/i18n/workItemDividingMessages.ts'
 import { workItemFacetMessages } from '@/shared/i18n/workItemFacetMessages.ts'
+import { workItemFactMessages } from '@/shared/i18n/workItemFactMessages.ts'
 import { workItemHeadMessages } from '@/shared/i18n/workItemHeadMessages.ts'
 import { workItemLinkMessages } from '@/shared/i18n/workItemLinkMessages.ts'
 import { workItemNextStepMessages } from '@/shared/i18n/workItemNextStepMessages.ts'
@@ -60,7 +69,12 @@ export const ru = {
   pastedImages: pastedImageMessages.ru.pastedImages,
   ...connectionMessages.ru,
   liveWork: liveWorkMessages.ru.liveWork,
+  commits: workItemFactMessages.ru.commits,
   analytics: analyticsMessages.ru.analytics,
+  decisions: decisionsMessages.ru,
+  decisionPoints: decisionPointMessages.ru,
+  composed: composedTextMessages.ru,
+  volumes: volumesMessages.ru,
   app: {
     title: 'Valkama',
   },
@@ -230,6 +244,8 @@ export const ru = {
     zoomIn: 'Приблизить',
     zoomOut: 'Отдалить',
     zoomReset: 'Весь граф',
+    zoomFloor:
+      'На узком экране граф не уменьшается мельче, чем читаются карточки. Остальное — перетаскиванием.',
     options: 'Параметры и легенда графа',
     chainChip: 'Цепочка {reference} · {count}',
     chainExit: 'Выйти из цепочки {reference} и показать всё пространство',
@@ -660,6 +676,8 @@ export const ru = {
   },
   workItem: {
     agents: workItemAgentMessages.ru.agents,
+    closeActions: workItemClosingMessages.ru.closeActions,
+    dividing: workItemDividingMessages.ru.dividing,
     usage: workItemUsageMessages.ru.usage,
     preview: workItemPreviewMessages.ru.preview,
     addDescription: 'Добавить описание',
@@ -710,77 +728,7 @@ export const ru = {
       outgoing: 'От этой задачи',
       incoming: 'К этой задаче',
     },
-    chain: {
-      title: 'Цепочка',
-      scopeLabel: 'Что охватывает цепочка',
-      scopeTree: 'Состав',
-      scopeChain: 'Цепочка',
-      showOnGraph: 'Показать на графе',
-      onGraph: 'На графе',
-      details: 'График и темп',
-      loadFailed: 'Не удалось загрузить цепочку.',
-      primaryOnly: 'Цепочка доступна только для элементов основного хранилища.',
-      refreshFailed: 'Не удалось обновить цепочку; показан последний ответ.',
-      stat: {
-        total: 'Под корнем',
-        open: 'Открыто',
-        noneOpen: 'Открытых нет',
-        workable: 'Можно брать',
-        workableNote: 'включая неразобранное',
-      },
-      part: '{group} {count}',
-      group: {
-        active: 'В работе',
-        review: 'Проверка',
-        ready: 'Готово к работе',
-        triage: 'Не разобрано',
-        deferred: 'Отложено',
-        blocked: 'Заблокировано',
-        containers: 'Цели и этапы',
-        done: 'Выполнено',
-      },
-      groupCount: '{group} · {count}',
-      showAll: 'Показать все · {count}',
-      showFewer: 'Свернуть',
-      forecast: {
-        window: 'За {days}\u{A0}дней',
-        first: 'Первый день | Первые {count}\u{A0}дня | Первые {count}\u{A0}дней',
-        facts: '{period}: {created} добавлено, {closed} выполнено',
-        quiet: 'За {days}\u{A0}дней ничего не добавлено и не выполнено',
-        line: '{facts}. {verdict}',
-        young: 'Для прогноза нужно {days}\u{A0}дней истории',
-        growing:
-          'Новое появляется быстрее, чем закрывается: чтобы сойтись, нужно закрывать больше {rate}\u{A0}в день',
-        steady: 'Открытое не убывает: чтобы сойтись, нужно закрывать больше {rate}\u{A0}в день',
-        about: 'При таком темпе открытое закроется примерно за {span}',
-        aboutBy: 'При таком темпе открытое закроется примерно за {span} (к\u{A0}{date})',
-        range: 'При таком темпе открытое закроется за {span}',
-        rangeOn: 'При таком темпе открытое закроется за {span} ({date})',
-        earliest: 'При таком темпе открытое закроется не раньше чем через {span}: темп неровный',
-        year: 'При таком темпе открытое закроется не раньше чем через год',
-        day: '{count}\u{A0}день | {count}\u{A0}дня | {count}\u{A0}дней',
-        week: '{count}\u{A0}неделю | {count}\u{A0}недели | {count}\u{A0}недель',
-        month: '{count}\u{A0}месяц | {count}\u{A0}месяца | {count}\u{A0}месяцев',
-      },
-      noParent: 'без родителя',
-      map: {
-        summary: 'Карта цепочки: веток — {lanes}, задач — {total}; {parts}.',
-        lane: 'Ветка {name}: задач — {total}; {parts}',
-        hint: 'Стрелки влево и вправо — по задачам, Page Up и Page Down — по участкам одного состояния, Home и End — к краям, Enter — открыть задачу.',
-        task: '{reference} · {title} · {state}',
-        position: '{position} из {total}',
-        filterLane: 'Показать только ветку {name}',
-        filter: 'Ветка {name}',
-        clearFilter: 'Ветка {name}: показать все ветки',
-        openParent: 'Открыть {reference}',
-        countDone: 'выполнено {done} из {total}',
-      },
-      seriesTotal: 'Объём {count}',
-      seriesClosed: 'Выполнено {count}',
-      seriesOpen: 'Открыто {count}',
-      chartSummary:
-        'Объём с {from} по {to}: в начале {start}, сейчас {total}; на {day} выполнено {closed}, открыто {open}.',
-    },
+    chain: workItemChainMessages.ru.chain,
     inspector: 'Единица работы',
     resize: 'Изменить ширину панели',
     sections: 'Разделы единицы работы',
@@ -800,25 +748,7 @@ export const ru = {
       laneHeads:
         '{goals}\u{A0}родитель строкой | {goals}\u{A0}родителя строками | {goals}\u{A0}родителей строками',
     },
-    columnEmpty: 'Пусто',
-    lanes: {
-      noParent: 'Без родителя',
-      counts: 'открыто {open} · закрыто {closed}',
-      fold: 'Свернуть «{lane}»',
-      unfold: 'Развернуть «{lane}»',
-      openGoal: 'Открыть {reference}',
-      showChain: 'Показать цепочку {reference} на доске',
-      empty: 'Внутри пока нет задач.',
-      showAll: 'Показать все · {count}',
-      showFewer: 'Свернуть',
-      inState: '{count} в «{state}»',
-      offLeft: 'Левее:',
-      offRight: 'Правее:',
-    },
-    order: {
-      hint: 'Стрелки переводят фокус между задачами.',
-      moved: '{reference}: {position} из {total} в «{state}»',
-    },
+    ...boardMessages.ru,
     listEmpty: 'В этом пространстве ещё нет работы.',
     noSpace: 'У этого проекта пока нет пространства планирования.',
     cutoverPending: 'Выполните `valkama migrate work-model` один раз, остановив все сессии.',
@@ -831,6 +761,7 @@ export const ru = {
     },
     ...workItemFacetMessages.ru,
     ...workItemHeadMessages.ru,
+    ...workItemFactMessages.ru,
     ...workItemNextStepMessages.ru,
     filter: workFilterMessages.ru.filter,
     ...viewMenuMessages.ru,
@@ -871,7 +802,7 @@ export const ru = {
       claim: 'Работу взять не удалось',
       release: 'Освободить работу не удалось',
       takeover: 'Забрать работу не удалось',
-      tick: 'Шаг не отмечен',
+      tick: 'Условие не отмечено',
       attach: 'Ссылка не прикреплена',
       priority: 'Приоритет не изменён',
       labels: 'Метки не изменены',
@@ -881,14 +812,14 @@ export const ru = {
       dismiss: 'Скрыть',
       guard: {
         summary: 'Нет итога работы: напишите, что сделано и что дальше.',
-        checklist: 'В чек-листе есть незакрытые шаги.',
+        checklist: 'Есть невыполненные условия.',
         executor: 'У работы нет исполнителя.',
         blocker: 'Для блокировки нужна блокирующая задача или причина.',
         transition: 'Процесс не допускает такой переход.',
       },
       action: {
         summary: 'Написать итог',
-        checklist: 'К чек-листу',
+        checklist: 'К условиям',
         executor: 'Взять работу',
         blocker: 'Открыть связи',
       },
@@ -897,7 +828,7 @@ export const ru = {
         transitionQuestion:
           'Перевести в «{state}» вопреки правилам процесса? Переопределение будет записано в историю работы.',
         tick: 'Отметить всё равно',
-        tickQuestion: 'Шаг держит {holder}. Отметить его выполненным от вашего имени?',
+        tickQuestion: 'Условие держит {holder}. Отметить его выполненным от вашего имени?',
       },
     },
     noClaim: 'Никто не взял',
@@ -911,7 +842,7 @@ export const ru = {
     create: 'Новая работа',
     newTitle: 'Новая работа',
     cancel: 'Отмена',
-    checklist: 'Чек-лист',
+    checklist: 'Условия',
     checklistProgress: '{done}/{total} готово',
     stepHeldBy: 'в работе',
     stepDoneBy: 'завершил',
@@ -960,7 +891,7 @@ export const ru = {
     refAttached: 'прикрепил {author} · {at}',
     noActivity: 'История пуста.',
     note: 'Заметка',
-    noteHint: 'Результат, причина блокировки или следующий шаг.',
+    noteHint: 'Результат, причина блокировки или что делать дальше.',
     noteSend: 'Добавить',
     reserved: 'Зарезервированные разделы',
     reservedIntro: 'Список разделов задаёт Valkama; эти появятся со своим слоем.',
@@ -979,10 +910,12 @@ export const ru = {
       caption: 'Работа этого пространства; сортируется по любому столбцу.',
       reference: 'Ссылка',
       title: 'Название',
+      goal: 'Цель и этап',
+      project: 'Проект',
       state: 'Состояние',
       priority: 'Приоритет',
       claim: 'Исполнитель',
-      checklist: 'Шаги',
+      checklist: 'Условия',
       updated: 'Обновлено',
       sortBy: 'Сортировать по',
       sortOther: 'Порядок',
@@ -1020,23 +953,23 @@ export const ru = {
     taken_over: 'Работа передана',
     linked: 'Связь добавлена',
     unlinked: 'Связь удалена',
-    checklist_replaced: 'Чек-лист заменён',
-    checklist_claimed: 'Шаг взят',
-    checklist_taken_over: 'Шаг передан',
-    checklist_released: 'Шаг освобождён',
-    checklist_completed: 'Шаг выполнен',
-    checklist_reopened: 'Шаг открыт заново',
+    checklist_replaced: 'Условия заменены',
+    checklist_claimed: 'Условие взято',
+    checklist_taken_over: 'Условие передано',
+    checklist_released: 'Условие освобождено',
+    checklist_completed: 'Условие выполнено',
+    checklist_reopened: 'Условие открыто заново',
     summarized: 'Сводка записана',
     execution_attached: 'Исполнение прикреплено',
     overridden: 'Гард переопределён',
     moved: 'Колонка изменена',
     takenOver: 'Работа передана',
-    checklistClaimed: 'Пункт чек-листа взят в работу',
-    checklistTakenOver: 'Пункт чек-листа передан',
-    checklistReleased: 'Пункт чек-листа освобождён',
-    checklistCompleted: 'Пункт чек-листа завершён',
-    checklistReopened: 'Пункт чек-листа переоткрыт',
-    checklistReplaced: 'Чек-лист заменён',
+    checklistClaimed: 'Условие взято',
+    checklistTakenOver: 'Условие передано',
+    checklistReleased: 'Условие освобождено',
+    checklistCompleted: 'Условие выполнено',
+    checklistReopened: 'Условие открыто заново',
+    checklistReplaced: 'Условия заменены',
     event: 'Событие карточки',
     previousAgent: '· предыдущий исполнитель {agent}',
     session: 'Сессия приложена',

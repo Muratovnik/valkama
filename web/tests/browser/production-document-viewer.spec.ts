@@ -3,6 +3,7 @@ import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { aCardAsking, HUB_TITLE, LINK, linkIn } from './documentBackend.ts'
+import { requestedShot } from './keptShots.ts'
 import { test } from './test.ts'
 
 /**
@@ -22,12 +23,6 @@ function viewerOf(page: Page) {
 
 async function settled(viewer: Locator) {
   await expect(viewer).toHaveCSS('transform', 'none')
-}
-
-/** Where a shot goes when a person asks for shots; a run without the setting takes none. */
-async function shot(page: Page, name: string) {
-  const folder = process.env.VALKAMA_SHOT_DIR
-  if (folder) await page.screenshot({ path: `${folder}/${name}.png` })
 }
 
 test('from a card: over it at 1100, at the anchor, and Escape comes back to the link', async ({
@@ -50,7 +45,7 @@ test('from a card: over it at 1100, at the anchor, and Escape comes back to the 
   await expect(target).toBeFocused()
   await expect(target).toBeInViewport()
   await expect.poll(() => body.evaluate((node) => node.scrollTop)).toBeGreaterThan(0)
-  await shot(page, 'card-1100')
+  await requestedShot(page, 'card-1100')
   // The card is still there under it, out of reach.
   await expect(drawer.locator('..').locator('.overlay-surface').first()).toHaveAttribute(
     'inert',
@@ -79,7 +74,7 @@ test('from the questions waiting for an answer: over the dialog, which stays', a
   const { viewer } = viewerOf(page)
   await settled(viewer)
   await expect(viewer.locator('.document-block.is-target')).toBeFocused()
-  await shot(page, 'questions-1100')
+  await requestedShot(page, 'questions-1100')
 
   await page.keyboard.press('Escape')
   await expect(viewer).toHaveCount(0)
@@ -129,7 +124,7 @@ test('an anchor it does not have opens at the start and says so', async ({ page 
   await settled(viewer)
   await expect(status).toHaveText('There is no #kb:gone in this document, so it opens at the start')
   expect(await body.evaluate((node) => node.scrollTop)).toBe(0)
-  await shot(page, 'anchor-missing-1100')
+  await requestedShot(page, 'anchor-missing-1100')
 })
 
 test('a file gone since the text was written says so, and Close comes back to the link', async ({
@@ -144,7 +139,7 @@ test('a file gone since the text was written says so, and Close comes back to th
   await expect(viewer.getByRole('heading', { name: 'gone.md' })).toBeVisible()
   await expect(viewer).toContainText('The file docs/gone.md is no longer in the project')
   await expect(viewer.getByRole('button', { name: 'Refresh' })).toHaveCount(0)
-  await shot(page, 'gone-1100')
+  await requestedShot(page, 'gone-1100')
   await viewer.getByRole('button', { name: 'Close the document' }).click()
   await expect(viewer).toHaveCount(0)
   await expect(link).toBeFocused()
@@ -211,7 +206,7 @@ test.describe('on a phone', () => {
     await expect(viewer.getByRole('separator')).toHaveCount(0)
     expect(await body.evaluate((node) => node.scrollWidth - node.clientWidth)).toBe(0)
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
-    await shot(page, 'card-390')
+    await requestedShot(page, 'card-390')
     const table = viewer.locator('.rich-table-frame')
     expect(await table.evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(true)
     const code = viewer.locator('.rich-pre')
@@ -236,6 +231,6 @@ test.describe('in a forced palette', () => {
     const target = viewer.locator('.document-block.is-target')
     await expect(target).toHaveCSS('border-inline-start-style', 'solid')
     await expect(target).toHaveCSS('border-inline-start-width', '2px')
-    await shot(page, 'card-forced')
+    await requestedShot(page, 'card-forced')
   })
 })

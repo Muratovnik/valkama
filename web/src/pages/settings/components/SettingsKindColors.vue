@@ -26,6 +26,7 @@ import {
   readsPoorly,
 } from '@/shared/lib/kindColors.ts'
 import type { KindColor } from '@/shared/lib/kindColors.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import { useSettingsStore } from '@/shared/stores/settingsStore.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
@@ -72,7 +73,7 @@ function choose(kind: Kind, event: Event) {
 }
 
 const focusField = (kind: Kind) =>
-  document.querySelector<HTMLElement>(`#${CSS.escape(pickerId(kind))}`)?.focus()
+  placeFocus(document.querySelector<HTMLElement>(`#${CSS.escape(pickerId(kind))}`))
 
 function reset(kind: Kind) {
   write(kind, null)

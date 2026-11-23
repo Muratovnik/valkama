@@ -1,0 +1,1 @@
+var e=e=>e.state?.category??e.container_state??`not_started`;export{e as t};

@@ -1,5 +1,8 @@
 <script setup lang="ts">
-/** The questions waiting for an answer, with a document opened from one standing beside them. */
+/**
+ * The questions waiting for an answer, every space's or one scope's (`scope`), with a document
+ * opened from one standing beside them.
+ */
 import { useI18n } from 'vue-i18n'
 
 import DocumentViewer from '@/widgets/document-viewer/components/DocumentViewer.vue'
@@ -8,12 +11,16 @@ import { useDocumentPane } from '@/widgets/document-viewer/composables/useDocume
 import InputRequestsHub from '@/features/input-requests/components/InputRequestsHub.vue'
 import type { PendingCount } from '@/features/input-requests/composables/useInputRequests.ts'
 
+import type { QuestionScope } from '@/shared/api/inputRequestApi.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
+import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 
-defineProps<{ open: boolean }>()
+defineProps<{ open: boolean; scope?: QuestionScope | null }>()
 const emit = defineEmits<{
+  all: []
   close: []
   count: [value: PendingCount | null]
+  open: [route: PlatformRoute]
   select: [target: PlanningTarget]
 }>()
 
@@ -24,9 +31,12 @@ const documentBeside = useDocumentPane('hub', () => t('requests.title'))
 <template>
   <InputRequestsHub
     :open="open"
+    :scope="scope"
     :pane="documentBeside.pane"
+    @all="emit('all')"
     @close="emit('close')"
     @select="(target) => emit('select', target)"
+    @open="(route) => emit('open', route)"
     @count="(count) => emit('count', count)"
     @pane-close="documentBeside.close"
     @pane-fit="documentBeside.stand"

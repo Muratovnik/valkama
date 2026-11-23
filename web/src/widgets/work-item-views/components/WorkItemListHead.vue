@@ -11,27 +11,57 @@
  * its own cost the width the order's name needed, and the name came out cut.
  * Every order the wide list offers stays one choice away. A name never ends in an
  * ellipsis while a line of its own would hold it whole.
+ *
+ * The choice stays in the title's heading at every level, hidden where it is not offered.
+ * A new width or a new order tries every wider fit within one frame (`useListFit.ts`), and
+ * a choice made anew for the fit that holds lost the focus an order was chosen with.
+ *
+ * The head's controls are out of the Tab order: the rows are the list's one Tab
+ * stop, and the keys reach the head from them (`useListKeys.ts`).
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import type { ListColumn, SortKey } from '@/widgets/work-item-views/utils/listColumns.ts'
+import { fitOf, sortsChosen } from '@/widgets/work-item-views/utils/listColumns.ts'
+import type { Level, ListColumn, SortKey } from '@/widgets/work-item-views/utils/listColumns.ts'
+import { nextSort } from '@/widgets/work-item-views/utils/workOrder.ts'
+import type { ViewSort, ViewSortKey } from '@/widgets/work-item-views/utils/workOrder.ts'
 
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
   columns: readonly ListColumn[]
-  descending: boolean
   folded: readonly ListColumn[]
-  /** The folded sorts as one choice rather than a run of buttons. */
-  narrow: boolean
-  sortKey: SortKey
-  sortState: (key: SortKey) => 'ascending' | 'descending' | 'none'
+  /** The list's level, which decides how the folded sorts are offered and whether they wrap. */
+  level: Level
+  /** The order in force: by a column's key, or by one no column shows, such as the queue's. */
+  sort: ViewSort
 }>()
 
-const emit = defineEmits<{ sort: [key: SortKey] }>()
+/** The order a sort asks for, which the list's host keeps. */
+const emit = defineEmits<{ sort: [sort: ViewSort] }>()
 const { t } = useI18n()
+
+/** The folded sorts as one choice rather than a run of buttons. */
+const choice = computed(() => sortsChosen(fitOf(props.level)))
+/** Whether the choice is shown: it is offered, and some column is folded under the title. */
+const choiceShown = computed(() => choice.value && props.folded.length > 0)
+/**
+ * Whether the choice shows its chevron alone, its name in its hint and to assistive technology,
+ * and the title's heading may take a second line: only in the last level, which no other gives
+ * way to. In every other a heading too long for its column pushes the table past the list, and
+ * the level gives way (`useListFit.ts`).
+ */
+const bare = computed(() => props.level === 'bare')
+const sortKey = computed(() => props.sort.key)
+const descending = computed(() => props.sort.descending)
+const sortState = (key: SortKey) => {
+  if (props.sort.key !== key) return 'none'
+  return props.sort.descending ? 'descending' : 'ascending'
+}
+/** One press sorts by a column from the end it reads first; a second turns it over. */
+const sortBy = (key: ViewSortKey) => emit('sort', nextSort(props.sort, key))
 
 /**
  * A column that sorts numerically must carry the mark and every other column must
@@ -43,7 +73,7 @@ const holdsTitle = (column: ListColumn) => column.key === 'title'
 
 /** The sorts a heading offers as buttons: its own, and on the title's those folded under it. */
 function sortsIn(column: ListColumn): readonly ListColumn[] {
-  return !holdsTitle(column) || props.narrow ? [column] : [column, ...props.folded]
+  return !holdsTitle(column) || choice.value ? [column] : [column, ...props.folded]
 }
 
 function headClass(column: ListColumn) {
@@ -62,22 +92,22 @@ function sortClass(sort: ListColumn, column: ListColumn) {
 const TURN = 'turn'
 
 const chosen = computed(() =>
-  props.folded.some((column) => column.key === props.sortKey) ? props.sortKey : '',
+  props.folded.some((column) => column.key === sortKey.value) ? sortKey.value : '',
 )
 const choices = computed(() => {
   const columns = props.folded.map((column) => ({ label: t(column.label), value: column.key }))
   if (!chosen.value) return columns
-  const turn = props.descending ? 'workItem.list.sortAscending' : 'workItem.list.sortDescending'
+  const turn = descending.value ? 'workItem.list.sortAscending' : 'workItem.list.sortDescending'
   return [...columns, { label: t(turn), value: TURN }]
 })
 
 function choose(value: string) {
   if (value === TURN) {
-    emit('sort', props.sortKey)
+    sortBy(sortKey.value)
     return
   }
   const column = props.folded.find((each) => each.key === value)
-  if (column) emit('sort', column.key)
+  if (column) sortBy(column.key)
 }
 </script>
 
@@ -85,7 +115,7 @@ function choose(value: string) {
   <thead>
     <tr
       aria-rowindex="1"
-      :class="{ narrow }"
+      :class="{ choice: choiceShown, wraps: bare }"
     >
       <th
         v-for="column in columns"
@@ -98,16 +128,17 @@ function choose(value: string) {
       >
         <span class="list-sorts">
           <button
-            v-for="sort in sortsIn(column)"
-            :key="sort.key"
+            v-for="offered in sortsIn(column)"
+            :key="offered.key"
             type="button"
             class="list-sort"
-            :class="sortClass(sort, column)"
-            @click="emit('sort', sort.key)"
+            tabindex="-1"
+            :class="sortClass(offered, column)"
+            @click="sortBy(offered.key)"
           >
-            {{ t(sort.label) }}
+            {{ t(offered.label) }}
             <VIcon
-              v-if="sortKey === sort.key"
+              v-if="sortKey === offered.key"
               name="chevron-down"
               class="list-sort-mark"
               :class="{ ascending: !descending }"
@@ -115,13 +146,16 @@ function choose(value: string) {
             />
           </button>
           <ChoiceSelect
-            v-if="narrow && holdsTitle(column) && folded.length"
+            v-if="holdsTitle(column)"
             class="list-sort-choice"
             size="heading"
+            :hidden="!choiceShown"
             :label="t('workItem.list.sortBy')"
             :placeholder="t('workItem.list.sortOther')"
             :model-value="chosen"
             :options="choices"
+            :bare="bare"
+            keyed
             @update:model-value="choose"
           />
         </span>
@@ -157,16 +191,19 @@ function choose(value: string) {
 
 /* The longest order may take a line of its own under the title's sort, and the
    other sorts stay on the first line. */
-.narrow .list-head {
+.choice .list-head {
   vertical-align: top;
 }
 
 /* A heading's sorts: one, or on the title's heading the title's and those of
-   the columns folded under it, side by side. */
+   the columns folded under it, side by side on one line. */
 .list-sorts {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
+
+  .wraps & {
+    flex-wrap: wrap;
+  }
 
   .list-head[data-numeric='true'] & {
     justify-content: flex-end;
@@ -178,7 +215,7 @@ function choose(value: string) {
   flex: 1 1 auto;
   gap: var(--space-1);
   align-items: center;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-list-inset);
   border: 0;
   color: var(--color-text-muted);
   font: var(--font-column-head);
@@ -196,19 +233,15 @@ function choose(value: string) {
     justify-content: flex-end;
   }
 
-  .list-sorts:has(> :nth-child(2)) > & {
+  /* A heading with more than one sort, as a run or as the title's sort and the choice; a
+     hidden choice is none of them. */
+  :is(.list-sorts:has(> .list-sort ~ .list-sort), .choice .list-head-title > .list-sorts) > & {
     flex: 0 0 auto;
-  }
-
-  /* On a phone the sorts give up half their inset, which is the width the
-     longest order's name needs beside the title's. */
-  .narrow & {
-    padding-inline: var(--space-2);
   }
 
   /* The choice beside the title's sort is a filled control with an inset of
      its own, so the sort's inset on that side is spent twice. */
-  .list-sorts:has(.list-sort-choice) > & {
+  .choice .list-head-title > .list-sorts > & {
     padding-inline-end: var(--space-half);
   }
 
@@ -227,13 +260,17 @@ function choose(value: string) {
 
 /* The reference's heading starts over the reference rather than over the
    glyphs that lead it, at the start the list declares; it is the cell's inset
-   where no list declares one. */
+   where no list declares one. A sort's inset is the list's cells'
+   (`--space-list-inset`), so a heading's word starts where its column's words do. */
 .list-head-reference > .list-sorts > .list-sort {
-  padding-inline-start: max(var(--space-3), var(--list-reference-start, 0px));
+  padding-inline-start: max(var(--space-list-inset), var(--list-reference-start, 0px));
 }
 
+/* An order's name is never cut: a heading too narrow for the choice pushes the table past the
+   list, which gives way to a level where it stands, at the last bare (`useListFit.ts`). */
 .list-sort-choice {
-  flex: 0 1 auto;
+  flex: none;
+  min-width: max-content;
 }
 
 /* One chevron, turned over. The icon set holds no upward chevron, and adding a

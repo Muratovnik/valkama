@@ -45,38 +45,6 @@
   overflow-wrap: anywhere;
 }
 
-.blockers {
-  display: grid;
-  gap: var(--space-1);
-  padding: 0;
-  margin: 0;
-  list-style: none;
-}
-
-/* A wait reads as the facet does everywhere else: its glyph in the hue of a
-   stop, then «Ждёт» and the reference, which opens the blocker. The glyph sits
-   on the first line's baseline, as a letter would, and a long title wraps
-   under the words rather than under the glyph. */
-.blocker {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--space-2);
-  align-items: baseline;
-  color: var(--color-text);
-  font: var(--font-line);
-}
-
-/* A glyph's baseline is its bottom edge; the margin sets it a little below the
-   line's baseline, where a letter's descender would end. */
-.blocker-glyph {
-  margin-bottom: calc(-2 * var(--space-hair));
-  color: var(--color-text-tertiary);
-
-  &[data-tone='danger'] {
-    color: var(--color-danger);
-  }
-}
-
 .checklist {
   display: grid;
   gap: var(--space-1);
@@ -134,21 +102,6 @@
   grid-column: 3;
 }
 
-.step-mark {
-  display: grid;
-  place-items: center;
-  width: var(--size-step-mark);
-  height: var(--size-step-mark);
-  border: 1px solid var(--color-rule-strong);
-  color: var(--color-surface);
-  border-radius: var(--radius-status);
-
-  .step[data-tone='success'] & {
-    background: var(--color-success);
-    border-color: var(--color-success);
-  }
-}
-
 /* Its padding and this line height add up to the box's height, which centres the first
    line on the box however the text then wraps; the tighter line stood above it. */
 .step-text {
@@ -189,7 +142,26 @@
    which is the inset of the holder's own control: the dot was a character of the phrase,
    a word's space from «завершил» and twelve pixels from the name, the flex gap and that
    inset added together. As in the identity line, it is room on both sides of a dot. */
+
+/* A step its former holder marked: the holder's lease lapsed, so the mark waits for a fresh
+   one before review or a close. It reads under the holder's line, in the hue of a decision
+   waiting, as review and a stale claim do. */
+.step-previous {
+  grid-column: 2;
+  padding-bottom: var(--space-1);
+  color: var(--color-warning);
+  font: var(--font-detail);
+  font-weight: 500;
+}
+
 .step-holder-dot {
   flex: none;
   margin-inline-start: var(--space-2);
+}
+
+/* Confirming the mark ticks the step again as the reader's own, under the mark it answers. */
+.step-confirm {
+  grid-column: 2;
+  justify-self: start;
+  margin-block-end: var(--space-1);
 }

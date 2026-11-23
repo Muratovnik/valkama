@@ -11,6 +11,7 @@ import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 import { launchedSessionId } from './executionFixtures.ts'
+import { requestedShot } from './keptShots.ts'
 import { expectSessionWithName } from './metaLine.ts'
 import { asked } from './questionBackend.ts'
 import { openQuestion } from './questionPage.ts'
@@ -79,12 +80,6 @@ async function openHeads(page: Page, locale: 'en' | 'ru', width: number) {
   return { card, drawer, thread }
 }
 
-/** Where a shot goes when a person asks for shots; a run without the setting takes none. */
-async function shot(page: Page, name: string) {
-  const folder = process.env.VALKAMA_SHOT_DIR
-  if (folder) await page.screenshot({ path: `${folder}/${name}.png` })
-}
-
 for (const locale of ['en', 'ru'] as const)
   for (const width of [320, 390, 430, 1280]) {
     const at = `${locale} at ${width}`
@@ -123,13 +118,13 @@ for (const locale of ['en', 'ru'] as const)
       }
       test.info().annotations.push({ type: 'places', description: places.join('; ') })
       await thread('Four replies below').evaluate((node) => node.scrollIntoView({ block: 'start' }))
-      await shot(page, `thread-${locale}-${width}`)
+      await requestedShot(page, `thread-${locale}-${width}`)
       await thread('Does the import keep').evaluate((node) =>
         node.scrollIntoView({ block: 'start' }),
       )
-      await shot(page, `waiting-${locale}-${width}`)
+      await requestedShot(page, `waiting-${locale}-${width}`)
       await card.evaluate((node) => node.scrollIntoView({ block: 'start' }))
-      await shot(page, `question-${locale}-${width}`)
+      await requestedShot(page, `question-${locale}-${width}`)
     })
   }
 

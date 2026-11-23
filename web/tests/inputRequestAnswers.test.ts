@@ -290,21 +290,24 @@ test('a closing leaves the words of a text answer among the words not sent', () 
 
 /** A key's last word: enough to read the lines by. */
 const lastWord = (key: string) => key.split('.').at(-1) ?? ''
+/** Every key is known: a question no service composed takes no word from the catalogue. */
+const knows = () => true
 
 test('what a closing left chosen reads as a line per field, by the labels shown', () => {
   const t = lastWord
+  const closed = answeredRequest()
   const left = draft({
     answers: { proceed: false, branch: 'merge', extra: ['keep', 'merge'], note: 'Words' },
     comments: { extra: 'Mine' },
   })
-  expect(unsentChoices(fields, left, t)).toEqual([
+  expect(unsentChoices(closed, left, t, knows)).toEqual([
     'Proceed: no',
     'Branch: Merge',
     'Extra: Keep, Merge',
   ])
   // A comment is words, said among them; a field with nothing chosen says nothing here.
-  expect(unsentChoices(fields, draft({ comments: { branch: 'Mine' } }), t)).toEqual([])
-  expect(unsentChoices(fields, EMPTY_DRAFT, t)).toEqual([])
+  expect(unsentChoices(closed, draft({ comments: { branch: 'Mine' } }), t, knows)).toEqual([])
+  expect(unsentChoices(closed, EMPTY_DRAFT, t, knows)).toEqual([])
 })
 
 const echo = (key: string, values?: Record<string, unknown>) =>
@@ -325,6 +328,26 @@ test('a replaced answer reads as a line per field that said something', () => {
     { id: 'proceed', text: 'Proceed: requests.no; requests.fieldNoteSaid(Because)' },
     { id: 'branch', text: 'Branch: requests.ownVariantSaid(In a week)' },
     { id: 'extra', text: 'Extra: Keep, Merge' },
+  ])
+})
+
+test('a label that is a question or ends in a colon takes no colon of ours after it', () => {
+  // An agent often asks a field as a question; a colon after its mark read «аналитики?: Фон строки».
+  const asked: InputRequestField[] = [
+    { id: 'look', label: 'Какой вариант аналитики?', type: 'choice', required: true, options },
+    { id: 'base', label: 'Ветка:', type: 'choice', required: true, options },
+    { id: 'said', label: '«Готово?»', type: 'text', required: false, options: [] },
+  ]
+  const chosen = answers({ look: 'keep', base: 'merge' })
+  const request = { ...requestEntry().request, fields: asked }
+  expect(unsentChoices(request, chosen, lastWord, knows)).toEqual([
+    'Какой вариант аналитики? Keep',
+    'Ветка: Merge',
+  ])
+  const version = { answers: { look: 'merge', said: 'Да' }, own: {}, field_notes: {} }
+  expect(versionLines(asked, version, echo)).toEqual([
+    { id: 'look', text: 'Какой вариант аналитики? Merge' },
+    { id: 'said', text: '«Готово?» Да' },
   ])
 })
 

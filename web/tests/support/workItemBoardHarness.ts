@@ -45,5 +45,5 @@ export function tile(wrapper: ReturnType<typeof board>, reference: string) {
 }
 
 export function live(wrapper: ReturnType<typeof board>) {
-  return wrapper.get('[role="status"]').text()
+  return wrapper.get('.work-item-board > [role="status"]').text()
 }

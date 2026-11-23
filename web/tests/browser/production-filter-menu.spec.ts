@@ -24,6 +24,14 @@ import { sixtyLabelSpace } from './served/filter.ts'
 import { test } from './test.ts'
 
 const everywhere = (text: string) => `Search for “${text}” in all projects`
+/**
+ * The goals whose titles hold «boa» and «board», as «Goal or stage» offers them: typed text
+ * finds a value of any facet, and the labels stand last.
+ */
+const BOARD_GOALS = [
+  'MAIN-401 · Board lanes: read the space by chain, with each lane’s open and closed work counted where its lane begins',
+  'MAIN-420 · The first board',
+]
 const expanded = (page: Page, value: 'false' | 'true') =>
   expect(field(page)).toHaveAttribute('aria-expanded', value)
 
@@ -43,7 +51,7 @@ test('there is no Filter button; a press in the field opens the facets, a facet 
 
   await field(page).click()
   await expanded(page, 'true')
-  for (const group of ['Conditions', 'Filter by'])
+  for (const group of ['Filters', 'Filter by'])
     await expect(menu(page).getByRole('group', { name: group, exact: true })).toBeVisible()
   await expect(menu(page).getByRole('group')).toHaveCount(2)
   await expect(field(page)).toBeFocused()
@@ -163,7 +171,7 @@ test('text narrows the menu and the work; a number leaves the search over every 
   await board(page)
   await field(page).click()
   await page.keyboard.type('boa')
-  await expect(page.getByRole('option')).toHaveText(['board', everywhere('boa')])
+  await expect(page.getByRole('option')).toHaveText([...BOARD_GOALS, 'board', everywhere('boa')])
 
   await field(page).fill('MAIN-402')
   await expect.poll(() => shownTiles(page)).toEqual(['MAIN-402'])
@@ -192,7 +200,7 @@ test('text narrows the menu and the work; a number leaves the search over every 
 
   // Letters typed away bring the list back with them.
   await field(page).fill('board')
-  await expect(page.getByRole('option')).toHaveText(['board', everywhere('board')])
+  await expect(page.getByRole('option')).toHaveText([...BOARD_GOALS, 'board', everywhere('board')])
 })
 
 test('the menu’s last row opens the search over every project on the text', async ({ page }) => {
@@ -215,9 +223,9 @@ test('the keyboard steps into a facet and back out of it', async ({ page }) => {
   await board(page)
   await field(page).focus()
   await page.keyboard.press('ArrowDown')
-  // The last facet: no holder works here, so the walk is the two presets and four facets.
-  await expect(menu(page).getByRole('option')).toHaveCount(6)
-  for (let step = 0; step < 5; step += 1) await page.keyboard.press('ArrowDown')
+  // The last facet: no holder works here, so the walk is the six conditions and six facets.
+  await expect(menu(page).getByRole('option')).toHaveCount(12)
+  for (let step = 0; step < 11; step += 1) await page.keyboard.press('ArrowDown')
   // The row the field names as active, the one a screen reader is told of.
   const isActive = async (name: string) =>
     expect(field(page)).toHaveAttribute(
@@ -305,7 +313,7 @@ test('a press on a group’s name stays in the menu, and the caret stays in the 
 }) => {
   await board(page)
   await field(page).click()
-  await menu(page).getByText('Conditions', { exact: true }).click()
+  await menu(page).getByText('Filters', { exact: true }).click()
   await expect(menu(page)).toBeVisible()
   await expect(field(page)).toBeFocused()
 })

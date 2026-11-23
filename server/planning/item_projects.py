@@ -47,7 +47,8 @@ NAMED = SOURCES[0]
 COMMITS = SOURCES[1]
 #: The most projects one item names.
 MAX_PROJECTS = 20
-_PROJECT_ID_LIMIT = 160
+#: The longest project id a caller may name.
+PROJECT_ID_LIMIT = 160
 _RANK = {source: index for index, source in enumerate(SOURCES)}
 
 CONTAINER_NAMES_NONE = "[project] a goal or stage names no projects: the tasks under it do"
@@ -76,7 +77,7 @@ def strongest(first: str, second: str) -> str:
 def project_id(value: object, field: str) -> str:
     """One project id as a caller names it, held to the length an id may have."""
 
-    return model.text_field(value, field, limit=_PROJECT_ID_LIMIT)
+    return model.text_field(value, field, limit=PROJECT_ID_LIMIT)
 
 
 def named(value: object, field: str = "projects") -> list[str] | None:

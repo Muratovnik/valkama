@@ -1784,7 +1784,7 @@ class AskingSessionsTests(WireCallTestCase):
         ]
         schema = tool["inputSchema"]["properties"]["addressees"]
         self.assertEqual(
-            ("array", 1, 5, {"type": "string"}),
+            ("array", 1, 5, {"type": "string", "maxLength": 128}),
             (schema["type"], schema["minItems"], schema["maxItems"], schema["items"]),
         )
         for said in (
@@ -2655,6 +2655,7 @@ class CompactWorkItemReadTests(WireCallTestCase):
                 "properties": {
                     "id": {
                         "type": "string",
+                        "maxLength": 64,
                         "description": "A work item, by its reference (MAIN-142) or its"
                         " work_item_id.",
                     },
@@ -2925,6 +2926,12 @@ class ChainToolTests(WireCallTestCase):
                 "UPDATE work_items SET created_at = ?, updated_at = ? WHERE work_item_id = ?",
                 (stamp, stamp, done["work_item_id"]),
             )
+            # Never moved, it closed when it was created: its history's `created` says when.
+            self.conn.execute(
+                "UPDATE work_item_events SET created_at = ?"
+                " WHERE work_item_id = ? AND action = 'created'",
+                (stamp, done["work_item_id"]),
+            )
         self.found = planning_service.create_work_item(
             self.conn, space=SPACE_KEY, title="found", state="ready", acceptance="assignment"
         )["reference"]
@@ -2971,6 +2978,7 @@ class ChainToolTests(WireCallTestCase):
             "workable",
             "by_category",
             "by_container_state",
+            "by_project",
         ):
             self.assertEqual(whole[key], answer[key], key)
         self.assertEqual((38, 32, 6), (answer["total"], answer["closed"], answer["open"]))

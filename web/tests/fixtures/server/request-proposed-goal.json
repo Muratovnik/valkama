@@ -15,6 +15,13 @@
     "title": "Goal an agent proposes",
     "kind": "question",
     "prompt": "An agent proposes the goal MAIN-25: Goal an agent proposes. Take it on, put it off, or drop it.",
+    "prompt_message": {
+      "key": "goal_proposed",
+      "values": {
+        "reference": "MAIN-25",
+        "title": "Goal an agent proposes"
+      }
+    },
     "fields": [
       {
         "id": "answer",
@@ -39,7 +46,7 @@
       },
       {
         "id": "until",
-        "label": "Until: a day YYYY-MM-DD or the item it waits on",
+        "label": "Until: a day YYYY-MM-DD, a count such as 3 comments, both as 2026-12-01 or 3 comments, or the item it waits on",
         "options": [],
         "required": true,
         "type": "text",

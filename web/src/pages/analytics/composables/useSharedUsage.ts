@@ -6,6 +6,9 @@
  * reads is asked once. A read asked again while the first is in flight follows it, and one asked
  * again once it was answered takes that answer, so long as the view is the one it was asked for.
  *
+ * Every read carries the page's space (`UsageScope`), so whatever part of the page asks it, its
+ * answer is the space's work; a read of the quota's windows is no read of the page and has none.
+ *
  * The view an answer belongs to is its period, its filters and its scope: a change of any of them,
  * or a refresh (`renew`), forgets every answer, so nothing asked after it is served from before
  * it. A section or a measure is no new view. A preset period runs to «now», and every read of a
@@ -24,9 +27,18 @@ import type { AnalyticsView } from '@/shared/api/analyticsAddress.ts'
 import { fetchUsage, usageParameters } from '@/shared/api/analyticsApi.ts'
 import type { Usage, UsageFilters, UsageQuery } from '@/shared/api/analyticsApi.ts'
 
-/** The filter of a scope alone: its project, or nothing at the top. */
-export const scopeFilters = (projectId: string | null): UsageFilters =>
-  projectId ? { project: [projectId] } : {}
+/**
+ * What the context strip narrows the page to: a space by its key, and a project in it. Both are
+ * null at the top.
+ */
+export interface UsageScope {
+  projectId: string | null
+  space: string | null
+}
+
+/** The filter of a scope alone: its project, or nothing in a whole space and at the top. */
+export const scopeFilters = (scope: UsageScope): UsageFilters =>
+  scope.projectId ? { project: [scope.projectId] } : {}
 
 export interface SharedUsage {
   /** The moment the view on show is read as of: the one its first read took. */
@@ -83,9 +95,14 @@ function follow(request: Request, forget: () => void, signal?: AbortSignal): Pro
 
 /**
  * The page's shared reads for the view `viewKey` names: a new key, like `renew`, forgets every
- * answer and the moment. `clock` is the time a new view is read as of.
+ * answer and the moment. `clock` is the time a new view is read as of, and `space` the space every
+ * read is narrowed to, which `viewKey` names too.
  */
-export function createSharedUsage(viewKey: () => string, clock = () => new Date()): SharedUsage {
+export function createSharedUsage(
+  viewKey: () => string,
+  clock = () => new Date(),
+  space: () => string | null = () => null,
+): SharedUsage {
   let requests = new Map<string, Request>()
   let moment: Date | null = null
   let view: string | null = null
@@ -109,8 +126,11 @@ export function createSharedUsage(viewKey: () => string, clock = () => new Date(
     return moment
   }
 
-  function read(query: UsageQuery, signal?: AbortSignal) {
+  const scoped = (query: UsageQuery): UsageQuery => ({ ...query, space: space() })
+
+  function read(asked: UsageQuery, signal?: AbortSignal) {
     sync()
+    const query = scoped(asked)
     const key = usageParameters(query).toString()
     const held = requests.get(key)
     const kept = requests
@@ -141,7 +161,7 @@ export function createSharedUsage(viewKey: () => string, clock = () => new Date(
 
   function peek(query: UsageQuery) {
     sync()
-    return requests.get(usageParameters(query).toString())?.usage
+    return requests.get(usageParameters(scoped(query)).toString())?.usage
   }
 
   return { now, peek, read, renew }
@@ -159,13 +179,17 @@ const unshared: SharedUsage = {
 
 /** The Analytics page's shared reads, for the page itself and every part inside it. */
 export function provideSharedUsage(options: {
-  projectId: () => string | null
+  scope: () => UsageScope
   view: () => AnalyticsView
 }): SharedUsage {
-  const shared = createSharedUsage(() => {
-    const { period, from, to, filters } = options.view()
-    return JSON.stringify({ period, from, to, filters, project: options.projectId() })
-  })
+  const shared = createSharedUsage(
+    () => {
+      const { period, from, to, filters } = options.view()
+      return JSON.stringify({ period, from, to, filters, scope: options.scope() })
+    },
+    undefined,
+    () => options.scope().space,
+  )
   provide(SHARED, shared)
   return shared
 }

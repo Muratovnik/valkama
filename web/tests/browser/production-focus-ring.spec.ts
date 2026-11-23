@@ -9,6 +9,7 @@ import type { Locator, Page } from '@playwright/test'
 
 import { focusColour } from './editorPage.ts'
 import { frames } from './frames.ts'
+import { requestedShot } from './keptShots.ts'
 import { asked, question, routeField, send } from './questionBackend.ts'
 import { openQuestion } from './questionPage.ts'
 import { inTheList, pair } from './questionPress.ts'
@@ -266,12 +267,6 @@ const ringCut = (target: Locator) =>
     )
   })
 
-/** Where a shot goes when a person asks for shots; a run without the setting takes none. */
-async function shot(page: Page, name: string) {
-  const folder = process.env.VALKAMA_SHOT_DIR
-  if (folder) await page.screenshot({ path: `${folder}/${name}.png` })
-}
-
 // Focus scrolls a landing just into view, flush with the edge, where the ring standing clear of
 // its words was cut: under why a send failed, at the foot of a phone's screen.
 for (const locale of ['en', 'ru'] as const)
@@ -292,7 +287,7 @@ for (const locale of ['en', 'ru'] as const)
     await frames(page.locator(':root'))
     expect(await outline(sent)).toBe('solid')
     expect(await ringCut(sent)).toBe(0)
-    await shot(page, `send-failed-ring-${locale}-390`)
+    await requestedShot(page, `send-failed-ring-${locale}-390`)
   })
 
 // The scroll stops at the nearest whole pixel, so a landing whose words above end on a fraction

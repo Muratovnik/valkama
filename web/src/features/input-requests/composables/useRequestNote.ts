@@ -12,7 +12,7 @@ import type { Ref } from 'vue'
 export function useRequestNote(
   text: () => string,
   preview: Ref<boolean>,
-  editor: () => { focus: () => void } | null,
+  editor: () => { takeFocus: () => void } | null,
 ) {
   const asked = ref(false)
   const written = computed(() => Boolean(text().trim()))
@@ -29,7 +29,7 @@ export function useRequestNote(
     if (!open.value) return
     preview.value = false
     await nextTick()
-    editor()?.focus()
+    editor()?.takeFocus()
   }
   return { open, press, written }
 }

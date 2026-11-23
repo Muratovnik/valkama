@@ -47,7 +47,8 @@ export const LINE_BUDGET = new Map([
   // dot draws itself in currentcolor, and PlatformStatePanel carries two status
   // edges (failure panel, degraded banner).
   ['shared/ui/VTextInput.vue', 1],
-  ['shared/ui/ChoiceSelect.vue', 2],
+  // A choice's list, carried out of its trigger: the overlay's edge and its search field's.
+  ['shared/ui/choiceList.css', 2],
   ['shared/ui/CommandList.vue', 1], // Search field edge; results use tone and a focus outline.
   ['shared/ui/OptionGroups.vue', 1], // Overlay edge of the list a field drives.
   ['shared/ui/MarkdownEditor.vue', 1], // The one field edge, around toolbar, text and foot.
@@ -86,15 +87,22 @@ export const LINE_BUDGET = new Map([
   // GraphView keeps the pan viewport frame, the floating flow controls and a
   // legend glyph whose border is the drawing itself.
   ['features/input-requests/components/RequestFold.vue', 1], // A reply's rule, as a quote's.
+  // The row dividers of what a close lists: the work a goal's cancel closes, and what closed
+  // under a goal without being done, rows of a reference and its words that air alone ran together.
+  ['features/work-item-closing/CancelGoalDialog.vue', 1],
+  ['features/work-item-closing/ConfirmCloseDialog.vue', 1],
+  // A checklist step's box, on the card and in the window that confirms a close against it.
+  ['entities/work-item/components/StepMark.vue', 1],
   ['features/input-requests/components/RequestFieldAnswer.vue', 1], // A comment's rule, as a quote's.
   ['features/input-requests/components/RequestHistory.vue', 1], // A replaced answer's, the same.
   // The divider between a review's points, and the thread's rule their fields hang behind.
   ['features/input-requests/components/RequestVerdictRow.vue', 2],
   // Settings General uses one earned divider between its preference groups
-  // and one row family, and its sheet's edge in a forced palette (below).
+  // and one row family; a tab's sheet keeps its edge in a forced palette.
   // Diagnostics uses section and row dividers, plus status edges for
   // initial-load and refresh failures.
-  ['pages/settings/components/SettingsGeneral.vue', 2],
+  ['pages/settings/components/SettingsGeneral.vue', 1],
+  ['pages/settings/components/SettingsSheet.vue', 1],
   ['pages/settings/components/SettingsRow.vue', 1],
   ['pages/settings/components/installation-health.css', 5],
   // The status edge of the note that the period before could not be read, as the degraded banner's.
@@ -109,7 +117,6 @@ export const LINE_BUDGET = new Map([
   ['widgets/work-item-inspector/components/InspectorMentionLine.vue', 1], // The quote of another item's words.
   ['widgets/work-item-inspector/components/InspectorThreadReplies.vue', 1], // What ties replies to their root.
   ['widgets/work-item-inspector/components/InspectorSummary.vue', 1],
-  ['widgets/work-item-inspector/components/InspectorOverview.css', 1],
   ['widgets/work-item-inspector/components/InspectorExecution.vue', 1],
   // The block a link in a document landed on, marked by the selected tone and this edge.
   ['widgets/document-viewer/components/DocumentText.vue', 1],
@@ -131,9 +138,11 @@ export const LINE_BUDGET = new Map([
   // A forced palette clears every ground, so a surface told apart by its ground
   // alone draws its edge in the palette's ink there and nowhere else: the panel
   // above, the settings sheet, and the list (beside its sticky rule), its columns,
-  // the cells of an epic's row and its tiles. A border, because an outline drawn
-  // inside lay under an opaque ground the surface holds and was lost.
+  // a column folded to its strip, the cells of an epic's row and its tiles. A border,
+  // because an outline drawn inside lay under an opaque ground the surface holds and
+  // was lost.
   ['widgets/work-item-views/components/WorkItemColumn.vue', 1],
+  ['widgets/work-item-views/components/WorkItemColumnFold.vue', 1],
   ['widgets/work-item-views/components/WorkItemLaneCell.vue', 1],
   ['widgets/work-item-views/components/WorkItemTile.vue', 1],
 ])
