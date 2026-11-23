@@ -1,15 +1,15 @@
 <script setup lang="ts">
 /**
- * What the answer that puts a question off opens in place: when to come back to it, a day or the
- * close of a card, and the press that puts it off.
+ * What the answer that puts a question off opens in place: when to come back to it, a day, a count
+ * of new comments, both, or the close of a card, and the press that puts it off.
  *
- * The two are one choice (`UntilChoice`), the card found among the open cards of the question's
+ * They are one choice (`UntilChoice`), the card found among the open cards of the question's
  * space.
  *
- * Put off is not available until a day or a card is chosen, and not for a day already gone; the
- * reason stands under it, where the press would have been read. What is chosen is part of what
- * the form holds, so it stays while the question is open, and is said as unsent if the question
- * closes some other way.
+ * Put off is not available until a day, a count or a card is chosen, and not for a day already
+ * gone or a count that is no whole number from 1 to 999; the reason stands under it, where the
+ * press would have been read. What is chosen is part of what the form holds, so it stays while the
+ * question is open, and is said as unsent if the question closes some other way.
  */
 import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -29,7 +29,7 @@ const props = defineProps<{
   entry: InputRequestEntry
   /** The id the answer that opened it names as what it controls. */
   panelId: string
-  /** The day or the card's number chosen, as the field holds it; empty while none is. */
+  /** The day, the count, both, or the card's number chosen, as the field holds it; else empty. */
   value: string
   /** Why the answer that opened it cannot be sent now, which keeps the press unavailable too. */
   blocked?: string

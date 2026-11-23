@@ -1,10 +1,10 @@
 /**
  * The kinds of question in «Needs my answer», at the widths its layout changes at: each purpose
  * the owner answers is drawn as its kind, with the content and the answers of the kinds table, and
- * one press writes the option it names; «Later…» puts a question off to a day or to a card's
- * close; a question its card's close took away says so; and the tabs over the list show one
- * kind's questions, drop a kind with none, give way to «All» when the open kind empties, and are
- * what «Question N of M» counts. A task in a goal shows its goal and the goal's conditions, the goal
+ * one press writes the option it names; «Later…» puts a question off to a day, to new comments,
+ * to whichever of the two comes first, or to a card's close; a question its card's close took
+ * away says so; and the tabs over the list show one kind's questions, drop a kind with none, give
+ * way to «All» when the open kind empties, and are what «Question N of M» counts. A task in a goal shows its goal and the goal's conditions, the goal
  * read by the reference the task's card names it by, at a phone's width in both languages too.
  */
 import { expect } from '@playwright/test'
@@ -98,19 +98,20 @@ for (const width of WIDTHS) {
     await expect(dialog.getByRole('tablist', { name: 'Kinds of question' })).toBeVisible()
   })
 
-  test(`at ${width}px «Later…» puts a question off to a day, or until a card closes`, async ({
+  test(`at ${width}px «Later…» puts a question off to a day, comments or both, or a card`, async ({
     page,
   }) => {
     const byDay = ofPurpose('return', { prompt: 'Put off by a day' })
     const byCard = ofPurpose('goal', { prompt: 'Put off by a card' })
-    const { record, requests } = await openKinds(page, [byDay, byCard], width)
+    const byBoth = ofPurpose('return', { prompt: 'Put off by comments' })
+    const { record, requests } = await openKinds(page, [byDay, byCard, byBoth], width)
 
     const day = record('Put off by a day')
     await day.getByRole('button', { name: 'Later…', exact: true }).click()
     const putOff = day.getByRole('button', { name: 'Put off', exact: true })
     await expect(putOff).toBeDisabled()
     await expect(day.locator('.request-later-reason')).toHaveText(
-      'Choose a day, or a card whose closing brings it back.',
+      'Choose a day, a number of new comments, or a card whose closing brings it back.',
     )
     await day.getByLabel('Until a day').fill('2099-03-01')
     await putOff.click()
@@ -127,11 +128,28 @@ for (const width of WIDTHS) {
     await expect(combo).toHaveValue('MAIN-320 Tray delivery adapter')
     await card.getByRole('button', { name: 'Put off', exact: true }).click()
 
+    const both = record('Put off by comments')
+    await both.getByRole('button', { name: 'Later…', exact: true }).click()
+    await both.getByLabel('New comments').fill('3')
+    await expect(both.locator('[data-until="either"]')).toHaveCount(0)
+    await both.getByLabel('Until a day').fill('2099-03-01')
+    const either = both.locator('[data-until="either"]')
+    await expect(either).toHaveText(
+      'It comes back on the day or the comments, whichever comes first.',
+    )
+    const box = await either.boundingBox()
+    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(width)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      width,
+    )
+    await both.getByRole('button', { name: 'Put off', exact: true }).click()
+
     await expect
       .poll(() => requests.writes.map((write) => write.body.answers))
       .toEqual([
         { answer: 'later', until: '2099-03-01' },
         { answer: 'later', until: 'MAIN-320' },
+        { answer: 'later', until: '2099-03-01 or 3 comments' },
       ])
   })
 

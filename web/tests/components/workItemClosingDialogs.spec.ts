@@ -138,6 +138,64 @@ describe('putting work off', () => {
     expect(wrapper.emitted('done')).toBeUndefined()
     expect(wrapper.get('[role="alert"]').text()).toBe('QA-7 is closed')
   })
+
+  it('puts it off until new comments, or a day or new comments, whichever comes first', async () => {
+    vi.mocked(deferWorkItem).mockResolvedValue()
+    const wrapper = defer()
+    const count = wrapper.get('input[type="number"]')
+    await count.setValue('3')
+    expect(wrapper.find('[data-until="either"]').exists()).toBe(false)
+    await wrapper.get('input[type="date"]').setValue('2099-01-02')
+    expect(wrapper.get('[data-until="either"]').text()).toBe(
+      'It comes back on the day or the comments, whichever comes first.',
+    )
+    await wrapper.get('.defer-reason textarea, .defer-reason input').setValue('Waits for word')
+    await press(wrapper)
+    await flushPromises()
+    expect(deferWorkItem).toHaveBeenLastCalledWith({
+      id: 'QA-320',
+      until: '2099-01-02 or 3 comments',
+      reason: 'Waits for word',
+    })
+    // The day taken away leaves the count; one comment is said as one.
+    await wrapper.get('input[type="date"]').setValue('')
+    await count.setValue('1')
+    await press(wrapper)
+    await flushPromises()
+    expect(deferWorkItem).toHaveBeenLastCalledWith({
+      id: 'QA-320',
+      until: '1 comment',
+      reason: 'Waits for word',
+    })
+  })
+
+  it('takes a card in place of a day and a count, and a day or a count in place of a card', async () => {
+    const wrapper = defer()
+    await wrapper.get('input[type="date"]').setValue('2099-01-02')
+    await wrapper.get('input[type="number"]').setValue('2')
+    const choice = wrapper.getComponent(UntilChoice)
+    choice.vm.$emit('update:value', 'QA-7')
+    await flushPromises()
+    expect(choice.props('value')).toBe('QA-7')
+    expect((wrapper.get('input[type="date"]').element as HTMLInputElement).value).toBe('')
+    expect((wrapper.get('input[type="number"]').element as HTMLInputElement).value).toBe('')
+    await wrapper.get('input[type="number"]').setValue('4')
+    expect(choice.props('value')).toBe('4 comments')
+  })
+
+  it.each([
+    ['0', 'Count from 1 to 999 new comments.'],
+    ['1000', 'Count from 1 to 999 new comments.'],
+    ['2.5', 'Count from 1 to 999 new comments.'],
+  ])('sends nothing for %s new comments', async (typed, says) => {
+    const wrapper = defer()
+    await wrapper.get('input[type="number"]').setValue(typed)
+    await wrapper.get('.defer-reason textarea, .defer-reason input').setValue('Waits for word')
+    expect(submitButton(wrapper).attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain(says)
+    await press(wrapper)
+    expect(deferWorkItem).not.toHaveBeenCalled()
+  })
 })
 
 const row = (n: number, holder: string[] = [], state = 'Dev') => ({
