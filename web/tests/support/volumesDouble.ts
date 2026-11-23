@@ -162,10 +162,13 @@ export interface VolumesInput {
   goals?: GoalRow[]
   /** When usage was first counted; null for a store that never counted any. */
   measuredFrom?: string | null
-  /** Outside goals: tasks by project id (null for none) and by label, each in one category. */
+  /**
+   * Outside goals: tasks by project id (null for none) and by label, each row's `tasks` in Ready
+   * or its count in each category (`categories`).
+   */
   outside?: {
-    byLabel?: { label: string | null; tasks: number }[]
-    byProject?: { project: string | null; tasks: number; name?: string }[]
+    byLabel?: (OutsideCounts & { label: string | null })[]
+    byProject?: (OutsideCounts & { project: string | null; name?: string })[]
   }
   /** The spaces of other stores the read could not read, each with its reason; none by default. */
   skipped?: { reason: string; space_ref: { data_scope_id: string; space_key: string } }[]
@@ -176,6 +179,13 @@ export interface VolumesInput {
   /** Questions waiting for the owner. */
   waiting?: number
 }
+
+/** A row's tasks outside goals: `tasks` in Ready, or a count in each category. */
+type OutsideCounts =
+  | { tasks: number; categories?: never }
+  | { categories: Partial<Record<Category, number>>; tasks?: never }
+
+const outsideCategories = (row: OutsideCounts) => byCategory(row.categories ?? { ready: row.tasks })
 
 /** The answer of `GET /api/planning/volumes`, validated as the page validates it. */
 export function volumesAnswer(input: VolumesInput = {}) {
@@ -221,7 +231,11 @@ export function volumesAnswer(input: VolumesInput = {}) {
       },
       goals: input.goals ?? [],
       outside: {
-        tasks: byProject.reduce((sum, row) => sum + row.tasks, 0),
+        tasks: byProject.reduce(
+          (sum, row) =>
+            sum + Object.values(outsideCategories(row)).reduce((all, count) => all + count, 0),
+          0,
+        ),
         by_project: byProject.map((row) => ({
           project: {
             id: row.project,
@@ -229,11 +243,11 @@ export function volumesAnswer(input: VolumesInput = {}) {
             name: row.project === null ? null : (row.name ?? row.project),
             combinations: null,
           },
-          categories: byCategory({ ready: row.tasks }),
+          categories: outsideCategories(row),
         })),
         by_label: (input.outside?.byLabel ?? []).map((row) => ({
           label: row.label,
-          categories: byCategory({ ready: row.tasks }),
+          categories: outsideCategories(row),
         })),
       },
       flow: {

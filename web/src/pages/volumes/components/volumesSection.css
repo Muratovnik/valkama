@@ -1,10 +1,10 @@
 /*
  * A section of the Volumes page under the numbers: its heading, with a count beside it where the
- * section has one, a part's heading over each of its tables, and the figures in its rows, which
- * keep to their line. This is the one place that says how, read by each section as its own scoped
- * style — the goals (`VolumesGoals`), the work outside goals (`VolumesOutside`), the flow
- * (`VolumesFlow`), the estimates (`VolumesEstimates`) and the commits on no card
- * (`VolumesCommits`).
+ * section has one, a part's heading over each of its tables, the figures in its rows, which keep
+ * to their line, and its table stacked where its columns do not fit. This is the one place that
+ * says how, read by each section as its own scoped style — the goals (`VolumesGoals`), the work
+ * outside goals (`VolumesOutside`), the flow (`VolumesFlow`), the estimates (`VolumesEstimates`)
+ * and the commits on no card (`VolumesCommits`).
  */
 .volumes-heading {
   display: flex;
@@ -29,4 +29,38 @@
 .volumes-figure {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+/* Where a section's columns do not fit its frame (`useTableFit`'s `stack`, `data-fit` on the
+   section), each row is a block whose cells flow on lines, so nothing scrolls sideways or stands
+   past the frame. The heading row is cut away and read only aloud: a block says in its own cells
+   what a heading would. The commits on no card and the work outside goals stand so, each saying
+   where its own cells go in the block; a section's table (`SectionTable`) keeps its heading row
+   there as a line of its sort buttons. */
+[data-fit='stack'] {
+  & .volumes-stack-head {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  & .volumes-stack-body {
+    display: block;
+  }
+
+  & .volumes-stack-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-3);
+    padding: var(--space-2) var(--space-3);
+
+    & > .chart-cell {
+      position: static;
+      min-inline-size: 0;
+      padding: 0;
+    }
+  }
 }

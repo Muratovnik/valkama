@@ -10,8 +10,10 @@
  * Each table is a section's (`ChartTable`); each row carries `data-row`, its project's id or its
  * label (`-` for none, `*` for several projects), and each figure `data-category`. Where the
  * columns do not fit the frame, the headings and the names come down to their longest words
- * (`useTableFit`, `least`); where even that does not fit, the tables scroll sideways with their
- * names held at the start.
+ * (`useTableFit`, `least`); where even that does not fit, each row stands as a block of its own
+ * (`stack`), as the commits on no card do: its name on its first line, then its eight figures in
+ * columns alike in every block, each beside its category's name, so nothing scrolls sideways.
+ * Scrolling, the categories past the frame were out of sight until the table's end.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -54,10 +56,10 @@ const tables = computed(() => [
 const emptyWords = computed(() => ({ empty: t('volumes.outside.empty') }))
 
 const root = ref<HTMLElement | null>(null)
-/** Both tables at their words' width while it fits, at their least where it does not. */
+/** Both tables at their words' width while it fits, at their least next, else a block a row. */
 const fit = useTableFit(root, [() => tables.value], () => ({
   steps: ['one', 'least'],
-  otherwise: 'one',
+  otherwise: 'stack',
 }))
 </script>
 
@@ -85,7 +87,7 @@ const fit = useTableFit(root, [() => tables.value], () => ({
         :label="`${t('volumes.outside.label')}: ${table.label}`"
         :words="emptyWords"
       >
-        <thead>
+        <thead class="volumes-stack-head">
           <tr>
             <th
               scope="col"
@@ -104,24 +106,26 @@ const fit = useTableFit(root, [() => tables.value], () => ({
             </th>
           </tr>
         </thead>
-        <tbody>
+        <tbody class="volumes-stack-body">
           <tr
             v-for="row in table.rows"
             :key="row.key"
+            class="volumes-stack-row volumes-outside-row"
             :data-row="row.key"
           >
             <th
               scope="row"
-              class="chart-cell chart-name"
+              class="chart-cell chart-name volumes-outside-name"
             >
               {{ row.name }}
             </th>
             <td
               v-for="category in STATE_CATEGORIES"
               :key="category"
-              class="chart-cell volumes-figure"
+              class="chart-cell volumes-figure volumes-outside-figure"
               data-numeric="true"
               :data-category="category"
+              :data-label="t(`workItem.category.${category}`)"
             >
               {{ row.categories[category] ?? 0 }}
             </td>
@@ -150,5 +154,37 @@ const fit = useTableFit(root, [() => tables.value], () => ({
    15px past a frame of 948. */
 .volumes-outside[data-fit='least'] :is(.chart-heading[data-numeric='true'], .chart-name) {
   min-inline-size: 0;
+}
+
+/* Where even that does not fit (`stack`, the section's block in `volumesSection.css`), a row is a
+   block: its name across it, then its figures in as many columns as the frame holds, each column
+   as wide as the longest category's name with five figures beside it («Заблокировано» and 98765
+   take 11.7em), so the columns of every block stand at one edge. Columns stand a column gutter
+   apart, so a figure is not read as the next category's: 12px apart, 98765 stood nearer «Отложено»
+   than its own name. A figure ends its column and its category's name, in a heading's ink, starts
+   it; that name is drawn and not read, as the cell's column heading says it aloud. */
+.volumes-outside[data-fit='stack'] {
+  & .volumes-outside-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 12em), 1fr));
+    column-gap: var(--size-column-gutter);
+  }
+
+  & .volumes-outside-name {
+    grid-column: 1 / -1;
+  }
+
+  & .volumes-outside-figure {
+    display: flex;
+    gap: var(--space-label-value);
+    justify-content: space-between;
+    align-items: baseline;
+
+    &::before {
+      content: attr(data-label) / '';
+      color: var(--color-text-tertiary);
+      font: var(--font-column-head);
+    }
+  }
 }
 </style>

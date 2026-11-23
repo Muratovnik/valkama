@@ -13,13 +13,14 @@
  *   word where it has not.
  *
  * Where no step fits, the table takes the page's answer for that (`otherwise`): a table of
- * records read as words stands each record as a block of its own (`stack`), and a table of
- * figures keeps its headings on two lines and scrolls sideways in its frame, its names held at its
- * start; the least only pays for its narrower columns when it brings every column in. Which step
- * fits depends on the words as much as on the frame — in Analytics «Ранее, 10 нояб., 00:00–14:30»
- * over «Today» is longer than the week's — so it is measured, never guessed from a width: a table
- * of words stacked by the width of a phone alone left «What was decided» past its frame at 1024
- * and 760, and the goals of Volumes, held to their columns, left «Осталось ≈» past it at 1280.
+ * records read as words, and Volumes' work outside goals with each figure beside its category's
+ * name, stands each record as a block of its own (`stack`), and another table of figures keeps its
+ * headings on two lines and scrolls sideways in its frame, its names held at its start; the least
+ * only pays for its narrower columns when it brings every column in. Which step fits depends on
+ * the words as much as on the frame — in Analytics «Ранее, 10 нояб., 00:00–14:30» over «Today» is
+ * longer than the week's — so it is measured, never guessed from a width: a table of words
+ * stacked by the width of a phone alone left «What was decided» past its frame at 1024 and 760,
+ * and the goals of Volumes, held to their columns, left «Осталось ≈» past it at 1280.
  *
  * Each step is read in its own layout and the answer is set before the browser paints, so no frame
  * shows the table wider than its frame. That happens once what the table holds changes (`holds`),

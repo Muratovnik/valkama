@@ -10,12 +10,14 @@
  * goal's title keeps a width of its own whatever its indent while the table has room for it, and
  * comes down to no less than its longest word where it has not, and the parent it names stands
  * under it on its edge (Volumes) — held to 11rem, the titles left «Left ≈» past the frame at 1280;
- * on a phone the periods stand whole in their row,
+ * the work outside goals, by project and by label, stacks as the commits do where its columns do
+ * not fit, each figure beside its category's name — scrolling sideways, its last categories stood
+ * out of sight until the table's end; on a phone the periods stand whole in their row,
  * and no row is held for the reader's own days until they are chosen (Analytics, the bar). Each
  * run prints what it measured.
  */
 import { expect } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
@@ -33,12 +35,16 @@ const WORDS = {
     attach: 'Attach to a card',
     period: 'Period',
     goals: 'Goals',
+    outside: 'Outside goals',
+    blocked: 'Blocked',
   },
   ru: {
     commits: 'Коммиты без карточки',
     attach: 'Прикрепить к карточке',
     period: 'Период',
     goals: 'Цели',
+    outside: 'Вне целей',
+    blocked: 'Заблокировано',
   },
 } as const
 
@@ -110,6 +116,40 @@ const COMMITS = Array.from({ length: 3 }, (_, at) => ({
   reported_at: '2026-03-02T10:00:05Z',
 }))
 
+/** A row's figures outside goals at their largest: five digits in every category. */
+const LARGEST = {
+  triage: 98_765,
+  deferred: 97_654,
+  ready: 96_543,
+  active: 95_432,
+  review: 94_321,
+  completed: 93_210,
+  blocked: 92_099,
+  cancelled: 90_988,
+}
+
+/** Work outside goals under long names, by project and by label, each row at the largest figures. */
+const OUTSIDE = {
+  byProject: [
+    {
+      project: 'alpha',
+      name: 'Alpha service backend monorepo with the volumes read and its migration tooling',
+      categories: LARGEST,
+    },
+    ...Array.from({ length: 4 }, (_, at) => ({
+      project: `project-${at}`,
+      name: `Project ${at}`,
+      categories: LARGEST,
+    })),
+    { project: null, categories: LARGEST },
+  ],
+  byLabel: [
+    { label: 'needs an owner decision before the release candidate', categories: LARGEST },
+    ...Array.from({ length: 4 }, (_, at) => ({ label: `label ${at}`, categories: LARGEST })),
+    { label: null, categories: LARGEST },
+  ],
+}
+
 async function openPage(page: Page, width: number) {
   await installBackend(page)
   // Routed after the backend's own, so these answer.
@@ -129,6 +169,7 @@ async function openPage(page: Page, width: number) {
         waiting: 23,
         unattached: 1234,
         goals: deepGoals(),
+        outside: OUTSIDE,
       }),
     }),
   )
@@ -146,14 +187,9 @@ async function openPage(page: Page, width: number) {
  * inner edges, what is left to scroll sideways, its step and the words its cells break inside, a
  * word being broken when its letters stand on more than one line.
  */
-const tableFit = (page: Page, region: string) =>
-  // The section first: its frame is a region of the same name once it scrolls.
-  page
-    .getByRole('region', { name: region, exact: true })
-    .first()
-    .evaluate((section) => {
-      const frame = section.querySelector<HTMLElement>('[data-region="table-frame"]')
-      if (!frame) return null
+const framesFit = (section: Locator) =>
+  section.evaluate((root) =>
+    [...root.querySelectorAll<HTMLElement>('[data-region="table-frame"]')].map((frame) => {
       const box = frame.getBoundingClientRect()
       const left = box.left + frame.clientLeft
       const right = left + frame.clientWidth
@@ -185,13 +221,23 @@ const tableFit = (page: Page, region: string) =>
         }
       }
       return {
-        fit: section.closest<HTMLElement>('[data-fit]')?.dataset.fit,
+        fit: root.closest<HTMLElement>('[data-fit]')?.dataset.fit,
         past,
         worst: worst.cell,
         sideways: frame.scrollWidth - frame.clientWidth,
         broken,
       }
-    })
+    }),
+  )
+
+/** How the first table of a section stands in its frame (`framesFit`). */
+async function tableFit(page: Page, region: string) {
+  // The section first: its frame is a region of the same name once it scrolls.
+  const [first = null] = await framesFit(
+    page.getByRole('region', { name: region, exact: true }).first(),
+  )
+  return first
+}
 
 /** The numbers by the row they stand in: for each row, the top of each figure. */
 const figureRows = (page: Page) =>
@@ -278,6 +324,29 @@ for (const lang of ['en', 'ru'] as const)
         expect.soft(commitsFit?.broken).toEqual([])
         expect.soft(width >= 600 || commitsFit?.fit === 'stack', 'stacked on a phone').toBe(true)
 
+        // The work outside goals stands in its frames at every width, by project and by label: as
+        // columns where they fit, else a block a row. It never scrolls sideways or cuts a word, and
+        // stacked, each figure is drawn beside its category's name, which the column's heading
+        // says aloud: scrolling, «Done», «Blocked» and «Cancelled» stood out of sight.
+        const outside = page.getByRole('region', { name: words.outside, exact: true })
+        const rowsOutside = OUTSIDE.byProject.length + OUTSIDE.byLabel.length
+        await expect(outside.locator('tr[data-row]')).toHaveCount(rowsOutside)
+        const outsideFit = await framesFit(outside)
+        expect(outsideFit).toHaveLength(2)
+        for (const one of outsideFit) {
+          expect.soft(one.past).toBeLessThanOrEqual(0.5)
+          expect.soft(one.sideways).toBeLessThanOrEqual(0)
+          expect.soft(one.broken).toEqual([])
+        }
+        const stacked = outsideFit[0]?.fit === 'stack'
+        expect.soft(width >= 600 || stacked, 'stacked on a phone').toBe(true)
+        const blocked = await outside
+          .locator('[data-category="blocked"]')
+          .evaluateAll((cells) => cells.map((cell) => getComputedStyle(cell, '::before').content))
+        expect(blocked).toHaveLength(rowsOutside)
+        for (const name of blocked)
+          expect.soft(name).toBe(stacked ? `"${words.blocked}" / ""` : 'none')
+
         // The deepest goal's title keeps its width, and the parent it names stands on its edge.
         const deepest = page.locator('tr[data-reference="MAIN-17"]')
         const title = await deepest.locator('[data-part="title"]').boundingBox()
@@ -312,6 +381,7 @@ for (const lang of ['en', 'ru'] as const)
           goal,
           goalsFit,
           commitsFit,
+          outsideFit,
         })
       })
     })
