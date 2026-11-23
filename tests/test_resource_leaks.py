@@ -1,11 +1,13 @@
-"""The suite's guard against connections, processes and files left open, `tests/resource_leaks.py`."""
+"""The suite's guard against resources left open, `tests/resource_leaks.py`."""
 
 from __future__ import annotations
 
 import gc
+import os
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import tracemalloc
 import unittest
 import warnings
@@ -14,6 +16,8 @@ from tests import resource_leaks
 
 #: Connections a case keeps past its own end, as an attribute of a test would.
 _KEPT: list[sqlite3.Connection] = []
+#: The temporary directories a case left to the collector.
+_NAMES: list[str] = []
 #: A child that exits at once, so a case that never waits for it leaves nothing running.
 _CHILD = [sys.executable, "-c", "pass"]
 
@@ -70,6 +74,16 @@ def _cases() -> type[unittest.TestCase]:
             with open(__file__, "rb") as handle:
                 handle.read(1)
             del handle
+
+        def test_never_cleans_up_its_directory(self) -> None:
+            directory = tempfile.TemporaryDirectory()
+            _NAMES.append(directory.name)
+            del directory
+
+        def test_cleans_up_its_directory(self) -> None:
+            directory = tempfile.TemporaryDirectory()
+            directory.cleanup()
+            del directory
 
     return Cases
 
@@ -147,6 +161,16 @@ class FileTest(GuardCase):
 
     def test_a_closed_file_passes(self) -> None:
         self.assert_passes("test_closes_its_file")
+
+
+class DirectoryTest(GuardCase):
+    def test_a_directory_left_to_the_collector_fails_the_test_that_dropped_it(self) -> None:
+        self.assert_fails_with("test_never_cleans_up_its_directory", "Implicitly cleaning up")
+        # The collector still removes it; the failure is that nobody else did.
+        self.assertFalse(os.path.exists(_NAMES.pop()))
+
+    def test_a_directory_cleaned_up_passes(self) -> None:
+        self.assert_passes("test_cleans_up_its_directory")
 
 
 class OtherWarningTest(GuardCase):

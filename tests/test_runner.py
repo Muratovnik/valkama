@@ -391,6 +391,11 @@ class RunnerLifecycleTests(unittest.TestCase):
             os.path.isfile(os.path.join(os.path.dirname(live.result_path), "result.schema.json"))
         )
 
+        # The launch ends, and the reap that reports it removes that directory.
+        self.process._code = 0
+        self.runner.reap()
+        self.assertFalse(os.path.exists(os.path.dirname(live.result_path)))
+
     def test_a_stop_and_a_reap_cannot_both_claim_one_ending(self) -> None:
         # Two threads share the registry. Before the claim was atomic, a stop
         # arriving while the watcher reaped reported a cancellation over a

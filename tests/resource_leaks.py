@@ -1,9 +1,10 @@
-"""A test that leaves an SQLite connection, a child process or a file open fails.
+"""A test that leaves a connection, a child process, a file or a temporary directory fails.
 
 Python warns, with a `ResourceWarning`, when one of these is collected while it
 is still open: an `sqlite3.Connection` without `close()` (from Python 3.13), a
-`subprocess.Popen` whose exit status was never read, and a file object never
-closed. `with conn:` does not close a connection: it ends a transaction and
+`subprocess.Popen` whose exit status was never read, a file object never
+closed, and a `tempfile.TemporaryDirectory` never cleaned up, which the
+collector then removes. `with conn:` does not close a connection: it ends a transaction and
 leaves the connection open. A `Popen` warns even when its child has exited, as
 long as nothing waited for it. On Windows an open connection or file holds its
 file, so a backup, a restore, a rename or the removal of a test's directory can
@@ -37,11 +38,12 @@ from collections.abc import Callable
 from typing import Any
 
 #: The start of the text each guarded warning has, as a pattern the filters match:
-#: `sqlite3`'s, `subprocess.Popen`'s and the `io` module's.
+#: `sqlite3`'s, `subprocess.Popen`'s, the `io` module's and `tempfile`'s.
 MESSAGES = (
     "unclosed database",
     r"subprocess \d+ is still running",
     "unclosed file",
+    "Implicitly cleaning up",
 )
 #: How to find where the resources a failure names were opened.
 HOW_TO_FIND = (
@@ -82,7 +84,8 @@ def take_collected() -> list[str]:
 def _complaint(found: list[str], where: str) -> str:
     listed = "\n".join(found)
     return (
-        f"{len(found)} connection(s), process(es) or file(s) never closed, collected {where};"
+        f"{len(found)} connection(s), process(es), file(s) or directories never closed,"
+        f" collected {where};"
         f" {HOW_TO_FIND}:\n{listed}"
     )
 
