@@ -357,6 +357,25 @@ class ReleaseToolchainTests(unittest.TestCase):
         )
         self.assertIn("uv venv .venv-semgrep --python", message)
 
+    def test_an_unnamed_tool_with_no_environment_is_not_checked_when_a_subset_is_named(
+        self,
+    ) -> None:
+        absent = release.environment_interpreter(self.root / "no-venv-semgrep")
+        own = {release.SEMGREP_ENVIRONMENT: (absent, release.pins(SEMGREP_PINS))}
+        commands = release.require_toolchain(
+            self.environment.interpreter(), release.pins(PINS), own, only=["ruff", "typos"]
+        )
+        self.assertEqual({"ruff", "typos"}, set(commands))
+
+    def test_a_named_tool_with_no_environment_is_still_refused(self) -> None:
+        absent = release.environment_interpreter(self.root / "no-venv-semgrep")
+        own = {release.SEMGREP_ENVIRONMENT: (absent, release.pins(SEMGREP_PINS))}
+        with self.assertRaises(release.ToolchainError) as refused:
+            release.require_toolchain(
+                self.environment.interpreter(), release.pins(PINS), own, only=["semgrep"]
+            )
+        self.assertIn("semgrep: no environment at", str(refused.exception))
+
     def test_semgrep_unpinned_in_its_own_requirements_is_refused(self) -> None:
         own = {release.SEMGREP_ENVIRONMENT: (self.semgrep.interpreter(), {})}
         with self.assertRaises(release.ToolchainError) as refused:
