@@ -4,8 +4,8 @@
  * name them, «project Billing» or «all projects», and the quota's sections, which are of no
  * project, have none; the overview's «ⓘ» says the same as a sentence, of the one project the page
  * is scoped to, by the shell's name for it (its id where it has none), or of all projects on the
- * global page; and the quota's «ⓘ» says that the quota is the whole account's, whatever project
- * is chosen.
+ * global page; and the quota's «ⓘ» says that the quota is the whole account's, whatever space
+ * and project are chosen.
  */
 import { flushPromises } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
@@ -126,8 +126,8 @@ describe('the projects beside a section’s heading', () => {
 
 describe('the quota and the project', () => {
   for (const [locale, said] of [
-    ['en', "The quota is the whole account's: the chosen project does not change it."],
-    ['ru', 'Квота — на весь аккаунт: выбранный проект её не меняет.'],
+    ['en', "The quota is the whole account's: the chosen space and project do not change it."],
+    ['ru', 'Квота — на весь аккаунт: выбранные пространство и проект её не меняют.'],
   ] as const)
     it(`says in the quota’s «ⓘ» that it is the whole account’s, in ${locale}`, async () => {
       const page = await mountAnalytics(

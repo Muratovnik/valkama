@@ -62,6 +62,7 @@ const answer = {
       ...measures(100 * (4 - index)),
     })),
     series: [],
+    unplaced: null,
     comparison: null,
   },
 }

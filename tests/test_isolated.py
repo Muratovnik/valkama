@@ -605,7 +605,7 @@ class HeavyLockTests(Workspace):
 
         self.assertEqual([run.name for run in self.gate_runs("web", "desktop")], repeated)
         self.assertIn("desktop-test", repeated)
-        self.assertIn("web-typecheck", repeated)
+        self.assertIn("web-test", repeated)
 
     def test_of_the_whole_list_only_the_unittest_step_takes_the_lock(self) -> None:
         gated = [run.name for run in self.gate_runs("python", "web", "desktop") if run.gated]
