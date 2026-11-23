@@ -13,6 +13,7 @@ migration computes, so a rule both readings got wrong still fails here.
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import datetime
 import hashlib
 import io
@@ -24,8 +25,10 @@ import shutil
 import sqlite3
 import sys
 import tempfile
+import time
 import unittest
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
+from typing import Any
 from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -38,6 +41,7 @@ from server.planning import store as planning_store
 from server.planning import work_model_migration as migration
 from server.projects import registry_owner
 from server.store_identity.refs import planning_space_entity
+from server.telemetry import liveness
 from tests import registry_fixtures, schema9, schema17
 
 T0 = "2026-07-26T00:00:00Z"
@@ -50,30 +54,74 @@ PICTURE = b"\x89PNG one picture"
 #: The steps a migration of a 2.9 store reports, in the order it takes them.
 STEP_NAMES = [
     "quota-names",
-    *(f"M{number}" for number in range(16)),
+    "oracle",
+    "states",
+    "history",
+    "items",
+    "containers",
+    "task-holders",
+    "children-left",
+    "checks",
+    "item-projects",
+    "labels",
+    "spaces",
+    "last-route",
+    "addressee",
+    "ended-requests",
+    "waiting-words",
     "deferred-items",
-    "history-actions",
+    "confirmations",
+    "participation",
+    "pending-actions",
+    "agent-decisions",
     "commits",
     "commit-refs",
     "refs-without-commits",
-    "participation",
-    "agent-decisions",
-    "pending-actions",
     "baselines",
     "triage-marks",
 ]
 #: Its postconditions in the order it checks them: a second run, then the fault check, last.
 POSTCONDITION_NAMES = [
-    *(f"P{number}" for number in range(1, 16)),
-    *(f"P{number}" for number in range(18, 31)),
+    "fresh-shape",
+    "row-counts",
+    "integrity",
+    "no-epic",
+    "parents",
+    "categories",
+    "history-keys",
+    "containers-unheld",
+    "holders",
+    "acceptance",
+    "started",
+    "derived",
+    "indexes",
+    "identities",
+    "known-exceptions",
+    "store-identity",
+    "space-projects",
+    "task-projects",
+    "labels-kept",
+    "routes",
+    "requests-kept",
+    "no-closed-waits",
+    "requests-ended",
     "deferred-items",
-    *(f"P{number}" for number in range(31, 36)),
+    "awaiting-rows",
+    "requests-asked",
+    "no-old-waiting",
+    "request-shapes",
+    "fresh-tables",
     "participation",
-    "agent-decisions",
     "pending-actions",
+    "agent-decisions",
     "agent-basis",
-    "baselines",
     "triage-marks",
+    "no-commit-refs",
+    "other-refs",
+    "record-pairs",
+    "commits-attached",
+    "commit-projects",
+    "baselines",
     "composed-texts",
     "second-run",
     "recovery-point",
@@ -1031,14 +1079,37 @@ class MigratedStoreTests(StoreCase):
             (True, {"table_created": True, "awaiting": ["WM-18"]}),
             (steps["confirmations"]["needed"], steps["confirmations"]["result"]),
         )
-        # `items` widened the CHECK with every action this build declares.
-        self.assertFalse(steps["history-actions"]["needed"])
-        [p30] = [entry for entry in self.report["postconditions"] if entry["name"] == "awaiting-rows"]
-        self.assertEqual({"rows": 1}, p30["detail"])
-        [p26] = [entry for entry in self.report["postconditions"] if entry["name"] == "fresh-tables"]
-        self.assertNotIn("work_item_confirmations", p26["detail"]["added"])
+        [post_awaiting_rows] = [
+            entry for entry in self.report["postconditions"] if entry["name"] == "awaiting-rows"
+        ]
+        self.assertEqual({"rows": 1}, post_awaiting_rows["detail"])
+        [post_fresh_tables] = [
+            entry for entry in self.report["postconditions"] if entry["name"] == "fresh-tables"
+        ]
+        self.assertNotIn("work_item_confirmations", post_fresh_tables["detail"]["added"])
 
-    def test_m8_gives_every_task_its_space_project_and_shapes_the_table_as_a_fresh_one(
+    def test_known_exceptions_lists_each_known_exception_a_person_reads_after_the_migration(
+        self,
+    ) -> None:
+        """The children taken out of the closed WM-3, the one task left in review and the
+        one goal awaiting confirmation, WM-18, whose children are all done."""
+
+        [post_known_exceptions] = [
+            entry for entry in self.report["postconditions"] if entry["name"] == "known-exceptions"
+        ]
+        self.assertEqual(
+            {
+                "taken_out_of_closed_containers": [
+                    {"reference": "WM-20", "from": "WM-3"},
+                    {"reference": "WM-4", "from": "WM-3"},
+                ],
+                "tasks_left_in_review": ["WM-21"],
+                "awaiting_confirmation": ["WM-18"],
+            },
+            post_known_exceptions["detail"],
+        )
+
+    def test_item_projects_gives_every_task_its_space_project_and_shapes_the_table_as_a_fresh_one(
         self,
     ) -> None:
         tasks = [number for number, expected in EXPECTED.items() if expected[0] == "task"]
@@ -1537,6 +1608,139 @@ def reshape_sessions_as_the_board_left_them(path: str, item: str) -> None:
         conn.close()
 
 
+#: The steps that came in together, in the order they keep among themselves.
+TOGETHER = (
+    (
+        "oracle",
+        "states",
+        "history",
+        "items",
+        "containers",
+        "task-holders",
+        "children-left",
+        "checks",
+    ),
+    ("item-projects", "labels", "spaces", "last-route"),
+    ("addressee", "waiting-words"),
+    ("deferred-items", "confirmations"),
+    ("participation", "pending-actions", "agent-decisions"),
+    ("commits", "commit-refs", "refs-without-commits"),
+)
+#: Each step another must follow, and the step that follows it.
+BEFORE = (
+    # The one rebuild of the requests copies the column `addressee` appends.
+    ("addressee", "ended-requests"),
+    # `confirmations` writes its rows by what each container derives once these are done.
+    ("containers", "confirmations"),
+    ("task-holders", "confirmations"),
+    ("children-left", "confirmations"),
+    ("checks", "confirmations"),
+    # `item-projects` reads the project each space held, which `spaces` takes off.
+    ("item-projects", "spaces"),
+    # `commit-refs` writes to the tables `commits` creates; the refs are rebuilt once no
+    # commit is one.
+    ("commits", "commit-refs"),
+    ("commit-refs", "refs-without-commits"),
+)
+
+
+def order_breaks(names: list[str]) -> list[str]:
+    """The relations an order of the steps breaks: one step after the step it must
+    precede, steps that came in together out of their order, and a last step other
+    than the triage marks, whose triggers would otherwise see the migration's writes."""
+
+    place = {name: index for index, name in enumerate(names)}
+    broken = [f"{first} after {then}" for first, then in BEFORE if place[first] > place[then]]
+    broken += [
+        f"{' '.join(group)} out of order"
+        for group in TOGETHER
+        if [name for name in names if name in group] != list(group)
+    ]
+    if names[-1] != "triage-marks":
+        broken.append(f"{names[-1]} last")
+    return broken
+
+
+def rebuilds(case: StoreCase) -> tuple[dict, list[tuple[str, str]]]:
+    """Migrate the case's store: its report, and each table rebuilt, as (step, table),
+    in the order the rebuilds ran."""
+
+    taken: list[tuple[str, str]] = []
+    running = ["before the steps"]
+    rebuild = planning_store.rebuild_table
+
+    def counted(conn: sqlite3.Connection, table: str, definition: str, rows: str) -> list[str]:
+        taken.append((running[-1], table))
+        return rebuild(conn, table, definition, rows)
+
+    def named(step: store_steps.Step) -> store_steps.Step:
+        def run(conn: sqlite3.Connection, context: store_steps.Context) -> Mapping[str, Any] | None:
+            running.append(step.name)
+            return step.run(conn, context)
+
+        return dataclasses.replace(step, run=run)
+
+    steps = tuple(named(step) for step in migration.STEPS)
+    with (
+        mock.patch.object(migration, "STEPS", steps),
+        mock.patch.object(planning_store, "rebuild_table", counted),
+    ):
+        report = case.migrate()
+    return report, taken
+
+
+#: The tables a 2.9 store has rebuilt, once each, by the step that rebuilds it.
+REBUILT = [
+    ("states", "workflow_states"),
+    ("items", "work_item_events"),
+    ("items", "work_items"),
+    ("spaces", "planning_spaces"),
+    ("ended-requests", "work_item_requests"),
+    ("refs-without-commits", "work_item_refs"),
+]
+
+
+class StepOrderTests(StoreCase):
+    """Where each step stands, by the relations its work needs."""
+
+    def test_the_steps_keep_every_relation_their_work_needs(self) -> None:
+        self.assertEqual([], order_breaks([step.name for step in migration.STEPS]))
+
+    def test_an_order_that_breaks_a_relation_is_told(self) -> None:
+        names = [step.name for step in migration.STEPS]
+
+        def moved(name: str, after: str) -> list[str]:
+            order = [each for each in names if each != name]
+            order.insert(order.index(after) + 1, name)
+            return order
+
+        for order, told in (
+            (moved("addressee", "ended-requests"), "addressee after ended-requests"),
+            (moved("confirmations", "items"), "containers after confirmations"),
+            (moved("item-projects", "spaces"), "item-projects after spaces"),
+            (
+                moved("commit-refs", "refs-without-commits"),
+                "commit-refs after refs-without-commits",
+            ),
+            (moved("pending-actions", "agent-decisions"), "participation pending-actions"),
+            (moved("baselines", "triage-marks"), "baselines last"),
+        ):
+            with self.subTest(told=told):
+                self.assertTrue(
+                    any(broken.startswith(told) for broken in order_breaks(order)),
+                    order_breaks(order),
+                )
+
+    def test_each_table_is_rebuilt_once_at_most_and_a_second_run_takes_no_step(self) -> None:
+        report, taken = rebuilds(self)
+        self.assertEqual("migrated", report["status"])
+        self.assertEqual(REBUILT, taken)
+        [post_second_run] = [
+            entry for entry in report["postconditions"] if entry["name"] == "second-run"
+        ]
+        self.assertEqual({"steps_needed_again": []}, post_second_run["detail"])
+
+
 class BoardEraSessionsTests(StoreCase):
     """A store that passed the Board cutover keeps `sessions.work_item_id` as INTEGER."""
 
@@ -1586,6 +1790,11 @@ class BoardEraSessionsTests(StoreCase):
         self.assertEqual(["sessions_parent"], step_items["result"]["sessions_rebuilt"])
         events = self.read("SELECT COUNT(*) FROM session_events WHERE session_id = 'kept-session'")
         self.assertEqual(1, events[0][0])
+
+    def test_sessions_are_rebuilt_once_by_items_beside_every_other_table(self) -> None:
+        report, taken = rebuilds(self)
+        self.assertEqual("migrated", report["status"])
+        self.assertEqual(sorted([("items", "sessions"), *REBUILT]), sorted(taken))
 
 
 #: A task at work whose holder took a step, and one whose step is all that holds it.
@@ -2361,9 +2570,9 @@ def emptied(half: str) -> Callable[[sqlite3.Connection, store_steps.Context], No
 
 
 #: For each `fresh-shape` probe, a store that passes the pragmas and fails the probe alone: the
-#: fault, and what `fresh-shape` says of it. A narrowed events CHECK is `history-actions`'s to widen again, so a
-#: second run would take it (`second-run`).
-P1_FAULTS = (
+#: fault, and what `fresh-shape` says of it, with the postconditions that fail when
+#: `fresh-shape` is not alone.
+FRESH_SHAPE_FAULTS = (
     (
         "the update half of the trigger refuses nothing",
         emptied("update"),
@@ -2378,7 +2587,6 @@ P1_FAULTS = (
         "the events table refuses an action a fresh store takes",
         rebuilt("work_item_events", "'accepted',", ""),
         "with {'action': 'accepted'} is refused (CHECK constraint failed",
-        ["fresh-shape", "second-run"],
     ),
     (
         "the states table takes a category the work model retired",
@@ -2454,6 +2662,16 @@ CLAUSE_FAULTS: tuple[
             ),
         ],
         ["triage-marks"],
+    ),
+    (
+        "known-exceptions",
+        "awaiting confirmation [], the oracle expected ['WM-18']",
+        lambda ids: [
+            ("DELETE FROM work_item_confirmations WHERE work_item_id = ?", (ids["WM-18"],))
+        ],
+        # The row the table lacks, the row its own postcondition misses and the step a
+        # second run would take again to give it back.
+        ["row-counts", "known-exceptions", "awaiting-rows", "second-run"],
     ),
     (
         "request-shapes",
@@ -3002,6 +3220,174 @@ class CommandTests(StoreCase):
         with contextlib.redirect_stdout(output):
             cli.main(["capabilities"])
         self.assertIn("migrate", json.loads(output.getvalue())["commands"])
+
+
+#: The refusal while a server may still hold the store, with the seconds since its last
+#: tick and the seconds left to wait, which add up to the three minutes a tick lasts.
+LIVE_SERVER = re.compile(
+    r"a Valkama server was running (\d+) s ago: stop the listener and every agent client,"
+    r" wait (\d+) s and run this again; nothing was written"
+)
+
+
+class LiveServerTests(StoreCase):
+    """A server that ticked the liveness file within three minutes may still hold the store."""
+
+    def seen(self, seconds_ago: float) -> None:
+        liveness.tick(self.path, time.time() - seconds_ago)
+
+    def test_a_server_seen_30_s_ago_refuses_the_command_before_any_write(self) -> None:
+        self.seen(30)
+        before = listed(self.directory.name)
+        digests = file_digest(self.path), file_digest(liveness.path_for(self.path))
+        output = io.StringIO()
+        with (
+            mock.patch.dict(os.environ, {"VALKAMA_DB": self.path}),
+            contextlib.redirect_stdout(output),
+            self.assertRaises(SystemExit) as raised,
+        ):
+            cli.main(["migrate", "work-model", "--item-projects", self.file])
+        message = str(raised.exception.code)
+        match = LIVE_SERVER.fullmatch(message)
+        assert match is not None, message
+        ago, wait = int(match[1]), int(match[2])
+        self.assertTrue(30 <= ago < 40, message)
+        self.assertEqual(180, ago + wait)
+        report = json.loads(output.getvalue())
+        self.assertEqual(("refused", message), (report["status"], report["message"]))
+        self.assertNotIn("recovery_point", report)
+        self.assertEqual(
+            digests, (file_digest(self.path), file_digest(liveness.path_for(self.path)))
+        )
+        self.assertEqual(17, identity(self.path)[0])
+        self.assertFalse(os.path.exists(os.path.join(self.directory.name, "backups")))
+        # The migration lock leaves its file; nothing else appears beside the store.
+        self.assertEqual(
+            {"valkama.sqlite3.migration.lock"}, set(listed(self.directory.name)) - set(before)
+        )
+
+    def test_the_refusal_comes_before_the_conditions_read_from_the_store(self) -> None:
+        self.seen(30)
+        with (
+            mock.patch.object(store, "_preconditions") as preconditions,
+            self.assertRaises(store.WorkModelPreconditionError) as raised,
+        ):
+            self.migrate()
+        preconditions.assert_not_called()
+        self.assertEqual("refused", raised.exception.report["status"])
+
+    def test_a_server_last_seen_10_min_ago_lets_the_migration_run(self) -> None:
+        self.seen(600)
+        report = self.migrate()
+        self.assertEqual("migrated", report["status"])
+        self.assertEqual(store.STORE_SCHEMA_VERSION, identity(self.path)[0])
+
+    def test_a_dry_run_migrates_a_copy_while_a_server_holds_the_store(self) -> None:
+        self.seen(30)
+        digest = file_digest(self.path)
+        into = os.path.join(self.directory.name, "trial")
+        output = io.StringIO()
+        with (
+            mock.patch.dict(os.environ, {"VALKAMA_DB": self.path}),
+            contextlib.redirect_stdout(output),
+        ):
+            cli.main(
+                ["migrate", "work-model", "--item-projects", self.file, "--dry-run", "--into", into]
+            )
+        report = json.loads(output.getvalue())
+        self.assertEqual((True, "migrated"), (report["dry_run"], report["status"]))
+        self.assertFalse(os.path.exists(liveness.path_for(report["store"])))
+        self.assertEqual((17, digest), (identity(self.path)[0], file_digest(self.path)))
+
+
+def old_sqlite_refusal(found: str) -> str:
+    """The refusal the migration gives on the SQLite `found`, written out in full."""
+
+    return (
+        f"this Python runs SQLite {found}, and the work-model migration needs SQLite 3.47.1"
+        " or newer: run it again with a Python whose SQLite is 3.47.1 or newer;"
+        " nothing was written"
+    )
+
+
+class OldSqliteTests(StoreCase):
+    """A SQLite older than 3.47.1 refuses the migration; the version is made up here."""
+
+    def running(self, version: str) -> contextlib.AbstractContextManager[Any]:
+        return mock.patch.object(store, "_running_sqlite", return_value=version)
+
+    def command(self, *arguments: str) -> tuple[str, dict]:
+        """Run the command expecting its refusal: the exit's message and the report."""
+
+        output = io.StringIO()
+        with (
+            mock.patch.dict(os.environ, {"VALKAMA_DB": self.path}),
+            contextlib.redirect_stdout(output),
+            self.assertRaises(SystemExit) as raised,
+        ):
+            cli.main(["migrate", "work-model", "--item-projects", self.file, *arguments])
+        return str(raised.exception.code), json.loads(output.getvalue())
+
+    def test_sqlite_3_47_0_refuses_the_command_before_any_write(self) -> None:
+        before, digest = listed(self.directory.name), file_digest(self.path)
+        with self.running("3.47.0"):
+            message, report = self.command()
+        self.assertEqual(old_sqlite_refusal("3.47.0"), message)
+        self.assertEqual(("refused", message), (report["status"], report["message"]))
+        self.assertEqual("3.47.0", report["environment"]["sqlite"])
+        self.assertEqual({"from": 17, "to": store.STORE_SCHEMA_VERSION}, report["schema"])
+        self.assertEqual(self.path, report["store"])
+        self.assertNotIn("recovery_point", report)
+        self.assertEqual([], report["steps"])
+        self.assertEqual((17, digest), (identity(self.path)[0], file_digest(self.path)))
+        # Refused before the migration lock: not even its file appears beside the store.
+        self.assertEqual(before, listed(self.directory.name))
+
+    def test_sqlite_3_47_0_refuses_a_dry_run_before_the_copy(self) -> None:
+        before, digest = listed(self.directory.name), file_digest(self.path)
+        into = os.path.join(self.directory.name, "trial")
+        with (
+            self.running("3.47.0"),
+            mock.patch.object(store, "copy_store", wraps=store.copy_store) as copy,
+        ):
+            message, report = self.command("--dry-run", "--into", into)
+        self.assertEqual(old_sqlite_refusal("3.47.0"), message)
+        self.assertEqual(
+            (True, os.path.abspath(self.path), "refused", message),
+            (report["dry_run"], report["source"], report["status"], report["message"]),
+        )
+        copy.assert_not_called()
+        self.assertFalse(os.path.exists(into))
+        self.assertEqual((17, digest), (identity(self.path)[0], file_digest(self.path)))
+        self.assertEqual(before, listed(self.directory.name))
+
+    def test_the_versions_are_compared_by_number(self) -> None:
+        for found in ("3.45.1", "3.47.0", "3.5.9"):
+            with self.subTest(found=found), self.running(found):
+                report: dict[str, Any] = {}
+                with self.assertRaises(store.WorkModelPreconditionError) as raised:
+                    store.refuse_an_old_sqlite(report)
+                self.assertEqual(old_sqlite_refusal(found), str(raised.exception))
+                self.assertEqual("refused", raised.exception.report["status"])
+        for found in ("3.47.1", "3.53.4", "3.100.0", "4.0.0"):
+            with self.subTest(found=found), self.running(found):
+                report = {}
+                store.refuse_an_old_sqlite(report)
+                self.assertEqual({}, report)
+
+    def test_sqlite_3_47_1_lets_the_migration_run(self) -> None:
+        with self.running("3.47.1"):
+            report = self.migrate()
+        self.assertEqual(
+            ("migrated", "3.47.1"), (report["status"], report["environment"]["sqlite"])
+        )
+        self.assertEqual(store.STORE_SCHEMA_VERSION, identity(self.path)[0])
+
+    def test_a_current_store_is_reported_current_on_any_sqlite(self) -> None:
+        with self.running("3.47.1"):
+            self.migrate()
+        with self.running("3.47.0"):
+            self.assertEqual("current", self.migrate()["status"])
 
 
 if __name__ == "__main__":

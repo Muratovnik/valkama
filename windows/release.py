@@ -16,7 +16,10 @@ The desktop installer is a window for the source service, not a bundled server.
 
 Release Kit runs every command here with its own interpreter as `{python}`, so
 `check` takes its Python tools from that interpreter's environment and nowhere
-else, and refuses before the first stage when that environment lacks one. Build
+else, and refuses before the first stage when that environment lacks one. The
+one exception is a tool whose own dependencies keep it out of that environment:
+it has an environment of its own beside it, with its own pins, and is taken and
+checked there (`OwnEnvironment`). Build
 and smoke need no development tool: build runs npm, and smoke runs the server,
 which imports only the standard library.
 
@@ -44,7 +47,7 @@ import sysconfig
 import tempfile
 import urllib.request
 import zipfile
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from types import ModuleType
@@ -57,6 +60,9 @@ SKIP_DIRS = frozenset(
     {".git", ".cache", ".private", ".state", "tmp", "node_modules", "release", "__pycache__"}
 )
 REQUIREMENTS = ROOT / "requirements-dev.txt"
+#: The Python `.venv` is built on: the one the installed launcher runs, so the suite
+#: and the tools run on the interpreter and the SQLite the service does.
+VENV_PYTHON = "3.15"
 _PIN = re.compile(r"([A-Za-z0-9][A-Za-z0-9._-]*)==([A-Za-z0-9.+!_-]+)")
 #: What pip names a console script: an `.exe` launcher on Windows, the bare name elsewhere.
 _SCRIPT_SUFFIXES = (".exe",) if sys.platform == "win32" else ("",)
@@ -67,18 +73,40 @@ class ToolchainError(RuntimeError):
 
 
 @dataclass(frozen=True)
+class OwnEnvironment:
+    """A virtual environment beside `.venv` for a tool whose dependencies keep it out of it.
+
+    semgrep is the one: a command-line tool nothing here imports, whose releases
+    pin pywin32 to a version with no wheel for the Python `.venv` is built on.
+    Its pins live in `requirements`, it is built in `directory` on `python`, the
+    newest Python its dependencies install on, and it is run and checked there.
+    """
+
+    directory: Path
+    requirements: Path
+    python: str
+
+
+SEMGREP_ENVIRONMENT = OwnEnvironment(
+    ROOT / ".venv-semgrep", ROOT / "requirements-semgrep.txt", python="3.14"
+)
+
+
+@dataclass(frozen=True)
 class Tool:
     """A tool `check` runs: the distribution that pins it, and how it is started.
 
     `module` runs it as `python -m module`. A tool without one is the console
-    script `script` from the interpreter's own scripts directory: typos and
+    script `script` from the environment's own scripts directory: typos and
     lint-imports have no runnable module, and `python -m semgrep` is refused
-    by semgrep itself.
+    by semgrep itself. `environment` names an environment of its own; without
+    one the tool belongs to the running interpreter.
     """
 
     distribution: str
     module: str | None = None
     script: str | None = None
+    environment: OwnEnvironment | None = None
 
 
 TOOLS: dict[str, Tool] = {
@@ -87,7 +115,7 @@ TOOLS: dict[str, Tool] = {
     "vulture": Tool("vulture", module="vulture"),
     "mypy": Tool("mypy", module="mypy"),
     "lint-imports": Tool("import-linter", script="lint-imports"),
-    "semgrep": Tool("semgrep", script="semgrep"),
+    "semgrep": Tool("semgrep", script="semgrep", environment=SEMGREP_ENVIRONMENT),
     "coverage": Tool("coverage", module="coverage"),
 }
 
@@ -118,8 +146,46 @@ def running_interpreter() -> Interpreter:
     return Interpreter(Path(sys.executable), Path(sysconfig.get_path("scripts")), _installed)
 
 
+def environment_interpreter(directory: Path) -> Interpreter:
+    """The virtual environment at `directory`, read from its files without starting it.
+
+    What it has installed is read from its own site-packages and nowhere else,
+    so a distribution of the running interpreter never answers for it.
+    """
+
+    windows = sys.platform == "win32"
+    scripts = directory / ("Scripts" if windows else "bin")
+    if windows:
+        site = [directory / "Lib" / "site-packages"]
+    else:
+        site = sorted((directory / "lib").glob("python*/site-packages"))
+    paths = [str(path) for path in site]
+
+    def version_of(distribution: str) -> str | None:
+        found = next(iter(importlib.metadata.distributions(name=distribution, path=paths)), None)
+        return None if found is None else found.version
+
+    return Interpreter(scripts / ("python.exe" if windows else "python"), scripts, version_of)
+
+
+#: What `require_toolchain` reads for an environment of its own: the environment and its pins.
+OwnToolchain = Mapping[OwnEnvironment, tuple[Interpreter, Mapping[str, str]]]
+
+
+def own_environments() -> dict[OwnEnvironment, tuple[Interpreter, dict[str, str]]]:
+    """Each environment of its own that a tool names, with the pins its requirements file holds."""
+
+    found: dict[OwnEnvironment, tuple[Interpreter, dict[str, str]]] = {}
+    for tool in TOOLS.values():
+        own = tool.environment
+        if own is not None and own not in found:
+            text = own.requirements.read_text(encoding="utf-8")
+            found[own] = (environment_interpreter(own.directory), pins(text))
+    return found
+
+
 def pins(text: str) -> dict[str, str]:
-    """Every `name==version` in requirements-dev.txt; anything looser is refused."""
+    """Every `name==version` in a requirements file; anything looser is refused."""
 
     found = {}
     for line in text.splitlines():
@@ -128,59 +194,89 @@ def pins(text: str) -> dict[str, str]:
             continue
         match = _PIN.fullmatch(requirement)
         if match is None:
-            raise ValueError(f"requirements-dev.txt must pin exactly: {requirement}")
+            raise ValueError(f"a gate requirements file must pin exactly: {requirement}")
         found[match.group(1)] = match.group(2)
     return found
 
 
-def _pin_problems(interpreter: Interpreter, pinned: Mapping[str, str]) -> list[str]:
+def _pin_problems(
+    interpreter: Interpreter, pinned: Mapping[str, str], source: str = REQUIREMENTS.name
+) -> list[str]:
     problems = []
     for distribution, wanted in pinned.items():
         installed = interpreter.version_of(distribution)
         if installed is None:
-            problems.append(f"{distribution}: not installed; requirements-dev.txt pins {wanted}")
+            problems.append(f"{distribution}: not installed; {source} pins {wanted}")
         elif installed != wanted:
-            problems.append(
-                f"{distribution}: {installed} installed; requirements-dev.txt pins {wanted}"
-            )
+            problems.append(f"{distribution}: {installed} installed; {source} pins {wanted}")
     return problems
 
 
-def require_toolchain(
-    interpreter: Interpreter, pinned: Mapping[str, str]
-) -> dict[str, tuple[str, ...]]:
-    """How to start each tool from this interpreter, or one refusal naming everything missing.
+def _build_hint(own: OwnEnvironment) -> str:
+    name = own.directory.name
+    return (
+        f" Build {name} beside it from {own.requirements.name} the same way, on"
+        f" Python {own.python} (uv venv {name} --python {own.python}, then uv pip"
+        f" install --python {name}/Scripts/python.exe -r {own.requirements.name})."
+    )
 
-    A console script is looked up in the interpreter's own scripts directory
+
+def require_toolchain(
+    interpreter: Interpreter, pinned: Mapping[str, str], own: OwnToolchain
+) -> dict[str, tuple[str, ...]]:
+    """How to start each tool, or one refusal naming everything missing.
+
+    A tool is taken from the running interpreter unless it names an environment
+    of its own, and then from that environment alone, its pin read from that
+    environment's requirements file and checked against what is installed
+    there. A console script is looked up in its environment's scripts directory
     alone: a same-named one on PATH belongs to some other environment.
     """
 
     problems = _pin_problems(interpreter, pinned)
     commands: dict[str, tuple[str, ...]] = {}
+    hints: dict[OwnEnvironment, str] = {}
     for name, tool in TOOLS.items():
-        if tool.distribution not in pinned:
-            problems.append(f"{name}: {tool.distribution} is not pinned in requirements-dev.txt")
+        environment, wanted, source = interpreter, pinned, REQUIREMENTS.name
+        if tool.environment is not None:
+            hints[tool.environment] = _build_hint(tool.environment)
+            source = tool.environment.requirements.name
+            if tool.environment not in own:
+                problems.append(
+                    f"{name}: its environment {tool.environment.directory} was not read"
+                )
+                continue
+            environment, wanted = own[tool.environment]
+            if not environment.executable.is_file():
+                problems.append(
+                    f"{name}: no environment at {tool.environment.directory}; build it from {source}"
+                )
+                continue
+            problems += _pin_problems(environment, wanted, source)
+        if tool.distribution not in wanted:
+            problems.append(f"{name}: {tool.distribution} is not pinned in {source}")
         if tool.module is not None:
-            commands[name] = (str(interpreter.executable), "-m", tool.module)
+            commands[name] = (str(environment.executable), "-m", tool.module)
         elif tool.script is not None:
-            found = _console_script(interpreter.scripts, tool.script)
+            found = _console_script(environment.scripts, tool.script)
             if found is not None:
                 commands[name] = (str(found),)
-            elif interpreter.version_of(tool.distribution) is not None:
+            elif environment.version_of(tool.distribution) is not None:
                 # A missing distribution is already reported; a missing script
                 # beside an installed one is a broken install.
-                problems.append(f"{name}: no {tool.script} console script in {interpreter.scripts}")
+                problems.append(f"{name}: no {tool.script} console script in {environment.scripts}")
     if problems:
         listed = "\n".join(f"  - {problem}" for problem in problems)
         raise ToolchainError(
             f"release check: {interpreter.executable} does not hold the pinned gate"
             f" toolchain:\n{listed}\n"
             "Run the release with the project's virtual environment: create it and"
-            " install the pins (uv venv .venv --python 3.11, then uv pip install"
+            f" install the pins (uv venv .venv --python {VENV_PYTHON}, then uv pip install"
             " --python .venv/Scripts/python.exe -r requirements-dev.txt; or"
             " python -m venv .venv, then .venv/Scripts/python -m pip install -r"
             " requirements-dev.txt), then run .venv/Scripts/python .github/relkit.pyz"
             " release prepare <version> (.venv/bin/python outside Windows)."
+            + "".join(hints.values())
         )
     return commands
 
@@ -205,10 +301,29 @@ def tool_environment(interpreter: Interpreter, base: Mapping[str, str]) -> dict[
     directory, so a shared install earlier on PATH would otherwise run instead.
     """
 
+    return _scripts_first(interpreter.scripts, base)
+
+
+def program_environment(command: Sequence[str], base: Mapping[str, str]) -> dict[str, str]:
+    """`base` with the directory of the program `command` starts first on PATH.
+
+    A tool from an environment of its own needs its own scripts first for the
+    reason `tool_environment` gives: semgrep's launcher would otherwise start a
+    `pysemgrep` an older `.venv` still holds. A program named without a
+    directory, such as npm, is found on PATH and leaves it as it is.
+    """
+
+    program = Path(command[0])
+    return _scripts_first(program.parent, base) if program.is_absolute() else dict(base)
+
+
+def _scripts_first(scripts: Path, base: Mapping[str, str]) -> dict[str, str]:
     environment = dict(base)
     key = next((name for name in environment if name.upper() == "PATH"), "PATH")
-    rest = environment.get(key, "")
-    environment[key] = os.pathsep.join(part for part in (str(interpreter.scripts), rest) if part)
+    parts = [part for part in environment.get(key, "").split(os.pathsep) if part]
+    if parts[:1] != [str(scripts)]:
+        parts.insert(0, str(scripts))
+    environment[key] = os.pathsep.join(parts)
     return environment
 
 
@@ -394,8 +509,14 @@ def isolated_environment(state: Path, base: Mapping[str, str] | None = None) -> 
     return environment
 
 
-def check(interpreter: Interpreter | None = None, requirements: str | None = None) -> None:
+def check(
+    interpreter: Interpreter | None = None,
+    requirements: str | None = None,
+    own: OwnToolchain | None = None,
+) -> None:
     """Run every gate, each Python tool from the interpreter running this file.
+
+    A tool with an environment of its own comes from that environment.
 
     The toolchain is verified against the pins before anything else, so a
     wrong interpreter is refused in one message instead of one stage at a time.
@@ -408,7 +529,9 @@ def check(interpreter: Interpreter | None = None, requirements: str | None = Non
     interpreter = interpreter or running_interpreter()
     if requirements is None:
         requirements = REQUIREMENTS.read_text(encoding="utf-8")
-    tools = require_toolchain(interpreter, pins(requirements))
+    tools = require_toolchain(
+        interpreter, pins(requirements), own_environments() if own is None else own
+    )
     require_version(version())
     base = tool_environment(interpreter, os.environ)
     with npm_copy(ROOT) as copy:
@@ -485,10 +608,11 @@ def _stages(
     ]
 
 
-def _run_stages(stages: list[tuple[str, tuple[str, ...], Path]], base: dict[str, str]) -> None:
+def _run_stages(stages: list[tuple[str, tuple[str, ...], Path]], shared: dict[str, str]) -> None:
     for stage, command, cwd in stages:
         sys.stdout.write(f"release check: {' '.join(command)}\n")
         sys.stdout.flush()
+        base = program_environment(command, shared)
         # Gate output is not parsed; inherit pipes to preserve the tool's text.
         if stage == "coverage run":
             with tempfile.TemporaryDirectory(prefix="valkama-check-", dir=task_parent()) as task:

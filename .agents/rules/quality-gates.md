@@ -67,14 +67,30 @@ scans only files Git knows about: a new module that is not yet staged is
 skipped without a word, so stage new files (`git add -N` is enough) before
 reading its result as covering them.
 
-Run the Python gates from the ignored `.venv`, built from
-`requirements-dev.txt` (`uv venv .venv --python 3.11`, then
+Run the Python gates from the ignored `.venv`, built on Python 3.15 — the
+interpreter the installed launcher runs, so the suite meets the SQLite the
+service does — from `requirements-dev.txt` (`uv venv .venv --python 3.15`, then
 `uv pip install --python .venv/Scripts/python.exe -r requirements-dev.txt`),
-with `.venv/Scripts` first on `PATH`. A shared interpreter drifts: an
-unpinned semgrep and mcp 2.x there broke the gate, because semgrep imports
-`mcp.server.fastmcp` at start and mcp 2 removed it. `PATH` matters even with
-the venv present, since the `semgrep` launcher finds `pysemgrep` through it
-and otherwise runs the shared copy.
+with `.venv/Scripts` first on `PATH`. The minimum the code supports stays
+Python 3.11 (`target-version` and `python_version` in `pyproject.toml`). A
+shared interpreter drifts: an unpinned semgrep and mcp 2.x there broke the gate,
+because semgrep imports `mcp.server.fastmcp` at start and mcp 2 removed it.
+
+A tool whose own dependencies do not install on the Python `.venv` is built on
+gets an environment of its own beside it, with its own requirements file, and
+the gates run it and check its pin there; `OwnEnvironment` in
+`windows/release.py` declares each one, its directory, its requirements and the
+Python to build it on. semgrep is the one today: every release since 1.137.0
+pins `pywin32==311`, which has no wheel for Python 3.15. Build the ignored
+`.venv-semgrep` from `requirements-semgrep.txt` on the newest Python it installs
+on (`uv venv .venv-semgrep --python 3.14`, then
+`uv pip install --python .venv-semgrep/Scripts/python.exe -r requirements-semgrep.txt`),
+and run `semgrep` with `.venv-semgrep/Scripts` first on `PATH`: the launcher
+finds `pysemgrep` through it, so an older `.venv` that still holds one would
+otherwise run that copy. Both runners put the directory of each step's own
+program first on `PATH` for that step (`release.program_environment`). When
+semgrep installs on the Python of `.venv` again, its pin can move back into
+`requirements-dev.txt` and its declaration go.
 
 `python tests/isolated.py gates --out DIR` runs the `AGENTS.md` list from that
 venv in one call: only the child sees the redirected `HOME`, `USERPROFILE`,
@@ -89,8 +105,10 @@ with `PermissionError`.
 
 Heavy runs wanting more CPUs than there are fail tests that pass alone, so each
 goes through one gate, `tests/machine_lock.py`, at a file in the system's
-temporary directory no TEMP or profile moves, declaring its CPUs: the whole
-unittest suite 2, from its package's `load_tests` until its process ends;
+temporary directory no TEMP or profile moves, declaring its CPUs:
+`tests/parallel.py` one for every two processes it runs at once (8 by default,
+half the CPUs on a smaller machine), and the whole unittest suite in one process 2,
+from its package's `load_tests` until its process ends;
 `npm run test:unit` up to 8 workers, all given `--maxWorkers`;
 `npm run test:browser:allowed` but `--list` all. In arrival order, a run goes in
 alone at once, beside others if it fits their CPUs and the load;
@@ -163,6 +181,16 @@ One trap worth knowing: coverage records line numbers and resolves them against
 the file as it is when the report runs. Reformat a measured file before
 reporting and the figure is nonsense — the ratchet fired once on a two-line
 shift that `ruff format` had introduced after the run.
+
+A test that leaves an SQLite connection open fails on Python 3.13 and later.
+`tests/sqlite_leaks.py`, installed by `tests/__init__.py` for every way the suite
+runs, makes sqlite3's `unclosed database` warning an error, and no other warning.
+It fails the test during which the collector found the connection, which is not
+always the one that opened it: run that module again with `-X tracemalloc=20 -W
+always::ResourceWarning`, where the guard stands aside and the warning prints the
+line that opened each connection. `with conn:` ends a transaction and leaves the
+connection open; close it with `contextlib.closing`, `try`/`finally`, or open a
+store file for reading through `store.read_only`.
 
 Two test files state properties rather than examples, and `property_settings.py`
 owns how Hypothesis is configured for both. `test_contract_properties.py` says

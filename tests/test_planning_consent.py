@@ -178,7 +178,7 @@ class Harness(unittest.TestCase):
 
     # -- reads ----------------------------------------------------------------------
 
-    def id(self, reference: str) -> str:
+    def item_id(self, reference: str) -> str:
         return str(service.get_work_item(self.conn, reference)["work_item_id"])
 
     def card(self, reference: str) -> dict:
@@ -202,7 +202,7 @@ class Harness(unittest.TestCase):
         return self.conn.execute(
             "SELECT * FROM work_item_requests WHERE work_item_id = ? AND addressee IS NOT NULL"
             " ORDER BY created_at, rowid",
-            (self.id(goal),),
+            (self.item_id(goal),),
         ).fetchall()
 
     def asked_of(self, goal: str, by: calls.Identity) -> str:
@@ -214,7 +214,7 @@ class Harness(unittest.TestCase):
 
     def action(self, goal: str) -> pending.Action:
         [found] = self.conn.execute(
-            "SELECT * FROM pending_actions WHERE work_item_id = ?", (self.id(goal),)
+            "SELECT * FROM pending_actions WHERE work_item_id = ?", (self.item_id(goal),)
         ).fetchall()
         return pending.Action.of_row(found)
 
@@ -231,7 +231,7 @@ class Harness(unittest.TestCase):
             "SELECT e.detail, c.identity_source, c.tool FROM work_item_events e"
             " JOIN execution_events c ON c.id = e.call_id"
             " WHERE e.work_item_id = ? AND e.action = 'transitioned' ORDER BY e.id DESC LIMIT 1",
-            (self.id(reference),),
+            (self.item_id(reference),),
         ).fetchone()
         return tuple(found)  # type: ignore[return-value]
 
@@ -392,12 +392,12 @@ class RoundTests(Harness):
         # The agent that asked follows the goal and hears Valkama's write there.
         follows = self.conn.execute(
             "SELECT follows FROM work_item_subscriptions WHERE work_item_id = ? AND session_id = ?",
-            (self.id(self.goal), "session-a"),
+            (self.item_id(self.goal), "session-a"),
         ).fetchone()
         self.assertEqual(1, follows[0])
         heard = {
             entry["kind"]
-            for _call, entry in person_events.valkama_since(self.conn, self.id(self.goal), 0)
+            for _call, entry in person_events.valkama_since(self.conn, self.item_id(self.goal), 0)
         }
         self.assertIn("status", heard)
 
@@ -510,7 +510,7 @@ class RoundTests(Harness):
         self.assertEqual("open", self.category(self.goal))
         [dropped] = self.conn.execute(
             "SELECT detail FROM work_item_events WHERE work_item_id = ? AND action = 'action_dropped'",
-            (self.id(self.goal),),
+            (self.item_id(self.goal),),
         ).fetchall()
         self.assertEqual("cancel_shared: [transition] refused for the test", dropped[0])
 
@@ -617,7 +617,7 @@ class OwnersAnswerTests(Harness):
     def told(self, reference: str) -> set[str]:
         return {
             entry["kind"]
-            for entry in person_events.since_last_agent_write(self.conn, self.id(reference))
+            for entry in person_events.since_last_agent_write(self.conn, self.item_id(reference))
         }
 
     def test_the_owner_answers_a_shared_cancel(self) -> None:

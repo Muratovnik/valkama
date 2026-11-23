@@ -23,11 +23,13 @@ from __future__ import annotations
 
 import contextlib
 import datetime
+import math
 import os
 import platform
 import sqlite3
 import sys
 import tempfile
+import time
 from collections.abc import Callable, Iterator, Mapping
 from typing import Any
 
@@ -625,11 +627,8 @@ def _assert_current_catalog(conn: sqlite3.Connection) -> None:
 
 
 def _read_stored_version_without_write(path: str) -> int:
-    probe = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
-    try:
+    with read_only(path) as probe:
         return int(probe.execute("PRAGMA user_version").fetchone()[0])
-    finally:
-        probe.close()
 
 
 def refuse_another_generation(conn: sqlite3.Connection, *, first_store: bool = False) -> None:
@@ -664,11 +663,8 @@ def refuse_another_generation(conn: sqlite3.Connection, *, first_store: bool = F
 def _probe_generation(path: str) -> None:
     """`refuse_another_generation` on an existing file, through a read-only connection."""
 
-    probe = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
-    try:
+    with read_only(path) as probe:
         refuse_another_generation(probe)
-    finally:
-        probe.close()
 
 
 def open_read_only() -> sqlite3.Connection:
@@ -697,6 +693,27 @@ def _uri(path: str, mode: str) -> str:
     escaped = absolute.replace("%", "%25").replace("?", "%3f").replace("#", "%23")
     prefix = "file:" if escaped.startswith("/") else "file:/"
     return f"{prefix}{escaped}?mode={mode}"
+
+
+@contextlib.contextmanager
+def read_only(path: str, *, immutable: bool = False) -> Iterator[sqlite3.Connection]:
+    """The store file at `path` for a look that writes nothing, closed when the block ends.
+
+    Nothing is created, migrated or locked, and a missing file is an
+    `sqlite3.OperationalError`. The close is the point: `with` on a connection only
+    ends a transaction, and a connection left to the garbage collector keeps the file
+    open until a collection finds it, so on Windows a backup, a restore or a rename of
+    the file fails in the meantime. `immutable` reads a file nothing holds open as one
+    that cannot change, so SQLite creates no journal or index beside it; the caller
+    answers for that being so.
+    """
+
+    uri = _uri(path, "ro") + ("&immutable=1" if immutable else "")
+    conn = sqlite3.connect(uri, uri=True)
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 
 def connect_for_read() -> sqlite3.Connection:
@@ -987,8 +1004,7 @@ def store_generation(path: str) -> str:
 
     if not os.path.isfile(path):
         raise FileNotFoundError(f"there is no store at {path}")
-    probe = sqlite3.connect(_uri(path, "ro"), uri=True)
-    try:
+    with read_only(path) as probe:
         try:
             refuse_another_generation(probe)
         except WorkModelMigrationRequiredError:
@@ -997,8 +1013,16 @@ def store_generation(path: str) -> str:
         if stored != STORE_SCHEMA_VERSION:
             raise StoreTooOldError(stored)
         return "current"
-    finally:
-        probe.close()
+
+
+def _stamp(path: str) -> tuple[int, int] | None:
+    """What a write to the file at `path` changes, or None when it cannot be read."""
+
+    try:
+        found = os.stat(path)
+    except OSError:
+        return None
+    return found.st_size, found.st_mtime_ns
 
 
 def copy_store(source: str, directory: str) -> str:
@@ -1007,32 +1031,71 @@ def copy_store(source: str, directory: str) -> str:
     `VACUUM INTO` through a read-only connection: a store in WAL mode keeps its latest
     commits in its journal, which a copy of the file alone would miss, and the source
     is never opened for writing. `directory` must not hold a store already.
+
+    A store with no journal beside it is open nowhere, and its file holds every
+    commit. A read-only connection to it would create the journal and its index and,
+    unable to checkpoint, leave both beside the source, so it is read as immutable
+    instead; a store that was opened or written while that copy was taken refuses it.
     """
 
     os.makedirs(directory, exist_ok=True)
     destination = os.path.join(directory, f"{DATA_PREFIX}.sqlite3")
     if os.path.exists(destination):
         raise FileExistsError(f"{destination} already exists")
-    conn = sqlite3.connect(_uri(source, "ro"), uri=True)
-    try:
+    unopened = not os.path.lexists(f"{source}-wal")
+    before = _stamp(source) if unopened else None
+    with read_only(source, immutable=unopened) as conn:
         conn.execute("VACUUM INTO ?", (destination,))
-    finally:
-        conn.close()
+    if unopened and (os.path.lexists(f"{source}-wal") or _stamp(source) != before):
+        os.remove(destination)
+        raise RuntimeError(f"{source} was opened while it was copied; copy it again")
     store_backups.copy_pictures(
         planning_images.directory_beside(source), planning_images.directory_beside(destination)
     )
     return destination
 
 
+#: The oldest SQLite the work-model migration runs on. On SQLite 3.45.1 the process
+#: ended with an access violation in the step that drops labels, while the word index
+#: deleted rows of its contentless FTS5 table by rowid; 3.47.1 and later ran the same
+#: store through. The cause is not pinned to one SQLite fix, so this is the
+#: oldest release seen to pass. The service itself needs only 3.43 (`planning.words`).
+WORK_MODEL_SQLITE = (3, 47, 1)
+
+
+def _running_sqlite() -> str:
+    """The version of the SQLite this interpreter runs, read here and nowhere else."""
+
+    return sqlite3.sqlite_version
+
+
+def refuse_an_old_sqlite(report: dict[str, Any]) -> None:
+    """Refuse the work-model migration on a SQLite older than `WORK_MODEL_SQLITE`.
+
+    Called before the migration lock, the copy of a dry run, the recovery point and
+    any write, so a refused run leaves nothing beside the store. Records the refusal
+    in `report` and raises `WorkModelPreconditionError`.
+    """
+
+    found = _running_sqlite()
+    if tuple(int(part) for part in found.split(".")) >= WORK_MODEL_SQLITE:
+        return
+    floor = ".".join(str(part) for part in WORK_MODEL_SQLITE)
+    message = (
+        f"this Python runs SQLite {found}, and the work-model migration needs SQLite"
+        f" {floor} or newer: run it again with a Python whose SQLite is {floor} or newer;"
+        " nothing was written"
+    )
+    report.update(status="refused", message=message)
+    raise WorkModelPreconditionError(message, report)
+
+
 def _environment(path: str) -> dict[str, Any]:
     """What the timing of a run depends on: the machine, the SQLite and the store's size."""
 
-    probe = sqlite3.connect(_uri(path, "ro"), uri=True)
-    try:
+    with read_only(path) as probe:
         pages = int(probe.execute("PRAGMA page_count").fetchone()[0])
         page_size = int(probe.execute("PRAGMA page_size").fetchone()[0])
-    finally:
-        probe.close()
     memory = sqlite3.connect(":memory:")
     try:
         memory.execute("CREATE VIRTUAL TABLE probe USING fts5(text)")
@@ -1048,7 +1111,7 @@ def _environment(path: str) -> dict[str, Any]:
         "processor": platform.processor(),
         "cpus": os.cpu_count(),
         "python": sys.version.split()[0],
-        "sqlite": sqlite3.sqlite_version,
+        "sqlite": _running_sqlite(),
         "fts5": fts5,
         "pages": pages,
         "page_size": page_size,
@@ -1142,14 +1205,17 @@ def migrate_work_model(
     The only way a store at Valkama 2.9's schema reaches this build: `connect()`
     refuses one with `WorkModelMigrationRequiredError`, which names this. A store of
     this build is left alone and reported `current`; any other is refused as
-    `store_generation` refuses it, untouched.
+    `store_generation` refuses it, untouched. A SQLite older than `WORK_MODEL_SQLITE`
+    is refused next (`refuse_an_old_sqlite`), before the lock and before any write.
 
-    Under the store's migration lock the conditions to start are read first, from
-    the store, the project registry and the file `item_projects` names, which
-    `valkama projects map-items` wrote (`planning.item_projects_map`); one that does
-    not hold raises `WorkModelPreconditionError`, the report `refused`, before any
-    write. Then a verified recovery point labelled `WORK_MODEL_LABEL` is taken,
-    with the pictures beside it. Then, with
+    Under the store's migration lock the conditions to start are read first: that no
+    Valkama server was seen running in the last `liveness.BREAK_SECONDS`
+    (`_refuse_a_live_server`), then those read from the store, the project registry
+    and the file `item_projects` names, which `valkama projects map-items` wrote
+    (`planning.item_projects_map`); one that does not hold raises
+    `WorkModelPreconditionError`, the report `refused`, before any write. Then a
+    verified recovery point labelled `WORK_MODEL_LABEL` is taken, with the pictures
+    beside it. Then, with
     foreign keys off -- set before the transaction, since SQLite ignores the pragma
     inside one -- schema 18's step (`QUOTA_NAMES`), which a store at 17 needs and one
     at 18 does not, and the steps of `planning.work_model_migration` run in one
@@ -1170,6 +1236,33 @@ def migrate_work_model(
             report["status"] = "failed"
             raise
     return report
+
+
+def _refuse_a_live_server(path: str, report: dict[str, Any]) -> None:
+    """Refuse the migration while a Valkama server may still hold the store.
+
+    A server 2.9 left open would go on reading and writing the store after the
+    migration commits, with the code of 2.9. The long-lived servers, MCP and HTTP,
+    tick the store's liveness file once every `liveness.TICK_SECONDS`, so an interval
+    that ended less than `liveness.BREAK_SECONDS` ago may belong to one still running.
+    Hooks are short processes and do not tick; closing the clients rules them out. A
+    store with no liveness file, such as the copy a dry run makes, has none to wait
+    for. Only reads, and writes nothing to the store.
+    """
+
+    seen = liveness.intervals(path)
+    if not seen:
+        return
+    ago = time.time() - seen[-1][1]
+    if ago >= liveness.BREAK_SECONDS:
+        return
+    message = (
+        f"a Valkama server was running {max(0, math.floor(ago))} s ago: stop the listener"
+        f" and every agent client, wait {math.ceil(liveness.BREAK_SECONDS - ago)} s and"
+        " run this again; nothing was written"
+    )
+    report.update(status="refused", message=message)
+    raise WorkModelPreconditionError(message, report)
 
 
 def _preconditions(
@@ -1194,12 +1287,15 @@ def _migrate_work_model(path: str, report: dict[str, Any], item_projects: str | 
         report.update(status="current", message=_ALREADY)
         return
     report["environment"] = _environment(path)
+    report["schema"]["from"] = _read_stored_version_without_write(path)
+    refuse_an_old_sqlite(report)
     with store_lock.migration_lock(path):
         # Again under the lock: another process may have run it meanwhile.
         if store_generation(path) == "current":
             report.update(status="current", message=_ALREADY)
             return
         report["schema"]["from"] = _read_stored_version_without_write(path)
+        _refuse_a_live_server(path, report)
         conn = sqlite3.connect(path, timeout=5)
         conn.row_factory = sqlite3.Row
         try:

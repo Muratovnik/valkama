@@ -324,7 +324,7 @@ class OwnerGroupTests(GroupHarness):
         # The action holds the tasks as they stood, the answer, until and why; the
         # question's `action` shows the conditions and the tasks, and the cancel list.
         [action] = self.waiting_on(goal)
-        ids = [self.id(task) for task in tasks]
+        ids = [self.item_id(task) for task in tasks]
         self.assertEqual(
             {"items": ids, "answer": "later", "until": "2026-12-01", "why": WHY}, action.params
         )
@@ -484,10 +484,10 @@ class OwnerAnswerTests(GroupHarness):
         moved = self.conn.execute(
             "SELECT created_at, detail FROM work_item_events WHERE work_item_id = ?"
             " AND action = 'transitioned' ORDER BY id DESC LIMIT 1",
-            (self.id(tasks[1]),),
+            (self.item_id(tasks[1]),),
         ).fetchone()
         self.assertEqual(f"triage: moved out of {goal}: owner: not in this group", moved["detail"])
-        [waiting] = triage.waiting(self.conn, self.space, items=[self.id(tasks[1])])
+        [waiting] = triage.waiting(self.conn, self.space, items=[self.item_id(tasks[1])])
         self.assertEqual((moved["created_at"], None), (waiting.since, waiting.seen_at))
         # The answer is the agent's, so the action ends carried out, and the question with it.
         self.assertEqual("carried_out", self.action(action.id)["outcome"])
@@ -669,9 +669,9 @@ class EndedBeforeAnswerTests(GroupHarness):
         self.assertEqual(
             [f"{task}: group withdrawn" for task in tasks], self.events(goal, "child_left")
         )
-        stack = triage.waiting(self.conn, self.space, items=[self.id(task) for task in tasks])
+        stack = triage.waiting(self.conn, self.space, items=[self.item_id(task) for task in tasks])
         self.assertEqual(
-            sorted((self.id(task), None) for task in tasks),
+            sorted((self.item_id(task), None) for task in tasks),
             sorted((found.work_item_id, found.seen_at) for found in stack),
         )
         # The goal, with nothing left under it, is cancelled as not needed.
@@ -797,7 +797,7 @@ class GroupOfOneTests(GroupHarness):
         finding = self.serious()
         goal, waits = self.assert_waits(self.group([finding]), [finding])
         self.assertEqual("group «Export fixes»: do 1 item", waits["what"])
-        self.assertEqual([], triage.waiting(self.conn, self.space, items=[self.id(finding)]))
+        self.assertEqual([], triage.waiting(self.conn, self.space, items=[self.item_id(finding)]))
         question = self.request(waits["question"])
         self.assertEqual("Group of 1 item: «Export fixes»", question["prompt"])
         _choice, items, _until, _cancels = json.loads(question["fields_json"])

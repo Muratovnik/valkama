@@ -34,6 +34,16 @@ checkouts are therefore distinguishable even at the same version.
   labels a project now carries and refuses to start, before any write, on a registry
   that is not format 4, a space whose project is not bound to it, two spaces of one
   name or a file of another store or state.
+- **`valkama migrate work-model` refuses to start while a Valkama server may still
+  hold the store.** When the store's liveness file shows a server running less than
+  three minutes ago, it exits 1 with a `refused` report naming the seconds since and
+  the seconds to wait, before the snapshot and before any write; `--dry-run` migrates
+  its copy as before.
+- **`valkama migrate work-model` refuses to start on a SQLite older than 3.47.1.** The
+  migration has crashed on SQLite 3.45.1, so a Python whose SQLite is older exits 1
+  with a `refused` report naming the version it found, before the snapshot, before any
+  write and, under `--dry-run`, before the copy. The service itself still runs on
+  SQLite 3.43 or newer.
 - **The migration carries commit refs over as commits.** `map-items` reads each commit
   ref's text — a hash, `project@hash`, a commit address, or a note naming several
   hashes, of which the start of a range and the hash after `base` or `from` are

@@ -173,12 +173,19 @@ def _version(command: Sequence[str]) -> str | None:
 
 
 def tool_versions(interpreter: release.Interpreter, *, npm: bool) -> dict[str, str | None]:
-    """The Python tools `gates` starts, as installed, and node and npm when an npm step runs."""
+    """The Python tools `gates` starts, as installed, and node and npm when an npm step runs.
+
+    A tool with an environment of its own is read there, where `gates` runs it.
+    """
 
     versions: dict[str, str | None] = {"python": platform.python_version()}
-    versions |= {
-        name: interpreter.version_of(tool.distribution) for name, tool in release.TOOLS.items()
-    }
+    for name, tool in release.TOOLS.items():
+        source = (
+            interpreter
+            if tool.environment is None
+            else release.environment_interpreter(tool.environment.directory)
+        )
+        versions[name] = source.version_of(tool.distribution)
     if npm:
         versions["node"] = _version(["node", "--version"])
         versions["npm"] = _version([release.NPM, "--version"])

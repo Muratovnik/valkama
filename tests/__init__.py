@@ -150,6 +150,12 @@ from server import launcher
 
 launcher.AUTOSTART_STORE = RunKeyDouble()
 
+# A test that leaves an SQLite connection open fails, here for every way the suite
+# is run: `tests/parallel.py`, `unittest discover`, `tests/affected.py` and one module alone.
+from tests import sqlite_leaks
+
+sqlite_leaks.install()
+
 
 class LoadNoting(unittest.TextTestResult):
     """The result of every unittest run: one that fails says who holds the heavy-test lock.
@@ -177,10 +183,11 @@ unittest.TextTestRunner.resultclass = LoadNoting  # type: ignore[assignment]
 #: gates and CI name. A narrower one makes a targeted run.
 _WHOLE_SUITE_PATTERNS = (None, "test*.py", "test_*.py")
 
-#: The logical CPUs a run of the whole suite declares to the heavy-test gate. The suite
-#: is one Python process, with the processes some tests start; a sampler of whole runs
-#: saw it at one to two cores, short of a run from start to end, so this is a first
-#: figure to revise against a measured one. `tests/isolated.py` declares it for its step.
+#: The logical CPUs a run of the whole suite in one process declares to the heavy-test
+#: gate. The suite is one Python process, with the processes some tests start; a
+#: sampler of whole runs saw it at one to two cores, short of a run from start to end,
+#: so this is a first figure to revise against a measured one. `tests/parallel.py`,
+#: which runs it in several processes, declares a figure of its own.
 WHOLE_SUITE_CPUS = 2
 
 

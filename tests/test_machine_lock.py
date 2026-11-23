@@ -418,8 +418,7 @@ def loaded_ids(suite: unittest.TestSuite) -> set[str]:
         if isinstance(test, unittest.TestSuite):
             found |= loaded_ids(test)
         else:
-            # unittest's own id: a test class may define an `id` helper of its own.
-            found.add(unittest.TestCase.id(test))
+            found.add(test.id())
     return found
 
 

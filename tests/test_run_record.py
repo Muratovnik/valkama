@@ -20,6 +20,7 @@ from unittest import mock
 
 from server import git_worktrees, processes
 from tests import isolated, machine_lock, run_record
+from windows import release
 
 ROOT = Path(__file__).resolve().parents[1]
 #: The mark the spec reporter of `node --test` starts its totals with: INFORMATION SOURCE.
@@ -477,6 +478,30 @@ class CountTests(unittest.TestCase):
         # The control: a test step added to the list without a count is one this sees.
         added = isolated.Step("browser-test", "web", "npm run test:browser:allowed", "web")
         self.assertNotEqual(test_steps((*isolated.GATE_STEPS, added)), set(run_record.TEST_COUNTS))
+
+
+class ToolVersionTests(unittest.TestCase):
+    """The versions a record names are those of the environments `gates` runs each tool in."""
+
+    def test_a_tool_with_an_environment_of_its_own_is_read_there(self) -> None:
+        directory = tempfile.TemporaryDirectory(prefix="vk-tools-", ignore_cleanup_errors=True)
+        self.addCleanup(directory.cleanup)
+        own = Path(directory.name) / "own-venv"
+        windows = sys.platform == "win32"
+        site = (
+            own / "Lib" / "site-packages" if windows else own / "lib" / "python3" / "site-packages"
+        )
+        info = site / "semgrep-9.9.9.dist-info"
+        info.mkdir(parents=True)
+        info.joinpath("METADATA").write_text("Name: semgrep\nVersion: 9.9.9\n", encoding="utf-8")
+        environment = release.OwnEnvironment(own, Path(directory.name) / "own.txt", python="3")
+        tool = release.Tool("semgrep", script="semgrep", environment=environment)
+        # The running interpreter answers for every other tool, and wrongly for this one.
+        running = release.Interpreter(Path("python"), Path("."), lambda name: f"running {name}")
+        with mock.patch.dict(release.TOOLS, {"semgrep": tool}):
+            versions = run_record.tool_versions(running, npm=False)
+        self.assertEqual("9.9.9", versions["semgrep"])
+        self.assertEqual("running ruff", versions["ruff"])
 
 
 class AdmissionTests(unittest.TestCase):

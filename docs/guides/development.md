@@ -51,5 +51,6 @@ copies an older product name left, is described under
 ## Checks before a pull request
 
 Every change runs all of [the gates](../../CONTRIBUTING.md#the-gates), from the
-repository root. The Python toolchain is pinned in `requirements-dev.txt` and
-configured in `pyproject.toml`; none of it is a runtime dependency.
+repository root. The Python toolchain is pinned in `requirements-dev.txt`, semgrep
+in `requirements-semgrep.txt` for an environment of its own, and configured in
+`pyproject.toml`; none of it is a runtime dependency.
