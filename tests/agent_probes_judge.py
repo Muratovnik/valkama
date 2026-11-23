@@ -15,7 +15,9 @@ What a check reads:
   things those answers do not carry are read from the recorded store itself:
   which items the session can have touched, and the session behind a comment;
 - calls, their order and the final answer: the client's own output, Claude
-  Code's `stream-json` or Codex's `--json`, read into one list of calls;
+  Code's `stream-json` or Codex's `--json`, read into one list of calls; the
+  answer is every text the main agent wrote after its last tool call in the
+  last turn;
 - files, Git and commands: the session's workspace as the run left it.
 
 A probe passes when every check that decides passed. A check that only records
@@ -48,6 +50,7 @@ from pathlib import Path
 from typing import Any
 
 from server import processes
+from server.planning import tools as planning_tools
 from server.store_identity.primitives import ContractError
 from server.store_identity.refs import planning_space_ref
 from tests import agent_probes as probes
@@ -297,9 +300,13 @@ def _add_tokens(tokens: dict[str, int], **counts: object) -> None:
 
 def _claude(record: Record, transcript: Transcript) -> None:
     pending: dict[str, int] = {}
-    launches: dict[str, int] = {}
+    #: Each launch's report, by the id of its call, in the order of the launches.
+    launches: dict[str, str | None] = {}
+    #: The launches sent to the background, whose call answers with where they run.
+    backgrounded: set[str] = set()
     for lines in record.turns():
         answer = None
+        reply: list[str] = []
         for line in lines:
             kind = line.get("type")
             if kind == "system" and line.get("subtype") == "init":
@@ -309,12 +316,23 @@ def _claude(record: Record, transcript: Transcript) -> None:
             elif kind == "assistant":
                 parent = line.get("parent_tool_use_id")
                 for part in (line.get("message") or {}).get("content") or ():
-                    if isinstance(part, Mapping) and part.get("type") == "tool_use":
+                    if not isinstance(part, Mapping):
+                        continue
+                    if part.get("type") == "tool_use":
                         _claude_use(transcript, part, parent, pending, launches)
+                        if not parent:
+                            reply = []
+                    elif part.get("type") == "text" and not parent:
+                        reply.append(str(part.get("text") or ""))
             elif kind == "user":
                 for part in (line.get("message") or {}).get("content") or ():
                     if isinstance(part, Mapping) and part.get("type") == "tool_result":
                         _claude_result(transcript, part, pending, launches)
+            elif kind == "system" and line.get("subtype") == "task_started":
+                if line.get("is_backgrounded"):
+                    backgrounded.add(str(line.get("tool_use_id")))
+            elif kind == "system" and line.get("subtype") == "task_notification":
+                _claude_notification(line, launches, backgrounded)
             elif kind == "result":
                 answer = line.get("result")
                 usage = line.get("usage") or {}
@@ -329,7 +347,22 @@ def _claude(record: Record, transcript: Transcript) -> None:
                     output=usage.get("output_tokens"),
                     reasoning=details.get("thinking_tokens"),
                 )
-        transcript.answer = answer if isinstance(answer, str) else None
+        transcript.answer = _final_reply(reply, answer)
+    transcript.reports.extend(report for report in launches.values() if report is not None)
+
+
+def _final_reply(texts: Sequence[str], result: object) -> str | None:
+    """A turn's answer: every text the main agent wrote after its last tool call.
+
+    A Stop hook may send the agent back for one more message, such as the report
+    table the owner's skills ask for, and the client's own result names only that
+    last one; the owner reads them all. Without any, the client's result.
+    """
+
+    written = [text for text in texts if text.strip()]
+    if written:
+        return "\n\n".join(written)
+    return result if isinstance(result, str) else None
 
 
 def _claude_use(
@@ -337,7 +370,7 @@ def _claude_use(
     part: Mapping[str, Any],
     parent: object,
     pending: dict[str, int],
-    launches: dict[str, int],
+    launches: dict[str, str | None],
 ) -> None:
     name = str(part.get("name") or "")
     given = part.get("input")
@@ -358,7 +391,7 @@ def _claude_use(
         pending[part["id"]] = index
     if name in CLAUDE_SUBAGENT_TOOLS and not parent:
         transcript.subagents.append(str(arguments.get("description") or arguments.get("prompt")))
-        launches[str(part.get("id"))] = index
+        launches[str(part.get("id"))] = None
     skill = arguments.get("skill")
     if name == "Skill" and transcript.skill is None and isinstance(skill, str):
         if SKILL_NAME.fullmatch(skill):
@@ -366,25 +399,47 @@ def _claude_use(
             transcript.skill_evidence = f"Skill {skill} at call {index}"
 
 
+def _claude_notification(
+    line: Mapping[str, Any], launches: dict[str, str | None], backgrounded: set[str]
+) -> None:
+    """A subagent's end: the report it handed back, or a backgrounded one's summary."""
+
+    identifier = str(line.get("tool_use_id"))
+    if identifier not in launches:
+        return
+    handback = line.get("handback_report")
+    report = handback.get("text") if isinstance(handback, Mapping) else None
+    if isinstance(report, str):
+        launches[identifier] = report
+    elif identifier in backgrounded:
+        launches[identifier] = str(line.get("summary") or "")
+
+
 def _claude_result(
     transcript: Transcript,
     part: Mapping[str, Any],
     pending: dict[str, int],
-    launches: dict[str, int],
+    launches: dict[str, str | None],
 ) -> None:
     identifier = str(part.get("tool_use_id"))
     text = _result_text(part.get("content"))
-    if identifier in launches:
-        transcript.reports.append(text)
+    # A subagent in the foreground answers its launch with its report; one sent to the
+    # background answers with where it runs, and its notification brings the report.
+    if identifier in launches and launches[identifier] is None:
+        launches[identifier] = text
     index = pending.pop(identifier, None)
     if index is not None:
         call = transcript.calls[index]
         transcript.calls[index] = dataclasses.replace(call, result=_parsed(text))
 
 
+#: Codex's items that are not an action: a message after one of them still ends the turn's reply.
+CODEX_QUIET_ITEMS = frozenset({"agent_message", "reasoning", "error", "todo_list"})
+
+
 def _codex(record: Record, transcript: Transcript) -> None:
     for lines in record.turns():
-        answer = None
+        reply: list[str] = []
         for line in lines:
             if line.get("type") == "turn.completed":
                 usage = line.get("usage") or {}
@@ -401,10 +456,49 @@ def _codex(record: Record, transcript: Transcript) -> None:
             if line.get("type") != "item.completed" or not isinstance(item, Mapping):
                 continue
             if item.get("type") == "agent_message":
-                answer = item.get("text")
-            else:
-                _codex_item(transcript, item)
-        transcript.answer = answer if isinstance(answer, str) else None
+                reply.append(str(item.get("text") or ""))
+                continue
+            if item.get("type") not in CODEX_QUIET_ITEMS:
+                reply = []
+            _codex_item(transcript, item)
+        transcript.answer = _final_reply(reply, None)
+    if not transcript.reports:
+        kept = record.directory / probes.SUBAGENT_TRANSCRIPTS
+        for path in sorted(kept.glob("*.jsonl")):
+            report = _codex_child_report(path)
+            if report is not None:
+                transcript.reports.append(report)
+
+
+def _codex_child_report(path: Path) -> str | None:
+    """A Codex subagent's report: the messages its own transcript says it ended its turns with.
+
+    Codex's output names neither the subagents it starts nor what they hand
+    back, so the run keeps each one's transcript. A turn's end there carries its
+    last message; a subagent the parent writes to again ends a turn per answer,
+    and all of them are what it handed back. Without a turn's end, the last
+    message the subagent wrote is its report.
+    """
+
+    ended: list[str] = []
+    written: str | None = None
+    for raw in path.read_bytes().splitlines():
+        with contextlib.suppress(ValueError):
+            line = json.loads(raw)
+            payload = line.get("payload") if isinstance(line, dict) else None
+            if not isinstance(payload, Mapping):
+                continue
+            message = payload.get("last_agent_message")
+            if payload.get("type") == "task_complete" and isinstance(message, str) and message:
+                ended.append(message)
+            if payload.get("type") == "message" and payload.get("role") == "assistant":
+                text = "".join(
+                    str(part.get("text") or "")
+                    for part in payload.get("content") or ()
+                    if isinstance(part, Mapping) and part.get("type") == "output_text"
+                )
+                written = text or written
+    return "\n\n".join(ended) if ended else written
 
 
 def _codex_item(transcript: Transcript, item: Mapping[str, Any]) -> None:
@@ -654,6 +748,8 @@ def _comments(view: View, reference: str) -> list[dict[str, Any]]:
                 "new": view.after_setup(comment.get("at")),
                 "text": body,
                 "awaits_reply": bool(comment.get("awaits_reply")),
+                # The items it told by reference: their holders hear it as its own do.
+                "mentions": list(comment.get("mentions") or ()),
             }
         )
     return comments
@@ -663,10 +759,25 @@ def _requests(view: View, reference: str) -> list[dict[str, Any]]:
     answer = view.tools().call(
         "list_work_item_requests", {"id": reference, "full": True, "limit": REQUEST_PAGE}
     )
+    # Who asked is the session of the call that wrote the question's event: a question's
+    # own `session_id` is what its asker passed, which a client's agent never does.
+    with view.recorded() as conn:
+        askers = {
+            str(row[0]): (row[1], row[2])
+            for row in conn.execute(
+                "SELECT e.detail, x.session_id, x.agent_id FROM work_item_events e"
+                " LEFT JOIN execution_events x ON x.id = e.call_id"
+                " JOIN work_items w ON w.work_item_id = e.work_item_id"
+                " JOIN planning_spaces s ON s.planning_space_id = w.planning_space_id"
+                " WHERE e.action = 'request_created' AND s.key || '-' || w.number = ?",
+                (reference,),
+            )
+        }
     found = []
     for request in answer.get("requests") or ():
         if not view.before_judging(request.get("created_at")):
             continue
+        session, agent = askers.get(str(request.get("request_id")), (None, None))
         fields = [field for field in request.get("fields") or () if isinstance(field, Mapping)]
         options = [option for field in fields for option in field.get("options") or ()]
         answers = request.get("answers") or {}
@@ -679,12 +790,15 @@ def _requests(view: View, reference: str) -> list[dict[str, Any]]:
                 "purpose": request.get("purpose"),
                 "prompt": request.get("prompt"),
                 "status": request.get("status"),
-                "by": _role(view, request.get("session_id")),
+                "by": _role(view, session, agent),
                 "new": view.after_setup(request.get("created_at")),
                 "addressed_to": [_role(view, request["addressee"])]
                 if request.get("addressee")
                 else [],
                 "options": [option.get("id") for option in options],
+                # As the owner reads it: each field with its options, their meaning,
+                # the recommendation and why.
+                "fields": fields,
                 "recommended": any(option.get("recommended") for option in options),
                 "every_required_field_recommended": all(
                     field.get("recommended") is not None
@@ -1035,6 +1149,9 @@ def _check_skill_loaded(view: View, check: Mapping[str, Any]) -> Outcome:
 
 def _check_subagents(view: View, check: Mapping[str, Any]) -> Outcome:
     found = view.transcript.subagents
+    if not found and view.record.session["client"] == "codex":
+        # Codex's output names no subagent it starts; the store's session rows do.
+        found = sorted(view.children)
     passed = _counted(found, check, {"min": 1})
     return Outcome(PASSED if passed else FAILED, f"{len(found)} launched")
 
@@ -1111,18 +1228,43 @@ def _handshake(record: Record, check: Mapping[str, Any]) -> bool:
     return check["contains"] in str(found.get("instructions") or "")
 
 
-def _first_call(record: Record, check: Mapping[str, Any]) -> bool:
+#: The tools that only read. The store records a call of the others, never of these.
+READ_TOOLS = frozenset(
+    tool["name"] for tool in planning_tools.TOOLS if tool["annotations"].get("readOnlyHint")
+)
+
+
+def _check_first_call(view: View, check: Mapping[str, Any]) -> Outcome:
+    """The session's first Valkama write as the store recorded it, and whose it is.
+
+    The store records writes only. A session whose Valkama calls all read, or that
+    made none, leaves nothing to confirm: the check holds and says so.
+    """
+
+    record = view.record
     with contextlib.closing(record.store()) as conn:
         found = conn.execute(
-            "SELECT identity_state, session_id FROM execution_events"
+            "SELECT tool, identity_state, session_id FROM execution_events"
             " WHERE id > ? AND tool IS NOT NULL ORDER BY id LIMIT 1",
             (record.session.get("setup_last_event", 0),),
         ).fetchone()
-    return (
-        found is not None
-        and found[0] == check["identity"]
-        and found[1] == record.session.get("session_id")
-    )
+    if found is None:
+        writes = [
+            call.tool
+            for call in view.transcript.calls
+            if call.valkama and call.tool not in READ_TOOLS
+        ]
+        if writes:
+            return Outcome(FAILED, f"the store recorded none of the session's writes: {writes}")
+        return Outcome(PASSED, "the session made no Valkama write: nothing to confirm")
+    tool, identity, session = found
+    passed = identity == check["identity"] and session == record.session.get("session_id")
+    shown = {
+        "tool": tool,
+        "identity": identity,
+        "own_session": session == record.session.get("session_id"),
+    }
+    return Outcome(PASSED if passed else FAILED, json.dumps(shown))
 
 
 def _flag(
@@ -1318,7 +1460,7 @@ CHECKS: dict[str, Callable[[View, Mapping[str, Any]], Outcome]] = {
     "spaces": _check_spaces,
     "writes": _check_writes,
     "session": _flag(_session),
-    "first_call": _flag(_first_call),
+    "first_call": _check_first_call,
     "call": _check_call,
     "no_call": _check_no_call,
     "order": _check_order,
@@ -1383,7 +1525,7 @@ def _review_shows(view: View, shows: Sequence[str]) -> list[str]:
                 for comment in _comments(view, reference)
             ]
             fields["questions"] = [
-                {key: request[key] for key in ("kind", "prompt", "options", "answer")}
+                {key: request[key] for key in ("kind", "prompt", "fields", "answer")}
                 for request in card(view, reference)["_requests"]
             ]
             body = json.dumps(fields, ensure_ascii=False, indent=1, default=str)
@@ -1523,12 +1665,36 @@ def judge_session(
     return found
 
 
+def _check_cases_unchanged(run: Mapping[str, Any]) -> None:
+    """Refuse to judge a run on scenario files that changed after it ran.
+
+    `run.json` names the cases by path and records each file's digest; the path
+    names a directory its owner goes on editing. A file whose digest differs, or
+    that is gone, would judge the record against expectations the run never had.
+    A run recorded before the digests were kept is judged as before.
+    """
+
+    recorded = (run.get("text") or {}).get("cases")
+    if not recorded:
+        return
+    cases = Path(run["cases"])
+    changed = sorted(
+        name for name, digest in recorded.items() if probes._sha256(cases / name) != digest
+    )
+    if changed:
+        raise probes.ProbeError(
+            f"the scenarios in {cases} changed after the run: {', '.join(changed)};"
+            " judge a copy of the run whose run.json names the cases it ran with"
+        )
+
+
 def judge(out: Path) -> int:
     """Judge every session `run.json` names; 0 when every probe passed."""
 
     run = probes._read_json(out / "run.json")
     if not run:
         raise probes.ProbeError(f"{out} holds no run.json of a probe run")
+    _check_cases_unchanged(run)
     scenarios = {item.id: item for item in probes.load_cases(Path(run["cases"]), None)}
     sessions = []
     started = time.monotonic()
@@ -1554,10 +1720,16 @@ def judge(out: Path) -> int:
         probes.remove_tree(out / WORK)
     verdicts = [probe["verdict"] for item in sessions for probe in item["probes"]]
     totals = {verdict: verdicts.count(verdict) for verdict in dict.fromkeys(verdicts)}
+    # A run writes its record as it goes; one written before `finished` came in
+    # wrote it only at its end.
+    finished = run.get("finished", True)
+    if not finished:
+        probes._say(f"the run was cut short: {len(sessions)} session(s) recorded")
     probes._write_json(
         out / REPORT,
         {
             "head": run.get("head"),
+            "finished": finished,
             "cases": run.get("cases"),
             "versions": run.get("versions"),
             "seconds": round(time.monotonic() - started, 1),
@@ -1568,7 +1740,7 @@ def judge(out: Path) -> int:
     probes._say(
         f"{len(verdicts)} probe(s): {json.dumps(totals, ensure_ascii=False)}; {out / REPORT}"
     )
-    return 0 if verdicts and all(verdict == PASSED for verdict in verdicts) else 1
+    return 0 if finished and verdicts and all(verdict == PASSED for verdict in verdicts) else 1
 
 
 # --- the scenario format ----------------------------------------------------------------

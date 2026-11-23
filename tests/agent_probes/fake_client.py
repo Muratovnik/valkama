@@ -8,12 +8,16 @@ as it would a real one. The prompt is a JSON object:
 
     {"skill": true, "calls": [{"tool": "claim_work_item", "args": {...}}],
      "files": {"app/NOTES.md": "text"}, "subagent": {"calls": [...], "report": "..."},
-     "answer": "..."}
+     "subagents": [{"calls": [...], "report": "...", "background": true}],
+     "wait_for_question": {"id": "MAIN-1", "seconds": 60}, "answer": "..."}
 
 Every key is optional. `skill` loads the Valkama skill first, as each client
 does: Claude Code by its Skill tool, Codex by reading the skill's file in a
 shell. `files` are written as each client's edit, `subagent` runs its calls as
-one subagent and returns its report. A prompt that is not JSON is answered as it
+one subagent and returns its report, and `subagents` runs several. One with
+`background` runs as Claude Code's backgrounded agent does: its launch answers
+with where it runs, and its report comes in the notification of its end; Codex
+has no such mode and runs it as any other. A prompt that is not JSON is answered as it
 stands, with no call. The output has the shapes the real clients write: the
 `stream-json` lines of Claude Code and the `--json` items of Codex, with each
 turn's tokens.
@@ -37,6 +41,7 @@ import re
 import shlex
 import subprocess
 import sys
+import time
 import tomllib
 import uuid
 from pathlib import Path
@@ -68,7 +73,7 @@ def parse(argv: list[str]) -> tuple[str, str, str | None]:
     index = 0
     while index < len(words):
         word = words[index]
-        index += 2 if word in ("-C", "-s", "-c") else 1
+        index += 2 if word in ("-C", "-s", "-c", "-m") else 1
         if not word.startswith("-"):
             positional.append(word)
     if positional[0] == "resume":
@@ -187,15 +192,24 @@ def main(argv: list[str]) -> int:
     if script.get("skill") and mcp is not None:
         load_skill(client)
     turn = Turn(client, hooks, common, mcp)
+    wait = script.get("wait_for_question")
+    if wait and mcp is not None:
+        answer = f"{answer} ({'asked' if turn.wait_for_question(wait) else 'not asked'})"
     for call in script.get("calls") or () if mcp is not None else ():
         turn.call(call)
     for name, text in (script.get("files") or {}).items():
         turn.write(Path.cwd() / name, text)
-    if script.get("subagent") and mcp is not None:
-        turn.subagent(script["subagent"])
+    works = list(script.get("subagents") or ())
+    if script.get("subagent"):
+        works.insert(0, script["subagent"])
+    for work in works if mcp is not None else ():
+        turn.subagent(work)
     if mcp is not None:
         mcp.close()
     run_hooks(client, hooks, "Stop", common, None)
+    # Claude Code under -p ends its session with each turn, as the real client does.
+    if client == "claude":
+        run_hooks(client, hooks, "SessionEnd", {**common, "reason": "other"}, None)
     if client == "claude":
         emit(
             {
@@ -256,6 +270,17 @@ class Turn:
     ) -> None:
         self.client, self.hooks, self.common, self.mcp = client, hooks, common, mcp
         self.session = str(common["session_id"])
+
+    def wait_for_question(self, wait: dict[str, Any]) -> bool:
+        """Read an item until it holds an open question, as a session still at work would."""
+
+        deadline = time.monotonic() + float(wait.get("seconds", 60))
+        while time.monotonic() < deadline:
+            result, error = self.mcp.call("get_work_item", {"id": wait["id"]}, {})
+            if not error and ((result or {}).get("questions") or {}).get("open"):
+                return True
+            time.sleep(0.2)
+        return False
 
     def call(
         self, call: dict[str, Any], *, parent: str | None = None, thread: str | None = None
@@ -327,8 +352,21 @@ class Turn:
                 "input": {"description": "a part of the work", "prompt": "Do the part."},
             }
             emit({"type": "assistant", "message": {"content": [use]}, "parent_tool_use_id": None})
+            background = bool(work.get("background"))
+            if background:
+                started = {"type": "system", "subtype": "task_started", "tool_use_id": launch}
+                emit({**started, "is_backgrounded": True})
+                launched = (
+                    "Async agent launched successfully.\nThe agent is working in the background."
+                )
+                done = {"type": "tool_result", "tool_use_id": launch, "content": launched}
+                emit({"type": "user", "message": {"content": [done]}, "parent_tool_use_id": None})
             for call in work.get("calls") or ():
                 self.call(call, parent=launch)
+            if background:
+                end = {"type": "system", "subtype": "task_notification", "tool_use_id": launch}
+                emit({**end, "status": "completed", "handback_report": {"text": report}})
+                return
             done = {"type": "tool_result", "tool_use_id": launch, "content": report}
             emit({"type": "user", "message": {"content": [done]}, "parent_tool_use_id": None})
             return

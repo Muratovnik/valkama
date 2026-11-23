@@ -571,7 +571,9 @@ TOOLS = [
             "acceptance": _ACCEPTANCE,
             "split_from": {
                 **WORK_ITEM_REFERENCE,
-                "description": "An open task to split a part off: the new item stands beside"
+                "description": "An open task to split a part off. A part of the task at hand"
+                " that another project, another holder or a later time takes is split off"
+                " it, not filed apart: the new item stands beside"
                 " it under the same parent, accepted as it is, and takes the steps named in"
                 " steps with their ids and ticks. Refused for a task in review and with a"
                 " parent, state or acceptance of its own. The answer names split_from and"
@@ -1101,7 +1103,10 @@ TOOLS = [
                 "description": "Set the steps, after the claim and before the ticks:"
                 ' the list alone, ["first condition", {"text": "…", "done": true}], or'
                 ' {"items": [...], "force": true} when force must carry a refusal'
-                " through. A step sent with the text of one the item has keeps that"
+                " through. The list replaces the item's: an open step left out is taken"
+                " off, and entering review or completing names it in conditions_changed;"
+                " read the item first to keep its steps. A step sent with the text of"
+                " one the item has keeps that"
                 " step's item_id, claim, tick and by_previous_holder, so appending is"
                 " sending the old steps"
                 " and then the new ones; a new step gets a new item_id, which"

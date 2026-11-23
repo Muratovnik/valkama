@@ -2,8 +2,15 @@
 
     python tests/agent_probes.py run --cases DIR --sections FILE --claude-md FILE
         --claude-coordinator DIR --codex-agents FILE --client claude|codex|both
-        --client-home DIR --out DIR [--store-copy [SOURCE]] [--only ID ...]
+        --claude-model MODEL --claude-effort EFFORT --codex-model MODEL --codex-effort EFFORT
+        --client-home DIR --out DIR [--store-copy [SOURCE]] [--only ID ...] [--jobs N]
     python tests/agent_probes.py judge --out DIR
+
+Every client the run starts takes the model and reasoning effort its two flags
+name, on every turn, in every job; the flags of a client the run does not start
+may be left out. A run that misses one is refused before it builds anything:
+the profile's own pair is never a default, since nobody chose it for the run.
+`run.json` keeps the pair each client ran with under `models`.
 
 A development tool like `tests/isolated.py`, and not part of the product. A probe
 asks whether an agent, given the user's instructions with some sections
@@ -38,14 +45,41 @@ the clients' logins (`.claude/.credentials.json`, `.codex/auth.json`):
   its `$CODEX_HOME/skills` and has each of the user's turned off by path;
 - per scenario: the sample workspace with its overlay and repositories, its
   projects in the profile's registry, and a store copy migrated by this
-  checkout, served by `tests/isolated.py serve --store-copy`.
+  checkout, served by `tests/isolated.py serve --store-copy`. The workspace is
+  a boundary: Git stops at it, Codex takes it for its project's root, and
+  Claude Code passes over the instruction files of every directory above it,
+  which it would read as a project's: those of the repository the output
+  directory lies in, and the user's own `~/.claude/CLAUDE.md` when the output
+  is under the user's home.
 
 A run holds the home's lock, `<client-home>.lock` beside it, from clearing the
 home to its last session: a second run on the same home waits for the first
 and says whose run it waits for, rather than clearing the home under it.
 
+`--jobs N` runs up to N sessions at once. One job builds its profile in
+`--client-home` itself, as above. More build one profile each in
+`<client-home>/jobs/<k>`, so each session has its own client directories,
+project registry, probe server, store copy and port; the store the copies are
+taken from is migrated once, in `<client-home>/.probes`. The logins stay in
+`--client-home`, given to a job's home before each session and taken back when
+the session refreshed one (`Logins`), and while Claude's login is near its
+expiry its sessions run one at a time (`Schedule`), so that two copies of one
+login are never refreshed at once. The record of a session is where it is with
+one job; `run.json` lists the sessions in the order they ended.
+
 The user's files, hook registrations and store are only read, and the store
-only through a connection that cannot write. Each session's record goes to
+only through a connection that cannot write. The run holds itself to that:
+`LiveFiles` digests the user's instruction files, client settings, hook
+registrations, Git configuration, project registry and installed skill when the
+run starts, once the profile is built and after each session, `run.json` keeps
+the first and last digests, and a change is an isolation failure, a session's
+own when it happened during one. `run.json` is written before the first session
+and again after each, with the checkout's head and uncommitted changes and the
+digests of the sections and scenario files, so a run cut short is still judged
+on what it finished and says what text it ran on; `finished` says whether it
+reached its end. The clients run without the variables a client
+session hands its children (`CALLER_SESSION`), so a run started in an agent's
+shell does not run them as that agent's children. Each session's record goes to
 `--out/<scenario>/<client>/`: the client's output of every turn, the handshake,
 the setup's bindings, a copy of the store, its spool and the profile's project
 registry after the session, and the failures of the environment, which say why
@@ -58,6 +92,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import dataclasses
+import hashlib
 import json
 import os
 import re
@@ -70,6 +105,7 @@ import sys
 import threading
 import time
 import tomllib
+import traceback
 import uuid
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path
@@ -111,7 +147,7 @@ RUBRIC_KEYS = ("shows", "lines")
 #: What a reviewer's file may show: an item by a bound name, the answer, the reports.
 RUBRIC_SHOWS = re.compile(r"answer|subagent_reports|item:\{\{[^{}]+\}\}")
 CALL_KEYS = ("tool", "author", "session", "as", "args")
-TURN_KEYS = ("before", "prompt")
+TURN_KEYS = ("before", "during", "prompt")
 #: The sessions a setup call may run as: the runner's own, and a foreign one
 #: that stays alive for the whole session.
 SETUP_SESSIONS = ("setup", "other")
@@ -151,7 +187,18 @@ CHECK_KINDS = frozenset(
 )
 
 #: What survives the clearing of the home between runs: the clients' logins.
-KEPT_LOGINS = (Path(".claude") / ".credentials.json", Path(".codex") / "auth.json")
+CLAUDE_LOGIN = Path(".claude") / ".credentials.json"
+KEPT_LOGINS = (CLAUDE_LOGIN, Path(".codex") / "auth.json")
+#: Where a run of several jobs builds the home of each, under `--client-home`.
+JOBS_DIR = "jobs"
+#: How long before its expiry a Claude login is taken as one a session may refresh.
+#: Claude Code refreshes it a few minutes before it expires; a session lasts minutes.
+REFRESH_MARGIN_SECONDS = 45 * 60.0
+#: The variables a client session gives every process it starts: its session, effort,
+#: entry point, plugin directories, subagent depth and MCP timeouts. A run started in
+#: an agent's shell would hand them on, and its clients would run as children of that
+#: session rather than as fresh sessions of their own.
+CALLER_SESSION = re.compile(r"CLAUDE|CODEX_|MCP_TIMEOUT$|MCP_CONNECTION_NONBLOCKING$", re.I)
 #: Directories of the home the run builds in, under the names the clients read.
 CLAUDE_DIR = ".claude"
 CODEX_DIR = ".codex"
@@ -159,6 +206,8 @@ CODEX_DIR = ".codex"
 WORK_DIR = ".probes"
 #: Where a session's record keeps the profile's project registry as the session left it.
 REGISTRY_COPY = "registry"
+#: Where a session's record keeps the transcripts of its subagents, one file each.
+SUBAGENT_TRANSCRIPTS = "subagents"
 
 #: The hooks the commit pickup needs beyond what the user registered: event,
 #: matcher and the `valkama hook` event, per client.
@@ -185,6 +234,8 @@ HANDSHAKE_PROTOCOL = "2025-06-18"
 
 #: How long one turn of a client may take, one MCP answer, and any other command.
 TURN_SECONDS = 1800.0
+#: How long a turn's `during` steps wait for its session to start again.
+DURING_SECONDS = 120.0
 ANSWER_SECONDS = 60.0
 COMMAND_SECONDS = 300.0
 _NO_WINDOW = processes.NO_WINDOW
@@ -310,6 +361,8 @@ def load_scenario(path: Path) -> Scenario:
         if not isinstance(found.get("prompt"), str):
             raise _refuse(path, f"turns[{index}] has no prompt")
         _check_calls(path, f"turns[{index}].before", found.get("before", []))
+        if _check_calls(path, f"turns[{index}].during", found.get("during", [])) and index == 0:
+            raise _refuse(path, "turns[0] has during steps: no session runs yet to act beside")
     expect = data["expect"]
     if not isinstance(expect, Mapping):
         raise _refuse(path, "expect is not an object of probes")
@@ -570,10 +623,16 @@ def codex_config(
     """The user's Codex configuration with `registration` as its only MCP server.
 
     Each of `hidden_skills`, a `SKILL.md` of the user's that Codex would read
-    whatever the profile's home, is turned off by its path.
+    whatever the profile's home, is turned off by its path. Codex reads the
+    `AGENTS.md` files from its project's root down to its working directory, and
+    takes for that root the nearest directory above with a `.git`: from a
+    workspace in a run's output directory, the repository that directory lies in,
+    whose instructions the probe would then follow. With no markers the root is
+    the workspace itself.
     """
 
     lines = [
+        "project_root_markers = []",
         without_mcp_servers(live).rstrip("\n"),
         "",
         "[mcp_servers.valkama]",
@@ -599,6 +658,35 @@ def codex_config(
     if not {str(path) for path in hidden_skills} <= off:
         raise ProbeError("the Codex configuration turns the user's skills back on")
     return text
+
+
+#: The instruction files Claude Code reads in a directory above its working one.
+ANCESTOR_INSTRUCTIONS = (
+    "CLAUDE.md",
+    "CLAUDE.local.md",
+    "AGENTS.md",
+    ".claude/CLAUDE.md",
+    ".claude/AGENTS.md",
+    ".claude/rules/**",
+)
+
+
+def ancestor_instructions(workspace: Path, own: Path) -> list[str]:
+    """The instruction files above `workspace`, as Claude Code's `claudeMdExcludes` patterns.
+
+    Claude Code reads the instruction files of every directory above its working
+    one, and a run's workspaces lie in its output directory, inside whatever
+    project holds that: a probe would follow that project's instructions as its
+    own. The files under `own`, the profile's client directory, stay.
+    """
+
+    own = own.resolve()
+    return [
+        (directory / name).as_posix()
+        for directory in workspace.resolve().parents
+        for name in ANCESTOR_INSTRUCTIONS
+        if own != directory / name and own not in (directory / name).parents
+    ]
 
 
 # --- the profile -------------------------------------------------------------------
@@ -915,7 +1003,11 @@ def build_profile(home: Path, inputs: Inputs) -> Profile:
             f"no instruction file has a section headed {', '.join(unplaced)}: nothing would test it"
         )
 
-    environment = isolated.isolated_environment(home)
+    environment = {
+        name: value
+        for name, value in isolated.isolated_environment(home).items()
+        if not CALLER_SESSION.match(name)
+    }
     environment.pop("VALKAMA_DB", None)
     launcher = local / "Valkama" / "bin"
     environment.update(
@@ -969,8 +1061,14 @@ def build_profile(home: Path, inputs: Inputs) -> Profile:
     )
 
 
-def mcp_registration(profile: Profile, mode: str, store_file: Path, client: str) -> dict[str, Any]:
-    """The MCP server a session's clients start: this checkout's, or one that fails."""
+def mcp_registration(
+    profile: Profile, mode: str, store_file: Path, client: str, *, port: int
+) -> dict[str, Any]:
+    """The MCP server a session's clients start: this checkout's, or one that fails.
+
+    `port` is the probe server's: the links an answer carries name it, and without
+    it they would name the user's own listener.
+    """
 
     if mode == "failing":
         return {"command": profile.python, "args": ["-c", "import sys; sys.exit(3)"], "env": {}}
@@ -987,6 +1085,7 @@ def mcp_registration(profile: Profile, mode: str, store_file: Path, client: str)
         {
             "VALKAMA_DB": str(store_file),
             "VALKAMA_AUTHOR": client,
+            "VALKAMA_PORT": str(port),
             "PYTHONUTF8": "1",
             "PYTHONIOENCODING": "utf-8",
         }
@@ -995,7 +1094,7 @@ def mcp_registration(profile: Profile, mode: str, store_file: Path, client: str)
 
 
 def write_client_configs(
-    profile: Profile, *, port: int, mode: str, store_file: Path
+    profile: Profile, *, port: int, mode: str, store_file: Path, workspace: Path
 ) -> dict[str, dict[str, int]]:
     """Each client's hooks and MCP registration for one session; what was left out, by client."""
 
@@ -1007,10 +1106,13 @@ def write_client_configs(
         coordinator=profile.coordinator,
         port=port,
     )
+    excluded = list(profile.claude_settings.get("claudeMdExcludes") or [])
+    excluded += ancestor_instructions(workspace, profile.claude_dir)
     _write_json(
-        profile.claude_dir / "settings.json", {**profile.claude_settings, "hooks": claude.hooks}
+        profile.claude_dir / "settings.json",
+        {**profile.claude_settings, "claudeMdExcludes": excluded, "hooks": claude.hooks},
     )
-    registration = mcp_registration(profile, mode, store_file, "claude")
+    registration = mcp_registration(profile, mode, store_file, "claude", port=port)
     _write_json(
         profile.claude_dir / ".claude.json",
         {"mcpServers": {"valkama": {"type": "stdio", **registration}}},
@@ -1021,7 +1123,7 @@ def write_client_configs(
     _write_json(profile.codex_dir / "hooks.json", {"hooks": codex.hooks})
     config = codex_config(
         profile.codex_config,
-        mcp_registration(profile, mode, store_file, "codex"),
+        mcp_registration(profile, mode, store_file, "codex", port=port),
         profile.codex_hidden_skills,
     )
     (profile.codex_dir / "config.toml").write_text(config, encoding="utf-8", newline="\n")
@@ -1224,8 +1326,58 @@ def substitute(value: Any, names: Mapping[str, str]) -> Any:
     return value
 
 
+@dataclasses.dataclass(frozen=True)
+class ModelChoice:
+    """The model and reasoning effort a client is asked to run.
+
+    Both are named for every client a run starts: a run on the profile's own
+    pair is one nobody chose for it.
+    """
+
+    model: str
+    effort: str
+
+    def flags(self, client: str) -> list[str]:
+        """The client's own flags for this choice: Claude Code's `--model` and `--effort`,
+        Codex's `-m` and its `model_reasoning_effort` setting."""
+
+        if client == "claude":
+            return ["--model", self.model, "--effort", self.effort]
+        return ["-m", self.model, "-c", f'model_reasoning_effort="{self.effort}"']
+
+    def record(self) -> dict[str, str]:
+        return {"model": self.model, "effort": self.effort}
+
+
+def model_choices(options: argparse.Namespace, chosen: Sequence[str]) -> dict[str, ModelChoice]:
+    """The model and effort of each chosen client, refused while any of them is not named."""
+
+    missing = [
+        f"--{client}-{part}"
+        for client in chosen
+        for part in ("model", "effort")
+        if not getattr(options, f"{client}_{part}", None)
+    ]
+    if missing:
+        raise ProbeError(
+            "every client a run starts needs its model and reasoning effort named;"
+            f" missing {', '.join(missing)}. A run does not fall back to the profile's own pair."
+        )
+    return {
+        client: ModelChoice(
+            getattr(options, f"{client}_model"), getattr(options, f"{client}_effort")
+        )
+        for client in chosen
+    }
+
+
 def client_argv(
-    client: str, program: Sequence[str], prompt: str, workspace: Path, session: str | None
+    client: str,
+    program: Sequence[str],
+    prompt: str,
+    workspace: Path,
+    session: str | None,
+    choice: ModelChoice,
 ) -> list[str]:
     """The command line of one turn; `session` continues the session of the first."""
 
@@ -1242,6 +1394,7 @@ def client_argv(
             "stream-json",
             "--verbose",
             "--include-hook-events",
+            *choice.flags(client),
         ]
         return argv + (["--resume", session] if session else [])
     argv = [
@@ -1261,6 +1414,7 @@ def client_argv(
         "-c",
         'windows.sandbox="mxc"',
         "--dangerously-bypass-hook-trust",
+        *choice.flags(client),
     ]
     return argv + (["resume", session, prompt] if session else [prompt])
 
@@ -1350,7 +1504,9 @@ RECORDED_VARIABLES = (
     "CLAUDE_CONFIG_DIR",
     "CODEX_HOME",
     "GIT_CONFIG_GLOBAL",
+    "GIT_CEILING_DIRECTORIES",
     "VALKAMA_DB",
+    "VALKAMA_PORT",
     "PATH",
 )
 
@@ -1387,11 +1543,34 @@ def _meta(session: str) -> dict[str, str]:
     return {"sessionId": session, "threadId": session, "callId": str(uuid.uuid4())}
 
 
+def _cancel_list_token(answer: object) -> str | None:
+    """The token of a `cancel_list` refusal: what a cancel of open work is confirmed by."""
+
+    refusal = answer.get("error") if isinstance(answer, Mapping) else None
+    if not isinstance(refusal, Mapping) or refusal.get("code") != "cancel_list":
+        return None
+    token = refusal.get("list_token")
+    return token if isinstance(token, str) else None
+
+
 def _last_event(store_file: Path) -> int:
     uri = f"{store_file.resolve().as_uri()}?mode=ro"
     with contextlib.closing(sqlite3.connect(uri, uri=True)) as conn:
         found = conn.execute("SELECT COALESCE(MAX(id), 0) FROM execution_events").fetchone()
     return int(found[0])
+
+
+def _session_started(store_file: Path, after: int, session: str | None) -> int | None:
+    """The first session start of `session` the store holds after event `after`, if any."""
+
+    uri = f"{store_file.resolve().as_uri()}?mode=ro"
+    with contextlib.closing(sqlite3.connect(uri, uri=True)) as conn:
+        found = conn.execute(
+            "SELECT MIN(id) FROM execution_events"
+            " WHERE id > ? AND kind = 'session_start' AND session_id = ?",
+            (after, session),
+        ).fetchone()
+    return None if found[0] is None else int(found[0])
 
 
 def foreign_transcripts(store_file: Path, after: int, home: Path) -> list[str]:
@@ -1419,6 +1598,38 @@ def foreign_transcripts(store_file: Path, after: int, home: Path) -> list[str]:
     )
 
 
+def keep_subagent_transcripts(store_file: Path, main: str, home: Path, into: Path) -> list[str]:
+    """Copy the transcripts of a session's subagents into `into`, one file per subagent.
+
+    Codex's output names no subagent it starts and carries none of its messages:
+    only the store's session rows name each child, and its transcript in the
+    profile's home holds its report. The home is cleared by the next run, so the
+    copy is the record. A file outside the home is never read: it is the user's.
+    Answers the names of the copies.
+    """
+
+    uri = f"{store_file.resolve().as_uri()}?mode=ro"
+    own = os.path.normcase(os.path.abspath(home)) + os.sep
+    with contextlib.closing(sqlite3.connect(uri, uri=True)) as conn:
+        rows = conn.execute(
+            "SELECT id, agent_id, transcript_path FROM sessions"
+            " WHERE parent_session_id = ? ORDER BY started_at, id",
+            (main,),
+        ).fetchall()
+    kept = []
+    for identifier, agent, path in rows:
+        source = Path(path or "")
+        if not path or not os.path.normcase(os.path.abspath(source)).startswith(own):
+            continue
+        if not source.is_file():
+            continue
+        name = re.sub(r"[^\w.-]", "_", str(agent or identifier)) + ".jsonl"
+        into.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, into / name)
+        kept.append(name)
+    return kept
+
+
 class SessionRunner:
     """One scenario on one client, from its server's start to the copy of its store."""
 
@@ -1430,9 +1641,11 @@ class SessionRunner:
         program: Sequence[str],
         directory: Path,
         base_store: Path,
+        choice: ModelChoice,
     ) -> None:
         self.profile, self.scenario, self.client = profile, scenario, client
         self.program = list(program)
+        self.choice = choice
         self.directory = directory
         self.base_store = base_store
         self.workspace = directory / "workspace"
@@ -1441,6 +1654,7 @@ class SessionRunner:
         self.names: dict[str, str] = {}
         self.environment: dict[str, str] = {}
         self.store_file = Path()
+        self.port = 0
         self.copied_last_event = 0
 
     def run(self) -> Session:
@@ -1481,8 +1695,16 @@ class SessionRunner:
         state = json.loads((self.serve_out / isolated.STATE).read_text(encoding="utf-8"))
         port = int(state["port"])
         self.store_file = isolated.store_path(self.serve_out / isolated.HOME)
-        self.environment = {**self.profile.environment, "VALKAMA_DB": str(self.store_file)}
-        self.record.port = port
+        self.environment = {
+            **self.profile.environment,
+            "VALKAMA_DB": str(self.store_file),
+            # Git in the workspace stops at it: above lies the repository the run's
+            # output directory may be in, which is not the probe's to read or commit to.
+            "GIT_CEILING_DIRECTORIES": str(self.directory),
+            # What the clients and their commands open or call is the probe server.
+            "VALKAMA_PORT": str(port),
+        }
+        self.port = self.record.port = port
         self.record.environment = {
             name: self.environment[name] for name in RECORDED_VARIABLES if name in self.environment
         }
@@ -1497,7 +1719,11 @@ class SessionRunner:
             }
         )
         self.record.dropped_hooks = write_client_configs(
-            self.profile, port=port, mode=self.scenario.mcp, store_file=self.store_file
+            self.profile,
+            port=port,
+            mode=self.scenario.mcp,
+            store_file=self.store_file,
+            workspace=self.workspace,
         )
         return True
 
@@ -1515,7 +1741,9 @@ class SessionRunner:
                 self._calls(turn.get("before") or ())
                 if self.record.failures:
                     return
-            if not self._turn(index, substitute(turn["prompt"], self.names)):
+            if not self._turn(
+                index, substitute(turn["prompt"], self.names), turn.get("during") or ()
+            ):
                 return
 
     def _role(self, name: str) -> str:
@@ -1542,7 +1770,9 @@ class SessionRunner:
         return self.record.roles[name]
 
     def _mcp(self) -> McpClient:
-        registration = mcp_registration(self.profile, "tip", self.store_file, "codex")
+        registration = mcp_registration(
+            self.profile, "tip", self.store_file, "codex", port=self.port
+        )
         client = McpClient(
             registration["command"],
             registration["args"],
@@ -1604,6 +1834,14 @@ class SessionRunner:
                 arguments["author"] = call["author"]
             meta = _meta(self._role(str(call.get("session", "setup"))))
             answer, error = client.call(str(call["tool"]), arguments, meta)
+            token = _cancel_list_token(answer) if error else None
+            if token is not None and isinstance(arguments.get("transition"), Mapping):
+                # A cancel that ends open work under the item names that work and waits
+                # for the same transition back with its token: the session the step
+                # stands for meant the cancel, so it confirms the list.
+                transition = {**arguments["transition"], "cancels": token}
+                arguments = {**arguments, "transition": transition}
+                answer, error = client.call(str(call["tool"]), arguments, meta)
             if error:
                 raise ProbeError(f"{call['tool']} was refused: {answer}")
             name = call.get("as")
@@ -1618,7 +1856,7 @@ class SessionRunner:
         """What the registered MCP command says to `initialize`, asked before the session."""
 
         registration = mcp_registration(
-            self.profile, self.scenario.mcp, self.store_file, self.client
+            self.profile, self.scenario.mcp, self.store_file, self.client, port=self.port
         )
         result: dict[str, Any]
         try:
@@ -1633,9 +1871,10 @@ class SessionRunner:
             result = {"error": str(error)}
         _write_json(self.directory / "handshake.json", result)
 
-    def _turn(self, index: int, prompt: str) -> bool:
+    def _turn(self, index: int, prompt: str, during: Sequence[Mapping[str, Any]] = ()) -> bool:
+        mark = _last_event(self.store_file) if during else 0
         argv = client_argv(
-            self.client, self.program, prompt, self.workspace, self.record.session_id
+            self.client, self.program, prompt, self.workspace, self.record.session_id, self.choice
         )
         output = self.directory / f"turn-{index}.jsonl"
         errors = self.directory / f"turn-{index}.stderr.txt"
@@ -1662,6 +1901,9 @@ class SessionRunner:
             except OSError as error:
                 self.record.fail(f"turn {index}", f"{argv[0]} did not start: {error}")
                 return False
+            if during and not self._during(index, process, mark, during, turn):
+                processes.stop_process_tree(process)
+                return False
             try:
                 code = process.wait(timeout=TURN_SECONDS)
             except subprocess.TimeoutExpired:
@@ -1680,6 +1922,37 @@ class SessionRunner:
         if self.record.session_id is None:
             self.record.session_id = session_id(self.client, output)
         return True
+
+    def _during(
+        self,
+        index: int,
+        process: subprocess.Popen[bytes],
+        mark: int,
+        calls: Sequence[Mapping[str, Any]],
+        turn: dict[str, Any],
+    ) -> bool:
+        """Make a turn's `during` steps once its session has started again, while it runs.
+
+        A headless client ends its session with each turn and starts it again with
+        the next, and the server asks nothing of an ended session: a step made
+        between turns, such as cancelling work the session takes part in, finds
+        nobody to ask. The steps wait for the turn's session start in the store.
+        """
+
+        deadline = time.monotonic() + DURING_SECONDS
+        while time.monotonic() < deadline:
+            started = _session_started(self.store_file, mark, self.record.session_id)
+            if started is not None:
+                turn["during_after_event"] = started
+                self._calls(calls)
+                return not self.record.failures
+            if process.poll() is not None:
+                break
+            time.sleep(0.2)
+        self.record.fail(
+            f"turn {index}", "the session did not start again before its during steps could run"
+        )
+        return False
 
     def _check_transcripts(self) -> None:
         """The session is the environment's failure when a server read a user's transcript."""
@@ -1700,10 +1973,12 @@ class SessionRunner:
             )
 
     def _keep_store(self) -> None:
-        """The session's store, spool and project registry, kept beside its record.
+        """The session's store, spool, project registry and subagents' transcripts, kept beside its record.
 
         The registry is kept because the next scenario empties it, and a check
-        reads the projects this session registered.
+        reads the projects this session registered; the transcripts because the
+        next run empties the home, and the judge reads a Codex subagent's report
+        from its own.
         """
 
         if not self.store_file.is_file():
@@ -1722,9 +1997,115 @@ class SessionRunner:
         for path in self.profile.registry.glob("*"):
             if path.is_file():
                 shutil.copy2(path, kept / path.name)
+        if self.record.session_id is not None:
+            try:
+                keep_subagent_transcripts(
+                    self.directory / "store.sqlite3",
+                    self.record.session_id,
+                    self.profile.home,
+                    self.directory / SUBAGENT_TRANSCRIPTS,
+                )
+            except (OSError, sqlite3.Error) as error:
+                self.record.fail("record", f"the subagents' transcripts were not kept: {error}")
+
+
+# --- the user's files -------------------------------------------------------------------
+
+
+def _sha256(path: Path) -> str | None:
+    return hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None
+
+
+class LiveFiles:
+    """The user's files a run reads and must leave as they were, digested as the run goes.
+
+    The instruction files, each client's settings and hook registration, the global
+    Git configuration with its hooks, the project registry, the coordinator files and
+    the installed Valkama skill. Their digests are taken when the run starts, again
+    once the profile and the store are ready, and after each session, and a change is
+    the isolation failure of the stage it happened in. `~/.claude.json` is not among
+    them: the user's running Claude Code sessions rewrite it whatever a run does. Nor
+    is the store, which the user's own service writes: the run reads it only through a
+    connection that cannot write.
+    """
+
+    def __init__(self, files: Sequence[Path], trees: Sequence[Path]) -> None:
+        self.files = tuple(dict.fromkeys(path.resolve() for path in files))
+        self.trees = tuple(dict.fromkeys(path.resolve() for path in trees))
+        self.before = self.digest()
+        self.after = self.before
+        #: Each stage that changed a file: its name and the files' paths.
+        self.changes: list[dict[str, Any]] = []
+
+    @classmethod
+    def of(cls, inputs: Inputs, registry: Path | None, git_config: Path | None) -> LiveFiles:
+        claude, codex = inputs.claude_dir, inputs.codex_dir
+        files = [
+            claude / "settings.json",
+            inputs.claude_md,
+            claude / "CLAUDE.md",
+            codex / "config.toml",
+            codex / "hooks.json",
+            inputs.codex_agents,
+            codex / "AGENTS.md",
+        ]
+        if git_config is not None:
+            files.append(git_config)
+        if registry is not None:
+            files += [registry / "projects.json", registry / "project-registry.toml"]
+        skills = [base / "valkama" for base in (claude / "skills", inputs.agents_skills)]
+        return cls(files, [inputs.coordinator, *skills, codex / "skills" / "valkama"])
+
+    def digest(self) -> dict[str, str | None]:
+        """Each file by its path, with the SHA-256 of its bytes, or None where there is none."""
+
+        paths = list(self.files)
+        for tree in self.trees:
+            if tree.is_dir():
+                paths += sorted(path for path in tree.rglob("*") if path.is_file())
+        return {str(path): _sha256(path) for path in dict.fromkeys(paths)}
+
+    def check(self, stage: str) -> list[str]:
+        """The files that changed since the last check, recorded as `stage`'s change."""
+
+        now = self.digest()
+        changed = sorted(
+            path for path in {*self.after, *now} if self.after.get(path) != now.get(path)
+        )
+        self.after = now
+        if changed:
+            self.changes.append({"stage": stage, "changed": changed})
+        return changed
+
+    def record(self) -> dict[str, Any]:
+        return {"before": self.before, "after": self.after, "changes": self.changes}
 
 
 # --- the run ----------------------------------------------------------------------------
+
+
+def checkout_changes() -> list[str]:
+    """This checkout's uncommitted changes, as `git status --porcelain` lists them.
+
+    With the head they name the skill, tool descriptions and hooks the run gave
+    the clients: a change left in the tree is part of what a session read.
+    """
+
+    done = _run_command(["git", "-C", str(ROOT), "status", "--porcelain"], os.environ)
+    return [line for line in done[1].splitlines() if line.strip()]
+
+
+def text_digests(sections: Path, cases: Path) -> dict[str, Any]:
+    """The SHA-256 of the sections file and of each scenario file the run was given.
+
+    Their paths name files their owner goes on editing; the digests say which
+    text a run ran on after they changed.
+    """
+
+    return {
+        "sections": _sha256(sections),
+        "cases": {path.name: _sha256(path) for path in sorted(cases.glob("*.json"))},
+    }
 
 
 def _programs(chosen: Sequence[str], given: Sequence[str], path: str) -> dict[str, list[str]]:
@@ -1747,10 +2128,20 @@ def _programs(chosen: Sequence[str], given: Sequence[str], path: str) -> dict[st
     return programs
 
 
-def run(options: argparse.Namespace, source: Path | None, registry: Path | None = None) -> int:
-    """Every chosen scenario on every chosen client; 0 when no session met a failure."""
+def run(
+    options: argparse.Namespace,
+    source: Path | None,
+    registry: Path | None = None,
+    git_config: Path | None = None,
+) -> int:
+    """Every chosen scenario on every chosen client; 0 when no session met a failure.
+
+    `registry` and `git_config` are the user's project registry directory and global
+    Git file, found by `main` before the `tests` package moved where they are looked for.
+    """
 
     chosen = list(CLIENTS) if options.client == "both" else [options.client]
+    choices = model_choices(options, chosen)
     scenarios = load_cases(options.cases.resolve(), options.only)
     inputs = Inputs(
         sections=options.sections.resolve(),
@@ -1764,7 +2155,10 @@ def run(options: argparse.Namespace, source: Path | None, registry: Path | None 
     with machine_lock.held(
         f"a probe run into {out}", path=home_lock(home), say=_say, name="probe-home lock"
     ):
-        return _run_locked(options, chosen, scenarios, inputs, home, out, source, registry)
+        live = LiveFiles.of(inputs, registry, git_config)
+        return _run_locked(
+            options, chosen, choices, scenarios, inputs, home, out, source, registry, live
+        )
 
 
 def home_lock(home: Path) -> Path:
@@ -1779,55 +2173,260 @@ def home_lock(home: Path) -> Path:
     return home.with_name(f"{home.name}.lock")
 
 
+def job_homes(home: Path, jobs: int) -> list[Path]:
+    """The profile home of each job: `home` itself for one, a directory under it each for more."""
+
+    if jobs == 1:
+        return [home]
+    return [home / JOBS_DIR / str(number) for number in range(1, jobs + 1)]
+
+
+class Logins:
+    """The clients' logins in `--client-home`, lent to the homes of the jobs.
+
+    A client refreshes its login in the home it runs in, and after that only the
+    copy it wrote works. The home's own file is the one kept: a job's home is
+    given it before each session when it is newer than the job's copy, and the
+    job's copy goes back to the home when its session refreshed it, so the next
+    session of every job and the next run start from the refreshed login. With
+    one job the home is the job's, and nothing moves.
+    """
+
+    def __init__(self, home: Path) -> None:
+        self.home = home
+        self._lock = threading.Lock()
+
+    def give(self, job: Path) -> None:
+        self._copy_newer(self.home, job)
+
+    def take(self, job: Path) -> None:
+        self._copy_newer(job, self.home)
+
+    def _copy_newer(self, source: Path, target: Path) -> None:
+        if source == target:
+            return
+        with self._lock:
+            for path in KEPT_LOGINS:
+                given, kept = source / path, target / path
+                if not given.is_file():
+                    continue
+                if kept.is_file() and kept.stat().st_mtime_ns >= given.stat().st_mtime_ns:
+                    continue
+                kept.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(given, kept)
+
+    def claude_expiry(self) -> float | None:
+        """When the home's Claude login expires, in seconds since the epoch; None when it says not."""
+
+        with self._lock:
+            try:
+                login = json.loads((self.home / CLAUDE_LOGIN).read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                return None
+        oauth = login.get("claudeAiOauth") if isinstance(login, dict) else None
+        expires = oauth.get("expiresAt") if isinstance(oauth, dict) else None
+        if isinstance(expires, bool) or not isinstance(expires, (int, float)):
+            return None
+        return expires / 1000
+
+
+class Schedule:
+    """The sessions still to run, handed to the jobs in their order as each may start.
+
+    A Claude session does not start beside another Claude session while the login
+    it would start with expires within `REFRESH_MARGIN_SECONDS`: each would refresh
+    its own copy of the login with the same refresh token. It waits for the other
+    to end, and the sessions after it that may start go by it.
+    """
+
+    def __init__(
+        self,
+        sessions: Sequence[tuple[Scenario, str]],
+        expiry: Callable[[], float | None],
+        clock: Callable[[], float] = time.time,
+    ) -> None:
+        self._waiting = list(sessions)
+        self._running: list[tuple[str, str]] = []
+        self._condition = threading.Condition()
+        self._expiry, self._clock = expiry, clock
+
+    def take(self) -> tuple[Scenario, str] | None:
+        """The next session that may start, waiting while none may; None when none is left."""
+
+        with self._condition:
+            while self._waiting:
+                for index, (scenario, client) in enumerate(self._waiting):
+                    if self._may_start(client):
+                        del self._waiting[index]
+                        self._running.append((scenario.id, client))
+                        return scenario, client
+                self._condition.wait()
+            return None
+
+    def done(self, scenario: Scenario, client: str) -> None:
+        with self._condition:
+            self._running.remove((scenario.id, client))
+            self._condition.notify_all()
+
+    def running(self) -> list[tuple[str, str]]:
+        """The sessions started and not yet done, in the order they started."""
+
+        with self._condition:
+            return list(self._running)
+
+    def _may_start(self, client: str) -> bool:
+        if client != "claude" or all(other != "claude" for _, other in self._running):
+            return True
+        expiry = self._expiry()
+        return expiry is None or expiry - self._clock() > REFRESH_MARGIN_SECONDS
+
+
 def _run_locked(
     options: argparse.Namespace,
     chosen: Sequence[str],
+    choices: Mapping[str, ModelChoice],
     scenarios: Sequence[Scenario],
     inputs: Inputs,
     home: Path,
     out: Path,
     source: Path | None,
     registry: Path | None,
+    live: LiveFiles,
 ) -> int:
-    profile = build_profile(home, inputs)
-    programs = _programs(chosen, options.client_program or (), profile.environment["PATH"])
-    base, prepared = prepare_store(source, profile.work, registry)
+    jobs = int(options.jobs)
+    if jobs > 1:
+        # Each job's profile clears only its own home: what an earlier run left
+        # beside the jobs, their homes included, goes here.
+        clear_home(home)
+    profiles = [build_profile(job, inputs) for job in job_homes(home, jobs)]
+    logins = Logins(home)
+    for profile in profiles:
+        logins.give(profile.home)
+    first = profiles[0]
+    programs = _programs(chosen, options.client_program or (), first.environment["PATH"])
+    base, prepared = prepare_store(source, home / WORK_DIR, registry)
     versions = {
-        client: _run_command([*programs[client], "--version"], profile.environment)[1].strip()
+        client: _run_command([*programs[client], "--version"], first.environment)[1].strip()
         for client in chosen
     }
     head = _run_command(["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"], os.environ)
-    sessions = []
-    for scenario in scenarios:
-        for client in (item for item in chosen if item in scenario.clients):
-            _say(f"{scenario.id} {client}")
-            record = SessionRunner(
-                profile, scenario, client, programs[client], out / scenario.name / client, base
-            ).run()
-            for failure in record.failures:
-                _say(f"  environment failure at {failure['stage']}: {failure['detail']}")
-            sessions.append(
-                {
-                    "scenario": scenario.id,
-                    "client": client,
-                    "record": str(record.directory.relative_to(out)),
-                    "failures": len(record.failures),
-                }
-            )
-    _write_json(
-        out / "run.json",
-        {
-            "head": head[1].strip(),
-            "cases": str(options.cases.resolve()),
-            "sections": str(inputs.sections),
-            "store": prepared,
-            "versions": versions,
-            "sessions": sessions,
-        },
+    sessions: list[dict[str, Any]] = []
+    record: dict[str, Any] = {
+        "head": head[1].strip(),
+        "changed": checkout_changes(),
+        "cases": str(options.cases.resolve()),
+        "sections": str(inputs.sections),
+        "text": text_digests(inputs.sections, options.cases.resolve()),
+        "store": prepared,
+        "versions": versions,
+        # What each client was asked to run; the judge's report names what each session ran.
+        "models": {client: choices[client].record() for client in chosen},
+        "sessions": sessions,
+        "finished": False,
+    }
+    if jobs > 1:
+        record["jobs"] = jobs
+    lock = threading.Lock()
+    #: The changes of the user's files found while a session ran, by session.
+    pending: dict[tuple[str, str], list[list[str]]] = {}
+
+    def write_record() -> None:
+        # Written before the first session and after each one, so that a run cut
+        # short still says what it ran on and which sessions it finished.
+        _write_json(out / "run.json", {**record, "live_files": live.record()})
+
+    # A profile that changed the user's files runs no session on them.
+    prepared_ok = not live.check("profile")
+    write_record()
+    schedule = Schedule(
+        [
+            (scenario, client)
+            for scenario in (scenarios if prepared_ok else ())
+            for client in chosen
+            if client in scenario.clients
+        ],
+        logins.claude_expiry,
     )
+
+    def finish(session: Session, key: tuple[str, str]) -> None:
+        # A change found now happened while any of the running sessions ran: each fails on it.
+        running = schedule.running()
+        name = " ".join(key)
+        beside = [" ".join(other) for other in running if other != key]
+        changed = live.check(f"{name} (beside {', '.join(beside)})" if beside else name)
+        if changed:
+            for other in running:
+                pending.setdefault(other, []).append(changed)
+        found = pending.pop(key, [])
+        for files in found:
+            session.fail("isolation", f"the user's files changed: {', '.join(files)}")
+        if found:
+            session.write()
+        prefix = "" if jobs == 1 else f"{name}: "
+        for failure in session.failures:
+            _say(f"  {prefix}environment failure at {failure['stage']}: {failure['detail']}")
+        sessions.append(
+            {
+                "scenario": key[0],
+                "client": key[1],
+                "record": str(session.directory.relative_to(out)),
+                "failures": len(session.failures),
+            }
+        )
+        write_record()
+
+    def work(number: int, profile: Profile) -> None:
+        while (taken := schedule.take()) is not None:
+            scenario, client = taken
+            try:
+                _say(f"{scenario.id} {client}" + ("" if jobs == 1 else f" in job {number}"))
+                logins.give(profile.home)
+                runner = SessionRunner(
+                    profile,
+                    scenario,
+                    client,
+                    programs[client],
+                    out / scenario.name / client,
+                    base,
+                    choices[client],
+                )
+                try:
+                    session = runner.run()
+                except Exception as error:  # noqa: BLE001 -- one session's fault ends only it
+                    session = runner.record
+                    session.fail("runner", "".join(traceback.format_exception_only(error)).strip())
+                    session.write()
+                logins.take(profile.home)
+                with lock:
+                    finish(session, (scenario.id, client))
+            finally:
+                schedule.done(scenario, client)
+
+    if jobs == 1:
+        work(1, first)
+    else:
+        threads = [
+            threading.Thread(target=work, args=(number, profile), name=f"probe-job-{number}")
+            for number, profile in enumerate(profiles, start=1)
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+    record["finished"] = True
+    write_record()
+    for change in live.changes:
+        _say(f"isolation failure: {change['stage']} changed {', '.join(change['changed'])}")
+    _say(f"the user's files: {len(live.after)} checked, {len(live.changes)} stage(s) changed them")
     failed = sum(1 for item in sessions if item["failures"])
     _say(f"{len(sessions)} session(s), {failed} with an environment failure; record in {out}")
-    return 1 if failed or not sessions else 0
+    return 1 if failed or live.changes or not sessions else 0
+
+
+def _jobs(value: str) -> int:
+    if not value.isdigit() or int(value) < 1:
+        raise argparse.ArgumentTypeError(f"--jobs takes a whole number of 1 or more, not {value!r}")
+    return int(value)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -1840,6 +2439,15 @@ def _parser() -> argparse.ArgumentParser:
     command.add_argument("--claude-coordinator", type=Path, required=True)
     command.add_argument("--codex-agents", type=Path, required=True)
     command.add_argument("--client", choices=(*CLIENTS, "both"), required=True)
+    for client in CLIENTS:
+        command.add_argument(
+            f"--{client}-model",
+            help=f"the model {client} runs; required when the run starts {client}",
+        )
+        command.add_argument(
+            f"--{client}-effort",
+            help=f"the reasoning effort {client} runs at; required when the run starts {client}",
+        )
     command.add_argument("--client-home", type=Path, required=True, help="the clients' home")
     command.add_argument("--out", type=Path, required=True, help="where the records go")
     command.add_argument(
@@ -1856,6 +2464,13 @@ def _parser() -> argparse.ArgumentParser:
         action="append",
         metavar="CLIENT=PATH",
         help="start CLIENT with PATH (a .py runs with this interpreter) instead of PATH's",
+    )
+    command.add_argument(
+        "--jobs",
+        type=_jobs,
+        default=1,
+        metavar="N",
+        help="run up to N sessions at once, each in a profile of its own (default 1)",
     )
     command = commands.add_parser("judge", help="judge the sessions a run recorded")
     command.add_argument("--out", type=Path, required=True, help="the directory of the run")
@@ -1877,7 +2492,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         # and moves `LOCALAPPDATA`, where the registry the copy migrates with is.
         source = None if copy is None else Path(copy or store.db_path())
         registry = Path(project_registry.registry_path()).parent
-        return run(options, source, registry)
+        git_config = Path(os.environ.get("GIT_CONFIG_GLOBAL") or Path.home() / ".gitconfig")
+        return run(options, source, registry, git_config)
     except ProbeError as error:
         _say(f"refused: {error}")
         return 2

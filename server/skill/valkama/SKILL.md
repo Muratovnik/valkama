@@ -44,35 +44,35 @@ splitting one or a part off it, or handing items to other agents.
    first. `list_work_items` filters by `state`, `category`, `kind`, `parent`,
    `owner` and `project`. Claim the item that already covers the work.
 3. **File it only when none does.** `create_work_item` with a `title` and a
-   `description` that is the brief: goal, context, constraints, the "done when"
-   and its verify command. Name the projects the change touches (`projects`).
-   Leave `space` out unless the projects live in two spaces or the item names no
-   project (a goal, a triage review item): give `space` then. Otherwise the
-   server puts the item under its parent's space, else in its projects' home
-   space. A finding in another project's code goes to that project, and so to
-   its space. A plan in the repository is referenced by `source`
-   (`docs/plan.md#kb:a7f3`), not copied, and a file the description names is
-   written as Naming a file says. Umbrella work is `kind: goal`, or `stage`
-   under a parent at any depth; children name it as `parent`, and nobody
-   claims it. Work filed outside accepted open goals and
-   stages starts in triage: send `acceptance: "assignment"` only on the owner's word.
-   Pass `claim: true` and `checklist` when you take a task at once. Link the
-   related items your search found (`relates-to`, `blocks`) and name the goal or
-   stage whose scope covers it as `parent`. A decision the owner must make is a
-   question on the new item (see Asking the owner), with each option, what it
-   costs and your recommendation, not a list of options in the description.
-   The answer's `similar` names up to three open items that read like it:
-   merge the new item into one that is the same change (`merge_work_items`)
-   and link a related one; an empty `similar` does not rule out a duplicate.
-4. **Claim before working.** `claim_work_item`, or `claim_ready_work_item` to
-   take the next workable task of a space: accepted work in a ready state, never
-   triage; a record's `withheld` says why a task is not given. A claim is atomic and refuses naming
-   the holder when someone else has the item. It also starts the work: a task
-   in a triage, deferred or ready state moves to the first active state, and the
-   acknowledgement's `started` says so. Send no separate transition to start.
-   The answer's `project_roots` names the root of each project the task changes:
-   read each one's instructions before you edit it.
-   A goal or stage is never claimed: claim a task under it.
+   `description` that is the brief: goal, context, constraints, the "done when" and
+   its verify command. Name the projects the change touches (`projects`). A part of
+   the task at hand another project, holder or later time takes is split off it with
+   `split_from`, not added to `projects` or filed apart. Give `space` only when the
+   projects live in two spaces or the item names none (a goal, a triage review
+   item); the server otherwise takes the parent's, else the projects' home space. A
+   finding in another project's code goes to that project's space. An approved plan
+   becomes one item per unit it anchors, with that anchor as `source`
+   (`docs/plan.md#kb:a7f3`), never a copy; a file the description names is written
+   as Naming a file says. Umbrella work is `kind: goal`, or `stage` under a parent
+   at any depth; children name it as `parent`, and nobody claims it. Work filed
+   outside accepted open goals and stages starts in triage: send `acceptance:
+   "assignment"` only on the owner's word. Pass `claim: true` and `checklist` when
+   you take a task at once. Link related items your search found (`relates-to`,
+   `blocks`) and name the goal or stage whose scope covers it as `parent`. A
+   decision the owner must make is a question on the new item (see Asking the
+   owner): each option, its cost and your recommendation, not a list in the
+   description. The answer's `similar` names up to three open items that read like
+   it: merge the new item into one that is the same change (`merge_work_items`) and
+   link a related one; an empty `similar` does not rule out a duplicate.
+4. **Claim before working.** `claim_work_item` takes a named item; the next task
+   of a space, or of a goal or stage with `within`, is `claim_ready_work_item`'s,
+   not a pick from a list: accepted work in a ready state, never triage, in the
+   board's order; a record's `withheld` says why a task is not given. A claim is
+   atomic and refuses naming the holder when someone else has the item. It also
+   starts the work, moving a triage, deferred or ready task to the first active
+   state (the acknowledgement's `started` says so): send no transition to start.
+   Read the instructions of each root the answer's `project_roots` names before
+   you edit it. A goal or stage is never claimed: claim a task under it.
 
 The holder is the session your client proved, written as
 `claim_ref: "codex (session <id>)"`; `author` is the name the history records
@@ -161,16 +161,19 @@ by [the triage procedure](references/triage.md).
 ## Work the item
 
 **Checklist.** Each step is a condition the item must meet to close; the steps
-of your plan stay in your client. Send them with the claim in one
-call: `apply_work_item_changes` with `claim: true` and
-`checklist: ["first condition", {"text": "…", "done": true}]`, a step already done
-sent as that object. `{"items": [...], "force": true}` sends the same steps when
-`force` must carry a refusal through. A step sent with
-the text of one the item has keeps its id, claim and tick, so add steps by
-sending the existing ones first and the new ones after; the acknowledgement
-lists every step's `item_id`. Tick a step by its `item_id` in the batch's
-`checklist_ticks`, and `done: false` reopens it. Leaving out a
-claimed or completed step is refused unless `force`, which discards its state.
+of your plan stay in your client. A `checklist` you send is the item's whole
+list: an open step left out of it is taken off. An item you found may have its
+conditions already, and neither a search nor a claim's acknowledgement shows
+them: read it with `get_work_item`, keep its conditions and tick those you meet.
+Send your steps with the claim in one call: `apply_work_item_changes` with
+`claim: true` and `checklist: ["first condition", {"text": "…", "done": true}]`,
+a step already done sent as that object. `{"items": [...], "force": true}` sends
+the same steps when `force` must carry a refusal through. A step sent with the
+text of one the item has keeps its id, claim and tick, so add steps by sending
+the existing ones first and the new ones after; the acknowledgement lists every
+step's `item_id`. Tick a step by its `item_id` in the batch's `checklist_ticks`,
+and `done: false` reopens it. Leaving out a claimed or completed step is refused
+unless `force`, which discards its state.
 
 **Shared items.** When agents split one item, each claims its step with
 `claim_work_item_checklist_item` before working on it and ticks it when done.
