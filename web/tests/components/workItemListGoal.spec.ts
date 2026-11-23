@@ -13,6 +13,7 @@ import WorkItemList from '@/widgets/work-item-views/components/WorkItemList.vue'
 
 import { boardId, boardItem } from '../fixtures/board.ts'
 import { atListWidth } from '../fixtures/listRoom.ts'
+import { listHeads as heads } from '../support/listHeads.ts'
 import { i18n } from '../support/workItemBoardHarness.ts'
 
 afterEach(() => {
@@ -51,7 +52,6 @@ const referenceOf = (row: HTMLElement) =>
 const rows = () => [...document.querySelectorAll<HTMLElement>('tbody tr')]
 const rowOf = (reference: string) => rows().find((row) => referenceOf(row) === reference)
 const order = () => rows().map((row) => referenceOf(row))
-const heads = () => [...document.querySelectorAll('thead th')].map((th) => th.textContent?.trim())
 const goalCells = () =>
   Object.fromEntries(
     rows().map((row) => [referenceOf(row), row.querySelector('.list-goal')?.textContent?.trim()]),

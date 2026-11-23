@@ -12,6 +12,10 @@
  * Every order the wide list offers stays one choice away. A name never ends in an
  * ellipsis while a line of its own would hold it whole.
  *
+ * The choice stays in the title's heading at every level, hidden where it is not offered.
+ * A new width or a new order tries every wider fit within one frame (`useListFit.ts`), and
+ * a choice made anew for the fit that holds lost the focus an order was chosen with.
+ *
  * The head's controls are out of the Tab order: the rows are the list's one Tab
  * stop, and the keys reach the head from them (`useListKeys.ts`).
  */
@@ -41,6 +45,8 @@ const { t } = useI18n()
 
 /** The folded sorts as one choice rather than a run of buttons. */
 const choice = computed(() => sortsChosen(fitOf(props.level)))
+/** Whether the choice is shown: it is offered, and some column is folded under the title. */
+const choiceShown = computed(() => choice.value && props.folded.length > 0)
 /**
  * Whether the choice shows its chevron alone, its name in its hint and to assistive technology,
  * and the title's heading may take a second line: only in the last level, which no other gives
@@ -109,7 +115,7 @@ function choose(value: string) {
   <thead>
     <tr
       aria-rowindex="1"
-      :class="{ choice, wraps: bare }"
+      :class="{ choice: choiceShown, wraps: bare }"
     >
       <th
         v-for="column in columns"
@@ -140,9 +146,10 @@ function choose(value: string) {
             />
           </button>
           <ChoiceSelect
-            v-if="choice && holdsTitle(column) && folded.length"
+            v-if="holdsTitle(column)"
             class="list-sort-choice"
             size="heading"
+            :hidden="!choiceShown"
             :label="t('workItem.list.sortBy')"
             :placeholder="t('workItem.list.sortOther')"
             :model-value="chosen"
@@ -226,13 +233,15 @@ function choose(value: string) {
     justify-content: flex-end;
   }
 
-  .list-sorts:has(> :nth-child(2)) > & {
+  /* A heading with more than one sort, as a run or as the title's sort and the choice; a
+     hidden choice is none of them. */
+  :is(.list-sorts:has(> .list-sort ~ .list-sort), .choice .list-head-title > .list-sorts) > & {
     flex: 0 0 auto;
   }
 
   /* The choice beside the title's sort is a filled control with an inset of
      its own, so the sort's inset on that side is spent twice. */
-  .list-sorts:has(.list-sort-choice) > & {
+  .choice .list-head-title > .list-sorts > & {
     padding-inline-end: var(--space-half);
   }
 
