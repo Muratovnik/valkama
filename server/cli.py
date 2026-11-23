@@ -570,8 +570,7 @@ def _projects_main(options: argparse.Namespace) -> None:
     try:
         payload: dict[str, Any]
         if command == "list":
-            raw = inventory.read_bytes()
-            payload = {"projects": registry_owner.parse_inventory(raw)}
+            payload = {"projects": registry_owner.read_inventory(inventory)}
         elif command in {"check", "doctor"}:
             payload = registry_owner.check(inventory, target, db_path())
         elif command == "rollback":
@@ -645,7 +644,7 @@ def _projects_main(options: argparse.Namespace) -> None:
             )
             written = next(
                 entry
-                for entry in registry_owner.parse_inventory(inventory.read_bytes())
+                for entry in registry_owner.read_inventory(inventory)
                 if entry["project_id"] == options.project_id
             )
             payload = {"changed": changed, "planning_binding": written["planning_binding"]}
