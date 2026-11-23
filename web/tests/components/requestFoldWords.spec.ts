@@ -2,8 +2,9 @@
  * A closed question the service composed reads, under its answer, in the words its buttons were
  * pressed in: the field «Answer» and the option «Put it off» of a goal's question are the
  * reader's «Ответ» and «Позже…», the day it is put off until is named, and the findings of a
- * group keep the labels the agent listed them by. A question an agent composed keeps every
- * word it was written in.
+ * group keep the labels the agent listed them by. On its form the fields typed into say what
+ * to type in the reader's words. A question an agent composed keeps every word it was written
+ * in.
  */
 import { createI18n } from 'vue-i18n'
 
@@ -102,15 +103,21 @@ function answered(request: Request, locale: 'en' | 'ru') {
 }
 
 describe('answeredFields', () => {
-  it('offers a goal’s answers on its form as its buttons name them, and keeps what to type', () => {
+  it('offers a goal’s answers on its form as its buttons name them, and says what to type', () => {
     const request = read(proposed)
     const typed = request.fields.slice(1).map((field) => [field.label, []])
+    expect(typed).toHaveLength(2)
+    // What is typed stays the service's to read: its own words «3 comments» and «or» stay.
     expect(answered(request, 'ru')).toEqual([
       ['Ответ', ['Делать', 'Позже…', 'Не делать']],
-      ...typed,
+      [
+        'До: день ГГГГ-ММ-ДД, число новых комментариев как 3 comments, то и другое как 2026-12-01 or 3 comments или номер карточки, которой ждать',
+        [],
+      ],
+      ['Ключ списка — для цели или этапа, под которыми есть открытая работа', []],
     ])
-    expect(answered(request, 'en')[0]).toEqual(['Answer', ['Do', 'Later…', 'Don’t do']])
-    expect(typed).toHaveLength(2)
+    // In English the typed fields say what the service wrote.
+    expect(answered(request, 'en')).toEqual([['Answer', ['Do', 'Later…', 'Don’t do']], ...typed])
   })
 
   it('keeps a session’s consent and a question an agent composed as the server wrote them', () => {
