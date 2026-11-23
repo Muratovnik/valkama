@@ -43,7 +43,7 @@ export const QUESTIONS: [PromptMessage, string, string][] = [
   [
     { key: 'task_moved_in', values: { reference: 'MAIN-12', goal: 'MAIN-3', title: 'Export it?' } },
     'An agent moves this task into MAIN-3. Do it, later, leave it where it was, or don’t do it?',
-    'Агент переносит эту задачу в MAIN-3. Делать, позже, оставить где была или не делать?',
+    'Агент переносит эту задачу в MAIN-3. Делать, позже, оставить, где была, или не делать?',
   ],
   [
     {

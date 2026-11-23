@@ -103,7 +103,7 @@ export const questionKindMessages = {
         later: 'Позже…',
         drop: 'Не делать',
         out: 'Вынести из цели',
-        stay: 'Оставить где была',
+        stay: 'Оставить, где была',
         allow: 'Разрешить',
         keep: 'Оставить',
         cancel: 'Отменить',
