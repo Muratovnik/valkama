@@ -3459,8 +3459,12 @@ that stays, whatever rows the bar takes.
 Under the goals, the work outside goals: the scope's tasks under no goal, by project and by
 label, each row saying how many stand in each category, the count of them beside the heading.
 Where its columns do not fit the frame even at their least, a row is a block of its own (Rows and
-tables): its name across it, then its figures in columns alike in every block, each beside its
-category's name.
+tables): its name across it, then its figures above zero in columns alike in every block, each
+beside its category's name. A block's zeros are not drawn, and are still read with their
+categories, as the columns of the wide table keep and show theirs: drawn, a block was eight lines
+of mostly zeros, and the section ran the page six times longer on a phone. A row stands for tasks
+it counts, so a block draws one figure at least; a row with none would draw all its zeros rather
+than stand as a name alone.
 Then the flow: how many tasks came in and came to a close in the period, the owner's decisions
 and the commits, for the period and day by day, newest first, with the pace of the scope's tasks
 over them in the words of a chain's. Then the estimates: the done tasks they are judged by,
