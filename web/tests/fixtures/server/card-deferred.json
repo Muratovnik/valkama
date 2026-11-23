@@ -95,6 +95,7 @@
         "deferred": {
           "until": null,
           "until_item": "MAIN-20",
+          "until_comments": null,
           "reason": "Waits for the other card.",
           "since": "2026-01-02T03:04:05Z",
           "by": {

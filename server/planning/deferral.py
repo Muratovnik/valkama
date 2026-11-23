@@ -1,16 +1,25 @@
 """Putting work off: the condition it comes back on, and who waits on what.
 
-An item is put off until a day, a time, or another item's close (`defer`), and it
-stands in a deferred state for exactly as long as a row of `work_item_deferrals`
-holds that condition. The row is the condition; the state is where the item stands.
+An item is put off until a day, a time, a count of new comments, a count or a day or
+time whichever comes first, or another item's close (`defer`), and it stands in a
+deferred state for exactly as long as a row of `work_item_deferrals` holds that
+condition. The row is the condition; the state is where the item stands.
 Nothing here changes a state: the service moves the item and calls this module for
 the row in the same write.
 
 - **Until.** `moment` reads a day (`YYYY-MM-DD`, coming back at 00:00 UTC) or a time
-  with its zone, and refuses one that has passed; anything else names an item, which
-  the service resolves and `check_item` holds to being open, another item, and not
-  one the put-off item stands under: a goal or stage closes only once nothing under
-  it is open, so a condition on it would never come.
+  with its zone, and refuses one that has passed. `until` reads those, a count of new
+  comments (`3 comments`) and a count with a moment joined by `or`, in either order
+  (`2026-12-01 or 3 comments`); anything else names an item, which the service
+  resolves and `check_item` holds to being open, another item, and not one the
+  put-off item stands under: a goal or stage closes only once nothing under it is
+  open, so a condition on it would never come.
+- **The count.** Every comment and reply written on the item after the condition was
+  set counts, a person's or an agent's: `put` keeps the newest comment's id then, and
+  the count reads the item's comments after it. A comment goes only with its item, so
+  the count never falls. The write of a comment asks `due` about its item at once, and
+  the sweep's `returns` step reads every count again, so no comment is missed; the
+  condition comes once, as every other does.
 - **The row.** `put` sets it, `clear` takes it away with the move out of the deferred
   state, `held` and `restore` keep it across a failed launch's put-back, and `repoint`
   sends the waiting of a merged item to the item it merged into.
@@ -50,22 +59,31 @@ RETURN_TOOL = "deferral-return"
 AUTHOR = leases.EXPIRY_AUTHOR
 #: Why work came back, as the `returned` event and field say it.
 DATE = "date"
+COMMENTS = "comments"
 DELETED = "deleted"
+#: The most new comments a condition counts to; the store's CHECK holds the same.
+COMMENTS_MOST = 999
 
 _DAY = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
 _TIME = re.compile(r"^\d{4}-\d{2}-\d{2}T")
+_COUNT = re.compile(r"^(\d{1,4}) comments?$")
+#: What joins a count and a moment, whichever comes first.
+_EITHER = " or "
 
-_COLUMNS = "until_at, until_item_id, reason, call_id, since, reached_at"
+_COLUMNS = (
+    "until_at, until_item_id, until_comments, comments_after, reason, call_id, since, reached_at"
+)
 _PUT = (
-    f"INSERT INTO work_item_deferrals(work_item_id, {_COLUMNS}) VALUES(?,?,?,?,?,?,?)"
+    f"INSERT INTO work_item_deferrals(work_item_id, {_COLUMNS}) VALUES(?,?,?,?,?,?,?,?,?)"
     " ON CONFLICT(work_item_id) DO UPDATE SET until_at = excluded.until_at,"
-    " until_item_id = excluded.until_item_id, reason = excluded.reason,"
+    " until_item_id = excluded.until_item_id, until_comments = excluded.until_comments,"
+    " comments_after = excluded.comments_after, reason = excluded.reason,"
     " call_id = excluded.call_id, since = excluded.since, reached_at = excluded.reached_at"
 )
 #: An item's condition with what its field shows: the item it waits on by reference,
 #: and who set it, by the author of that call's first event on the item and its session.
 _RECORD = (
-    "SELECT d.until_at, d.reason, d.since, d.reached_at, p.key, w.number,"
+    "SELECT d.until_at, d.until_comments, d.reason, d.since, d.reached_at, p.key, w.number,"
     " (SELECT e.author FROM work_item_events e WHERE e.work_item_id = d.work_item_id"
     "  AND e.call_id = d.call_id ORDER BY e.id LIMIT 1), c.session_id"
     " FROM work_item_deferrals d"
@@ -97,16 +115,21 @@ _DEPENDENTS = (
     " JOIN planning_spaces wp ON wp.planning_space_id = w.planning_space_id"
     " WHERE d.until_item_id IN (SELECT value FROM json_each(?))"
 )
-#: The conditions that came and were not yet acted on: a moment that passed, or an item
-#: that closed by a path that did not bring its waiting back.
+#: The conditions that came and were not yet acted on: a moment that passed, a count of
+#: comments reached, or an item that closed by a path that did not bring its waiting back.
 _DUE = (
-    "SELECT d.work_item_id, d.until_at, d.until_item_id, s.category"
+    "SELECT work_item_id, until_at, until_item_id, until_comments, category FROM ("
+    " SELECT d.work_item_id, d.until_at, d.until_item_id, d.until_comments, d.reached_at,"
+    " s.category, s.is_terminal, i.planning_space_id, i.number,"
+    " (SELECT COUNT(*) FROM work_item_comments c WHERE c.work_item_id = d.work_item_id"
+    "  AND c.id > d.comments_after) AS counted"
     " FROM work_item_deferrals d JOIN work_items i ON i.work_item_id = d.work_item_id"
     " LEFT JOIN work_items w ON w.work_item_id = d.until_item_id"
-    " LEFT JOIN workflow_states s ON s.state_id = w.state_id"
-    " WHERE d.reached_at IS NULL AND (d.until_at <= ? OR s.is_terminal = 1)"
-    " AND (? IS NULL OR i.planning_space_id = ?)"
-    " ORDER BY i.planning_space_id, i.number LIMIT ?"
+    " LEFT JOIN workflow_states s ON s.state_id = w.state_id)"
+    " WHERE reached_at IS NULL"
+    " AND (until_at <= ? OR is_terminal = 1 OR counted >= until_comments)"
+    " AND (? IS NULL OR planning_space_id = ?) AND (? IS NULL OR work_item_id = ?)"
+    " ORDER BY planning_space_id, number LIMIT ?"
 )
 
 
@@ -116,6 +139,8 @@ class Held:
 
     until_at: str | None
     until_item_id: str | None
+    until_comments: int | None
+    comments_after: int | None
     reason: str
     call_id: int | None
     since: str
@@ -123,12 +148,31 @@ class Held:
 
 @dataclass(frozen=True)
 class Due:
-    """A condition that came: the item put off, why it comes back, and the item it waited on."""
+    """A condition that came: the item put off, why it comes back, and the item it waited
+    on, the moment or the count of comments."""
 
     work_item_id: str
     because: str
     until_item_id: str | None
     until_at: str | None
+    until_comments: int | None = None
+
+
+@dataclass(frozen=True)
+class Until:
+    """A condition `until` names that is no item: the moment, the count of new comments,
+    or both, whichever comes first."""
+
+    until_at: str | None
+    comments: int | None
+
+    def said(self) -> str:
+        """How a person reads it: `2026-12-01`, `3 comments`, `2026-12-01 or 3 comments`."""
+
+        parts = [] if self.until_at is None else [said(self.until_at)]
+        if self.comments is not None:
+            parts.append(comments_said(self.comments))
+        return _EITHER.join(parts)
 
 
 def stamp(moment: datetime) -> str:
@@ -178,6 +222,63 @@ def said(until_at: str) -> str:
     return until_at[:10] if until_at.endswith("T00:00:00Z") else until_at
 
 
+def comments_said(count: int) -> str:
+    """A count of new comments as `until` names it: `1 comment`, `3 comments`."""
+
+    return f"{count} comment" if count == 1 else f"{count} comments"
+
+
+#: What a condition joined by ` or ` that is not one count and one moment is refused with.
+_ONE_OR_BOTH = (
+    "is no condition: join one count and one day or time, such as 2026-12-01 or 3 comments"
+)
+
+
+def until(text: str, now: datetime) -> Until | None:
+    """The moment, the count of new comments or both that `text` names, or None when it
+    names none of them, which leaves an item's reference.
+
+    A count is `3 comments` (`1 comment`), from 1 to `COMMENTS_MOST`; a count and a
+    moment are joined by ` or `, in either order, and the work comes back on whichever
+    comes first. A count goes with no item, and two moments or two counts are no
+    condition: each is refused, as `moment` refuses a moment that is not one.
+    """
+
+    parts = text.split(_EITHER)
+    if len(parts) > 2:
+        raise model.PlanningError(f"[{TAG}] until {text} {_ONE_OR_BOTH}")
+    counts = [_count(part) for part in parts]
+    if len(parts) == 1:
+        if counts[0] is not None:
+            return Until(None, counts[0])
+        at = moment(text, now)
+        return None if at is None else Until(at, None)
+    found = [count for count in counts if count is not None]
+    if len(found) != 1:
+        raise model.PlanningError(f"[{TAG}] until {text} {_ONE_OR_BOTH}")
+    at = moment(parts[1] if counts[0] is not None else parts[0], now)
+    if at is None:
+        raise model.PlanningError(
+            f"[{TAG}] until {text}: a count of comments goes with a day or a time, not with"
+            " an item; put it off until the item alone, or until the count"
+        )
+    return Until(at, found[0])
+
+
+def _count(part: str) -> int | None:
+    """The count of new comments `part` names, or None when it names none."""
+
+    found = _COUNT.match(part)
+    if found is None:
+        return None
+    count = int(found[1])
+    if not 1 <= count <= COMMENTS_MOST:
+        raise model.PlanningError(
+            f"[{TAG}] {part} is no count: count 1 to {COMMENTS_MOST} new comments"
+        )
+    return count
+
+
 def check_item(conn: sqlite3.Connection, item: sqlite3.Row, until: sqlite3.Row) -> None:
     """Refuse an item `item` cannot wait on: itself, one it stands under, or a closed one."""
 
@@ -206,10 +307,36 @@ def put(
     reason: str,
     call_id: int | None,
     since: str,
+    until_comments: int | None = None,
+    comments_after: int | None = None,
 ) -> None:
-    """Set the item's condition, replacing one it had: not yet come."""
+    """Set the item's condition, replacing one it had: not yet come.
 
-    conn.execute(_PUT, (work_item_id, until_at, until_item_id, reason, call_id, since, None))
+    A count starts now, after the item's newest comment, unless `comments_after` names
+    where it started, as a condition set back does.
+    """
+
+    if until_comments is not None and comments_after is None:
+        comments_after = int(
+            conn.execute(
+                "SELECT COALESCE(MAX(id), 0) FROM work_item_comments WHERE work_item_id = ?",
+                (work_item_id,),
+            ).fetchone()[0]
+        )
+    conn.execute(
+        _PUT,
+        (
+            work_item_id,
+            until_at,
+            until_item_id,
+            until_comments,
+            comments_after,
+            reason,
+            call_id,
+            since,
+            None,
+        ),
+    )
 
 
 def held(conn: sqlite3.Connection, work_item_id: str) -> Held | None:
@@ -226,15 +353,24 @@ def held(conn: sqlite3.Connection, work_item_id: str) -> Held | None:
         return None
     if found is None:
         return None
-    call = None if found[3] is None else int(found[3])
-    return Held(found[0], found[1], str(found[2]), call, str(found[4]))
+    until_at, until_item, counted, after, reason, call, since, _reached = found
+    return Held(
+        until_at,
+        until_item,
+        None if counted is None else int(counted),
+        None if after is None else int(after),
+        str(reason),
+        None if call is None else int(call),
+        str(since),
+    )
 
 
 def restore(conn: sqlite3.Connection, work_item_id: str, kept: Held) -> None:
     """Set a condition back as it was, under the call that set it, not yet come.
 
     A condition that had come is set back as one that has not: the question its coming
-    asked ended with the write that took it away, and the next pass asks again.
+    asked ended with the write that took it away, and the next pass asks again. A count
+    keeps where it started.
     """
 
     put(
@@ -245,6 +381,8 @@ def restore(conn: sqlite3.Connection, work_item_id: str, kept: Held) -> None:
         reason=kept.reason,
         call_id=kept.call_id,
         since=kept.since,
+        until_comments=kept.until_comments,
+        comments_after=kept.comments_after,
     )
 
 
@@ -293,25 +431,42 @@ def dependents(conn: sqlite3.Connection, items: Iterable[str]) -> list[tuple]:
         return []
 
 
-def due(conn: sqlite3.Connection, at: str, limit: int, *, space_id: str | None = None) -> list[Due]:
+def due(
+    conn: sqlite3.Connection,
+    at: str,
+    limit: int,
+    *,
+    space_id: str | None = None,
+    work_item_id: str | None = None,
+) -> list[Due]:
     """The conditions that came by `at` and were not acted on, at most `limit`, in order,
-    of one space's items when `space_id` names it.
+    of one space's items when `space_id` names it, of one item when `work_item_id` does.
 
-    A moment that passed comes back by `date`; an item that closed by a path that did
-    not bring its waiting back -- none does, but a store may hold one -- by the way it
-    closed.
+    A moment that passed comes back by `date`, before a count reached with it: the write
+    of a comment reads its count at once, so a count still unread when its moment has
+    passed came after it. A count reached comes back by `comments`; an item that closed
+    by a path that did not bring its waiting back -- none does, but a store may hold
+    one -- by the way it closed.
     """
 
     try:
-        rows = conn.execute(_DUE, (at, space_id, space_id, limit)).fetchall()
+        rows = conn.execute(
+            _DUE, (at, space_id, space_id, work_item_id, work_item_id, limit)
+        ).fetchall()
     except sqlite3.OperationalError as error:
         if "no such table" not in str(error):
             raise
         return []
     found = []
-    for identity, until_at, until_item, category in rows:
-        because = DATE if until_at is not None else str(category)
-        found.append(Due(str(identity), because, until_item, until_at))
+    for identity, until_at, until_item, counted, category in rows:
+        if until_at is not None and until_at <= at:
+            because = DATE
+        elif until_item is None:
+            because = COMMENTS
+        else:
+            because = str(category)
+        count = None if counted is None else int(counted)
+        found.append(Due(str(identity), because, until_item, until_at, count))
     return found
 
 
@@ -348,7 +503,8 @@ def record(conn: sqlite3.Connection, work_item_id: str) -> dict | None:
     """The item's `deferred` field: the condition, why and since when, who set it, and
     when it came; None for an item with none.
 
-    `until` is the moment, `until_item` the item's reference, one of them null; `by`
+    `until` is the moment and `until_comments` the count of new comments, either or both,
+    or `until_item` the item's reference alone; `by`
     the author and the session of the call that set it, as the history names them.
     """
 
@@ -360,10 +516,11 @@ def record(conn: sqlite3.Connection, work_item_id: str) -> dict | None:
         return None
     if found is None:
         return None
-    until_at, reason, since, reached_at, key, number, author, session = found
+    until_at, counted, reason, since, reached_at, key, number, author, session = found
     return {
         "until": until_at,
         "until_item": None if key is None else model.human_id(str(key), int(number)),
+        "until_comments": None if counted is None else int(counted),
         "reason": reason,
         "since": since,
         "by": {"author": author, "session_id": session},
@@ -373,7 +530,7 @@ def record(conn: sqlite3.Connection, work_item_id: str) -> dict | None:
 
 #: The fields of `deferred` the card carries: when or on what it comes back, and
 #: whether that came. Why, and who put it off, are read with the events part.
-CARD_DEFERRED = ("until", "until_item", "reached_at")
+CARD_DEFERRED = ("until", "until_item", "until_comments", "reached_at")
 
 
 def card(found: dict) -> dict:
@@ -395,18 +552,20 @@ def returned(conn: sqlite3.Connection, work_item_id: str) -> dict | None:
     because, _space, rest = str(found[0]).partition(" ")
     return {
         "because": because,
-        "item": None if because == DATE else rest,
+        "item": None if because in (DATE, COMMENTS) else rest,
         "at": found[1],
     }
 
 
-def because_text(because: str, until_at: str | None, item: str | None) -> str:
-    """Why work came back as its `returned` event says it: `date 2026-12-01`, `completed
-    MAIN-12`."""
+def because_text(due: Due, item: str | None) -> str:
+    """Why work came back as its `returned` event says it: `date 2026-12-01`, `comments 3`,
+    `completed MAIN-12`."""
 
-    if because == DATE:
-        return f"{DATE} {said(str(until_at))}"
-    return f"{because} {item}"
+    if due.because == DATE:
+        return f"{DATE} {said(str(due.until_at))}"
+    if due.because == COMMENTS:
+        return f"{COMMENTS} {due.until_comments}"
+    return f"{due.because} {item}"
 
 
 def reference(conn: sqlite3.Connection, identity: str) -> str:

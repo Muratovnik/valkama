@@ -29,12 +29,14 @@
       "kind",
       "title",
       "until",
+      "comments",
       "reason"
     ],
     "put_off_came": [
       "reference",
       "until",
-      "item"
+      "item",
+      "comments"
     ],
     "cancel_asked": [
       "reference",
@@ -106,6 +108,7 @@
     "put_off": [
       "reference",
       "until",
+      "comments",
       "reason"
     ],
     "steps": [

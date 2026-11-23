@@ -25,10 +25,10 @@ import unittest
 from server import store
 
 #: The schema version the declaration below belongs to.
-PINNED_SCHEMA_VERSION = 24
+PINNED_SCHEMA_VERSION = 25
 
 #: The digest of a fresh store's declaration at that version, `declaration_digest`.
-PINNED_DECLARATION_DIGEST = "235f7d193f9651b0fd01156d0fd9aa66465ac570626b1715f29ec2dd7a14fc86"
+PINNED_DECLARATION_DIGEST = "88363a402f7502b93d8418fc1c233d4d8b65828037098b6acbfca7af960d1d4f"
 
 _TOKEN = re.compile(r"\w+|[^\w\s]")
 

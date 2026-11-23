@@ -291,9 +291,30 @@ _WRITTEN: dict[tuple[str, str], tuple[_Values, _Values]] = {
     ),
     ("work_items", "number >= 1"): (({"number": 0},), ()),
     ("work_item_baselines", "tasks >= 0"): (({"tasks": -1},), ({"tasks": 3},)),
-    ("work_item_deferrals", "(until_at IS NULL) <> (until_item_id IS NULL)"): (
-        ({"until_at": None}, {"until_item_id": "probe"}),
+    (
+        "work_item_deferrals",
+        "until_item_id IS NULL OR (until_at IS NULL AND until_comments IS NULL)",
+    ): (
+        (
+            {"until_item_id": "probe"},
+            {"until_at": None, "until_item_id": "probe", "until_comments": 3, "comments_after": 0},
+        ),
         ({"until_at": None, "until_item_id": "probe"},),
+    ),
+    (
+        "work_item_deferrals",
+        "until_at IS NOT NULL OR until_item_id IS NOT NULL OR until_comments IS NOT NULL",
+    ): (
+        ({"until_at": None},),
+        ({"until_at": None, "until_comments": 3, "comments_after": 0},),
+    ),
+    ("work_item_deferrals", "(until_comments IS NULL) = (comments_after IS NULL)"): (
+        ({"until_comments": 3}, {"comments_after": 0}),
+        ({"until_comments": 3, "comments_after": 0},),
+    ),
+    ("work_item_deferrals", "until_comments IS NULL OR until_comments BETWEEN 1 AND 999"): (
+        ({"until_comments": 0, "comments_after": 0}, {"until_comments": 1000, "comments_after": 0}),
+        ({"until_comments": 1, "comments_after": 0}, {"until_comments": 999, "comments_after": 5}),
     ),
     ("work_item_requests", "(prompt_key IS NULL) = (prompt_values IS NULL)"): (
         ({"prompt_key": "goal_proposed"}, {"prompt_values": "{}"}),

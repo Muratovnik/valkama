@@ -82,6 +82,7 @@ const QUESTIONS: [PromptMessage, string, string][] = [
         kind: 'stage',
         title: 'Exports',
         until: '2026-12-01',
+        comments: null,
         reason: 'after the release',
       },
     },
@@ -89,14 +90,66 @@ const QUESTIONS: [PromptMessage, string, string][] = [
     'Агент откладывает принятый этап MAIN-3: Exports. До 2026-12-01. Причина: after the release. Оставить, отложить или не делать?',
   ],
   [
-    { key: 'put_off_came', values: { reference: 'MAIN-3', until: '1 December', item: null } },
+    {
+      key: 'put_off_asked',
+      values: {
+        reference: 'MAIN-3',
+        kind: 'goal',
+        title: 'Exports',
+        until: null,
+        comments: 1,
+        reason: 'waits for word',
+      },
+    },
+    'An agent puts off MAIN-3, an accepted goal: Exports. Until 1 new comment. Its reason: waits for word. Keep it, put it off, or drop it.',
+    'Агент откладывает принятую цель MAIN-3: Exports. До 1 нового комментария. Причина: waits for word. Оставить, отложить или не делать?',
+  ],
+  [
+    {
+      key: 'put_off_asked',
+      values: {
+        reference: 'MAIN-3',
+        kind: 'stage',
+        title: 'Exports',
+        until: '2026-12-01',
+        comments: 3,
+        reason: 'waits for word',
+      },
+    },
+    'An agent puts off MAIN-3, an accepted stage: Exports. Until 2026-12-01 or 3 new comments, whichever comes first. Its reason: waits for word. Keep it, put it off, or drop it.',
+    'Агент откладывает принятый этап MAIN-3: Exports. До 2026-12-01 или 3 новых комментариев — что наступит раньше. Причина: waits for word. Оставить, отложить или не делать?',
+  ],
+  [
+    {
+      key: 'put_off_came',
+      values: { reference: 'MAIN-3', until: '1 December', item: null, comments: null },
+    },
     'MAIN-3 was put off until 1 December; that has come. Do it, put it off again, or drop it.',
     'MAIN-3 отложили до 1 December, и этот срок настал. Делать, отложить снова или не делать?',
   ],
   [
-    { key: 'put_off_came', values: { reference: 'MAIN-3', until: null, item: 'MAIN-2' } },
+    {
+      key: 'put_off_came',
+      values: { reference: 'MAIN-3', until: null, item: 'MAIN-2', comments: null },
+    },
     'MAIN-3 was put off until MAIN-2 closed; that has come. Do it, put it off again, or drop it.',
     'MAIN-3 отложили до закрытия MAIN-2, и это время настало. Делать, отложить снова или не делать?',
+  ],
+  [
+    {
+      key: 'put_off_came',
+      values: { reference: 'MAIN-3', until: null, item: null, comments: 2 },
+    },
+    'MAIN-3 was put off until 2 new comments; that has come. Do it, put it off again, or drop it.',
+    'MAIN-3 отложили до 2 новых комментариев, и это условие выполнено. Делать, отложить снова или не делать?',
+  ],
+  [
+    {
+      key: 'put_off_came',
+      values: { reference: 'MAIN-3', until: null, item: null, comments: 21 },
+    },
+    'MAIN-3 was put off until 21 new comments; that has come. Do it, put it off again, or drop it.',
+    'MAIN-3 отложили до 21 нового комментария, и это условие выполнено. Делать, отложить снова или не делать?',
   ],
   [
     {
@@ -229,9 +282,20 @@ const DECISIONS: [WhatMessage, string, string][] = [
   ],
   [{ key: 'closed', values: { reference: 'MAIN-3' } }, 'close MAIN-3', 'закрытие MAIN-3'],
   [
-    { key: 'put_off', values: { reference: 'MAIN-3', until: '2026-12-01', reason: 'later' } },
+    {
+      key: 'put_off',
+      values: { reference: 'MAIN-3', until: '2026-12-01', comments: null, reason: 'later' },
+    },
     'put off MAIN-3 until 2026-12-01: later',
     'отложено: MAIN-3 до 2026-12-01: later',
+  ],
+  [
+    {
+      key: 'put_off',
+      values: { reference: 'MAIN-3', until: '2026-12-01', comments: 5, reason: 'later' },
+    },
+    'put off MAIN-3 until 2026-12-01 or 5 new comments, whichever comes first: later',
+    'отложено: MAIN-3 до 2026-12-01 или 5 новых комментариев — что наступит раньше: later',
   ],
   [
     {

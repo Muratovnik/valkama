@@ -1,8 +1,9 @@
 <script setup lang="ts">
 /**
  * What stops an item, at the top of Overview, before anything else on it: each open blocker as
- * «Ждёт MAIN-12» and its title, and work put off as «Отложено до 20 ноября» or «Отложено до
- * закрытия MAIN-12», with why it waits. A closed item is neither blocked nor waiting
+ * «Ждёт MAIN-12» and its title, and work put off as «Отложено до 20 ноября», «Отложено до
+ * 3 новых комментариев», both with «что наступит раньше», or «Отложено до закрытия MAIN-12», with
+ * why it waits. A closed item is neither blocked nor waiting
  * (`openBlockers`), and the record names a put-off only while the item stands put off.
  */
 import { computed } from 'vue'
@@ -10,6 +11,7 @@ import { useI18n } from 'vue-i18n'
 
 import { openBlockers } from '@/widgets/work-item-inspector/utils/openBlockers.ts'
 import { usePutOffDay } from '@/widgets/work-item-inspector/utils/usePutOffDay.ts'
+import { putOffWords } from '@/widgets/work-item-inspector/utils/workEventWords.ts'
 
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { semanticStatePresentation } from '@/shared/lib/uiSystem.ts'
@@ -28,13 +30,18 @@ const blockerTone = semanticStatePresentation({
   state: 'blocked',
 }).tone
 
-/** Until when it is put off, as the owner reads a day, or the card whose close it waits on. */
+/**
+ * Until when it is put off, as the owner reads a day, the count of new comments or both, or the
+ * card whose close it waits on.
+ */
 const deferral = computed(() => {
   const put = props.item.deferred
   if (!put || props.item.state?.category !== 'deferred') return null
-  const until = put.until_item
-    ? t('workItem.closeActions.deferred.card', { reference: put.until_item })
-    : t('workItem.closeActions.deferred.day', { date: day(put.until ?? '') })
+  const until = putOffWords(
+    { comments: put.until_comments, item: put.until_item, until: put.until },
+    t,
+    day,
+  )
   const line = `${t('workItem.closeActions.deferred.label')} ${until}`
   return put.reason ? `${line} — ${put.reason}` : line
 })

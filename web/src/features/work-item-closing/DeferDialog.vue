@@ -1,10 +1,12 @@
 <script setup lang="ts">
 /**
- * «Put off»: when the work comes back, a day or the close of a card (`UntilChoice`), and why it
- * waits, which the server takes nothing without and the owner reads when the work comes back.
+ * «Put off»: when the work comes back, a day, a count of new comments, both, or the close of a
+ * card (`UntilChoice`), and why it waits, which the server takes nothing without and the owner
+ * reads when the work comes back.
  *
- * «Put off» is not available until both are said, and not for a day already gone; the reason
- * stands under the fields, where the press would have been read. A refused write keeps the
+ * «Put off» is not available until both are said, and not for a day already gone or a count that
+ * is no whole number from 1 to 999; the reason stands under the fields, where the press would have
+ * been read. A refused write keeps the
  * window open with all that was chosen, its reason at the foot.
  */
 import { computed, ref, useId, watch } from 'vue'

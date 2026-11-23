@@ -186,6 +186,19 @@ describe('a transition in the history', () => {
     ],
     ['ru', 'deferred: until MAIN-12: ', 'Отложено: до закрытия MAIN-12'],
     ['en', 'deferred: until MAIN-12', 'Deferred: until MAIN-12 closes'],
+    ['ru', 'deferred: until 1 comment: waits', 'Отложено: до 1 нового комментария — waits'],
+    ['en', 'deferred: until 3 comments', 'Deferred: until 3 new comments'],
+    [
+      'ru',
+      'deferred: until 2026-12-01 or 3 comments: waits',
+      'Отложено: до [2026-12-01] или до 3 новых комментариев — что наступит раньше — waits',
+    ],
+    [
+      'en',
+      'deferred: until 2026-12-01T15:00:00Z or 1 comment',
+      'Deferred: until [2026-12-01T15:00:00Z] or until 1 new comment, whichever comes first',
+    ],
+    ['ru', 'triage: returned, comments 3', 'Не разобрано: появились 3 новых комментария'],
     ['ru', 'ready: returned, date 2026-12-01', 'Готово к работе: наступило [2026-12-01]'],
     ['en', 'ready: returned, completed MAIN-12', 'Ready: MAIN-12 is done'],
     // A writer's own note stays as written, even one that begins like the service's.
@@ -218,6 +231,9 @@ describe('a work event in the history', () => {
     ['ru', 'returned', 'date 2026-12-01', 'наступило [2026-12-01]'],
     ['ru', 'returned', 'cancelled MAIN-12', 'MAIN-12 отменена'],
     ['en', 'returned', 'deleted MAIN-12', 'MAIN-12 is deleted'],
+    ['ru', 'returned', 'comments 1', 'появился 1 новый комментарий'],
+    ['ru', 'returned', 'comments 5', 'появилось 5 новых комментариев'],
+    ['en', 'returned', 'comments 2', '2 new comments came'],
     ['ru', 'triage_seen', 'seen', 'просмотрено и оставлено как есть'],
     ['en', 'triage_seen', 'cleared', 'mark taken away'],
     ['ru', 'child_left', 'MAIN-12: moved under MAIN-3', 'MAIN-12 перенесена в MAIN-3'],
@@ -247,6 +263,7 @@ describe('a work event in the history', () => {
       'task -> stage; something else',
     )
     expect(said('en', 'returned', 'date')).toBe('date')
+    expect(said('en', 'returned', 'comments many')).toBe('comments many')
   })
 
   it('has a title for every event the service records', () => {

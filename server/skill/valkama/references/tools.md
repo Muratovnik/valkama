@@ -84,10 +84,11 @@ says what it is:
 - `lapsed_claim` (`holder`, `reason`, `at`) names whose claim the sweep released,
   why and when, until the next claim; a step marked `by_previous_holder` was
   ticked by that holder and waits for a tick that confirms it (see Claims).
-- `deferred`, on work put off, says what it waits on: `until` or `until_item`,
-  and `reached_at` once that came and the owner is asked; `returned`, on work in
-  triage that came back, says why (`because`: `date`, `completed`, `cancelled`
-  or `deleted`, with the `item`) and when.
+- `deferred`, on work put off, says what it waits on: `until`, `until_comments`
+  (the count of new comments) or both, or `until_item` alone, and `reached_at`
+  once that came and the owner is asked; `returned`, on work in triage that came
+  back, says why (`because`: `date`, `comments`, `completed`, `cancelled` or
+  `deleted`, with the `item`) and when.
 - `triage_stack`, only on an item waiting for a triage review, is `{seen_at, seen_by}`:
   when a review marked it seen and who, both null while none did. `list_work_items`
   with `triage_stack: "unseen"` lists the items no review marked, oldest first, and
@@ -331,7 +332,7 @@ resolves its discussion, records its summary and moves its state:
 | `summary` | `{"done": "…", "next": "…", "why": "…", "friction": "none", "list": {"label": "…", "options": [...]}}` | records the closing summary |
 | `triage_seen` | `true` or `false` | marks an item waiting for a triage review as seen, or takes the mark away; not with `transition`, `defer` or `move_out` |
 | `transition` | `{"state": "completed", "reason": "…", "force": false}` | moves the state |
-| `defer` | `{"until": "2026-12-01", "reason": "…", "force": false}`, not with `transition`, `move_out` or `convert` | puts the item off until a day, a time with its zone, or an open item's close ([work model](work-model.md#goals-and-stages)) |
+| `defer` | `{"until": "2026-12-01", "reason": "…", "force": false}`, not with `transition`, `move_out` or `convert` | puts the item off until a day, a time with its zone, a count of new comments (`3 comments`), a count or a day whichever comes first (`2026-12-01 or 3 comments`), or an open item's close ([work model](work-model.md#goals-and-stages)) |
 | `move_out` | `{"reason": "…", "force": false}`, not with `transition`, `defer` or `convert` | takes the item out of its goal or stage, to triage |
 
 A list group holds at most 100 entries. `checklist_ticks` can name only steps
@@ -547,7 +548,7 @@ match is weak, and an item with no attached commit cannot show.
 | `[consent]` | Answer `agree`, `object` with a `reason`, or `moved_out` once `move_out` took your task out of what the cancel closes. |
 | `queue_off` | The refusal says `the owner hands out work in MAIN by hand: take the item they named with claim_work_item`: do that. |
 | `workflow_guard` or a claim refused with `[acceptance_question]` | Wait for the owner's answer, then take it. |
-| `[deferral]` | Send `until` and `reason`; `until` is a day, a time with its zone, or an open item other than this one and the goals and stages over it. |
+| `[deferral]` | Send `until` and `reason`; `until` is a day, a time with its zone, a count of 1 to 999 new comments (`3 comments`), one count and one day or time joined by `or` (`2026-12-01 or 3 comments`, never with an item), or an open item other than this one and the goals and stages over it. |
 | `[move_out]` | Give the reason the item leaves its goal or stage; an item under none, or closed, has nothing to move out of. |
 | `[parent]` | Clear a parent with `move_out`, not an edit; accept the goal or stage first, or move the item out, before accepted work goes under it. |
 | `[convert]` | Send the word the refusal names: `stage` for a task under a parent, `goal` for one without, a task kind for a goal or stage; move out what stands under a goal or stage first, and reopen a closed item. |

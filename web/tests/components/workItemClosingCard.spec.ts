@@ -216,6 +216,7 @@ const deferred = (until: Partial<NonNullable<WorkItem['deferred']>>): WorkItem =
   deferred: {
     until: null,
     until_item: null,
+    until_comments: null,
     reason: 'After the release',
     since: '2026-11-01T10:00:00Z',
     by: { author: 'owner', session_id: null },
@@ -237,6 +238,17 @@ describe('put-off work and a marked step on Overview', () => {
       'Put off until QA-12 closes — After the release',
     )
     expect(hindrances(task()).find('[data-hindrance]').exists()).toBe(false)
+  })
+
+  it('says until how many new comments, alone or with a day, whichever comes first', () => {
+    const counted = hindrances(deferred({ until_comments: 3 }))
+    expect(counted.get('[data-hindrance="deferred"]').text()).toBe(
+      'Put off until 3 new comments — After the release',
+    )
+    const either = hindrances(deferred({ until: '2026-11-20T00:00:00+00:00', until_comments: 1 }))
+    expect(either.get('[data-hindrance="deferred"]').text()).toBe(
+      'Put off until November 20 or until 1 new comment, whichever comes first — After the release',
+    )
   })
 
   it('confirms a step its former holder marked by ticking it again', async () => {

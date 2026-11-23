@@ -123,9 +123,12 @@ CONFIRMATIONS = """CREATE TABLE IF NOT EXISTS work_item_confirmations(
     left_at TEXT
 )"""
 #: The condition put-off work comes back on (`planning.deferral`), one row for exactly
-#: as long as its item stands in a deferred state: a moment, or another item's close,
-#: never both. The item it waits on is held without an action on delete, so a delete
-#: that went around the return fails rather than leaving the condition unmet forever.
+#: as long as its item stands in a deferred state: a moment, a count of new comments,
+#: the two together (whichever comes first), or another item's close alone. The item
+#: it waits on is held without an action on delete, so a delete that went around the
+#: return fails rather than leaving the condition unmet forever. A count reads the
+#: item's comments after `comments_after`, the newest comment's id when the count
+#: started (0 for none): comments go only with their item, so the count never falls.
 #: `call_id` is the call that set it -- the put-off, or the owner's answer to put it
 #: off again -- which a failed launch's put-back keeps, null for a write made outside
 #: any call; `reached_at` is when it came and the owner was asked instead. It goes
@@ -134,11 +137,16 @@ DEFERRALS = """CREATE TABLE IF NOT EXISTS work_item_deferrals(
     work_item_id TEXT PRIMARY KEY REFERENCES work_items(work_item_id) ON DELETE CASCADE,
     until_at TEXT,
     until_item_id TEXT REFERENCES work_items(work_item_id),
+    until_comments INTEGER,
+    comments_after INTEGER,
     reason TEXT NOT NULL,
     call_id INTEGER REFERENCES execution_events(id),
     since TEXT NOT NULL,
     reached_at TEXT,
-    CHECK((until_at IS NULL) <> (until_item_id IS NULL))
+    CHECK(until_item_id IS NULL OR (until_at IS NULL AND until_comments IS NULL)),
+    CHECK(until_at IS NOT NULL OR until_item_id IS NOT NULL OR until_comments IS NOT NULL),
+    CHECK((until_comments IS NULL) = (comments_after IS NULL)),
+    CHECK(until_comments IS NULL OR until_comments BETWEEN 1 AND 999)
 )"""
 #: What comes due by the clock, and who waits on one item, each read by its own column.
 DEFERRALS_UNTIL_AT_INDEX = (

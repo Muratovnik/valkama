@@ -151,6 +151,7 @@ const planning = (payload: unknown) => ({
 const putOff = (reason: string) => ({
   until: at,
   until_item: null,
+  until_comments: null,
   reason,
   since: at,
   by: { author: 'user', session_id: null },

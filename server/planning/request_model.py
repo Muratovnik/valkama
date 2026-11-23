@@ -68,7 +68,8 @@ CONFIRM_FIELDS = _confirm_fields("Leave it to the next session")
 CONFIRM_OPEN_FIELDS = _confirm_fields("Leave it open")
 #: The fields of the question put-off work asks when its condition came under goals
 #: and stages all accepted: `do` takes it up, `later` puts it off again until `until`
-#: (a day or an item's reference, as `defer` reads it), and `drop` cancels it, with
+#: (a day, a count of new comments, both, or an item's reference, as `defer` reads it),
+#: and `drop` cancels it, with
 #: `cancels` the list token a goal or stage with open work under it is cancelled by.
 RETURN_DO = "do"
 RETURN_LATER = "later"
@@ -89,7 +90,8 @@ RETURN_FIELDS = (
     },
     {
         "id": RETURN_UNTIL,
-        "label": "Until: a day YYYY-MM-DD or the item it waits on",
+        "label": "Until: a day YYYY-MM-DD, a count such as 3 comments, both as 2026-12-01 or"
+        " 3 comments, or the item it waits on",
         "type": "text",
         "required": True,
         "options": [],

@@ -17,12 +17,13 @@ the items in a state of the deferred category are exactly the items with a condi
 
 from __future__ import annotations
 
+import json
 import unittest
 from datetime import UTC, datetime
 from unittest import mock
 
 from server import mcp_surface
-from server.planning import api, leases, person_events, service, sweep
+from server.planning import api, deferral, leases, person_events, service, sweep
 from tests.test_planning_closing import APPLY, AS_A, AS_B, DELETE, DONE, MERGE, Tree
 
 CLAIM = "/api/planning/work-item/claim"
@@ -154,7 +155,7 @@ class Deferral(Tree):
         )
         record = service.get_work_item(self.conn, reference)
         [at] = [event["at"] for event in record["events"] if event["action"] == "returned"]
-        item = None if because == "date" else detail.partition(" ")[2]
+        item = None if because in ("date", "comments") else detail.partition(" ")[2]
         self.assertEqual({"because": because, "item": item, "at": at}, record["returned"])
         self.assertNotIn("deferred", record)
         self.holds()
@@ -183,6 +184,7 @@ class PuttingOffTests(Deferral):
             {
                 "until": "2026-11-18T00:00:00Z",
                 "until_item": None,
+                "until_comments": None,
                 "reason": WHY,
                 "since": "2026-11-17T09:30:00Z",
                 "reached_at": None,
@@ -207,7 +209,7 @@ class PuttingOffTests(Deferral):
             ({"until": "2026-12-01T09:00:00", "reason": WHY}, "names no zone"),
             (
                 {"until": "soon", "reason": WHY},
-                "[deferral] until soon is no day, time or work item",
+                "[deferral] until soon is no day, time, count of comments or work item",
             ),
             ({"until": t, "reason": WHY}, f"[deferral] {t} cannot wait on itself"),
             ({"until": self.goal, "reason": WHY}, f"[deferral] {t} stands under {self.goal}"),
@@ -431,7 +433,12 @@ class ReadTests(Deferral):
         self.assertEqual("deferred", record["state"]["category"])
         self.assertEqual("deferred", found[1]["work_item"]["state"]["category"])
         self.assertEqual(
-            {"until": "2026-11-18T00:00:00Z", "until_item": None, "reached_at": None},
+            {
+                "until": "2026-11-18T00:00:00Z",
+                "until_item": None,
+                "until_comments": None,
+                "reached_at": None,
+            },
             card["deferred"],
         )
         self.assertEqual(before, self.written(), "a read brings nothing back")
@@ -741,6 +748,217 @@ class InvariantTests(Deferral):
                 for title, reference in (("t", t), ("u", u), ("S1", s1), ("a", a), ("x", x))
             },
         )
+
+
+class CommentCountTests(Deferral):
+    """Work put off until a count of new comments, alone or with a day, whichever first.
+
+    The owner's rule: every comment and reply written on the item after it was put off
+    counts, a person's or an agent's; a count and a day bring it back on whichever comes
+    first. A comment that reaches the count brings the work back in its own write, and
+    the sweep reads every count again, so no comment is missed and none asks twice.
+    """
+
+    def say(self, reference: str, body: str = "News", meta: object = None, **more: object) -> int:
+        """A comment on the item, the person's or the agent's of `meta`; its id."""
+
+        entry = {"body": body, **more}
+        if meta is None:
+            self.person(APPLY, id=reference, comment=entry)
+        else:
+            self.agent("apply_work_item_changes", meta, id=reference, comment=entry)
+        return int(
+            self.conn.execute(
+                "SELECT MAX(id) FROM work_item_comments WHERE work_item_id = ?",
+                (self.identity(reference),),
+            ).fetchone()[0]
+        )
+
+    def counted(self, reference: str) -> tuple:
+        """The count and where it started, as the condition of the item holds them."""
+
+        found = self.conn.execute(
+            "SELECT until_comments, comments_after FROM work_item_deferrals WHERE work_item_id = ?",
+            (self.identity(reference),),
+        ).fetchone()
+        return () if found is None else tuple(found)
+
+    def test_a_persons_and_an_agents_comments_and_replies_count_from_the_put_off(self) -> None:
+        t = self.made("t")
+        before = self.say(t, "Written before the put-off")
+        self.defer(t, until="3 comments")
+        self.assertEqual((3, before), self.counted(t))
+        self.assertEqual(
+            {"until": None, "until_item": None, "until_comments": 3, "reached_at": None},
+            {
+                name: value
+                for name, value in service.get_work_item(self.conn, t)["deferred"].items()
+                if name in ("until", "until_item", "until_comments", "reached_at")
+            },
+        )
+        root = self.say(t, "The person asks")
+        self.say(t, "The agent answers", meta=AS_B, reply_to=root)
+        self.assertEqual("deferred", self.category(t), "two of three")
+        self.assertEqual({}, self.sweep(), "the sweep finds nothing come either")
+        self.say(t, "The person replies", reply_to=root)
+        self.came_back(t, "comments", "comments 3")
+
+    def test_one_comment_brings_it_back_in_the_write_of_that_comment(self) -> None:
+        t = self.made("t")
+        self.defer(t, until="1 comment", meta=AS_B)
+        self.say(t, meta=AS_A)
+        self.came_back(t, "comments", "comments 1")
+
+    def test_a_count_or_a_day_comes_back_on_the_count_when_it_comes_first(self) -> None:
+        for until in (f"{TOMORROW} or 2 comments", f"2 comments or {TOMORROW}"):
+            with self.subTest(until=until):
+                t = self.made("t")
+                self.defer(t, until=until)
+                self.assertEqual(
+                    ("2026-11-18T00:00:00Z", None), (self.condition(t) or ())[:2], "the day"
+                )
+                self.assertEqual(2, self.counted(t)[0])
+                self.say(t)
+                self.say(t, meta=AS_B)
+                self.came_back(t, "comments", "comments 2")
+
+    def test_a_count_or_a_day_comes_back_on_the_day_when_it_comes_first(self) -> None:
+        t = self.made("t")
+        self.defer(t, until=f"2 comments or {TOMORROW}")
+        self.say(t)
+        self.assertEqual({sweep.RETURNS: 1}, self.sweep())
+        self.came_back(t, "date", "date 2026-11-18")
+
+    def test_a_count_reached_after_the_day_passed_unread_comes_back_on_the_day(self) -> None:
+        """The day passed before the comment, though no pass read it yet: it came first."""
+
+        t = self.made("t")
+        self.defer(t, until=f"{TOMORROW} or 1 comment")
+        with mock.patch.object(leases, "utc_now", lambda: CAME):
+            self.say(t)
+        self.came_back(t, "date", "date 2026-11-18")
+
+    def test_the_sweep_counts_a_comment_whose_write_did_not_ask(self) -> None:
+        """A comment the store holds by another path than the service's write -- an older
+        writer, a restore -- is counted by the next pass."""
+
+        t = self.made("t")
+        self.defer(t, until="1 comment")
+        self.conn.execute(
+            "INSERT INTO work_item_comments(work_item_id, author, body) VALUES(?, 'agent', 'x')",
+            (self.identity(t),),
+        )
+        self.conn.commit()
+        self.assertEqual("deferred", self.category(t))
+        self.assertEqual({sweep.RETURNS: 1}, self.sweep(LATER))
+        self.came_back(t, "comments", "comments 1")
+
+    def test_under_accepted_goals_it_asks_once_however_many_comments_follow(self) -> None:
+        t = self.made("t", parent=self.goal)
+        self.defer(t, until="2 comments")
+        self.say(t)
+        self.say(t, meta=AS_B)
+        [asked] = self.returns(t)
+        self.assertEqual("deferred", self.category(t))
+        self.assertEqual(
+            f"{t} was put off until 2 new comments; that has come. Do it, put it off again,"
+            " or drop it.",
+            asked["prompt"],
+        )
+        self.assertEqual(
+            ("put_off_came", {"reference": t, "until": None, "item": None, "comments": 2}),
+            (asked["prompt_key"], json.loads(asked["prompt_values"])),
+        )
+        self.assertEqual(
+            "2026-11-17T09:30:00Z", service.get_work_item(self.conn, t)["deferred"]["reached_at"]
+        )
+        before = self.written()
+        self.say(t, "A third")
+        self.say(t, "A fourth", meta=AS_B)
+        self.assertEqual({}, self.sweep(), "asked once")
+        self.assertEqual([asked["request_id"]], [row["request_id"] for row in self.returns(t)])
+        self.assertEqual(before[0], self.written()[0], "no item changed")
+        self.holds()
+
+    def test_later_counts_the_new_comments_from_the_answer(self) -> None:
+        t = self.made("t", parent=self.goal)
+        self.defer(t)
+        self.assertEqual({sweep.RETURNS: 1}, self.sweep())
+        [asked] = self.returns(t)
+        since = (self.condition(t) or ())[4]
+        last = self.say(t, "Before the answer")
+        answer = self.answer(asked, "later", until="2 comments")
+        self.assertEqual("deferred", answer["carried_out"])
+        until_at, until_item, reason, _call, kept, reached = self.condition(t) or ()
+        self.assertEqual(
+            (None, None, WHY, since, None), (until_at, until_item, reason, kept, reached)
+        )
+        self.assertEqual((2, last), self.counted(t), "the count starts with the answer")
+        self.say(t)
+        self.assertEqual(1, len(self.returns(t)), "one of two")
+        self.say(t, meta=AS_B)
+        first, second = self.returns(t)
+        self.assertEqual(("answered", "pending"), (first["status"], second["status"]))
+        self.assertEqual(2, json.loads(second["prompt_values"])["comments"])
+        self.holds()
+
+    def test_later_takes_a_count_or_a_day(self) -> None:
+        t = self.made("t", parent=self.goal)
+        self.defer(t)
+        self.sweep()
+        [asked] = self.returns(t)
+        self.answer(asked, "later", until="2026-12-01 or 5 comments")
+        self.assertEqual(("2026-12-01T00:00:00Z", None), (self.condition(t) or ())[:2])
+        self.assertEqual(5, self.counted(t)[0])
+
+    def test_a_put_back_after_a_failed_launch_keeps_where_the_count_started(self) -> None:
+        t = self.made("t")
+        self.defer(t, until="2 comments")
+        start = self.counted(t)
+        identity = self.identity(t)
+        kept = deferral.held(self.conn, identity)
+        assert kept is not None
+        deferral.clear(self.conn, identity)
+        self.say(t)
+        deferral.restore(self.conn, identity, kept)
+        self.assertEqual(start, self.counted(t))
+
+    def test_each_count_that_names_no_condition_is_refused(self) -> None:
+        t = self.made("t")
+        x = self.made("x")
+        before = self.written()
+        for until, says in (
+            ("0 comments", "[deferral] 0 comments is no count: count 1 to 999 new comments"),
+            ("1000 comments", "[deferral] 1000 comments is no count"),
+            (
+                f"3 comments or {x}",
+                f"[deferral] until 3 comments or {x}: a count of comments goes with a day or a"
+                " time, not with an item",
+            ),
+            (f"{TOMORROW} or 2026-11-19", "is no condition: join one count and one day or time"),
+            ("3 comments or 4 comments", "is no condition"),
+            (f"{TOMORROW} or 3 comments or 4 comments", "is no condition"),
+            ("2026-11-16 or 3 comments", "[deferral] 2026-11-16 has come already"),
+            ("three comments", "is no day, time, count of comments or work item"),
+        ):
+            with self.subTest(until=until):
+                status, error = self.refused(
+                    lambda until=until: self.person(
+                        APPLY, id=t, defer={"until": until, "reason": WHY}
+                    )
+                )
+                self.assertEqual((400, "invalid_request"), (status, error["code"]))
+                self.assertIn(says, error["message"])
+        self.assertEqual(before, self.written(), "nothing of a refused put-off was kept")
+        # The same refusal stands in the owner's answer `later`.
+        g = self.made("g", parent=self.goal)
+        self.defer(g)
+        self.sweep()
+        [asked] = self.returns(g)
+        status, error = self.refused(lambda: self.answer(asked, "later", until="0 comments"))
+        self.assertEqual(400, status)
+        self.assertIn("[deferral] 0 comments is no count", error["message"])
+        self.assertEqual("pending", self.returns(g)[0]["status"])
 
 
 if __name__ == "__main__":

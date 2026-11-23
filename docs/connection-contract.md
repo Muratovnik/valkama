@@ -562,8 +562,8 @@ each with its values, are defined once, in `server/planning/composed.py`:
 | `task_filed`, `task_moved_in` | `reference`, `goal`, `title`: an agent files the task in an accepted goal, or moves it there |
 | `task_moved_to` | `reference`, `goal`, `state` (the state's key), `title`: an agent moves a task in a goal to a state |
 | `goal_proposed`, `goal_came_back` | `reference`, `title`: an agent proposes a goal; a goal came back from being put off |
-| `put_off_asked` | `reference`, `kind` (`goal` or `stage`), `title`, `until`, `reason` |
-| `put_off_came` | `reference`, and what it waited for: the moment `until` or the item `item`, the other `null` |
+| `put_off_asked` | `reference`, `kind` (`goal` or `stage`), `title`, `until` (a day, a time or a reference, or `null`), `comments` (a count of new comments, or `null`; with `until` a day or time, whichever comes first), `reason` |
+| `put_off_came` | `reference`, and what came: the moment `until`, the count `comments` or the item `item`, the other two `null` |
 | `cancel_asked` | `reference`, `point` (`cancel_outside` or `cancel_shared`), `title`, `reason` or `null`, `sessions_asked`, `objections` (`[{session, reason}]`), `unanswered` (sessions) |
 | `cancel_consent` | `reference`, `title`, `reason` or `null`: asked of a session at work |
 | `confirm_asked`, `confirm_agent`, `confirm_agent_empty` | `reference`, `cancelled` and `moved_out` (`[{reference, reason}]`), `steps`, `hidden` (lines that did not fit); the agent's two add `summary` or `null` |
@@ -576,7 +576,7 @@ each with its values, are defined once, in `server/planning/composed.py`:
 | `moved` | `reference`, `under` |
 | `cancelled` | `reference`, `question` (the answered question it follows, or `null`) |
 | `closed` | `reference` |
-| `put_off` | `reference`, `until`, `reason` |
+| `put_off` | `reference`, `until`, `comments`, as `put_off_asked` has them, `reason` |
 | `steps` | `changes` (`[{change, before, after}]`, `change` `removed`, `rewrote` or `clarified`), `reason` or `null` |
 | `chose` | `labels` |
 | `group` | `title`, `answer` (`do`, `later` or `drop`), `count` |
@@ -4344,19 +4344,25 @@ naming `defer`. `until` is one of:
 
 - a day, `2026-12-01`, which comes at 00:00 UTC;
 - a time with its zone, such as `2026-12-01T09:00:00Z` or `2026-12-01T12:00:00+03:00`;
+- a count of new comments from 1 to 999, `3 comments` or `1 comment`: every comment
+  and reply written on the item after the put-off counts, a person's or an agent's;
+- a count and a day or time joined by `or`, in either order, whichever comes first:
+  `2026-12-01 or 3 comments`;
 - the reference or `work_item_id` of the open item whose close it waits on: not
   the item itself, and not a goal or stage it stands under, which closes only
-  once nothing under it is open.
+  once nothing under it is open. A count goes with no item.
 
 `reason`, at most 400 characters, says why the work waits; the owner reads it when
 it comes back. In one write the item moves to the first `deferred` state its
 workflow reaches, with the `transitioned` detail `deferred: until 2026-12-01:
-<reason>`; its basis goes and its claims and step claims end (`released`), as on
+<reason>` (`until 3 comments: …`, `until 2026-12-01 or 3 comments: …`); its basis goes and its claims and step claims end (`released`), as on
 every move there. An item put off already stays where it is and takes the new
 condition. The answer adds `deferred`, and `applied.defer` of a batch says `state`,
 `deferred` and `released`. It is refused with `invalid_request`, nothing written,
-without `until` or `reason`, for an `until` that is no day, time or open item it
-may wait on or a moment already past, and for a closed item (`[deferral]`); and for one another session holds: `MAIN-12 is
+without `until` or `reason`, for an `until` that is no day, time, count of 1 to 999
+comments, one count and one day or time, or open item it may wait on, for a count
+joined with an item, or a moment already past, and for a closed item
+(`[deferral]`); and for one another session holds: `MAIN-12 is
 held by …; pass force to put it off anyway`. `force` carries the last through and
 records `overridden` with `claim`.
 
@@ -4364,34 +4370,40 @@ The full record and the card of an item put off carry `deferred`:
 
 | Field | What it says |
 | --- | --- |
-| `until`, `until_item` | the moment it comes back, or the reference of the item it waits on; one of them is `null` |
+| `until`, `until_comments`, `until_item` | the moment it comes back, the count of new comments it waits for, or both, whichever comes first; or the reference of the item it waits on alone. What it does not wait on is `null` |
 | `reason`, `since`, `by` | why, when and who put it off: `by` is `{author, session_id}` of that call; the card leaves these to the history |
 | `reached_at` | when its condition came while the owner is asked whether to take it up; otherwise `null` |
 
 **Coming back.** The work comes back when its day or time passes, read by the
 sweep's `returns` step and by `claim_ready_work_item` for its space before it reads
-the queue, and in the write that completes, cancels or deletes the item it waits
-on. An item merged away passes the wait to the item it merged into. It comes back
+the queue; in the write of the comment that reaches its count, and at the sweep's
+next pass for a comment the store holds by another path; and in the write that
+completes, cancels or deletes the item it waits on. A count and a moment come back
+on whichever came first: a moment that passed before the comment that reaches the
+count, though no pass read it yet, came first. An item merged away passes the wait
+to the item it merged into. It comes back
 to the first `triage` state its workflow reaches, with the `transitioned` detail
 `triage: returned, date 2026-12-01` and a `returned` event whose detail is `date
-2026-12-01`, `completed MAIN-12`, `cancelled MAIN-12` or `deleted MAIN-12`. While
-that move is its newest, its record carries `returned`: `because` (`date`,
-`completed`, `cancelled` or `deleted`), the `item`, `null` for a date, and `at`. A
+2026-12-01`, `comments 3`, `completed MAIN-12`, `cancelled MAIN-12` or `deleted
+MAIN-12`. While that move is its newest, its record carries `returned`: `because`
+(`date`, `comments`, `completed`, `cancelled` or `deleted`), the `item`, `null` for
+a date or a count, and `at`. A
 close or a delete that brought work back answers with `returned`, the references
 it brought back.
 
 Under goals and stages all accepted and open, or when its workflow reaches no
 `triage` state, the item stays put off with `reached_at` set, and Valkama asks the
 owner a question of purpose `return`: `MAIN-12 was put off until 2026-12-01; that
-has come. Do it, put it off again, or drop it.` It is asked once: the item waited
-on closing again, or being deleted, asks nothing more. A delete of that item, before
+has come. Do it, put it off again, or drop it.` (`until 3 new comments` for a
+count). It is asked once: the item waited on closing again, or being deleted, or
+more comments, asks nothing more. A delete of that item, before
 or after its close, leaves `until` at the moment the condition came and
 `until_item` `null`. Its one required choice, `answer`,
 takes `do`, `later` with the text `until`, or `drop` with the optional text
 `cancels`, a cancel list's token. As with [review](#review-asks-the-owner), only a
 person answers it, and the answer is carried out in the same write: `do` moves the
 item to its first `ready` state (`carried_out: ready`), `later` puts it off until
-the new condition (`deferred`), `drop` cancels it with a summary saying the owner
+the new condition (`deferred`), whose count of new comments starts with the answer, `drop` cancels it with a summary saying the owner
 dropped it (`cancelled`). While the question is open an agent's claim of the item,
 and its move anywhere but a cancelled state, is refused with
 `acceptance_question`, which `force` does not carry.

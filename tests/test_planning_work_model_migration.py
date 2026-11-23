@@ -1208,6 +1208,21 @@ class MigratedStoreTests(StoreCase):
             },
             names,
         )
+        # A condition may count new comments, alone or with a moment (schema 25).
+        self.assertEqual(
+            [
+                "work_item_id",
+                "until_at",
+                "until_item_id",
+                "until_comments",
+                "comments_after",
+                "reason",
+                "call_id",
+                "since",
+                "reached_at",
+            ],
+            [str(row[1]) for row in self.read("PRAGMA table_info(work_item_deferrals)")],
+        )
         [(rows,)] = self.read("SELECT COUNT(*) FROM work_item_deferrals")
         self.assertEqual(0, rows)
         [step] = [step for step in self.report["steps"] if step["name"] == "deferred-items"]

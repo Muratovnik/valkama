@@ -15,7 +15,7 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Added
 
-- **`valkama migrate work-model` carries a store Valkama 2.9 left to schema 24.** Run
+- **`valkama migrate work-model` carries a store Valkama 2.9 left to schema 25.** Run
   once with every session stopped, it takes a verified `pre3.0` snapshot with the
   pictures beside it, then gives the workflows their eight categories and the service
   state, the history their renamed keys and every item its kind, acceptance and start,
@@ -69,16 +69,25 @@ checkouts are therefore distinguishable even at the same version.
   `to` (a UTC day or a timestamp, both ends included), in pages of up to 200
   (`limit`, `offset`), each with its item, session and time. In an item's full
   record a marked event carries its `point`. A migrated store starts with no marks.
+- **Work can be put off until new comments come.** `defer` and the owner's answer
+  `later` take, beside a day, a time and an item's close, a count of new comments
+  (`until: "3 comments"`) and a count with a day or time, whichever comes first
+  (`"2026-12-01 or 3 comments"`). Every comment and reply written on the item after it
+  was put off counts, a person's or an agent's; the comment that reaches the count
+  brings the work back in its own write, and under accepted goals the owner is asked
+  once. The record's `deferred` carries `until_comments`, and `returned` says
+  `comments`. The card's «Put off» and a question's «Later…» take the count too. The
+  store moves to schema 25.
 
 ### Changed
 
-- **A fresh store holds the work model, at schema 24.** A new space's workflow has a
+- **A fresh store holds the work model, at schema 25.** A new space's workflow has a
   state for each of eight categories — Triage, Deferred, Ready, Dev, Review, Done,
   Blocked and Cancelled — and new work starts in Triage; `backlog` and `queued` are no
   longer categories. A goal or a stage is stored as a container, which the store keeps
   out of ready, active, review and blocked, and a service state beside the eight holds
   an accepted open one. A store Valkama 2.9 left is refused with "run `valkama migrate
-  work-model` once" and left as it was, and a 2.9 build refuses a store at 24.
+  work-model` once" and left as it was, and a 2.9 build refuses a store at 25.
 - **A close ends the questions on its item and says how.** Closing an item writes
   every question, decision and list still pending on it `expired`, with
   `expired_reason` `item_completed` or `item_cancelled` in place of `task_closed`,

@@ -159,6 +159,37 @@ for (const width of [1280, 620, 390]) {
   })
 }
 
+for (const width of [1280, 620, 390]) {
+  test(`a task is put off until new comments or a day, whichever first, at ${width}px`, async ({
+    page,
+  }, info) => {
+    let deferred = false
+    const drawer = await openCard(page, width, {
+      space: closingSpace,
+      card: (read) => (deferred ? deferredCard(read, { until_comments: 3 }) : read),
+    })
+    const sent = await writes(page, '/api/planning/work-item/defer', () => {
+      deferred = true
+      return {}
+    })
+    await openStateMenu(page, drawer)
+    await page.getByRole('option', { name: 'Later' }).click()
+
+    const dialog = page.getByRole('dialog', { name: 'Put off' })
+    await dialog.getByLabel('Until a day').fill('2099-01-02')
+    await dialog.getByLabel('New comments').fill('3')
+    await expect(dialog.locator('[data-until="either"]')).toBeVisible()
+    await dialog.getByLabel('Why it waits').fill('After the release')
+    await fitsWindow(page, dialog)
+    await page.screenshot(shot(info.outputPath(`dialogs-${width}-defer-comments.png`)))
+    await dialog.locator('button[type="submit"]').click()
+    await expect.poll(() => sent.map((body) => body.until)).toEqual(['2099-01-02 or 3 comments'])
+    await expect(drawer.locator('[data-hindrance="deferred"]')).toHaveText(
+      'Put off until January 2 or until 3 new comments, whichever comes first — After the release',
+    )
+  })
+}
+
 test('a task is put off until a card of its space closes', async ({ page }, info) => {
   const drawer = await openCard(page, 1280, { space: closingSpace })
   await page.route('**/api/modules/planning/search?*', (route) =>
