@@ -37,6 +37,7 @@ python valkama.py <command> [options]
 | `export [--section planning] [--space KEY]... [--output PATH]` | write every Planning space, every one of its work items and their questions as one JSON export; see [`export`](#export) |
 | `transcripts purge [--session ID]... [--before DATE] [--dry-run]` | delete archived transcripts now, on request, whatever retention says; prints counts only; see [The transcript archive](client-hooks.md#the-transcript-archive) |
 | `usage rebuild --session ID [--agent ID] \| --all [--dry-run] [--json]` | read a session's usage run again from its transcript; see [`usage rebuild`](#usage-rebuild) |
+| `usage pauses [--since WHEN] [--until WHEN] [--client NAME]... [--json]` | how much of the prompt cache model requests read after pauses of each length, per client, role, model and sign-in; reads only; see [`usage pauses`](#usage-pauses) |
 | `quota import --source FILE` | import subscription quota samples from a JSON-lines file, one window a line; importing again keeps nothing twice. The format is in [the connection contract](../connection-contract.md#subscription-quota-samples-and-accounts) |
 | `migrate planning-model [--dry-run]` | explicitly convert a Board-era store to Planning once; dry run converts a copy; see [Converting a Board-era store](store-upgrades.md#converting-a-board-era-store) |
 | `attach NAME PATH [--label TEXT]` | attach another database file as a scope |
@@ -64,6 +65,104 @@ those spaces and records them as `space_filter`; an unknown space exits
 non-zero. `--output` writes the file whole through a temporary file beside it
 and prints one summary line instead of the JSON. A space whose items do not add
 up to its count stops the export.
+
+## `usage pauses`
+
+`usage pauses [--since WHEN] [--until WHEN] [--client NAME]... [--json]` reports,
+for the model requests sent in a period, how much of each one's context was read
+from the prompt cache and how much was written to it again, by the length of the
+pause before it. It reads the runs the background usage reader knows and their
+transcripts (or archived copies) again; it opens the store read-only and changes
+nothing. Each run's file is read whole, so a long period over a large history
+takes a while; `--client` and a shorter period read less.
+
+`WHEN` is a date, the start of that day in UTC, or a time with its offset
+(`2030-03-04T10:00+02:00`). `--until` defaults to now and `--since` to 30 days
+before `--until`. The period is read in whole hours of UTC, `--since` rounded
+down to its hour and `--until` up. `--client` (`claude`, `codex`, repeatable)
+reads only that client's runs.
+
+What is measured:
+
+- A request is one usage a client's record reports: a Claude response by its
+  message id, a Codex `token_usage_record`. An adviser's part is left out. The
+  first request of each run has no pause and is counted in no bucket.
+- The pause is the time from when the previous request in the same run was sent
+  to when this one was sent: the age of the cache it could read. A request
+  counts as sent at its last input record: the prompt, tool result, notice or
+  hook message it answers.
+- `wait` is what the pause waited on:
+  - `wake`: a keep-warm wake, a hook message that starts with the literal
+    `keepwarm:` (a Claude Stop hook's `asyncRewake` message, a Stop or
+    SubagentStop `block` reason, or a Codex Stop `block` reason);
+  - `person`: a person's prompt or the answer to a question put to a person;
+  - `machine`: everything else.
+
+  The `person` rows are the control sample, because those waits are never
+  warmed.
+- The buckets are `0-4m`, `4-5m`, `5-6m`, `6-30m`, `30-60m`, `60-70m`, `70m-3h`,
+  `3-12h` and `12h+`. Each holds its lower edge and not its upper one. The edges
+  sit on either side of the five-minute and one-hour cache lives, so a cliff at
+  either one falls between two buckets.
+- `auth` is `subscription` for an organization the subscription quota knows,
+  and `null` where nothing says.
+
+`--json` prints one object whose `interface_version` is `valkama-usage-pauses`.
+Fields are only ever added to it:
+
+| Field | Meaning |
+| --- | --- |
+| `from`, `to` | the hours read, UTC, `to` not included |
+| `buckets` | each bucket's `key`, `from_seconds` and `to_seconds` (`null` for the last), in order |
+| `waits` | `machine`, `person`, `wake` |
+| `cold_share` | a request that read less than this share of its context from the cache counts as cold (0.5) |
+| `runs` | `read`, the runs read; `missing`, those with no transcript left to read |
+| `rows` | one per environment, wait and bucket that had a request, as below |
+
+Each row:
+
+| Field | Meaning |
+| --- | --- |
+| `client`, `role`, `model`, `auth` | the environment: `claude` or `codex`; `main` (a session's own run) or `subagent`; the model that answered; `subscription` or `null` |
+| `wait`, `bucket` | as above |
+| `requests` | requests in the row |
+| `context_tokens` | everything they sent: the next four added up |
+| `input_tokens`, `cached_read_tokens`, `cache_write_5m_tokens`, `cache_write_1h_tokens` | what they sent by kind; Codex reports one write kind, kept as `cache_write_5m_tokens` |
+| `read_share`, `write_share` | cache reads, and cache writes, over `context_tokens`; `null` with no tokens |
+| `cold_requests` | requests that read less than `cold_share` of their own context from the cache |
+| `estimated_api_cost_usd`, `unpriced_requests` | the estimate at public API prices of the requests with a price, and how many had none; on a `wake` row, what the wakes cost |
+| `background_known` | whether the client's transcript shows background work: true for Claude, false for Codex |
+| `background_requests`, `background_cold_requests` | requests sent while a background command or subagent the run started was still running, and how many of them were cold; `null` where `background_known` is false |
+
+```json
+{
+ "interface_version": "valkama-usage-pauses",
+ "from": "2030-03-01T00:00:00+00:00",
+ "to": "2030-03-08T00:00:00+00:00",
+ "buckets": [{"key": "0-4m", "from_seconds": 0, "to_seconds": 240}],
+ "waits": ["machine", "person", "wake"],
+ "cold_share": 0.5,
+ "runs": {"read": 42, "missing": 0},
+ "rows": [
+  {
+   "client": "claude", "role": "subagent", "model": "claude-opus-5-5",
+   "auth": "subscription", "wait": "machine", "bucket": "6-30m",
+   "requests": 12, "context_tokens": 1450000, "input_tokens": 120,
+   "cached_read_tokens": 150000, "cache_write_5m_tokens": 1299880,
+   "cache_write_1h_tokens": 0, "read_share": 0.1034, "write_share": 0.8965,
+   "cold_requests": 11, "estimated_api_cost_usd": 9.41, "unpriced_requests": 0,
+   "background_known": true, "background_requests": 0,
+   "background_cold_requests": 0
+  }
+ ]
+}
+```
+
+(`buckets` is cut to its first entry here; the answer lists all nine.)
+
+`GET /api/analytics/pauses` answers the same report under `pauses`, with the
+period given as the usage read takes it (`from`, `to`, `utc_offset`). The
+Analytics page's «Pauses» section draws it.
 
 ## `usage rebuild`
 

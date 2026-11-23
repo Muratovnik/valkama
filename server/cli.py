@@ -24,12 +24,14 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import datetime as dt
 import json
 import os
 import shutil
 import sqlite3
 import sys
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -43,6 +45,7 @@ from . import (
     store,
     transcripts,
 )
+from .analytics import pauses as usage_pauses
 from .federation import federated_spaces
 from .hooks import ingest
 from .hooks.statusline import INTERFACE as STATUSLINE_INTERFACE
@@ -57,7 +60,7 @@ from .platform import installed
 from .projects import registry_owner, scopes
 from .quota import history as quota_history
 from .static_assets import DIST_DIR, SOURCE_ROOT
-from .store import connect, data_root, db_path
+from .store import connect, data_root, db_path, open_read_only
 from .store_identity import metadata as store_metadata
 from .store_identity.refs import planning_space_entity
 from .telemetry import journal, usage_rebuild
@@ -583,6 +586,49 @@ def _usage_rebuild_main(parser: argparse.ArgumentParser, options: argparse.Names
         raise SystemExit(1)
 
 
+#: How far back `usage pauses` reads when no `--since` is given.
+_PAUSES_DAYS = 30
+
+
+def _pauses_moment(text: str) -> float:
+    """A `--since` or `--until`: a date, the start of that day in UTC, or a time with its offset."""
+
+    try:
+        if len(text) == len("2030-03-04"):
+            return dt.datetime.combine(dt.date.fromisoformat(text), dt.time(), dt.UTC).timestamp()
+        moment = dt.datetime.fromisoformat(text)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("a date or a time with its offset") from error
+    if moment.tzinfo is None:
+        raise argparse.ArgumentTypeError("a time needs its offset")
+    return moment.timestamp()
+
+
+def _usage_pauses_main(options: argparse.Namespace) -> None:
+    """Print the report of pauses before model requests; the store is only read."""
+
+    until = options.until if options.until is not None else time.time()
+    since = options.since if options.since is not None else until - _PAUSES_DAYS * 86400
+    try:
+        with contextlib.closing(open_read_only()) as conn:
+            conn.row_factory = sqlite3.Row
+            report = usage_pauses.read(conn, start=since, end=until, clients=options.client)
+    except (OSError, ValueError, sqlite3.Error) as error:
+        raise SystemExit(f"usage pauses: {error}") from error
+    print(
+        json.dumps(report, ensure_ascii=False, indent=1)
+        if options.json
+        else usage_pauses.render(report)
+    )
+
+
+def _usage_main(parser: argparse.ArgumentParser, options: argparse.Namespace) -> None:
+    if options.usage_command == "pauses":
+        _usage_pauses_main(options)
+    else:
+        _usage_rebuild_main(parser, options)
+
+
 def _quota_import_main(options: argparse.Namespace) -> None:
     """Import quota samples from a file and print what was kept; a refusal exits non-zero."""
 
@@ -827,6 +873,31 @@ def main(argv: list[str] | None = None) -> None:
         help="report what a rebuild would change; rebuilds nothing",
     )
     rebuild_cmd.add_argument("--json", action="store_true")
+    pauses_cmd = usage_sub.add_parser(
+        "pauses",
+        help="how much of the prompt cache requests read after pauses of each length;"
+        " reads the store and the transcripts, changes nothing",
+    )
+    pauses_cmd.add_argument(
+        "--since",
+        type=_pauses_moment,
+        metavar="WHEN",
+        help=f"a date (UTC) or a time with its offset; {_PAUSES_DAYS} days before --until if not given",
+    )
+    pauses_cmd.add_argument(
+        "--until",
+        type=_pauses_moment,
+        metavar="WHEN",
+        help="a date (UTC) or a time with its offset; now if not given",
+    )
+    pauses_cmd.add_argument(
+        "--client",
+        action="append",
+        default=[],
+        choices=("claude", "codex"),
+        help="only this client's runs; repeat for more",
+    )
+    pauses_cmd.add_argument("--json", action="store_true")
     quota_cmd = commands.add_parser("quota", help="act on the subscription quota samples")
     quota_sub = quota_cmd.add_subparsers(dest="quota_command", required=True)
     quota_import_cmd = quota_sub.add_parser(
@@ -935,7 +1006,7 @@ def main(argv: list[str] | None = None) -> None:
                 raise SystemExit(f"transcripts purge: {error}") from error
         print(transcripts.render_purge(purged))
     elif options.command == "usage":
-        _usage_rebuild_main(parser, options)
+        _usage_main(parser, options)
     elif options.command == "quota":
         _quota_import_main(options)
     else:

@@ -17,7 +17,7 @@ from collections.abc import Callable, Mapping
 
 from .. import query_params
 from ..quota import accounts
-from . import quota, usage, uses
+from . import pauses, quota, usage, uses
 
 ANALYTICS_API_INTERFACE = "valkama-analytics-api"
 USAGE_PATH = "/api/analytics/usage"
@@ -27,6 +27,8 @@ QUOTA_PATH = "/api/analytics/quota"
 QUOTA_WINDOW_PATH = "/api/analytics/quota/window"
 #: How often each analytics surface was opened: read by `GET`, counted by `POST`.
 USES_PATH = "/api/analytics/uses"
+#: How much of the prompt cache requests read after pauses of each length (`pauses`).
+PAUSES_PATH = "/api/analytics/pauses"
 
 _PARAMETERS = frozenset(
     {"from", "to", "step", "utc_offset", "group_by", "compare", "none", *usage.DIMENSIONS}
@@ -137,6 +139,22 @@ def _quota(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dic
     }
 
 
+def _pauses(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
+    """The pauses before model requests over `from` to `to`, a date at `utc_offset` or a time
+    with its offset as the usage read takes them, read in whole hours (`pauses`)."""
+
+    _refuse_unknown(parameters, frozenset({"from", "to", "utc_offset"}))
+    period = usage.query(
+        start=query_params.required(parameters, "from", error=AnalyticsHttpError),
+        end=query_params.required(parameters, "to", error=AnalyticsHttpError),
+        utc_offset=_offset(parameters),
+    )
+    return {
+        "interface_version": ANALYTICS_API_INTERFACE,
+        "pauses": pauses.read(conn, start=period.start / 1e6, end=period.end / 1e6),
+    }
+
+
 #: The longest model name a window of one model's week is asked for by.
 _MODEL_LENGTH = 64
 
@@ -191,6 +209,7 @@ def _quota_window(conn: sqlite3.Connection, parameters: Mapping[str, list[str]])
 
 
 _READS: dict[str, Callable[[sqlite3.Connection, Mapping[str, list[str]]], dict]] = {
+    PAUSES_PATH: _pauses,
     QUOTA_PATH: _quota,
     QUOTA_WINDOW_PATH: _quota_window,
     USAGE_PATH: _usage,
@@ -247,6 +266,7 @@ def handle_post(
 
 __all__ = [
     "ANALYTICS_API_INTERFACE",
+    "PAUSES_PATH",
     "QUOTA_PATH",
     "QUOTA_WINDOW_PATH",
     "READ_PATHS",
