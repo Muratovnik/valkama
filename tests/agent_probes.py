@@ -1044,7 +1044,8 @@ def prepare_store(
     """
 
     isolated = _isolated()
-    base = work / "base.sqlite3"
+    home = work / "base"
+    base = isolated.store_path(home)
     migration = work / "migration"
     migration.mkdir(parents=True, exist_ok=True)
     environment = {**isolated.isolated_environment(migration), "VALKAMA_DB": str(base)}
@@ -1056,7 +1057,7 @@ def prepare_store(
         if code != 0:
             raise ProbeError(f"could not create a store: {output.strip()[-800:]}")
         return base, {"source": None}
-    isolated.copy_store(source, base)
+    isolated.copy_store(source, home)
     isolated.copy_registry(migration, registry)
     carried = migration / "AppData" / "Local" / "Valkama"
     arguments = ["migrate", "work-model"]
@@ -1705,8 +1706,10 @@ class SessionRunner:
         if not self.store_file.is_file():
             return
         try:
-            _isolated().copy_store(self.store_file, self.directory / "store.sqlite3")
-        except (OSError, sqlite3.Error) as error:
+            # The product's own copy, which names its file; the record keeps its name.
+            copied = store.copy_store(str(self.store_file), str(self.directory))
+            os.replace(copied, self.directory / "store.sqlite3")
+        except (OSError, RuntimeError, sqlite3.Error) as error:
             self.record.fail("record", f"the store could not be copied: {error}")
         spool = self.store_file.parent / "spool"
         if spool.is_dir():

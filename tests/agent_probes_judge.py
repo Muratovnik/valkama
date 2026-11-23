@@ -490,7 +490,7 @@ class Store:
         home.mkdir(parents=True)
         self.path = isolated.store_path(home)
         self.path.parent.mkdir(parents=True)
-        isolated.copy_store(record.directory / "store.sqlite3", self.path)
+        isolated.copy_store(record.directory / "store.sqlite3", home)
         environment = {
             **isolated.isolated_environment(home),
             "VALKAMA_DB": str(self.path),

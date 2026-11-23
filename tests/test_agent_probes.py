@@ -843,6 +843,55 @@ class SandboxRefusalTests(unittest.TestCase):
         self.assertIn('windows.sandbox="mxc"', argv)
 
 
+def _rows(path: Path) -> list[tuple[Any, ...]]:
+    with contextlib.closing(sqlite3.connect(path)) as conn:
+        return conn.execute("SELECT value FROM kept").fetchall()
+
+
+class StoreCopyTests(unittest.TestCase):
+    """The run's store and a session's kept store are copies of the store each names.
+
+    `isolated.copy_store` takes the profile home a store goes in, not the file: given
+    the file, it copied into a directory of that name, and the run served a path that
+    held no store.
+    """
+
+    def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(temporary.cleanup)
+        self.base = Path(temporary.name)
+        self.source = self.base / "source.sqlite3"
+        with contextlib.closing(sqlite3.connect(self.source)) as conn, conn:
+            conn.execute("CREATE TABLE kept (value)")
+            conn.execute("INSERT INTO kept VALUES ('copied')")
+
+    def test_the_run_serves_a_copy_of_the_store_it_was_given(self) -> None:
+        registry = self.base / "registry"
+        registry.mkdir()
+        with mock.patch.object(agent_probes, "_valkama", return_value='"status": "migrated"'):
+            served, prepared = agent_probes.prepare_store(self.source, self.base / "work", registry)
+
+        self.assertTrue(served.is_file(), served)
+        self.assertEqual([("copied",)], _rows(served))
+        self.assertEqual("migrated", prepared["migration"])
+
+    def test_a_session_keeps_its_store_under_the_name_the_judge_reads(self) -> None:
+        directory = self.base / "record"
+        (self.base / "registry").mkdir()
+        directory.mkdir()
+        runner = mock.Mock(
+            store_file=self.source,
+            directory=directory,
+            profile=mock.Mock(registry=self.base / "registry"),
+        )
+
+        agent_probes.SessionRunner._keep_store(runner)
+
+        runner.record.fail.assert_not_called()
+        self.assertEqual([("copied",)], _rows(directory / "store.sqlite3"))
+        self.assertEqual(["registry", "store.sqlite3"], sorted(p.name for p in directory.iterdir()))
+
+
 class StoreCopyRegistryTests(unittest.TestCase):
     """The registry a store copy migrates with is the caller's, not the suite's.
 
