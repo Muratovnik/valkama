@@ -91,9 +91,11 @@ test('a coarse pointer asked without the width is a second finger, in reach.css 
   assert.deepEqual(asked(REACH, FINGER), [])
 })
 
+// Read as the file loads, not in a test (`collectVueSources`).
+const productFindings = scanUiSources(collectVueSources()).filter(
+  (line) => line.endsWith(WINDOW) || line.endsWith(FINGER_ONCE),
+)
+
 test('the tree asks the window only where it may', () => {
-  const findings = scanUiSources(collectVueSources()).filter(
-    (line) => line.endsWith(WINDOW) || line.endsWith(FINGER_ONCE),
-  )
-  assert.deepEqual(findings, [])
+  assert.deepEqual(productFindings, [])
 })

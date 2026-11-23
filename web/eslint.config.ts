@@ -59,7 +59,7 @@ const TYPE_MEMBER_ORDER = {
 const LINE_DEBT = {
   'src/shared/i18n/locales/en.ts': 1047,
   'src/shared/i18n/locales/ru.ts': 1046,
-  'tests/uiSystemGuard.test.ts': 475,
+  'tests/uiSystemGuard.test.ts': 470,
   'stylelint-order-preset.js': 416,
 }
 

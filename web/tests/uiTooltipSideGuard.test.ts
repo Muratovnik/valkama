@@ -63,7 +63,10 @@ test('a hint without a side passes, and an exception passes only from the regist
   ])
 })
 
+// Read as the file loads, not in a test (`collectVueSources`).
+const productFindings = scanTooltipSides(collectVueSources())
+
 test('no hint of the product tree states a side, and every exception says why', () => {
-  assert.deepEqual(scanTooltipSides(collectVueSources()), [])
+  assert.deepEqual(productFindings, [])
   for (const [what, why] of SIDED_TOOLTIPS) assert.ok(why.trim().length > 10, what)
 })

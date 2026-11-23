@@ -85,6 +85,9 @@ test('what hover changes besides sight, and sight that focus alone keeps, are no
     assert.deepEqual(scan('future/Row.vue', css), [], css)
 })
 
+// Read as the file loads, not in a test (`collectVueSources`).
+const productFindings = scanRevealCopies(collectVueSources())
+
 test('the tree reveals every action through reveal.css', () => {
-  assert.deepEqual(scanRevealCopies(collectVueSources()), [])
+  assert.deepEqual(productFindings, [])
 })

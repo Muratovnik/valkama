@@ -16,8 +16,11 @@ const drawn = (template: string) => [
   },
 ]
 
+// Read as the file loads, not in a test (`collectVueSources`).
+const productFindings = scanTitleBreaks(collectVueSources())
+
 test('the tree as it stands writes no title as text but the ones it registers', () => {
-  assert.deepEqual(scanTitleBreaks(collectVueSources()), [])
+  assert.deepEqual(productFindings, [])
 })
 
 test('the gate runs the rule, and holds a tree that is not the product to an empty register', () => {

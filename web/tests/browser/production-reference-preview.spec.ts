@@ -145,14 +145,17 @@ test('a neighbour takes the card over at once; after a pause it waits again', as
 
   const neighbour = reference(entry, 'MAIN-13')
   const { x, y } = await middle(neighbour)
-  const before = Date.now()
+  // The page's clock stands until the move is over and then runs short of the half second a
+  // resting pointer waits, however long a busy machine takes over the move.
+  await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 1000)
   await page.mouse.move(x, y, { steps: 4 })
+  await page.clock.runFor(449)
   await expect(shown).toContainText('MAIN-13')
-  expect(Date.now() - before).toBeLessThan(450)
   await expect(page.locator(CARD)).toHaveCount(1)
   // No fading in again: it is the same card, moved.
   await expect(shown).toHaveAttribute('data-opened', 'at-once')
   await expect(reference(entry, 'MAIN-12')).not.toHaveAttribute('aria-describedby')
+  await page.clock.resume()
 
   await page.mouse.move(5, 5, { steps: 4 })
   await expect(shown).toHaveCount(0)

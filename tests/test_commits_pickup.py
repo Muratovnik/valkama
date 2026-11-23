@@ -11,7 +11,6 @@ import io
 import json
 import os
 import sqlite3
-import statistics
 import time
 import unittest
 from pathlib import Path
@@ -24,6 +23,7 @@ from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
 
 from .commit_fixtures import CALL, CLAUDE, CODEX, PROJECT, CommitPlace
+from .processor_time import processor_seconds
 from .registry_fixtures import project_entry, registry_bytes
 
 SUBAGENT = "019a3c2e-aaaa-7c11-9e0f-2f4b6d8a1c3e"
@@ -33,7 +33,7 @@ DEFAULT = "beta"
 UNBOUND = "gamma"
 #: The default project of a neighbouring space NEXT, in the tests that make one.
 NEIGHBOUR = "lib"
-#: How many runs each cost figure is the median of.
+#: How many runs each cost figure is the mean of, timed at once.
 RUNS = 200
 
 
@@ -240,13 +240,15 @@ class StoreAccessTests(PickupCase):
 
 
 class CostTests(PickupCase):
-    def median_ms(self, payload: dict) -> float:
-        times = []
-        for _run in range(RUNS):
-            started = time.perf_counter_ns()
-            entry._commits("claude", payload)
-            times.append(time.perf_counter_ns() - started)
-        return statistics.median(times) / 1e6
+    def mean_ms(self, payload: dict) -> float:
+        """The milliseconds of processor time one look costs: a look is shorter than a tick of
+        the thread's clock, so the runs are timed together (`tests.processor_time`)."""
+
+        def runs() -> None:
+            for _run in range(RUNS):
+                entry._commits("claude", payload)
+
+        return processor_seconds(runs)[1] / RUNS * 1000
 
     def test_with_no_record_the_look_costs_at_most_two_milliseconds(self) -> None:
         """What the look for records adds to a hook that finds none: the directory listings
@@ -264,7 +266,7 @@ class CostTests(PickupCase):
             ),
         )
         self.assertEqual(2, len(self.place.everywhere()))
-        self.assertLessEqual(self.median_ms(payload), 2.0)
+        self.assertLessEqual(self.mean_ms(payload), 2.0)
         self.assertEqual([], self.rows())
 
 

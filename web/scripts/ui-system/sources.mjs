@@ -10,6 +10,15 @@ function normalizedRelative(root, file) {
   return relative(root, file).split(sep).join('/')
 }
 
+/**
+ * Every source file under `root` a rule reads, with its path from there.
+ *
+ * A test reads the product tree with it as its file loads, outside its tests. Vitest
+ * cannot stop a test whose body never awaits; it can only fail one that has returned,
+ * by the time it took on the wall, and on a busy machine that time is the load beside
+ * the run rather than the reading. Loading a file has no such limit, and a read or a
+ * rule that throws there still fails the file.
+ */
 export function collectVueSources(root = defaultSourceRoot) {
   const sources = []
   const visit = (directory) => {

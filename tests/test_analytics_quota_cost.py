@@ -4,19 +4,20 @@ A reading every ten minutes for a year, the five-hour window and the week each t
 accounts read by the poll, one of them with a model's week as well, and one read through
 a session's status line, which a read gives its organization one reading at a time. Only
 the last seven days are answered, and the year before them must not cost the read. The
-budget is the Analytics read's own (`test_analytics_cost`), held to the quickest of a few
-reads for the reason given there.
+budget is the Analytics read's own (`test_analytics_cost`), on the reading thread's processor
+time for the reason given there.
 """
 
 from __future__ import annotations
 
 import datetime as dt
-import time
+from functools import partial
 
 from server.analytics import quota
 from server.quota import accounts, samples
 from tests import test_analytics_cost as cost
 from tests.analytics_fixtures import START, UsageStore
+from tests.processor_time import processor_seconds
 
 #: A year of readings, ten minutes apart.
 STEP = dt.timedelta(minutes=10)
@@ -72,14 +73,8 @@ class QuotaCostTests(UsageStore):
     ) -> None:
         self.build()
         self.assertGreater(self.readings, 52_000)
-        spent: list[float] = []
-        answer: dict = {}
-        while len(spent) < cost.READS and (not spent or min(spent) >= cost.BUDGET):
-            began = time.perf_counter()
-            answer = quota.read(self.conn, 180, now=NOW)
-            spent.append(time.perf_counter() - began)
-        took = ", ".join(f"{one:.3f}" for one in spent)
-        self.assertLess(min(spent), cost.BUDGET, f"the quota read took {took} s")
+        answer, spent = processor_seconds(partial(quota.read, self.conn, 180, now=NOW))
+        self.assertLess(spent, cost.BUDGET, f"the quota read took {spent:.3f} s of processor time")
         # The status line's account is its organization's, known by its weekly reset, which
         # is the same every week: one account, however many weeks it was read in.
         slot = accounts.weekly_reset(samples.seat_for_week((START + 53 * _WEEK).isoformat()))
