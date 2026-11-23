@@ -131,15 +131,12 @@ class LiveTests(unittest.TestCase):
                 encoding="utf-8",
             )
             command = [INTERPRETER, str(script), "--port", "тест"]
-            child = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-            try:
+            # Leaving the block closes both pipes and waits for the child, which
+            # ends when its input closes.
+            with subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE) as child:
                 assert child.stdout is not None
                 port = int(child.stdout.readline())
                 [row] = listener_owners.listener_processes(port)
-            finally:
-                assert child.stdin is not None
-                child.stdin.close()
-                child.wait(timeout=30)
             self.assertEqual(child.pid, row["pid"])
             self.assertEqual(subprocess.list2cmdline(command), row["command_line"])
             self.assertTrue(row["identity_token"])

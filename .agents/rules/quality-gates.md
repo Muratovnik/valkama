@@ -176,15 +176,18 @@ the file as it is when the report runs. Reformat a measured file before
 reporting and the figure is nonsense — the ratchet fired once on a two-line
 shift that `ruff format` had introduced after the run.
 
-A test that leaves an SQLite connection open fails on Python 3.13 and later.
-`tests/sqlite_leaks.py`, installed by `tests/__init__.py` for every way the suite
-runs, makes sqlite3's `unclosed database` warning an error, and no other warning.
-It fails the test during which the collector found the connection, which is not
-always the one that opened it: run that module again with `-X tracemalloc=20 -W
-always::ResourceWarning`, where the guard stands aside and the warning prints the
-line that opened each connection. `with conn:` ends a transaction and leaves the
-connection open; close it with `contextlib.closing`, `try`/`finally`, or open a
-store file for reading through `store.read_only`.
+A test that leaves an SQLite connection (on Python 3.13 and later), a child
+process or a file open fails. `tests/resource_leaks.py`, installed by
+`tests/__init__.py` for every way the suite runs, makes three warnings errors and
+no other: sqlite3's `unclosed database`, `subprocess`'s `subprocess N is still
+running` and `io`'s `unclosed file`. It fails the test during which the resource
+was collected, which is not always the one that opened it: run that module again
+with `-X tracemalloc=20 -W always::ResourceWarning`, where the guard stands aside
+and the warning prints the line that opened each one. `with conn:` ends a
+transaction and leaves the connection open; close it with `contextlib.closing`,
+`try`/`finally`, or open a store file for reading through `store.read_only`. A
+`Popen` warns whenever nothing read its exit status, even after its child has
+ended: `wait()` for it, in a `finally` or a cleanup when the test may fail first.
 
 Two test files state properties rather than examples, and `property_settings.py`
 owns how Hypothesis is configured for both. `test_contract_properties.py` says

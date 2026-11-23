@@ -133,6 +133,11 @@ _LISTENING = re.compile(rb"Valkama on http://127\.0\.0\.1:(\d+)/")
 _NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 _NEW_GROUP = 0x00000200 if sys.platform == "win32" else 0
 _STILL_ACTIVE = 259
+#: The supervisors this process started and has not seen end, by process number.
+#: A supervisor outlives the `serve` that started it, so its `Popen` stays here
+#: rather than being dropped while its child runs: `alive` asks the child through
+#: it, which reads its exit status once it has ended, and `stop` waits for it.
+_STARTED: dict[int, subprocess.Popen] = {}
 
 
 class ServeError(RuntimeError):
@@ -830,6 +835,12 @@ def supervise(out: Path, source: Path | None, command: Sequence[str] | None = No
 def alive(pid: int) -> bool:
     """Whether a process is still running, asked without signalling it."""
 
+    started = _STARTED.get(pid)
+    if started is not None:
+        if started.poll() is None:
+            return True
+        del _STARTED[pid]
+        return False
     if sys.platform == "win32":
         import _winapi
 
@@ -885,6 +896,7 @@ def start(out: Path, source: Path | None) -> int:
             creationflags=_NO_WINDOW | _NEW_GROUP,
             start_new_session=sys.platform != "win32",
         )
+    _STARTED[supervisor.pid] = supervisor
     deadline = time.monotonic() + START_SECONDS + STOP_SECONDS
     while time.monotonic() < deadline:
         state = _read_state(out)
@@ -896,9 +908,12 @@ def start(out: Path, source: Path | None) -> int:
             return 0
         if state is not None and state["state"] == "failed":
             _say(f"serve failed: {state['error']}")
+            # What a supervisor writes last; it ends right after.
+            _wait_for_exit(supervisor.pid)
             _clear_state(out)
             return 1
         if supervisor.poll() is not None:
+            del _STARTED[supervisor.pid]
             _say(f"the supervisor exited with code {supervisor.returncode}; see {supervisor_log}")
             remove_tree(out / HOME)
             _clear_state(out)
@@ -946,6 +961,24 @@ def _stop_orphan(state: Mapping[str, object]) -> list[str]:
     return []
 
 
+def _wait_for_exit(supervisor: int) -> bool:
+    """Wait for a supervisor this process started, which has written its last state, to end.
+
+    Whether it ended in time. One another process started, or that runs in this
+    one, is not this process's to wait for, and counts as ended.
+    """
+
+    started = _STARTED.get(supervisor)
+    if started is None:
+        return True
+    try:
+        started.wait(timeout=STOP_SECONDS)
+    except subprocess.TimeoutExpired:
+        return False
+    del _STARTED[supervisor]
+    return True
+
+
 def _wait_for_end(out: Path, supervisor: int) -> dict | None:
     deadline = time.monotonic() + STOP_SECONDS
     while time.monotonic() < deadline:
@@ -979,8 +1012,12 @@ def stop(out: Path) -> int:
         return 1
     problems = []
     if state["state"] in ("starting", "ready") and alive(state["supervisor"]):
+        supervisor = state["supervisor"]
         (out / STOP).touch()
-        state = _wait_for_end(out, state["supervisor"]) or {"state": "stopped"}
+        state = _wait_for_end(out, supervisor) or {"state": "stopped"}
+        # What a supervisor writes last; it ends right after.
+        if state["state"] in ("stopped", "failed") and not _wait_for_exit(supervisor):
+            problems.append(f"the supervisor {supervisor} did not end after it stopped")
     if state["state"] == "failed":
         problems.append(state["error"])
     elif state["state"] == "ready":
