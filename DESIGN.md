@@ -884,38 +884,41 @@ names the key as wide as the widest key, so a reason appearing or another taking
 moves nothing under the field; given room only while it stood, a reason a line longer than the
 hint pushed the projects down at 390px. Once the space has issued a number its key stands as
 text with the reason it does not change, since it is in those numbers; a renamed space says
-under its name that what names the space by its name will no longer find it, in room the edit
-holds for those words from the start, so the fields under the name do not move at the first
-letter typed. The projects stand one a row, by name as the interface's language orders names,
-whatever the browser's language is, so a Russian interface puts Cyrillic names before Latin
-ones: a radio that makes it the default, on the name's first line however the name wraps; its
-name, which takes at most two fifths of the row and wraps there rather than take its folder's
-room; its folder, cut in its middle so that its last folder, which tells one project from the
-next, stays whole while the row has room for it, and shown whole in its hint, its «…» against
-that last folder in every row: given the whole room before the last folder, the cut start hid
-whole letters and left what was left of one empty after its «…», from none to some 8px; and its
+that what names the space by its name will no longer find it under the form, over the foot's
+buttons, in room the edit holds for those words there from the start, so neither the form nor
+the foot moves at the first letter typed or when the old name comes back; held under the name,
+that room stood empty between the name and the key, farther apart than any other two fields.
+The projects stand one a row, by name as the interface's language orders names, whatever the
+browser's language is, so a Russian interface puts Cyrillic names before Latin ones: a radio
+that makes it the default, on the name's first line however the name wraps; its name, which
+takes at most two fifths of the row and wraps there rather than take its folder's room; its
+folder, cut in its middle so that its last folder, which tells one project from the next, stays
+whole while the row has room for it, and shown whole in its hint, its «…» against that last
+folder in every row: given the whole room before the last folder, the cut start hid whole
+letters and left what was left of one empty after its «…», from none to some 8px; and its
 remove. The default has no remove while the space has other projects, so the window repeats the
 server's rule rather than meeting its refusal, and the first project added becomes the default
 by itself. «Add project» searches the registered projects the space does not have, those in no
 space first, then those of other spaces with what moving one means, each part by name as the
 rows are; what is typed finds a project by its name before one only its folder matches, those
 in no space still first among the names, and a folder's path in the list breaks where its line
-runs out. Another space's default that space keeps others beside is
-listed with its reason and cannot be chosen. «New project from folder…» takes the folder's
-path, a name and an identifier, on a ground of its own so that its own two buttons do not
-read as the window's foot; the folder suggests its own name as the project's, in any script,
-and that name in an identifier's form, each until the reader types one. While the registry
-cannot be read the window says so in place of the projects, and an edit waits, since its
-save would leave the space with none. Only a space with no work items offers «Remove space»,
-at the start of the foot, and it asks in the window before anything goes; where the foot
-cannot hold all three, the way out and the save change lines together. A refused save keeps
-what was typed and says why, in the reader's language, at the end of the form, and while the
-form is longer than the window at its lower edge right above the foot's buttons, so it is
-seen with nothing scrolled. A save whose space stood while the registry refused its projects
-says so above the fields and turns its button into «Retry binding», which saves the same
-draft as that space's edit and never creates a second one. After a save the shell follows the
-space: into a new one, onto a changed key, and to «All spaces» from a removed one. Where the
-dialog is under 520px wide a project's folder goes under its name.
+runs out. Another space's default that space keeps others beside is listed with its reason and
+cannot be chosen. «New project from folder…» takes the folder's path, a name and an identifier,
+on a ground of its own so that its own two buttons do not read as the window's foot; the folder
+suggests its own name as the project's, in any script, and that name in an identifier's form,
+each until the reader types one. While the registry cannot be read the window says so in place
+of the projects, and an edit waits, since its save would leave the space with none. Only a
+space with no work items offers «Remove space», at the start of the foot, and it asks in the
+window before anything goes; where the foot cannot hold all three, the way out and the save
+change lines together. A refused save keeps what was typed and says why, in the reader's
+language, at the end of the form, and while the form is longer than the window at its lower
+edge right above the foot's buttons, so it is seen with nothing scrolled; where both stand,
+what a rename says stands over the refusal, which keeps the place nearest the buttons. A save
+whose space stood while the registry refused its projects says so above the fields and turns
+its button into «Retry binding», which saves the same draft as that space's edit and never
+creates a second one. After a save the shell follows the space: into a new one, onto a changed
+key, and to «All spaces» from a removed one. Where the dialog is under 520px wide a project's
+folder goes under its name.
 
 The chrome says only what it has read. Until the module list names the module, the
 context bar's title stands empty on its line; until the spaces are read and the

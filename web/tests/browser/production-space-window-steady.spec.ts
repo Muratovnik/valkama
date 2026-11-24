@@ -17,8 +17,9 @@ import {
   installSpaceWindowBackend,
   LONG_SPACE_NAMES,
   longSpaceWorld,
+  spaceWindowWorld,
 } from './spaceWindowBackend.ts'
-import { ellipsisGaps } from './spaceWindowMeasures.ts'
+import { ellipsisGaps, inView } from './spaceWindowMeasures.ts'
 import { openPortfolio, WORDS } from './spaceWindowPage.ts'
 import { test } from './test.ts'
 
@@ -29,6 +30,27 @@ const SIZES = [
   { width: 1024, height: 768 },
   { width: 1280, height: 800 },
 ] as const
+
+type Box = Awaited<ReturnType<Locator['boundingBox']>>
+
+/** The boxes of the window's parts, one by one. */
+async function boxes(parts: Record<string, Locator>) {
+  const each: Record<string, Box> = {}
+  for (const [part, locator] of Object.entries(parts)) each[part] = await locator.boundingBox()
+  return each
+}
+
+/** That every part stands where it stood at the start. */
+function expectStill(now: Record<string, Box>, start: Record<string, Box>, when: string) {
+  for (const [part, box] of Object.entries(start))
+    expect.soft(now[part]?.y, `${part}, ${when}`).toBeCloseTo(box?.y ?? Number.NaN, 1)
+}
+
+/** Whether the reader sees the words, nothing over them. */
+async function seen(words: Locator) {
+  const where = await inView(words)
+  return where.seen
+}
 
 /** Where the projects' heading, the first thing under the key's field, stands. */
 async function headingTop(heading: Locator) {
@@ -93,6 +115,84 @@ for (const lang of ['en', 'ru'] as const)
           expect(Math.max(...each) - Math.min(...each), JSON.stringify(gaps)).toBeLessThanOrEqual(1)
         })
       })
+
+      for (const [world, key] of [
+        [spaceWindowWorld, 'DRF'],
+        [longSpaceWorld, 'LNG'],
+      ] as const)
+        test(`a rename of ${key} says what it changes over the buttons and moves nothing`, async ({
+          page,
+        }) => {
+          const state = world()
+          await installSpaceWindowBackend(page, state)
+          await openPortfolio(page, { width, height })
+          await page.getByRole('button', { name: words.configure(key) }).click()
+          const dialog = page.getByRole('dialog', { name: words.editTitle(key) })
+          const name = dialog.getByLabel(words.name, { exact: true })
+          const fieldOf = (label: string) =>
+            dialog.locator('.field', { has: page.getByLabel(label, { exact: true }) })
+          const save = dialog.getByRole('button', { name: words.save })
+          const parts = {
+            key: fieldOf(words.key),
+            projects: dialog.getByRole('region', { name: words.projects }),
+            save,
+          }
+          await expect(dialog).toHaveCSS('transform', 'none')
+          await name.click()
+          const start = await boxes(parts)
+          // The name stands as far from the key as the key from the projects: no room is held
+          // between them for what a rename says.
+          const nameBox = await fieldOf(words.name).boundingBox()
+          const after = (start.key?.y ?? Number.NaN) - (nameBox?.y ?? 0) - (nameBox?.height ?? 0)
+          const keyBottom = (start.key?.y ?? 0) + (start.key?.height ?? 0)
+          const under = (start.projects?.y ?? Number.NaN) - keyBottom
+          expect
+            .soft(after, 'the name to the key, against the key to the projects')
+            .toBeCloseTo(under, 0)
+
+          const named = state.spaces.find((space) => space.key === key)?.name ?? ''
+          await name.fill(`${named}, renamed`)
+          await expect(name).toHaveAccessibleDescription(new RegExp(words.renamed, 'u'))
+          const said = dialog.locator(
+            `[id="${(await name.getAttribute('aria-describedby')) ?? ''}"]`,
+          )
+          await expect(said).toBeVisible()
+          expectStill(await boxes(parts), start, 'renamed')
+          // Under the form, over the buttons, in sight however long the form.
+          expect
+            .soft(
+              await said.evaluate((node) => {
+                const form = node.closest('[role="dialog"]')?.querySelector('section')
+                return Boolean(form && form.compareDocumentPosition(node) & 4)
+              }),
+              'after the projects',
+            )
+            .toBe(true)
+          const saidBox = await said.boundingBox()
+          expect.soft(saidBox?.y ?? Number.NaN, 'over the buttons').toBeLessThan(start.save?.y ?? 0)
+          expect.soft(await seen(said), 'in sight').toBe(true)
+
+          // The name given back takes the words away and moves nothing either.
+          await name.fill(named)
+          await expect(said).toHaveCount(0)
+          await expect(name).not.toHaveAccessibleDescription(new RegExp(words.renamed, 'u'))
+          expectStill(await boxes(parts), start, 'named back')
+
+          // A refused save says why under it, nearer the buttons, and neither covers the other.
+          await name.fill(`${named}, renamed`)
+          await expect(said).toBeVisible()
+          state.saveRefuses = 'name_taken'
+          await save.click()
+          const alert = dialog.getByRole('alert')
+          await expect(alert).toHaveText(words.nameTaken)
+          const alertBox = await alert.boundingBox()
+          const saidNow = await said.boundingBox()
+          expect
+            .soft((saidNow?.y ?? 0) + (saidNow?.height ?? 0), 'the rename over the refusal')
+            .toBeLessThanOrEqual((alertBox?.y ?? Number.NaN) + 0.5)
+          expect.soft(await seen(alert), 'the refusal in sight').toBe(true)
+          expect.soft(await seen(said), 'the rename in sight').toBe(true)
+        })
 
       test('a name that gives no key and a key typed after it move nothing under the key', async ({
         page,

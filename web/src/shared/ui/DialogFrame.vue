@@ -16,6 +16,17 @@ const props = withDefaults(
     context?: string | readonly TextRun[]
     /** Why the last submit did not go through. */
     error?: string
+    /**
+     * The words `note` can come to say, whose room is held over the foot from the start, so that
+     * saying them moves nothing in the form or the foot.
+     */
+    heldNote?: string
+    /**
+     * What the form says over the foot while it stands, such as what a change will mean when it
+     * is saved; `noteId` is its id, for the field it describes.
+     */
+    note?: string
+    noteId?: string
     pane?: OverlayPaneNames | null
     paneRoom?: number
     placement?: 'center' | 'start' | 'top'
@@ -24,7 +35,17 @@ const props = withDefaults(
     subtitle?: string
     surfaceClass?: string
   }>(),
-  { subtitle: '', surfaceClass: '', busy: false, context: '', error: '', placement: 'center' },
+  {
+    subtitle: '',
+    surfaceClass: '',
+    busy: false,
+    context: '',
+    error: '',
+    heldNote: '',
+    note: '',
+    noteId: undefined,
+    placement: 'center',
+  },
 )
 
 const emit = defineEmits<{
@@ -90,14 +111,38 @@ const body = ref<HTMLElement | null>(null)
         <slot />
         <!-- A refused submit is announced where the operator is looking: at the
              end of the form they just tried to send, not in a corner banner, and
-             above the foot's buttons while the form is longer than the dialog. -->
-        <p
-          v-if="error"
-          class="dialog-frame-error"
-          role="alert"
+             above the foot's buttons while the form is longer than the dialog. What
+             the form says of a change stands there too, over the refusal. -->
+        <div
+          v-if="error || note || heldNote"
+          class="dialog-frame-said"
+          :class="{ 'is-said': Boolean(error || note) }"
         >
-          {{ error }}
-        </p>
+          <div
+            v-if="note || heldNote"
+            class="held-room"
+          >
+            <small
+              v-if="note"
+              :id="noteId"
+              class="dialog-frame-note"
+              >{{ note }}</small
+            >
+            <small
+              v-if="heldNote"
+              class="held-room-unseen dialog-frame-note"
+              aria-hidden="true"
+              >{{ heldNote }}</small
+            >
+          </div>
+          <p
+            v-if="error"
+            class="dialog-frame-error"
+            role="alert"
+          >
+            {{ error }}
+          </p>
+        </div>
       </div>
       <footer
         v-if="$slots.footer"
@@ -113,6 +158,8 @@ const body = ref<HTMLElement | null>(null)
     </template>
   </OverlayHost>
 </template>
+
+<style scoped src="@/shared/ui/heldRoom.css"></style>
 
 <style scoped>
 /* A dialog floats inset from the window, or on a narrow one stands across all of it, and its
@@ -166,21 +213,39 @@ const body = ref<HTMLElement | null>(null)
   padding: var(--space-dialog-inset);
 }
 
-/* At the end of the form, and while the form is longer than the dialog, at the body's lower
-   edge over what scrolls under it, right above the foot's buttons: at the end of a long form
-   alone it stood out of sight under the fold, and a press on Save seemed to do nothing. It
-   sticks at the very edge (`--size-stuck-bottom`) on the dialog's own ground, which reaches
-   that edge and a step above its words, given back by its margins so that a form that fits
-   lays it where it always stood. */
-.dialog-frame-error {
+/* What the form says of a change and why a submit was refused, the refusal under it, nearer
+   the buttons: at the end of the form, and while the form is longer than the dialog, at the
+   body's lower edge over what scrolls under it, right above the foot's buttons. At the end of a
+   long form alone a refusal stood out of sight under the fold, and a press on Save seemed to do
+   nothing. It sticks at the very edge (`--size-stuck-bottom`) on the dialog's own ground, which
+   reaches that edge and a step above its words, given back by its margins so that a form that
+   fits lays it where it always stood. While only held room stands there it has no ground and
+   takes no press, so what scrolls under it shows and answers. */
+.dialog-frame-said {
   position: sticky;
   inset-block-end: var(--size-stuck-bottom);
   z-index: 1;
+  display: grid;
+  gap: var(--space-3);
   padding-block: var(--space-3) var(--space-dialog-inset);
   margin: calc(-1 * var(--space-3)) 0 calc(-1 * var(--space-dialog-inset));
+  pointer-events: none;
+
+  &.is-said {
+    background: var(--color-surface);
+    pointer-events: auto;
+  }
+}
+
+.dialog-frame-note {
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+}
+
+.dialog-frame-error {
+  margin: 0;
   color: var(--color-danger);
   font-size: var(--font-size-dense);
-  background: var(--color-surface);
 }
 
 .dialog-frame-footer {
