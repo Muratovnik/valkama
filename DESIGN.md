@@ -3350,7 +3350,11 @@ failure moved what stands under it, and room held for the note stood empty under
 rest. The retry is reached at every width too: where the line has no room for «· Retry», the words themselves
 are the retry, named «Could not refresh · Retry» with «Retry» as their hint, and take no room the
 words did not. Dropped there, a phone and a span of days in Russian offered no retry of its own,
-only the refresh beside it. Reading another space, period or filter dims what is shown until its
+only the refresh beside it. The failure's disc keeps its 8px whatever lines its words take:
+beside the words on two lines of a phone it was squeezed to an oval 4 to 8px wide. The retry's
+focus ring is drawn inside the retry, as a period's is in its track: round it, the ring
+touched the disc at every width and stood 1.6px past the row of the words on two lines.
+Reading another space, period or filter dims what is shown until its
 answer comes, after a moment so that a quick answer does not flicker;
 a refresh of the same view dims nothing. Records reach the store in batches, so the age is in
 seconds and the minutes after the newest record are hatched, as every figure not final yet is,

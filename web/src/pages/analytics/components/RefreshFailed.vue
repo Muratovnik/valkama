@@ -50,7 +50,7 @@ const failed = computed(() => props.failed ?? standing.failed.value)
     :class="{ 'refresh-failed-held': !failed }"
   >
     <span
-      class="refresh-failed-mark"
+      class="refresh-failed-mark disc-mark"
       aria-hidden="true"
     />
     <VButton
@@ -104,20 +104,22 @@ const failed = computed(() => props.failed ?? standing.failed.value)
   white-space: inherit;
 }
 
+/* The retry's ring stands inside its own box, as a period's does in its track: drawn round it, it
+   touched the disc a gap of 4px before it at every width, and round the words wrapped onto two
+   lines on a phone it stood 1.6px past the 36px row they share with the refresh. */
+.refresh-failed .refresh-failed-retry:focus-visible {
+  outline-offset: calc(-1 * var(--size-focus-ring));
+}
+
 /* Held while the bar fits its line: its room taken, nothing of it seen or heard. */
 .refresh-failed-held {
   visibility: hidden;
 }
 
+/* The failure's disc (`discMark.css`), in the colour a failure is marked in. */
 .refresh-failed-mark {
-  inline-size: var(--space-2);
-  block-size: var(--space-2);
   background: var(--color-danger);
-  border-radius: 50%;
-
-  @media (forced-colors: active) {
-    background: CanvasText;
-    forced-color-adjust: none;
-  }
 }
 </style>
+
+<style scoped src="@/pages/analytics/components/discMark.css"></style>
