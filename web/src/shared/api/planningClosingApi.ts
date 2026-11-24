@@ -4,7 +4,7 @@
  * close of one that awaits confirmation.
  *
  * Each answers with nothing a card reads: the card reads its item again after any of them, and
- * their answers carry fields of a write (`cancelled`, `released` as a list, `returned` as a list)
+ * their answers carry fields of a write (`cancelled`, `released` as a list, `brought_back`)
  * that the record's own read does not. A refusal comes as the planning boundary throws it, a
  * cancel whose list is not confirmed as `CancelListError` with that list.
  */

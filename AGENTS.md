@@ -41,7 +41,8 @@ is complete on its own.
   back answered by it (`[decision]`), a launch that no longer moves its item
   to review, a cancel of a goal or stage with open work under it (`cancel_list`, `cancels`), a parent cleared only by
   `move_out` and never under an unaccepted goal (`[parent]`), work put off
-  only by `defer` and brought back by itself (`deferred`, `returned`), work
+  only by `defer` and brought back by itself (`deferred`, `returned`,
+  `brought_back`), work
   the owner is asked whether to do or take up again (`acceptance_question`),
   a cancel of work outside the agent's own or that other sessions do, which
   waits for the owner or for those sessions (`waits_for_owner`,

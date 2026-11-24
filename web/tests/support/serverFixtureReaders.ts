@@ -114,7 +114,7 @@ export const FIXTURE_READERS: Record<string, (value: unknown) => unknown> = {
   'requests-triage-due.json': validateInputRequestList,
   'requests.json': validateInputRequestList,
   'space-settings.json': validateSpaceRecord,
-  'transition-returned.json': (value) => validateMovedItem(value),
+  'transition-brought-back.json': (value) => validateMovedItem(value),
   'usage-item.json': validateItemUsageAnswer,
   'usage-session.json': validateSessionUsageAnswer,
   'volumes-filtered.json': validateVolumesAnswer,

@@ -19,6 +19,7 @@ import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
 
 import {
   linkEndStateSaid,
+  validateMovedItem,
   validateWorkItemBrief,
   validateWorkItemRecord,
   workableIds,
@@ -195,6 +196,18 @@ describe('a record of the work model', () => {
       validateWorkItemRecord({ ...came, returned: { ...back, because: 'comments', item: null } })
         .returned?.because,
     ).toBe('comments')
+  })
+
+  it('reads what a close brought back apart from why an item came back', () => {
+    const closed = { ...workItemFixture('Closed', 3), brought_back: ['MAIN-37'] }
+    expect(validateMovedItem(closed).brought_back).toEqual(['MAIN-37'])
+    // `returned` is the record of an item that came back, never the list a write answers with.
+    expect(() =>
+      validateMovedItem({ ...workItemFixture('Closed', 3), returned: ['MAIN-37'] }),
+    ).toThrow()
+    expect(() =>
+      validateMovedItem({ ...closed, brought_back: [{ because: 'date', item: null }] }),
+    ).toThrow()
   })
 })
 

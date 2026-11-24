@@ -4497,8 +4497,8 @@ to the first `triage` state its workflow reaches, with the `transitioned` detail
 MAIN-12`. While that move is its newest, its record carries `returned`: `because`
 (`date`, `comments`, `completed`, `cancelled` or `deleted`), the `item`, `null` for
 a date or a count, and `at`. A
-close or a delete that brought work back answers with `returned`, the references
-it brought back.
+close or a delete that brought work back answers with `brought_back`, the
+references it brought back; `returned` is only ever the record above.
 
 Under goals and stages all accepted and open, or when its workflow reaches no
 `triage` state, the item stays put off with `reached_at` set, and Valkama asks the

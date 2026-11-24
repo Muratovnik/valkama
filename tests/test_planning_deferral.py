@@ -330,7 +330,10 @@ class ComingBackTests(Deferral):
         t = self.made("t")
         self.defer(t, until=x)
         answer = self.close(AS_A, x)
-        self.assertEqual([t], answer["applied"]["transition"]["returned"])
+        moved = answer["applied"]["transition"]
+        self.assertEqual([t], moved["brought_back"])
+        # `returned` is the record of an item that came back; a close names the list apart.
+        self.assertNotIn("returned", moved)
         self.came_back(t, "completed", f"completed {x}")
 
     def test_a_cancel_brings_it_back_alone_and_by_its_goals_cascade(self) -> None:
@@ -359,7 +362,7 @@ class ComingBackTests(Deferral):
             error["dependents"],
         )
         answer = cancel(cancels=error["list_token"])
-        self.assertEqual([u], answer["applied"]["transition"]["returned"])
+        self.assertEqual([u], answer["applied"]["transition"]["brought_back"])
         self.came_back(u, "cancelled", f"cancelled {y}")
 
     def test_a_merge_passes_the_wait_to_the_item_it_merged_into(self) -> None:
@@ -379,7 +382,8 @@ class ComingBackTests(Deferral):
         t = self.made("t")
         self.defer(t, until=x)
         answer = self.person(DELETE, id=x)
-        self.assertEqual([t], answer["returned"])
+        self.assertEqual([t], answer["brought_back"])
+        self.assertNotIn("returned", answer)
         self.came_back(t, "deleted", f"deleted {x}")
 
     def test_the_take_next_queue_brings_back_what_came_due_in_its_space(self) -> None:
@@ -657,7 +661,7 @@ class AwaitedItemTests(Deferral):
 
     def test_deleted_open_it_asks_the_owner_and_keeps_the_moment_in_its_place(self) -> None:
         answer = self.at(LATER, lambda: self.person(DELETE, id=self.x))
-        self.assertEqual([self.t], answer["returned"])
+        self.assertEqual([self.t], answer["brought_back"])
         self.assertEqual("deferred", self.category(self.t))
         self.assertEqual((LATER_AT, None, LATER_AT), self.waits_on())
         self.assertEqual(["pending"], [row["status"] for row in self.returns(self.t)])
@@ -674,7 +678,7 @@ class AwaitedItemTests(Deferral):
         self.at(LATER, lambda: self.cancel(self.x))
         self.assertEqual((None, self.identity(self.x), came), self.waits_on())
         answer = self.at(LATER, lambda: self.person(DELETE, id=self.x))
-        self.assertNotIn("returned", answer, "nothing came back by the delete")
+        self.assertNotIn("brought_back", answer, "nothing came back by the delete")
         self.assertEqual((came, None, came), self.waits_on())
         self.assertEqual(
             [(asked["request_id"], "pending")],
