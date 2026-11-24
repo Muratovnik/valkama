@@ -37,7 +37,7 @@ import VTextInput from '@/shared/ui/VTextInput.vue'
 /** Eight of the widest letter, the most room a key of 2 to 8 letters and digits takes. */
 const WIDEST_KEY = 'W'.repeat(8)
 
-const { t } = useI18n()
+const { locale, t } = useI18n()
 const host = useSpaceWindowState()
 const target = computed(() => host?.target.value ?? null)
 const opened = computed(() => target.value !== null)
@@ -104,7 +104,7 @@ const keyWords = computed(() => ({
   errors: keyReasons.value,
 }))
 const choices = computed(() =>
-  projectChoices(draft.value, registered.value, origin.value?.ref ?? null),
+  projectChoices(draft.value, registered.value, origin.value?.ref ?? null, locale.value),
 )
 const takenIds = computed(() => registered.value.map((project) => project.project_id))
 const removable = computed(() => origin.value !== null && origin.value.workItems === 0)

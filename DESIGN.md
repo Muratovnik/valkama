@@ -874,29 +874,31 @@ there are some and the registry could be read; it stands twice as far from the c
 page's head does, so it does not read as one more of them, and each name keeps to one line
 while the line has room for it, rather than breaking between two, with a comma and a space
 between names. The empty state names them too, under «Create a space».
-The window holds the name, the key, the space's projects and its workflow, which it names
-and does not change, and keeps its scrollbar's room from the start, so a list that grows
-past the window narrows nothing. A new space's key is the server's for the name until the
-reader types one; a name the server derives none from, such as a Cyrillic one, leaves the
-field empty and says why under it, once: the reason states the key's form, and no hint says
-it again. The key's field holds the room of every hint and reason it can come to say from the
-start, the hint that names the key as wide as the widest key, so a reason appearing or another
-taking its place moves nothing under the field; given room only while it stood, a reason a line
-longer than the hint pushed the projects down at 390px. Once the space has issued a number its
-key stands as text with the reason it does not change, since it is in those numbers; a renamed
-space says under its name that what names the space by its name will no longer find it, in room the edit holds for those words
-from the start, so the fields under the name do not move at the first letter typed. The
-projects stand one a row, by name: a radio that makes it the default, on the name's first
-line however the name wraps; its name, which takes at most two fifths of the row and wraps
-there rather than take its folder's room; its folder, cut in its middle so that its last
-folder, which tells one project from the next, stays whole while the row has room for it, and
-shown whole in its hint; and its remove. The default has no remove while the space has other
-projects, so the window repeats the server's rule rather than meeting its refusal, and the
-first project added becomes the default by itself. «Add project» searches the registered
-projects the space does not have, those in no space first, then those of other spaces with
-what moving one means; what is typed finds a project by its name before one only its folder
-matches, those in no space still first among the names, and a folder's path in the list
-breaks where its line runs out. Another space's default that space keeps others beside is
+The window holds the name, the key, the space's projects and its workflow, which it names and
+does not change, and keeps its scrollbar's room from the start, so a list that grows past the
+window narrows nothing. A new space's key is the server's for the name until the reader types
+one; a name the server derives none from, such as a Cyrillic one, leaves the field empty and
+says why under it, once: the reason states the key's form, and no hint says it again. The key's
+field holds the room of every hint and reason it can come to say from the start, the hint that
+names the key as wide as the widest key, so a reason appearing or another taking its place
+moves nothing under the field; given room only while it stood, a reason a line longer than the
+hint pushed the projects down at 390px. Once the space has issued a number its key stands as
+text with the reason it does not change, since it is in those numbers; a renamed space says
+under its name that what names the space by its name will no longer find it, in room the edit
+holds for those words from the start, so the fields under the name do not move at the first
+letter typed. The projects stand one a row, by name as the interface's language orders names,
+whatever the browser's language is, so a Russian interface puts Cyrillic names before Latin
+ones: a radio that makes it the default, on the name's first line however the name wraps; its
+name, which takes at most two fifths of the row and wraps there rather than take its folder's
+room; its folder, cut in its middle so that its last folder, which tells one project from the
+next, stays whole while the row has room for it, and shown whole in its hint; and its remove.
+The default has no remove while the space has other projects, so the window repeats the
+server's rule rather than meeting its refusal, and the first project added becomes the default
+by itself. «Add project» searches the registered projects the space does not have, those in no
+space first, then those of other spaces with what moving one means, each part by name as the
+rows are; what is typed finds a project by its name before one only its folder matches, those
+in no space still first among the names, and a folder's path in the list breaks where its line
+runs out. Another space's default that space keeps others beside is
 listed with its reason and cannot be chosen. «New project from folder…» takes the folder's
 path, a name and an identifier, on a ground of its own so that its own two buttons do not
 read as the window's foot; the folder suggests its own name as the project's, in any script,

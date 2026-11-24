@@ -3,14 +3,15 @@
  * The space's projects in its window: one row each, the default chosen among them, a way to
  * add a registered project and a way to register one from a folder.
  *
- * Each row is a radio of one group, which picks the default, then the project's name, its
- * folder and its remove; the rows stand in the order of their names. The default has no remove
- * while the space has other projects: the row repeats the server's rule rather than meeting its
- * refusal. The rows share their columns, so every folder starts at one edge; a long name wraps
- * within its share of the row rather than taking the folder's room, and the radio stands on the
- * name's first line. A folder too long for its row is cut in its middle, so its last folder,
- * which tells one project from the next, stays whole while the row has room for it; it is shown
- * whole in its hint. On a narrow window the folder goes under the name.
+ * Each row is a radio of one group, which picks the default, then the project's name, its folder
+ * and its remove; the rows stand in the order of their names, as the interface's language orders
+ * them. The default has no remove while the space has other projects: the row repeats the
+ * server's rule rather than meeting its refusal. The rows share their columns, so every folder
+ * starts at one edge; a long name wraps within its share of the row rather than taking the
+ * folder's room, and the radio stands on the name's first line. A folder too long for its row is
+ * cut in its middle, so its last folder, which tells one project from the next, stays whole while
+ * the row has room for it; it is shown whole in its hint. On a narrow window the folder goes
+ * under the name.
  *
  * «Add project» is a search over the registered projects the space does not have: those in
  * no space first, then those of other spaces, which say what moving one means. What is typed
@@ -49,13 +50,16 @@ const props = defineProps<{
   takenIds: readonly string[]
 }>()
 const draft = defineModel<SpaceDraft>({ required: true })
-const { t } = useI18n()
+const { locale, t } = useI18n()
 const group = useId()
 
 /** What is typed in «Add project», which puts the projects it names first. */
 const query = ref('')
 const rows = computed(() =>
-  byName(draft.value.projects).map((project) => ({ ...project, path: pathParts(project.root) })),
+  byName(draft.value.projects, locale.value).map((project) => ({
+    ...project,
+    path: pathParts(project.root),
+  })),
 )
 
 const options = computed<ChoiceOption[]>(() =>
