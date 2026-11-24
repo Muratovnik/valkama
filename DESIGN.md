@@ -887,9 +887,10 @@ space's projects move to it; an emptied one gives the key's form instead, since 
 for them to move to. Once the space has issued a number its key stands as
 text with the reason it does not change, since it is in those numbers; a renamed space says
 that what names the space by its name will no longer find it under the form, over the foot's
-buttons, in room the edit holds for those words there from the start, so neither the form nor
-the foot moves at the first letter typed or when the old name comes back; held under the name,
-that room stood empty between the name and the key, farther apart than any other two fields.
+buttons, from the first letter typed, and the foot's buttons go down by those words while the
+form above stays where it stood; no room is held for them, since held over the buttons it stood
+there as a blank of some 100px while nothing was renamed, and held under the name, as a gap
+between the name and the key farther than between any other two fields.
 The projects stand one a row, by name as the interface's language orders names, whatever the
 browser's language is, so a Russian interface puts Cyrillic names before Latin ones: a radio
 that makes it the default, on the name's first line however the name wraps; its name, which
@@ -1076,7 +1077,12 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   at each edge, so a line appearing under a field or a refusal at the end of the
   form moved its title and every field above them under the hand. What arrives
   before that first act, a picture decoded or a list read as it opens, is under
-  nobody's hand, and the dialog stays centred on it.
+  nobody's hand, and the dialog stays centred on it. What a dialog says over its
+  foot's buttons, a change's meaning or a refusal, stands over what scrolls under
+  it, and no control the keyboard reaches stands under those words: the body keeps
+  their height clear at its lower edge for a focused control, so a Tab scrolls it
+  out from under them (WCAG 2.4.11). Without that a Tab stopped on remove buttons
+  and fields hidden whole under a rename's words.
 - **Inspectors:** persistent right-side detail uses the shared resizable
   inspector. Width is bounded by the actual workspace, not the viewport. The
   panel lives while any item is open and only its content changes with the item:

@@ -7,6 +7,8 @@
  * parent; another space's goal is not offered. A space with no goal or stage offers «Без
  * цели» alone. A write the server did not answer keeps everything typed and says, below the
  * fields and in the window's own words, that the work was not created, never `HTTP 503`.
+ * In a window too short for the form, no control the keyboard reaches then stands under that
+ * reason, which stays over the buttons (DESIGN.md, «Dialogs and drawers»).
  *
  * A goal chosen with a parent is named «Этап» and sent as a goal, which the server makes a
  * stage. The project starts on the space's default and is sent only when another is chosen; a
@@ -21,6 +23,7 @@ import type { Locator, Page, TestInfo } from '@playwright/test'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
+import { bodyOverflows, walkFocus } from './dialogFocus.ts'
 import { spaceScope, workItem } from './planningFixtures.ts'
 import { ITEMS, spaceFramesRead } from './served/graphSpaceFrames.ts'
 import { spaceAnswer } from './servedAnswers.ts'
@@ -83,9 +86,13 @@ async function openWindow(
   page: Page,
   width: number,
   locale: Locale,
-  { items = ITEMS, answer = 200 }: { answer?: number; items?: readonly object[] } = {},
+  {
+    items = ITEMS,
+    answer = 200,
+    height = width > 600 ? 900 : 844,
+  }: { answer?: number; height?: number; items?: readonly object[] } = {},
 ) {
-  await page.setViewportSize({ width, height: width > 600 ? 900 : 844 })
+  await page.setViewportSize({ width, height })
   await installBackend(page)
   await page.route('**/api/planning?*', (route) =>
     route.fulfill(
@@ -254,6 +261,22 @@ for (const { width, locale } of [
       )
       expect(await reason.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true)
       await shoot(page, info, `new-work-${width}-write-failed-${locale}`)
+    })
+
+    test('no control the keyboard reaches stands under the reason in a short window', async ({
+      page,
+    }) => {
+      const { dialog, words } = await openWindow(page, width, locale, { answer: 503, height: 480 })
+      const title = dialog.getByRole('textbox', { name: words.title })
+      await title.fill('Rehearse the restore')
+      await dialog.getByRole('button', { name: words.open, exact: true }).click()
+      await expect(dialog.getByRole('alert')).toHaveText(words.noAnswer)
+      // The form is longer than the window, so the reason over the buttons stands over some of it.
+      expect(await bodyOverflows(dialog)).toBe(true)
+      // From the title through every field of the form, to the foot.
+      const ahead = await walkFocus(page, dialog, title)
+      expect(ahead.length, JSON.stringify(ahead)).toBeGreaterThanOrEqual(5)
+      expect(ahead.filter((stop) => stop.covered > 0)).toEqual([])
     })
   })
 }

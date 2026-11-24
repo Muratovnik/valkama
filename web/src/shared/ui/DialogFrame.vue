@@ -1,5 +1,16 @@
 <script setup lang="ts">
+/**
+ * The frame of every command dialog: its head, a body that scrolls what it holds, and a foot of
+ * buttons. What the form says of a change (`note`) and why a submit was refused (`error`) stand
+ * at the end of the body, and while the form is longer than the dialog at its lower edge over
+ * what scrolls under it; a control the keyboard reaches scrolls clear of those words, so no
+ * focus stands under them.
+ *
+ * Its parts are `data-part` `dialog-body` and `said`, the box of those words.
+ */
 import { computed, ref } from 'vue'
+
+import { useResizeObserver } from '@vueuse/core'
 
 import OverlayHeader from '@/shared/ui/OverlayHeader.vue'
 import OverlayHost from '@/shared/ui/OverlayHost.vue'
@@ -16,11 +27,6 @@ const props = withDefaults(
     context?: string | readonly TextRun[]
     /** Why the last submit did not go through. */
     error?: string
-    /**
-     * The words `note` can come to say, whose room is held over the foot from the start, so that
-     * saying them moves nothing in the form or the foot.
-     */
-    heldNote?: string
     /**
      * What the form says over the foot while it stands, such as what a change will mean when it
      * is saved; `noteId` is its id, for the field it describes.
@@ -41,7 +47,6 @@ const props = withDefaults(
     busy: false,
     context: '',
     error: '',
-    heldNote: '',
     note: '',
     noteId: undefined,
     placement: 'center',
@@ -62,6 +67,23 @@ const busyMark = computed(() => props.busy || undefined)
  * still while it scrolls, for a way through what it holds.
  */
 const body = ref<HTMLElement | null>(null)
+
+/**
+ * How tall the words over the foot stand while they say something, which the body keeps clear
+ * at its lower edge for what the keyboard reaches (`scroll-padding`), so a focused control
+ * scrolls out from under them. Without it a Tab stopped on a control wholly under the words, as
+ * the browser saw it inside the body.
+ */
+const said = ref<HTMLElement | null>(null)
+const saidHeight = ref(0)
+useResizeObserver(said, ([entry]) => {
+  saidHeight.value = entry?.borderBoxSize[0]?.blockSize ?? 0
+})
+const saying = computed(() => Boolean(props.error || props.note))
+const saidRoom = computed(() => (saying.value ? saidHeight.value : 0))
+const bodyRoom = computed(() =>
+  saidRoom.value ? { '--size-said-room': `${String(saidRoom.value)}px` } : undefined,
+)
 </script>
 
 <template>
@@ -106,7 +128,9 @@ const body = ref<HTMLElement | null>(null)
       <div
         ref="body"
         class="dialog-frame-body"
+        data-part="dialog-body"
         :class="{ 'is-steady': steadyScroll }"
+        :style="bodyRoom"
       >
         <slot />
         <!-- A refused submit is announced where the operator is looking: at the
@@ -114,27 +138,17 @@ const body = ref<HTMLElement | null>(null)
              above the foot's buttons while the form is longer than the dialog. What
              the form says of a change stands there too, over the refusal. -->
         <div
-          v-if="error || note || heldNote"
+          v-if="saying"
+          ref="said"
           class="dialog-frame-said"
-          :class="{ 'is-said': Boolean(error || note) }"
+          data-part="said"
         >
-          <div
-            v-if="note || heldNote"
-            class="held-room"
+          <small
+            v-if="note"
+            :id="noteId"
+            class="dialog-frame-note"
+            >{{ note }}</small
           >
-            <small
-              v-if="note"
-              :id="noteId"
-              class="dialog-frame-note"
-              >{{ note }}</small
-            >
-            <small
-              v-if="heldNote"
-              class="held-room-unseen dialog-frame-note"
-              aria-hidden="true"
-              >{{ heldNote }}</small
-            >
-          </div>
           <p
             v-if="error"
             class="dialog-frame-error"
@@ -158,8 +172,6 @@ const body = ref<HTMLElement | null>(null)
     </template>
   </OverlayHost>
 </template>
-
-<style scoped src="@/shared/ui/heldRoom.css"></style>
 
 <style scoped>
 /* A dialog floats inset from the window, or on a narrow one stands across all of it, and its
@@ -188,10 +200,14 @@ const body = ref<HTMLElement | null>(null)
    What it holds that sticks to its top or bottom edge sticks inside its inset, as the browser
    keeps a stuck box clear of the scroller's padding, so the inset passes over the top of it
    with what scrolls showing through: it is told to stand that much further out
-   (`--size-stuck-top`, `--size-stuck-bottom`), at the very edge. */
+   (`--size-stuck-top`, `--size-stuck-bottom`), at the very edge.
+   What the keyboard reaches scrolls clear of the words stuck over the foot, as tall as they
+   stand (`--size-said-room`, measured): the body keeps that much of its lower edge free for it
+   (WCAG 2.4.11, Focus Not Obscured). */
 .dialog-frame-body {
   --size-stuck-top: calc(-1 * var(--space-dialog-inset));
   --size-stuck-bottom: calc(-1 * var(--space-dialog-inset));
+  --size-said-room: 0px;
 
   display: grid;
   gap: var(--space-6);
@@ -199,6 +215,7 @@ const body = ref<HTMLElement | null>(null)
   min-height: 0;
   padding: var(--space-dialog-inset);
   overflow-y: auto;
+  scroll-padding-block-end: var(--size-said-room);
 }
 
 /* Paid for out of the end inset, so the words end where they would with no scrollbar. One that
@@ -219,8 +236,9 @@ const body = ref<HTMLElement | null>(null)
    long form alone a refusal stood out of sight under the fold, and a press on Save seemed to do
    nothing. It sticks at the very edge (`--size-stuck-bottom`) on the dialog's own ground, which
    reaches that edge and a step above its words, given back by its margins so that a form that
-   fits lays it where it always stood. While only held room stands there it has no ground and
-   takes no press, so what scrolls under it shows and answers. */
+   fits lays it where it always stood. No room is held for it: it comes with its words and goes
+   with them, and the foot moves by its height, rather than stand as a blank over the buttons
+   while nothing is said. */
 .dialog-frame-said {
   position: sticky;
   inset-block-end: var(--size-stuck-bottom);
@@ -229,12 +247,7 @@ const body = ref<HTMLElement | null>(null)
   gap: var(--space-3);
   padding-block: var(--space-3) var(--space-dialog-inset);
   margin: calc(-1 * var(--space-3)) 0 calc(-1 * var(--space-dialog-inset));
-  pointer-events: none;
-
-  &.is-said {
-    background: var(--color-surface);
-    pointer-events: auto;
-  }
+  background: var(--color-surface);
 }
 
 .dialog-frame-note {
