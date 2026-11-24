@@ -93,12 +93,36 @@ async function measureDialog(page: Page, info: TestInfo, tag: string, width: num
       right: rect.right,
       sideways: body ? body.scrollWidth - body.clientWidth : Number.NaN,
       names,
+      rows: [...dialog.querySelectorAll('[data-project]')].map((row) => {
+        const edge = (part: string) => row.querySelector(`[data-part="${part}"]`)?.getBoundingClientRect()
+        const name = row.querySelector('[data-part="name"]')
+        const line = document.createRange()
+        if (name?.firstChild) line.setStart(name.firstChild, 0)
+        if (name?.firstChild) line.setEnd(name.firstChild, 1)
+        const first = line.getBoundingClientRect()
+        const radio = edge('default')
+        return {
+          name: edge('name')?.left ?? Number.NaN,
+          root: edge('root')?.left ?? Number.NaN,
+          radioOffLine: radio ? Math.abs(radio.top + radio.height / 2 - (first.top + first.height / 2)) : 0,
+          removeOver: (edge('remove')?.height ?? 0) - row.getBoundingClientRect().height,
+        }
+      }),
     }
   })
   expect(box.left, JSON.stringify(box)).toBeGreaterThanOrEqual(0)
   expect(box.right, JSON.stringify(box)).toBeLessThanOrEqual(width)
   expect(box.sideways, JSON.stringify(box)).toBeLessThanOrEqual(0)
   expect(box.names.filter((name) => name.cut > 0.5)).toEqual([])
+  // The rows' names and folders each start at one edge, the radio sits on the name's first
+  // line and the remove is no taller than its row.
+  const spread = (edges: number[]) => (edges.length ? Math.max(...edges) - Math.min(...edges) : 0)
+  expect(spread(box.rows.map((row) => row.name)), JSON.stringify(box.rows)).toBeLessThanOrEqual(1)
+  expect(spread(box.rows.map((row) => row.root)), JSON.stringify(box.rows)).toBeLessThanOrEqual(1)
+  for (const row of box.rows) {
+    expect(row.radioOffLine, JSON.stringify(row)).toBeLessThanOrEqual(1)
+    expect(row.removeOver, JSON.stringify(row)).toBeLessThanOrEqual(0)
+  }
   await page.screenshot({
     path: info.outputPath(`space-window-${tag}.png`),
     animations: 'disabled',

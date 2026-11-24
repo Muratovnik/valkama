@@ -6,8 +6,8 @@
  * Each row is a radio of one group, which picks the default, then the project's name, its
  * folder and its remove. The default has no remove while the space has other projects: the
  * row repeats the server's rule rather than meeting its refusal. A folder too long for its
- * row is cut at its end and shown whole in its hint. On a narrow window the folder goes
- * under the name.
+ * row is cut at its end and shown whole in its hint. The rows share their columns, so every
+ * folder starts at one edge. On a narrow window the folder goes under the name.
  *
  * «Add project» is a search over the registered projects the space does not have: those in
  * no space first, then those of other spaces, which say what moving one means. The default of
@@ -300,18 +300,21 @@ function addFolder() {
   font-size: var(--font-size-dense);
 }
 
+/* The radio, the name, the folder, the marks and the remove on one line; the folder takes
+   what the line has left and is cut at its end. The rows borrow the list's columns, so the
+   longest name sets where every folder starts. */
 .project-rows {
   display: grid;
-  gap: var(--space-1);
+  grid-template-columns: auto auto minmax(0, 1fr) auto var(--size-control-height);
+  gap: var(--space-1) var(--space-3);
   min-width: 0;
 }
 
-/* The radio, the name, the folder, the marks and the remove on one line; the folder takes
-   what the line has left and is cut at its end. */
 .project-row {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) auto var(--size-control-height);
-  gap: var(--space-2) var(--space-3);
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  row-gap: var(--space-2);
   align-items: center;
   min-height: var(--size-control-height);
 }
@@ -387,11 +390,14 @@ function addFolder() {
 
 /* A narrow window: the folder goes under the name, beside the radio's column. */
 @container overlay (width < 520px) {
+  .project-rows {
+    grid-template-columns: auto minmax(0, 1fr) auto var(--size-control-height);
+  }
+
   .project-row {
     grid-template-areas:
       'radio name marks remove'
       '. root root .';
-    grid-template-columns: auto minmax(0, 1fr) auto var(--size-control-height);
     row-gap: 0;
   }
 
