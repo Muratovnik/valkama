@@ -255,8 +255,9 @@ const hasUsage = (group: Group) => group.spends || sessionOf(group) !== null
                 <time
                   v-tooltip.detail="facts.started.full"
                   :datetime="facts.started.at"
-                  >{{ facts.started.text }}</time
-                ><template v-if="facts.quiet">, {{ facts.quiet }}</template>
+                  >{{ facts.started.text }}</time><template v-if="facts.quiet"
+                  >, {{ facts.quiet }}</template
+                >
               </span>
               <span
                 v-if="facts.ended"
@@ -277,8 +278,7 @@ const hasUsage = (group: Group) => group.spends || sessionOf(group) !== null
                 <time
                   v-tooltip.detail="facts.activity.full"
                   :datetime="facts.activity.at"
-                  >{{ facts.activity.text }}</time
-                >, {{ facts.ago }}
+                  >{{ facts.activity.text }}</time>, {{ facts.ago }}
               </span>
               <span
                 v-else

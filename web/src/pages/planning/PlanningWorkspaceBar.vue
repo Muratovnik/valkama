@@ -254,8 +254,7 @@ function focusChips() {
         <span
           v-if="!reading"
           class="workspace-fact"
-          >{{ countsText }}</span
-        ><template v-if="!reading && elsewhereText"
+          >{{ countsText }}</span><template v-if="!reading && elsewhereText"
           >{{ BETWEEN }}<span class="workspace-fact">{{ elsewhereText }}</span></template
         ><span
           v-if="closedText"

@@ -38,8 +38,9 @@ async function load() {
   const { graphView } = await import('@/pages/planning/utils/graphView.ts')
   const { createGraphLayoutRunner } =
     await import('@/widgets/work-item-graph/utils/graphLayoutRunner.ts')
-  const warm = await import('@/widgets/work-item-graph/utils/graphLayoutWarm.ts')
-  return { graphView, createGraphLayoutRunner, warm }
+  const { SPARE_LIFETIME_MS, takeGraphLayoutEngine } =
+    await import('@/widgets/work-item-graph/utils/graphLayoutWarm.ts')
+  return { graphView, createGraphLayoutRunner, SPARE_LIFETIME_MS, takeGraphLayoutEngine }
 }
 
 /** A prefetch, and the warm-up its dynamic import starts. */
@@ -104,23 +105,23 @@ describe('the warm layout worker', () => {
 
   it('is ended when nobody takes it within a minute, and the next field starts afresh', async () => {
     vi.useFakeTimers()
-    const { graphView, warm } = await load()
+    const { graphView, SPARE_LIFETIME_MS, takeGraphLayoutEngine } = await load()
     await prefetch(graphView)
-    await vi.advanceTimersByTimeAsync(warm.SPARE_LIFETIME_MS - 1)
+    await vi.advanceTimersByTimeAsync(SPARE_LIFETIME_MS - 1)
     expect(engines[0].terminateWorker).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1)
     expect(engines[0].terminateWorker).toHaveBeenCalledOnce()
-    warm.takeGraphLayoutEngine()
+    takeGraphLayoutEngine()
     expect(engines).toHaveLength(2)
     expect(vi.getTimerCount()).toBe(0)
   })
 
   it('is ended when its warm-up fails, and the next field starts afresh', async () => {
-    const { graphView, warm } = await load()
+    const { graphView, takeGraphLayoutEngine } = await load()
     await prefetch(graphView)
     engines[0].layouts[0].reject(new Error('worker failed'))
     await vi.waitFor(() => expect(engines[0].terminateWorker).toHaveBeenCalledOnce())
-    warm.takeGraphLayoutEngine()
+    takeGraphLayoutEngine()
     expect(engines).toHaveLength(2)
   })
 })

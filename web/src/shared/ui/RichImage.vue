@@ -33,8 +33,7 @@ const failed = ref(false)
   <span
     v-if="failed"
     class="rich-image-missing"
-    >{{ name }}</span
-  ><button
+    >{{ name }}</span><button
     v-else
     v-tooltip.name="t('pastedImages.open', { name })"
     type="button"

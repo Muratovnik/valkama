@@ -446,8 +446,9 @@ describe('the chain section of a card', () => {
     const wrapper = await openChain()
     await getButton(wrapper, 'On graph').trigger('click')
     const [[shown, branch]] = wrapper.emitted('chain') as [
-      [{ root: { reference: string }; total: number }, string | null],
-    ]
+      { root: { reference: string }; total: number },
+      string | null,
+    ][]
     expect(shown.root.reference).toBe('MAIN-384')
     expect(shown.total).toBe(616)
     // No branch chosen on the map: the graph is framed on the root.

@@ -186,8 +186,7 @@ const percent = (part: number) => `${part * 100}%`
           v-if="note.at"
           class="account-change-at"
           :datetime="note.at"
-          >{{ note.when }}</time
-        ><span
+          >{{ note.when }}</time><span
           v-else
           class="account-change-at"
           >{{ note.when }}</span
