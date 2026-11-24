@@ -337,7 +337,8 @@ view of the projects registry and nothing else's. Defaults stay with the module 
 the store's path is not in a module the store imports.
 
 The project inventory and its schema-v4 projection are Valkama-owned user state,
-managed through `valkama.py projects`. Keep one writer, a fixed projection path
+written only by `registry_owner`, which `valkama.py projects` and the server's
+space write (`planning/space_window.py`) call. Keep one writer, a fixed projection path
 for every reader, atomic writes, and exact-byte rollback. Only `projects upgrade`
 and `projects import` read the former format, through one reader in
 `registry_owner`; `projects downgrade` returns the bytes the upgrade replaced.

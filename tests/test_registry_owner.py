@@ -356,6 +356,27 @@ class RegistryOwnerTests(unittest.TestCase):
             self._bindings(),
         )
 
+    def test_restore_undoes_one_write_and_refuses_after_another(self) -> None:
+        for project_id in ("alpha", "beta"):
+            self._add(project_id)
+        self._bind("alpha", "MAIN")
+        before = registry_owner.read_inventory(self.inventory)
+        self._update(
+            registry_owner.Bind("beta", _space("MAIN"), True),
+            registry_owner.Unbind("alpha", _space("MAIN")["resource_id"]),
+        )
+        after = registry_owner.read_inventory(self.inventory)
+        undo = registry_owner.Restore(after=after, before=before)
+        self._bind("alpha", "BETA")
+        held = self._state()
+        with self.assertRaises(registry_owner.RegistryOwnerError) as refused:
+            self._update(undo)
+        self.assertEqual("changed_meanwhile", refused.exception.code)
+        self.assertEqual(held, self._state())
+        self.assertTrue(registry_owner.rollback(self.inventory, self.target))
+        self.assertTrue(self._update(undo))
+        self.assertEqual({"alpha": ("MAIN", True), "beta": None}, self._bindings())
+
     def test_preview_refuses_as_update_would_and_writes_nothing(self) -> None:
         self._add("alpha")
         before = self._state()

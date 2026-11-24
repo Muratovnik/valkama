@@ -1195,9 +1195,8 @@ def create_space(
     taken = frozenset(row[0] for row in conn.execute("SELECT key FROM planning_spaces"))
     chosen = model.space_key(key) if key else model.derive_space_key(space_name, taken)
     if chosen in taken:
-        raise model.PlanningError(f"planning space key {chosen} is already in use")
-    if conn.execute("SELECT 1 FROM planning_spaces WHERE name = ?", (space_name,)).fetchone():
-        raise model.PlanningError(f"a planning space named {space_name} already exists")
+        raise model.SpaceRefusedError("key_taken", f"planning space key {chosen} is already in use")
+    _name_free(conn, space_name)
     identifier = (
         model.identifier(space_id, "planning_space.planning_space_id")
         if space_id
@@ -1215,6 +1214,97 @@ def create_space(
         "provider_kind": "local",
         "workflow_id": workflow["workflow_id"],
     }
+
+
+def _name_free(conn: sqlite3.Connection, name: str, space_id: str | None = None) -> None:
+    """Refuse a name another space has: a space is found by its name as well as by its key."""
+
+    if conn.execute(
+        "SELECT 1 FROM planning_spaces WHERE name = ? AND planning_space_id IS NOT ?",
+        (name, space_id),
+    ).fetchone():
+        raise model.SpaceRefusedError("name_taken", f"a planning space named {name} already exists")
+
+
+def _space_for_write(conn: sqlite3.Connection, space_id: str) -> sqlite3.Row:
+    """The space's row, read under the write lock this takes when no transaction holds it."""
+
+    if not conn.in_transaction:
+        conn.execute("BEGIN IMMEDIATE")
+    row = conn.execute(
+        "SELECT planning_space_id, name, key, next_number FROM planning_spaces"
+        " WHERE planning_space_id = ?",
+        (space_id,),
+    ).fetchone()
+    if row is None:
+        raise model.PlanningError("planning space does not exist")
+    return row
+
+
+def rename_space(conn: sqlite3.Connection, space_id: str, name: str) -> bool:
+    """Give a space a new name, unique among spaces; whether it changed.
+
+    The key and every number stay: a reference is built from the key, and the name
+    above it is free to change.
+    """
+
+    space_name = model.text_field(name, "planning_space.name")
+    row = _space_for_write(conn, space_id)
+    if row["name"] == space_name:
+        return False
+    _name_free(conn, space_name, space_id)
+    conn.execute(
+        "UPDATE planning_spaces SET name = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')"
+        " WHERE planning_space_id = ?",
+        (space_name, space_id),
+    )
+    return True
+
+
+def rekey_space(conn: sqlite3.Connection, space_id: str, key: str) -> bool:
+    """Give a space a new key while it has issued no number; whether it changed.
+
+    Every reference is its key and a number, so once a number is out, in a text, a
+    commit or an address, the key no longer changes. A number deleted with its item
+    is spent all the same: `next_number` says whether any was ever issued.
+    """
+
+    chosen = model.space_key(key)
+    row = _space_for_write(conn, space_id)
+    if row["key"] == chosen:
+        return False
+    if int(row["next_number"]) != 1:
+        raise model.SpaceRefusedError(
+            "key_issued",
+            f"planning space {row['key']} has issued numbers: its key no longer changes",
+        )
+    if conn.execute("SELECT 1 FROM planning_spaces WHERE key = ?", (chosen,)).fetchone():
+        raise model.SpaceRefusedError("key_taken", f"planning space key {chosen} is already in use")
+    conn.execute(
+        "UPDATE planning_spaces SET key = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')"
+        " WHERE planning_space_id = ?",
+        (chosen, space_id),
+    )
+    return True
+
+
+def remove_space(conn: sqlite3.Connection, space_id: str) -> None:
+    """Remove a space that holds no work item, with its workflow and its own settings.
+
+    Work cannot be without a space, so a space with any item, open or finished, stays.
+    """
+
+    row = _space_for_write(conn, space_id)
+    if conn.execute(
+        "SELECT 1 FROM work_items WHERE planning_space_id = ? LIMIT 1", (space_id,)
+    ).fetchone():
+        raise model.SpaceRefusedError(
+            "space_not_empty",
+            f"planning space {row['key']} holds work: only an empty one is removed",
+        )
+    # The workflow, its states and moves, and the space's participation and label
+    # settings go with it by their keys' ON DELETE CASCADE.
+    conn.execute("DELETE FROM planning_spaces WHERE planning_space_id = ?", (space_id,))
 
 
 def create_default_workflow(conn: sqlite3.Connection, planning_space_id: str) -> dict:

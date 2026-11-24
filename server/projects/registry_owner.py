@@ -759,7 +759,20 @@ class Remove(NamedTuple):
     project_id: str
 
 
-Change = Add | Edit | Bind | Unbind | Rekey | Remove
+class Restore(NamedTuple):
+    """Put back the entries an earlier write of the caller's own changed, and only those.
+
+    `after` is how that write left each project it touched, `before` how it found
+    them; a project in `after` and not in `before` was added by it and goes. Any of
+    them changed since is refused, as is a result that breaks a rule: this undoes one
+    caller's write, where `rollback` undoes the last write, whoever made it.
+    """
+
+    after: Sequence[Mapping[str, Any]]
+    before: Sequence[Mapping[str, Any]]
+
+
+Change = Add | Edit | Bind | Unbind | Rekey | Remove | Restore
 
 
 def _registered(projects: list[dict[str, Any]], project_id: str) -> dict[str, Any]:
@@ -832,6 +845,19 @@ def _apply(projects: list[dict[str, Any]], change: Change) -> list[dict[str, Any
             binding = entry["planning_binding"]
             if binding is not None and binding["resource_id"] == change.resource_id:
                 entry["planning_binding"] = dict(binding, resource_id=target)
+    elif isinstance(change, Restore):
+        now = {entry["project_id"]: entry for entry in projects}
+        left = {entry["project_id"]: dict(entry) for entry in change.after}
+        found = {entry["project_id"]: dict(entry) for entry in change.before}
+        if any(now.get(project_id) != entry for project_id, entry in left.items()):
+            raise RegistryOwnerError(
+                "the projects changed since the write being undone", code="changed_meanwhile"
+            )
+        projects = [
+            found.get(entry["project_id"], entry)
+            for entry in projects
+            if entry["project_id"] not in left or entry["project_id"] in found
+        ]
     else:
         entry = _registered(projects, change.project_id)
         _leaving_default(projects, entry)
