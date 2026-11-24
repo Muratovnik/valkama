@@ -3,8 +3,9 @@
  * The frame of every command dialog: its head, a body that scrolls what it holds, and a foot of
  * buttons. What the form says of a change (`note`) and why a submit was refused (`error`) stand
  * at the end of the body, and while the form is longer than the dialog at its lower edge over
- * what scrolls under it; a control the keyboard reaches scrolls clear of those words, so no
- * focus stands under them.
+ * what scrolls under it; a control focused from the keyboard is kept clear of those words, as the
+ * focus comes to it and while it stays there as the words come, change or grow and as the body
+ * gets shorter, so no focus stands under them.
  *
  * Its parts are `data-part` `dialog-body` and `said`, the box of those words.
  */
@@ -78,32 +79,50 @@ const said = ref<HTMLElement | null>(null)
 const saidHeight = ref(0)
 useResizeObserver(said, ([entry]) => {
   saidHeight.value = Math.ceil(entry?.borderBoxSize[0]?.blockSize ?? 0)
+  keepClear()
+})
+useResizeObserver(body, () => {
+  keepClear()
 })
 const saying = computed(() => Boolean(props.error || props.note))
 const saidRoom = computed(() => (saying.value ? saidHeight.value : 0))
 const bodyRoom = computed(() =>
   saidRoom.value ? { '--size-said-room': `${String(saidRoom.value)}px` } : undefined,
 )
+/** A pixel past the ring: a scroll stops at a whole pixel, and left a fraction under the words. */
+const HAIR = 1
+
 /**
- * A control the keyboard brings focus to under the words, or with its ring under them, is
- * scrolled up out from under them, as far as the words stand at that moment and a pixel more for
- * the scroll's whole-pixel stop. The browser's own scroll to a text field shows only its caret,
- * and left the rest of a description's box under a refusal; and the room the body keeps is
- * measured a frame late, so a Shift+Tab from the foot pressed as a refusal appeared left a button
- * under the refusal's line.
+ * How far the focus ring reaches out of `control` (`base.css`): none where the control shows
+ * focus its own way.
  */
-function keepClear(event: FocusEvent) {
-  const { target } = event
+function ringOf(control: HTMLElement) {
+  const style = getComputedStyle(control)
+  return style.outlineStyle === 'none'
+    ? 0
+    : Number.parseFloat(style.outlineWidth) + Number.parseFloat(style.outlineOffset)
+}
+
+/**
+ * The control focused from the keyboard in the body, when the words or its ring stand over it,
+ * is scrolled up out from under them by as far as they stand at that moment. It runs on every
+ * change of where the words stand against that control: as the focus comes to it, and while the
+ * focus stays, as the words come, change or grow (their observer) and as the body gets shorter
+ * (its own). The browser's own scroll to a text field shows only its caret, and left the rest of
+ * a description's box under a refusal; the room the body keeps is measured a frame late; and,
+ * answered as the focus came alone, a refusal that arrived after a Shift+Tab back into the form
+ * stood over all of the focused tab.
+ */
+function keepClear() {
+  const scroller = body.value
   const words = said.value
-  if (!words || !body.value || !(target instanceof HTMLElement)) return
-  if (words.contains(target) || !target.matches(':focus-visible')) return
-  const style = getComputedStyle(target)
-  const ring =
-    style.outlineStyle === 'none'
-      ? 0
-      : Number.parseFloat(style.outlineWidth) + Number.parseFloat(style.outlineOffset)
-  const under = target.getBoundingClientRect().bottom + ring + 1 - words.getBoundingClientRect().top
-  if (under > 0) body.value.scrollBy({ top: Math.ceil(under) })
+  const focused = document.activeElement
+  if (!scroller || !words || !(focused instanceof HTMLElement)) return
+  if (!scroller.contains(focused) || words.contains(focused)) return
+  if (!focused.matches(':focus-visible')) return
+  const lower = words.getBoundingClientRect().top
+  const under = focused.getBoundingClientRect().bottom + ringOf(focused) + HAIR - lower
+  if (under > 0) scroller.scrollBy({ top: Math.ceil(under) })
 }
 </script>
 

@@ -1082,8 +1082,11 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   it, and no control the keyboard reaches stands under those words: the body keeps
   their height clear at its lower edge for a focused control and its ring, so a
   Tab scrolls it out from under them (WCAG 2.4.11), a text field's whole box and
-  not only its caret. Without that a Tab stopped on remove buttons and fields hidden whole
-  under a rename's words.
+  not only its caret, and a focus that stays is scrolled clear the same way as the
+  words come, change or grow over it and as the body gets shorter. Without that a
+  Tab stopped on remove buttons and fields hidden whole under a rename's words, and
+  a refusal that came after a Shift+Tab back into the form stood over the whole of
+  the focused tab.
 - **Inspectors:** persistent right-side detail uses the shared resizable
   inspector. Width is bounded by the actual workspace, not the viewport. The
   panel lives while any item is open and only its content changes with the item:
