@@ -362,14 +362,14 @@ defineExpose({ gave: room.gave })
   }
 }
 
-/* The narrowest phone, a window of about 380px or less, where the page asks for it (`beside`):
+/* The narrowest phone, a window under about 400px, where the page asks for it (`beside`):
    a part of the line's end stands in the periods' row. At 360px a failed refresh in Russian,
    beside the filter, the freshness and the read again, had room only for three lines and ran 2px
    past the row's end. The periods keep the whole row where their last line leaves a cell for it
    (`cell`), which the page stands it in; otherwise they leave it the row's third and fourth
    columns and wrap in what they keep. Leaving those columns whatever their count, they had too
    little room for two columns and stood in one of five lines, 172px of track against 104. */
-@container (width < 18rem) {
+@container (width < 19rem) {
   .period-bar-beside .period-bar-periods {
     grid-area: 1 / 1 / 2 / 3;
   }

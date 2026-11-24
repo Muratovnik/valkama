@@ -1,5 +1,6 @@
 /**
- * The bar's states, measured at the widths the bar takes each of its forms in: a phone (360 and 390px),
+ * The bar's states, measured at the widths the bar takes each of its forms in: a phone (360, 390 and
+ * 399px, the widest window the narrowest phone's form holds),
  * the two rows of a narrow bar (760 and 1024px), the band where a span of days takes the bar to two
  * rows (1280px), and one line (1440 and 1920px), in Russian, whose words are the longest.
  *
@@ -19,9 +20,9 @@
  * from a phone of 360px up. On a phone every period stands whole in its row, opened, chosen or
  * beside a failure.
  *
- * On the narrowest phones, 360 to 390px, in both languages, the periods stand in two columns or
+ * On the narrowest phones, 360 to 399px, in both languages, the periods stand in two columns or
  * more across the whole first row, and the bar is no taller than at 390px. Where the bar is
- * narrower than 18rem the freshness stands in the cell the periods' short last line leaves, past
+ * narrower than 19rem the freshness stands in the cell the periods' short last line leaves, past
  * «Свой» and inside the track, overlapping no period; wider, in the row under them. It reads as the
  * freshness and not as a period: no button, no ground of its own, the muted detail ink, outside the
  * choice. Standing beside the periods instead, the freshness left them one column of five lines.
@@ -52,7 +53,7 @@ const PERIODS = {
   days: { period: 'custom', from: '2026-11-09', to: '2026-11-11' },
 } as const
 
-const WIDTHS = [360, 390, 760, 1024, 1280, 1440, 1920] as const
+const WIDTHS = [360, 390, 399, 760, 1024, 1280, 1440, 1920] as const
 
 // Playwright hides scrollbars, and one that arrives narrows what it scrolls on a real screen.
 test.use({ locale: 'ru-RU', launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'] } })
@@ -239,7 +240,7 @@ for (const width of [390, 760, 1440] as const)
 /** The periods' name in each language, which names their radio group. */
 const PERIODS_LABEL = { en: 'Period', ru: 'Период' } as const
 /** The narrowest phones and the phone over them, walked up. */
-const PHONES = [360, 370, 380, 390] as const
+const PHONES = [360, 370, 380, 390, 399, 400] as const
 
 /**
  * The bar on a phone: its width inside its padding in the root's ems and its height, the periods' track and each
@@ -319,7 +320,7 @@ const overlaps = (one: Box, other: Box) =>
 
 /**
  * The periods in two columns or more, the bar no taller than `tallest`, and the freshness where
- * the bar's width puts it: in the cell their last line leaves under 18rem, under them wider.
+ * the bar's width puts it: in the cell their last line leaves under 19rem, under them wider.
  */
 function expectPhone(name: string, state: PhoneBar, tallest: number) {
   expect(state.segments, `${name}: the periods`).toHaveLength(5)
@@ -333,7 +334,7 @@ function expectPhone(name: string, state: PhoneBar, tallest: number) {
   for (const [at, segment] of state.segments.entries())
     expect.soft(overlaps(fresh, segment), `${name}: the freshness over period ${at}`).toBe(false)
   expect.soft(age.right, `${name}: the age past the window`).toBeLessThanOrEqual(state.window)
-  if (state.ems < 18) {
+  if (state.ems < 19) {
     const last = state.segments.at(-1) ?? fresh
     expect
       .soft(age.left, `${name}: the age before the free cell`)
@@ -357,14 +358,14 @@ function expectPhone(name: string, state: PhoneBar, tallest: number) {
 }
 
 /**
- * Under 18rem, with no failure said, the freshness standing in the periods' row leaves the row
+ * Under 19rem, with no failure said, the freshness standing in the periods' row leaves the row
  * under them to the field and the read again: between them stand only the row's gaps around the
  * failure's column and the freshness's, both empty (`PeriodBar`'s four columns). Standing on the
  * third and fourth columns, the freshness held the third as wide as itself past the read again,
  * 46 to 58px of the row the field and a failure lost.
  */
 function expectRowShared(name: string, state: PhoneBar) {
-  if (state.ems >= 18 || state.failure !== null) return
+  if (state.ems >= 19 || state.failure !== null) return
   const field = state.field ?? { right: Number.NaN }
   const refresh = state.refresh ?? { left: Number.NaN }
   expect

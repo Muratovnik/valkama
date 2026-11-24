@@ -337,8 +337,10 @@ const freshHint = computed(() =>
    row under the periods shares out: on the third and fourth it held the third as wide as itself
    past the read again, an empty column in the row under them that the field and a failure lost,
    58px for a live period, and at 360px in Russian the failure's words took three lines and the
-   bar grew by 11px. */
-@container (width < 18rem) {
+   bar grew by 11px. Under 19rem, a window under about 400px: at 18rem, in windows of 384 to
+   399px, a live period's failure in Russian had 90px beside the field, the freshness and the
+   read again, took three lines and grew the bar by 11px. */
+@container (width < 19rem) {
   .analytics-bar-fresh {
     grid-area: 1 / 3 / 2 / 5;
     align-content: center;

@@ -3275,17 +3275,18 @@ The reader's own days take a third row once chosen, which moves the panel down b
 scrolled sideways beside the freshness, opening with «Now» cut and «Custom» past the edge, and a row
 held for the reader's own days under every other period stood as an empty band of 72px over the
 panel; the period bar of Agent decisions and Volumes is the same bar. On the narrowest phone, a
-bar under 18rem in a window of about 380px or less, Analytics' freshness stands in the periods'
+bar under 19rem in a window under about 400px, Analytics' freshness stands in the periods'
 row instead (`beside`): beside the filter, the freshness and the refresh, a failed refresh in
-Russian had room only for three lines there and ran 2px past the row's end. It stands in the cell
-the periods' short last line leaves, past «Custom», the periods keeping the whole row two over two
-over one; only where their count leaves no such cell does it take the row's end, the periods
-wrapping in what it leaves. Standing at that end whatever their count, it left them 182 to 206px,
-one column of five lines. In that cell the freshness never reads as a period: it is words, not a
-button; it takes no ground, edge or pressed state of its own, the track's ground under it being
-the periods'; it is in the muted detail ink, never a segment's; it sits on the last line's height,
-as far from the track's end as a period's words from its column's edge; and assistive technology
-reads it as the freshness, outside the choice, which holds the periods alone. A refresh
+Russian had room only for three lines there and ran 2px past the row's end, and under 18rem, in
+windows of 384 to 399px, a live period's took three lines and grew the bar by 11px. It stands in
+the cell the periods' short last line leaves, past «Custom», the periods keeping the whole row
+two over two over one; only where their count leaves no such cell does it take the row's end, the
+periods wrapping in what it leaves. Standing at that end whatever their count, it left them 182 to
+206px, one column of five lines. In that cell the freshness never reads as a period: it is words,
+not a button; it takes no ground, edge or pressed state of its own, the track's ground under it
+being the periods'; it is in the muted detail ink, never a segment's; it sits on the last line's
+height, as far from the track's end as a period's words from its column's edge; and assistive
+technology reads it as the freshness, outside the choice, which holds the periods alone. A refresh
 that fails keeps what is shown and says so in words before the age at every width, «Could not
 refresh» with a retry: given up on a short line, its words had left a red disc with no hint. A
 refresh whose period before could not be read, where what is shown has it, fails so too: shown,
