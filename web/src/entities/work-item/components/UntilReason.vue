@@ -9,6 +9,10 @@
  *
  * The reason shown is `id`, which the press it keeps unavailable names as its description; the
  * copies that hold its room are neither seen nor heard.
+ *
+ * Why the last write was refused (`refusal`) stands in the same room, after the reason when both
+ * stand, in the danger's ink and announced. Under the room, at the end of the form, it stood
+ * across the room's empty height from the field it followed.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -23,8 +27,10 @@ const props = withDefaults(
     reason: string
     /** The reasons of the place's own it can come to say, besides the choice's. */
     also?: readonly string[]
+    /** Why the last write was refused; empty while none was. */
+    refusal?: string
   }>(),
-  { also: () => [] },
+  { also: () => [], refusal: '' },
 )
 const { t } = useI18n()
 const room = computed(() => [
@@ -34,13 +40,22 @@ const room = computed(() => [
 
 <template>
   <div class="held-room">
-    <p
-      v-if="reason"
-      :id="id"
-      class="until-reason"
-    >
-      {{ reason }}
-    </p>
+    <div class="until-said">
+      <p
+        v-if="reason"
+        :id="id"
+        class="until-reason"
+      >
+        {{ reason }}
+      </p>
+      <p
+        v-if="refusal"
+        class="until-refusal"
+        role="alert"
+      >
+        {{ refusal }}
+      </p>
+    </div>
     <p
       v-for="word in room"
       :key="word"
@@ -55,10 +70,22 @@ const room = computed(() => [
 <style scoped src="@/shared/ui/heldRoom.css"></style>
 
 <style scoped>
+.until-said {
+  display: grid;
+  gap: var(--space-1);
+  align-content: start;
+  min-width: 0;
+}
+
 .until-reason,
-.until-reason-room {
+.until-reason-room,
+.until-refusal {
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
+}
+
+.until-refusal {
+  color: var(--color-danger);
 }
 </style>

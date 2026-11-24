@@ -1,0 +1,148 @@
+.combo-box {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  align-items: center;
+  min-height: var(--size-control-height);
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
+  border: 1px solid var(--color-rule-strong);
+  background: var(--color-control-surface);
+  border-radius: var(--radius-control);
+  cursor: text;
+
+  &:hover:not(.disabled, :has(.combo-input:focus-visible)) {
+    border-color: var(--color-action-primary);
+  }
+
+  &:has(.combo-input:focus-visible) {
+    border-color: var(--color-focus-ring);
+  }
+
+  &.invalid {
+    outline: 1px solid var(--color-text-muted);
+    outline-offset: -2px;
+  }
+
+  &.disabled {
+    color: var(--color-text-disabled);
+    background: var(--color-control-disabled-surface);
+    border-color: var(--color-rule);
+    cursor: not-allowed;
+  }
+}
+
+/* Of one value, the field and, while nobody types, its chosen words drawn over it, share one
+   cell, and the chevron has the other. The field stays the box's own child, which the list is
+   placed and sized by and a press reaches. */
+.combo-box.single {
+  display: grid;
+  grid-template-columns: minmax(8ch, 1fr) auto;
+
+  > .combo-input,
+  > .combo-shown {
+    grid-area: 1 / 1;
+    width: auto;
+    min-width: 0;
+  }
+
+  > .combo-chevron {
+    grid-area: 1 / 2;
+  }
+}
+
+.combo-input {
+  flex: 1 1 8ch;
+  width: 0;
+  min-width: 8ch;
+  min-height: var(--size-control-inline);
+  padding: 0;
+  border: 0;
+  color: inherit;
+  font: var(--font-control);
+  background: transparent;
+  outline: 0;
+
+  /* Its words are drawn over it; the caret stays in the field's ink. */
+  &.is-covered {
+    color: transparent;
+    caret-color: var(--color-text);
+  }
+}
+
+/* A press goes through them to the field, whose hint they are part of. */
+.combo-shown {
+  font: var(--font-control);
+  pointer-events: none;
+}
+
+.combo-chevron {
+  margin-inline-start: auto;
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.combo-popup {
+  width: var(--reka-combobox-trigger-width);
+  max-width: calc(100vw - 24px);
+  max-height: min(320px, var(--reka-combobox-content-available-height));
+  padding: var(--space-1);
+  border: 1px solid var(--color-rule-strong);
+  color: var(--color-text);
+  background: var(--color-surface);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: var(--radius-control);
+  box-shadow: 0 14px 34px var(--color-shadow);
+}
+
+.combo-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 18px;
+  gap: var(--space-3);
+  align-items: center;
+  min-height: var(--size-control-height);
+  padding: var(--space-2);
+  border-radius: var(--radius-status);
+  cursor: pointer;
+
+  &[data-highlighted] {
+    background: var(--color-surface-active);
+
+    @media (forced-colors: active) {
+      outline: var(--size-focus-ring) solid Highlight;
+      outline-offset: -2px;
+    }
+  }
+
+  &[data-disabled] {
+    opacity: 0.58;
+    cursor: not-allowed;
+  }
+
+  &:not([data-state='checked']) .combo-check {
+    visibility: hidden;
+  }
+}
+
+.combo-title {
+  display: block;
+  font: var(--font-row-title);
+  overflow-wrap: anywhere;
+}
+
+/* A note may be a folder's path, one word to a browser: it breaks where the line runs out
+   rather than running past the list's edge. */
+.combo-note {
+  display: block;
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+  overflow-wrap: anywhere;
+}
+
+.combo-empty {
+  padding: var(--space-3);
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-interface);
+  text-align: center;
+}

@@ -1054,7 +1054,15 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   lock, and restoration. A command dialog layers above an open drawer instead
   of unmounting it. In a window 620px wide or narrower a dialog takes the whole
   width as the drawer does, without corners, its head, body and foot sharing a
-  16px inset in place of the floating dialog's 24px.
+  16px inset in place of the floating dialog's 24px. A centred dialog is centred
+  as it opens and, from the reader's first press, key or typed value in it, keeps
+  the top it stood at then while what it holds grows or shrinks: it grows and
+  shrinks at its foot, rises only as far as it must to stay in the window, and is
+  centred again when the window changes size. Centred all along, it grew by half
+  at each edge, so a line appearing under a field or a refusal at the end of the
+  form moved its title and every field above them under the hand. What arrives
+  before that first act, a picture decoded or a list read as it opens, is under
+  nobody's hand, and the dialog stays centred on it.
 - **Inspectors:** persistent right-side detail uses the shared resizable
   inspector. Width is bounded by the actual workspace, not the viewport. The
   panel lives while any item is open and only its content changes with the item:
@@ -1567,8 +1575,9 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   takes both classes and keeps the trim's cut, sideways only, so its accents stay whole. What
   a host draws in a choice's option is held to the row, so its own one-line word gives way,
   and the row's hint says the option's words; what it draws for the chosen value is held to
-  the trigger the same way, and the trigger's value box says it. A menu's entry is not such a label: it wraps,
-  and every word of it stays on screen.
+  the trigger the same way, and the trigger's value box says it. A field found by typing that holds
+  one value draws it so while nobody types there, its hint on the field (`SearchCombobox`). A menu's
+  entry is not such a label: it wraps, and every word of it stays on screen.
 - **The mark:** one drawing — a spark: a long stroke, a triangle under its short
   arm and a four-pointed star — in two tones, owned by `BrandMark`. Inside the
   shell it is a single ink taking its color from the carrier. Where it stands
@@ -2792,7 +2801,11 @@ move as it appears. Under the card it read as a word about the card. «Отло�
 the reason under the fields, until both are said, for a day already gone and for a count that is
 no whole number from 1 to 999. The reason holds the room of every reason it can come to say, so
 the value that makes the press available moves nothing: given room only while it stood, it took
-that room with it, and the window, centred on the screen, moved the fields under the hand. A
+that room with it, and the press moved. A refused write keeps all that was chosen, and its reason
+stands in that room in the danger's ink, right under why it waits: at the end of the form it
+stood across the room's empty height. The window keeps its top as the line or a refusal comes
+(**Dialogs and drawers**), so neither moves the fields. A chosen card's number and title too long
+for its field end in an ellipsis, whole in the field's hint (**One-line labels**). A
 task's cancel asks its reason in the band under the bar, the caret in the field, then «Отменить
 MAIN-12? Карточка закроется как «Отменено».» with «Отменить задачу»; the reason is the move's and
 the summary's why, since a close needs a summary. A goal's or a stage's cancel at work opens
@@ -2993,7 +3006,9 @@ place the choice «Отложить» asks of when work comes back (**Closing wo
 the card searched among the open cards of the question's own space: «Until a day», «New comments»,
 both, whichever comes first, or «Until a card closes». Its fields stand on a line, the card beside
 the day and the count where the line holds all three and under them where it does not, and the
-«whichever comes first» line stands as that passage says. «Put off» stands under the fields,
+«whichever comes first» line stands as that passage says. Beside them the card's field has what the
+day and the count leave, so a long card chosen there is cut by that passage's rule, and choosing
+it moves nothing. «Put off» stands under the fields,
 unavailable with the reason under it until a day from today on, a count from 1 to 999 or a card
 is chosen. It stands there whether a reason does or not, and the reason holds the room of every
 reason it can come to say, so a value becoming one the server takes moves nothing but what the
@@ -3032,9 +3047,11 @@ the recommended word, since the server recommends every one. Ticking only ticks.
 unticked leaves the group and goes back to triage whatever the answer, so every answer sends what
 is ticked, and once any is unticked Do names how many go: «Do: 7». The server takes Do and
 «Later…» only with a finding ticked, so with none ticked both wait for one: they are unavailable,
-and the reason stands under the answers, as it stands under an unavailable «Put off»; a choice of a
-day already open keeps its «Put off» unavailable for the same reason. «Don't do» stays, and drops
-the whole group.
+and the reason stands under the answers, in a room held for it while the question waits, as it
+stands under an unavailable «Put off», so a tick taken away or given back moves nothing under the
+answers. A choice of a day already open keeps its «Put off» unavailable for the same reason, said
+under that press alone, while the line under the answers keeps only its room: said in both
+places, it read twice on one screen. «Don't do» stays, and drops the whole group.
 «Later…» puts the goal off with the findings ticked, to a day, to new comments, to whichever of
 the two comes first, or until a card closes. «Don't do»
 asks first, as every answer that cancels does. Where open work stands under the goal that the

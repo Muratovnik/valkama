@@ -7,8 +7,9 @@
  * «Put off» is not available until both are said, and not for a day already gone or a count that
  * is no whole number from 1 to 999; the reason stands under the fields, where the press would have
  * been read, in the room of every reason it can come to say (`UntilReason`), so the value that
- * makes it available does not shrink the window and move the fields under the hand. A refused
- * write keeps the window open with all that was chosen, its reason at the foot.
+ * makes it available does not shrink the window. A refused write keeps the window open with all
+ * that was chosen, and its reason stands in that same room, right under why it waits: at the
+ * end of the form, it stood across the room's empty height from the last field.
  */
 import { computed, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -91,7 +92,6 @@ async function submit() {
     :context="`${item.reference} · ${item.title}`"
     :close-label="t('workItem.closeActions.defer.keep')"
     :busy="busy"
-    :error="error"
     @close="emit('close')"
     @submit="submit"
   >
@@ -114,6 +114,7 @@ async function submit() {
         :id="hintId"
         :reason="blocked"
         :also="ownReasons"
+        :refusal="error"
       />
     </div>
     <template #footer>

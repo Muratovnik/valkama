@@ -136,7 +136,9 @@ describe('putting work off', () => {
       reason: 'Waits on the API',
     })
     expect(wrapper.emitted('done')).toBeUndefined()
-    expect(wrapper.get('[role="alert"]').text()).toBe('QA-7 is closed')
+    // The refusal stands in the reason's room, right under why it waits.
+    expect(wrapper.get('.until-refusal').attributes('role')).toBe('alert')
+    expect(wrapper.get('.until-refusal').text()).toBe('QA-7 is closed')
   })
 
   it('puts it off until new comments, or a day or new comments, whichever comes first', async () => {

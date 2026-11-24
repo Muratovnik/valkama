@@ -68,7 +68,7 @@ export const LINE_BUDGET = new Map([
   // which is a frame as the dialog is.
   ['shared/ui/OverlayPane.vue', 2],
   ['shared/ui/ReferencePreview.vue', 1], // Overlay edge of the card a reference shows on hover.
-  ['shared/ui/SearchCombobox.vue', 2], // The field's edge, and the overlay edge of its list.
+  ['shared/ui/searchCombobox.css', 2], // The field's edge, and the overlay edge of its list.
   ['shared/ui/SemanticState.vue', 1],
   // A chart's tick of the period it is compared with, and its key in the legend: an edge in the
   // text's ink told from the stack by its drawing, not a hue. The border is the drawing itself.

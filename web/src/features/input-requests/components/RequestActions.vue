@@ -61,7 +61,12 @@
  * An answer that cannot be sent yet (`blocked`), as a group's Do and Later… with no finding
  * ticked, is unavailable, and why stands under the answers at their end, as it stands under an
  * unavailable Put off. Its box is unavailable only while it says its own answer: as the box an
- * asking confirms in, it confirms.
+ * asking confirms in, it confirms. That line holds the room of each reason an answer can come
+ * to give (`blockable`) while the question waits, so a tick taken away or given back moves
+ * nothing under it: given its room only while it stood, it moved the next question down and up.
+ * While the choice of a day stands open, the reason stands under its Put off alone, which it
+ * keeps unavailable too, and this line keeps only its room: said in both places, it read twice
+ * on one screen. The answers it blocks name it there (`blockedId`, which the foot gives both).
  */
 import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -86,6 +91,8 @@ const props = withDefaults(
     answers?: readonly KindAnswer[]
     /** The answer whose step of asking stands, by its place among them. */
     asking?: number | null
+    /** The id of the reason a blocked answer names, wherever it stands. */
+    blockedId?: string
     /** Somebody waits on the answer, so it can be refused. */
     declinable?: boolean
     /** Whether the choice of a day the answer that puts off opens is open, and its id. */
@@ -93,7 +100,14 @@ const props = withDefaults(
     /** What Send says, where it sends something other than an answer. */
     sendWord?: string
   }>(),
-  { answers: () => [], asking: null, declinable: true, later: null, sendWord: undefined },
+  {
+    answers: () => [],
+    asking: null,
+    blockedId: undefined,
+    declinable: true,
+    later: null,
+    sendWord: undefined,
+  },
 )
 const emit = defineEmits<{
   /** A press on a kind's answer, by its place; `confirmed` once its step of asking was answered. */
@@ -104,7 +118,8 @@ const emit = defineEmits<{
   'way-out': []
 }>()
 const { t } = useI18n()
-const blockedId = useId()
+const ownBlockedId = useId()
+const blockedId = computed(() => props.blockedId ?? ownBlockedId)
 const root = ref<HTMLElement | null>(null)
 /** Absent rather than false, because `aria-disabled="false"` is a claim and not a default. */
 const busyMark = computed(() => props.busy || undefined)
@@ -118,6 +133,14 @@ const byAnswers = computed(() => props.waiting && props.answers.length > 0)
 const blockedWhy = computed(() =>
   byAnswers.value ? (props.answers.find((answer) => answer.blocked)?.blocked ?? '') : '',
 )
+/** Every reason an answer can come to give under the answers, one a line: the line's room. */
+const blockedRoom = computed(() =>
+  byAnswers.value
+    ? [...new Set(props.answers.flatMap(({ blockable }) => blockable ?? []))].join('\n')
+    : '',
+)
+/** The reason stands here, unless under the open choice of a day, which says it there. */
+const blockedHere = computed(() => Boolean(blockedWhy.value) && !props.later?.open)
 /** The box an answer's step asks in: the next one, or the one before where it is the last. */
 const confirmAt = (index: number) => (index + 1 < props.answers.length ? index + 1 : index - 1)
 const askedWords = (index: number) =>
@@ -161,7 +184,10 @@ function kindButton(answer: KindAnswer, index: number) {
   if (step === index) return { ...box, variant: 'secondary' as const, word: t('requests.back') }
   if (step !== null && confirmAt(step) === index)
     return { ...box, variant: 'danger' as const, word: props.answers[step]?.label ?? '' }
-  const blocked = { blocked: Boolean(answer.blocked), why: answer.blocked ? blockedId : undefined }
+  const blocked = {
+    blocked: Boolean(answer.blocked),
+    why: answer.blocked ? blockedId.value : undefined,
+  }
   return { ...box, ...blocked, variant: 'secondary' as const, word: answer.label }
 }
 /** A lone answer that asks has no box beside it, so its asking brings one. */
@@ -288,13 +314,19 @@ defineExpose({ focusWayOut })
         >{{ onward.word }}</VButton
       >
     </div>
-    <p
-      v-if="blockedWhy"
-      :id="blockedId"
-      class="request-blocked"
+    <div
+      v-if="blockedRoom || blockedWhy"
+      class="request-blocked-place"
+      :data-room="blockedRoom"
     >
-      {{ blockedWhy }}
-    </p>
+      <p
+        v-if="blockedHere"
+        :id="blockedId"
+        class="request-blocked"
+      >
+        {{ blockedWhy }}
+      </p>
+    </div>
     <VButton
       v-if="dismissable"
       variant="ghost"
@@ -443,9 +475,27 @@ defineExpose({ focusWayOut })
   min-width: 0;
 }
 
-/* Why an answer is unavailable: a line of its own under the answers, at their end. */
-.request-blocked {
+/* Why an answer is unavailable: a line of its own under the answers, at their end, as tall as
+   the tallest reason it holds the room of, which stands unseen in the same cell. */
+.request-blocked-place {
+  display: grid;
   flex-basis: 100%;
+  grid-template-columns: minmax(0, 1fr);
+
+  > *,
+  &::before {
+    grid-area: 1 / 1;
+  }
+
+  &::before {
+    content: attr(data-room);
+    white-space: pre-line;
+    visibility: hidden;
+  }
+}
+
+.request-blocked,
+.request-blocked-place::before {
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
