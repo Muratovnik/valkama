@@ -9,7 +9,9 @@ namespaces and source-manifest provenance are deliberately not part of it.
 A planning space may hold several projects. Each binding says whether its
 project is the space's default one, and every bound space has exactly one: the
 space's root is the root of that project. A projection of another format is
-malformed here, as a schema-v4 one is to a reader of schema 3.
+malformed here, as a schema-v4 one is to a reader of schema 3. One of an older
+schema, as an earlier release left it, is refused the same way, but its reason
+says it is older rather than broken, so a caller can name the upgrade it waits for.
 """
 
 from __future__ import annotations
@@ -93,6 +95,12 @@ def parse_registry(raw: bytes | None) -> RegistryResult:
         document = json.loads(raw.decode("utf-8"))
         document = _exact_mapping(document, _DOCUMENT_KEYS, "registry")
         version = document["schema_version"]
+        if type(version) is int and 0 < version < SCHEMA_VERSION:
+            return _result(
+                "malformed",
+                reason=f"Valkama project registry has the older schema {version};"
+                f" this build reads schema {SCHEMA_VERSION}",
+            )
         if type(version) is not int or version != SCHEMA_VERSION:
             raise RegistryError(f"registry.schema_version must be {SCHEMA_VERSION}")
         projects = document["projects"]

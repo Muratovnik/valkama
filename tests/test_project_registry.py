@@ -122,13 +122,27 @@ class ProjectRegistryTests(unittest.TestCase):
         )
         self.assertIsNone(beta["planning_binding"])
 
-    def test_a_projection_of_schema_3_is_malformed(self) -> None:
+    def test_a_projection_of_schema_3_is_refused_as_older_not_as_broken(self) -> None:
         fixture = Path(__file__).with_name("fixtures") / "valkama-projects-v4.fixture.json"
         former = fixture.read_bytes().replace(b'"schema_version": 4', b'"schema_version": 3')
         listing = project_registry.parse_registry(former)
         self.assertEqual("malformed", listing["status"])
         self.assertEqual([], listing["projects"])
-        self.assertIn("registry.schema_version must be 4", listing["reason"])
+        self.assertEqual(
+            "Valkama project registry has the older schema 3; this build reads schema 4",
+            listing["reason"],
+        )
+
+    def test_a_schema_that_is_not_an_older_number_is_still_malformed(self) -> None:
+        fixture = Path(__file__).with_name("fixtures") / "valkama-projects-v4.fixture.json"
+        for version in (b"5", b'"3"', b"0", b"true"):
+            with self.subTest(version=version):
+                raw = fixture.read_bytes().replace(
+                    b'"schema_version": 4', b'"schema_version": ' + version
+                )
+                listing = project_registry.parse_registry(raw)
+                self.assertEqual("malformed", listing["status"])
+                self.assertIn("is malformed: registry.schema_version must be 4", listing["reason"])
 
     def test_each_bound_space_needs_exactly_one_default_project(self) -> None:
         resource_ref = planning_space_entity(
