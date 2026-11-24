@@ -69,21 +69,35 @@ const busyMark = computed(() => props.busy || undefined)
 const body = ref<HTMLElement | null>(null)
 
 /**
- * How tall the words over the foot stand while they say something, which the body keeps clear
- * at its lower edge for what the keyboard reaches (`scroll-padding`), so a focused control
- * scrolls out from under them. Without it a Tab stopped on a control wholly under the words, as
- * the browser saw it inside the body.
+ * How tall the words over the foot stand while they say something, to the next whole pixel,
+ * which the body keeps clear at its lower edge for what the keyboard reaches (`scroll-padding`),
+ * so a focused control scrolls out from under them. Without it a Tab stopped on a control wholly
+ * under the words, as the browser saw it inside the body; at their own fraction of a pixel, the
+ * scroll stopped a part of a pixel short.
  */
 const said = ref<HTMLElement | null>(null)
 const saidHeight = ref(0)
 useResizeObserver(said, ([entry]) => {
-  saidHeight.value = entry?.borderBoxSize[0]?.blockSize ?? 0
+  saidHeight.value = Math.ceil(entry?.borderBoxSize[0]?.blockSize ?? 0)
 })
 const saying = computed(() => Boolean(props.error || props.note))
 const saidRoom = computed(() => (saying.value ? saidHeight.value : 0))
 const bodyRoom = computed(() =>
   saidRoom.value ? { '--size-said-room': `${String(saidRoom.value)}px` } : undefined,
 )
+/**
+ * A control the keyboard brings focus to under the words is brought clear of them by the nearest
+ * way, which keeps the body's room at its edge: the browser's own scroll to a text field shows
+ * only its caret, and left the rest of a description's box under a refusal.
+ */
+function keepClear(event: FocusEvent) {
+  const { target } = event
+  const words = said.value
+  if (!saidRoom.value || !words || !(target instanceof HTMLElement)) return
+  if (words.contains(target) || !target.matches(':focus-visible')) return
+  if (target.getBoundingClientRect().bottom > words.getBoundingClientRect().top)
+    target.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+}
 </script>
 
 <template>
@@ -131,6 +145,7 @@ const bodyRoom = computed(() =>
         data-part="dialog-body"
         :class="{ 'is-steady': steadyScroll }"
         :style="bodyRoom"
+        @focusin="keepClear"
       >
         <slot />
         <!-- A refused submit is announced where the operator is looking: at the

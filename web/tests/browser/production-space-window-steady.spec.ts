@@ -50,10 +50,25 @@ async function boxes(parts: Record<string, Locator>) {
   return each
 }
 
+/** How far under the dialog's top the element stands. */
+async function underTop(dialog: Locator, element: Locator) {
+  return (await topOf(element)) - (await topOf(dialog))
+}
+
+/**
+ * How far under the dialog's top each part stands: what the dialog holds moves the dialog itself
+ * only as far as it must to stay in the window, and moves none of its parts within it.
+ */
+async function fromTop(dialog: Locator, parts: Record<string, Locator>) {
+  const each: Record<string, number> = {}
+  for (const [part, locator] of Object.entries(parts)) each[part] = await underTop(dialog, locator)
+  return each
+}
+
 /** That every part stands where it stood at the start. */
-function expectStill(now: Record<string, Box>, start: Record<string, Box>, when: string) {
-  for (const [part, box] of Object.entries(start))
-    expect.soft(now[part]?.y, `${part}, ${when}`).toBeCloseTo(box?.y ?? Number.NaN, 1)
+function expectStill(now: Record<string, number>, start: Record<string, number>, when: string) {
+  for (const [part, at] of Object.entries(start))
+    expect.soft(now[part], `${part}, ${when}`).toBeCloseTo(at, 1)
 }
 
 /** Whether the reader sees the words, nothing over them. */
@@ -86,12 +101,13 @@ const cutStarts = (dialog: Locator) =>
       const first = document.createRange()
       first.setStart(words, 0)
       first.setEnd(words, 1)
+      // Drawn in the folder's own box, so in its type: a computed `font` is often empty.
       const dots = document.createElement('span')
-      dots.style.font = getComputedStyle(head).font
       dots.style.position = 'absolute'
+      dots.style.visibility = 'hidden'
       dots.style.whiteSpace = 'pre'
       dots.textContent = '…'
-      document.body.append(dots)
+      head.after(dots)
       const dotsWidth = dots.getBoundingClientRect().width
       dots.remove()
       return [
@@ -253,7 +269,8 @@ for (const lang of ['en', 'ru'] as const)
           await expect(dialog).toHaveCSS('transform', 'none')
           await name.click()
           const start = await boxes(parts)
-          const saveAt = await topOf(save)
+          const placed = await fromTop(dialog, parts)
+          const saveAt = await underTop(dialog, save)
           // Nothing is said over the buttons yet, and no room stands there for it.
           const room = dialog.locator('[data-part="said"]')
           await expect(room).toHaveCount(0)
@@ -275,9 +292,9 @@ for (const lang of ['en', 'ru'] as const)
           )
           await expect(said).toBeVisible()
           await expect(room).toHaveCount(1)
-          expectStill(await boxes(parts), start, 'renamed')
+          expectStill(await fromTop(dialog, parts), placed, 'renamed')
           // The buttons go down by the words, or stay where the window already stands its tallest.
-          const savedAt = await topOf(save)
+          const savedAt = await underTop(dialog, save)
           expect.soft(savedAt, 'the buttons, renamed').toBeGreaterThanOrEqual(saveAt - 0.5)
           // Under the form, over the buttons, in sight however long the form.
           expect
@@ -290,7 +307,7 @@ for (const lang of ['en', 'ru'] as const)
             )
             .toBe(true)
           const saidBox = await said.boundingBox()
-          expect.soft(saidBox?.y ?? Number.NaN, 'over the buttons').toBeLessThan(savedAt)
+          expect.soft(saidBox?.y ?? Number.NaN, 'over the buttons').toBeLessThan(await topOf(save))
           expect.soft(await seen(said), 'in sight').toBe(true)
 
           // The name given back takes the words away, and the buttons come back up.
@@ -298,8 +315,10 @@ for (const lang of ['en', 'ru'] as const)
           await expect(said).toHaveCount(0)
           await expect(room).toHaveCount(0)
           await expect(name).not.toHaveAccessibleDescription(new RegExp(words.renamed, 'u'))
-          expectStill(await boxes(parts), start, 'named back')
-          expect.soft(await topOf(save), 'the buttons, named back').toBeCloseTo(saveAt, 0)
+          expectStill(await fromTop(dialog, parts), placed, 'named back')
+          expect
+            .soft(await underTop(dialog, save), 'the buttons, named back')
+            .toBeCloseTo(saveAt, 0)
 
           // A refused save says why under it, nearer the buttons, and neither covers the other.
           await name.fill(`${named}, renamed`)
