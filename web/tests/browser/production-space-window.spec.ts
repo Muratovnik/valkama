@@ -41,6 +41,9 @@ const SIZES = [
 const WORDS = {
   en: {
     newSpace: 'New space',
+    menu: 'Space actions',
+    createEntry: 'New space…',
+    configureEntry: 'Configure space…',
     configure: (key: string) => `Configure space ${key}`,
     editTitle: (key: string) => `Space ${key}`,
     name: 'Name',
@@ -60,6 +63,9 @@ const WORDS = {
   },
   ru: {
     newSpace: 'Новое пространство',
+    menu: 'Действия с пространством',
+    createEntry: 'Новое пространство…',
+    configureEntry: 'Настроить пространство…',
     configure: (key: string) => `Настроить пространство ${key}`,
     editTitle: (key: string) => `Пространство ${key}`,
     name: 'Название',
@@ -135,6 +141,24 @@ async function measureDialog(page: Page, info: TestInfo, tag: string, width: num
   await record(info, `space window ${tag}`, box)
 }
 
+/** The space's choice and the menu after it share one line, and the menu stays in the bar. */
+async function menuBesideChoice(page: Page) {
+  const [bar, choice, menu] = await Promise.all(
+    ['.context-bar', '[data-scope-choice="space"]', '[data-scope-choice="space-menu"]'].map(
+      (selector) => page.locator(selector).boundingBox(),
+    ),
+  )
+  const said = JSON.stringify({ bar, choice, menu })
+  expect(bar && choice && menu, said).toBeTruthy()
+  if (!bar || !choice || !menu) return
+  expect(
+    Math.abs(choice.y + choice.height / 2 - (menu.y + menu.height / 2)),
+    said,
+  ).toBeLessThanOrEqual(0.5)
+  expect(menu.x - (choice.x + choice.width), said).toBeGreaterThan(0)
+  expect(menu.x + menu.width, said).toBeLessThanOrEqual(bar.x + bar.width)
+}
+
 async function openPortfolio(page: Page, size: (typeof SIZES)[number]) {
   await page.setViewportSize({ width: size.width, height: size.height })
   await page.goto(serializePlatformRoute({ module_id: 'planning', scope: globalScope }))
@@ -183,6 +207,62 @@ for (const size of SIZES) {
       ])
       // The shell follows the new space: the bar names it.
       await expect(page.locator('[data-scope-choice="space"]')).toContainText('ATS')
+    })
+
+    test('the context bar’s menu creates a space anywhere and configures the main store’s chosen space', async ({
+      page,
+    }) => {
+      const state = world()
+      await installSpaceWindowBackend(page, state)
+      await openPortfolio(page, size)
+      const menu = page.getByRole('button', { name: words.menu, exact: true })
+      await menuBesideChoice(page)
+      // Over every space there is no chosen space to configure.
+      await menu.click()
+      await expect(page.getByRole('menuitem')).toHaveText([words.createEntry])
+      await page.getByRole('menuitem', { name: words.createEntry }).click()
+      const created = page.getByRole('dialog', { name: words.newSpace })
+      await expect(created.getByLabel(words.name, { exact: true })).toBeFocused()
+      await page.keyboard.press('Escape')
+      await expect(created).toBeHidden()
+      await expect(menu).toBeFocused()
+
+      await page.goto(
+        serializePlatformRoute({
+          module_id: 'planning',
+          scope: { kind: 'space', space_ref: ref('ATL') },
+        }),
+      )
+      await expect(page.locator('[data-scope-choice="space"]')).toContainText('ATL')
+      await menuBesideChoice(page)
+      await menu.click()
+      await expect(page.getByRole('menuitem')).toHaveText([words.createEntry, words.configureEntry])
+      await page.getByRole('menuitem', { name: words.configureEntry }).click()
+      const edited = page.getByRole('dialog', { name: words.editTitle('ATL') })
+      await expect(edited.locator('[data-project]')).toHaveCount(2)
+      await page.keyboard.press('Escape')
+      await expect(edited).toBeHidden()
+      expect(state.saves).toEqual([])
+    })
+
+    test('while the main store cannot be written the bar’s menu offers no way to write', async ({
+      page,
+    }) => {
+      const state = world()
+      state.writable = false
+      await installSpaceWindowBackend(page, state)
+      await page.setViewportSize({ width: size.width, height: size.height })
+      await page.goto(
+        serializePlatformRoute({
+          module_id: 'planning',
+          scope: { kind: 'space', space_ref: ref('ATL') },
+        }),
+      )
+      await expect(page.locator('[data-scope-choice="space"]')).toContainText('ATL')
+      await page.getByRole('button', { name: words.menu, exact: true }).click()
+      const create = page.getByRole('menuitem', { name: words.createEntry })
+      await expect(page.getByRole('menuitem')).toHaveCount(1)
+      await expect(create).toHaveAttribute('aria-disabled', 'true')
     })
 
     test('a key another space has is refused, and the window keeps what was typed', async ({

@@ -19,15 +19,27 @@
  * space by its key and name, the project by its name — so a label beside it is
  * the same word twice, and it was taking a grid track from the value that has to
  * ellipsize. The word survives as the accessible name.
+ *
+ * After the choices the menu «⋯» opens the space window: «New space…», which waits while the
+ * main store cannot be written, and «Configure space…» while a space of the main store is
+ * chosen. It stands from the first frame, so the controls never move once the spaces are
+ * read. The selectors stay as they are.
+ *
+ * Each control's box carries `data-scope-choice`: `space`, `project` and `space-menu`, the
+ * hooks a test reaches one by.
  */
 import { computed, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
+
+import { useSpaceWindow } from '@/features/space-window/spaceWindowHost.ts'
 
 import type { ShellSpace } from '@/shared/api/platformApiTypes.ts'
 import { sameSpace } from '@/shared/api/platformPlanningRefs.ts'
 import type { OperatingScope } from '@/shared/api/platformRoute.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
+import type { MenuEntry } from '@/shared/ui/menuEntries.ts'
+import VMenu from '@/shared/ui/VMenu.vue'
 
 const props = defineProps<{
   /** Null while the shell does not yet know which scope it stands in. */
@@ -209,6 +221,37 @@ function chooseProject(value: string) {
   )
 }
 
+const spaceWindow = useSpaceWindow()
+/** The space window's ways in: a new space, and the chosen space while it is the main store's. */
+const spaceEntries = computed<MenuEntry[]>(() => {
+  const opener = spaceWindow
+  if (opener === null) return []
+  const { scope } = props
+  const entries: MenuEntry[] = [
+    {
+      key: 'new-space',
+      kind: 'action',
+      label: t('spaceWindow.createEntry'),
+      icon: 'plus',
+      disabled: !opener.creatable(),
+      opens: true,
+      select: opener.create,
+    },
+  ]
+  if (scope?.kind === 'space' && openSpace.value && opener.editable(scope.space_ref)) {
+    const space = scope.space_ref
+    entries.push({
+      key: 'configure-space',
+      kind: 'action',
+      label: t('spaceWindow.configureEntry'),
+      icon: 'settings',
+      opens: true,
+      select: () => opener.edit(space),
+    })
+  }
+  return entries
+})
+
 const spaceChoice = useTemplateRef<{ show: () => void }>('spaceChoice')
 /** Opens the choice of a space, for a page whose way out is to choose one. */
 defineExpose({ chooseSpace: () => spaceChoice.value?.show() })
@@ -255,6 +298,17 @@ defineExpose({ chooseSpace: () => spaceChoice.value?.show() })
           :search-label="t('settings.searchOptions')"
           :empty-label="t('settings.noOptions')"
           @update:model-value="chooseProject"
+        />
+      </div>
+      <div
+        v-if="spaceEntries.length"
+        class="space-menu"
+        data-scope-choice="space-menu"
+        :class="{ 'is-unknown': !scopeKnown }"
+      >
+        <VMenu
+          :entries="spaceEntries"
+          :label="t('spaceWindow.menu')"
         />
       </div>
     </div>
@@ -326,6 +380,12 @@ defineExpose({ chooseSpace: () => spaceChoice.value?.show() })
   max-width: 280px;
 }
 
+/* Like the space's choice, the menu keeps its box until the scope is known, so the bar's
+   controls stand where they will stay from the first frame, as the skeleton draws them. */
+.space-menu.is-unknown {
+  visibility: hidden;
+}
+
 /* The bar measures the space it was given, not the window: the rail beside it
    is its 64px icons or any width from 200 to 480px the operator drags it to, so
    the same window hands the bar many widths and a viewport threshold could only
@@ -363,6 +423,24 @@ defineExpose({ chooseSpace: () => spaceChoice.value?.show() })
 
     & :deep(.choice-select) {
       width: 100%;
+    }
+  }
+
+  /* The menu stands beside the space's choice, not on a line of its own under it. */
+  .context-controls:has(.space-menu) {
+    grid-template-columns: minmax(0, 1fr) auto;
+
+    & .operating-scope {
+      grid-row: 1;
+    }
+
+    & .project-scope {
+      grid-column: 1 / -1;
+    }
+
+    & .space-menu {
+      grid-row: 1;
+      grid-column: 2;
     }
   }
 }

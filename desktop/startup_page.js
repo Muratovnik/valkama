@@ -246,7 +246,10 @@ body { overflow: hidden; color: ${c.text}; font: 400 14px/1.5 'Inter Variable', 
 .sk-bar { flex: none; display: flex; gap: 16px; align-items: center; justify-content: space-between; height: 64px; padding: 12px 20px; }
 .sk-title-row { display: flex; align-items: center; height: 26px; }
 .sk-title { display: block; width: 80px; height: 12px; border-radius: 6px; background: ${c.raised}; }
-.sk-scope { display: block; flex: none; width: 220px; height: 40px; border-radius: 8px; background: ${c.raised}; }
+.sk-scope { display: flex; flex: none; gap: 12px; height: 40px; }
+.sk-choice { display: block; flex: 1 1 auto; width: 220px; border-radius: 8px; background: ${c.raised}; }
+/* The space menu's sign, which draws no fill of its own. */
+.sk-menu { display: block; flex: none; width: 40px; }
 .sk-panel { display: grid; flex: 1 1 auto; place-items: center; min-height: 0; background: ${c.canvas}; border-top-left-radius: 12px; }
 @media (width <= 760px) {
   :root { --sk-rail: 64px; }
@@ -258,7 +261,7 @@ body { overflow: hidden; color: ${c.text}; font: 400 14px/1.5 'Inter Variable', 
 }
 @container sk-main (width <= 586px) {
   .sk-bar { flex-direction: column; gap: 8px; align-items: stretch; height: auto; padding: 8px 12px; }
-  .sk-scope { width: 100%; }
+  .sk-scope { gap: 8px; width: 100%; }
 }
 /* What the window waits for, said only once the wait is long enough to read it. */
 .sk-status { display: grid; gap: 8px; justify-items: center; max-width: 440px; padding: 24px; text-align: center; animation: appear 160ms ease-out ${delay}ms both; }
@@ -281,7 +284,7 @@ p { margin: 0; color: ${c.muted}; }
 <div class="sk-foot"><i class="sk-entry"></i></div>
 </div>
 <div class="sk-main">
-<div class="sk-bar" aria-hidden="true"><div class="sk-title-row"><i class="sk-title"></i></div><i class="sk-scope"></i></div>
+<div class="sk-bar" aria-hidden="true"><div class="sk-title-row"><i class="sk-title"></i></div><span class="sk-scope"><i class="sk-choice"></i><i class="sk-menu"></i></span></div>
 <div class="sk-panel"><div class="sk-status"><h1>${escapeHtml(view.title)}</h1>${lines}</div></div>
 </div>
 </main>

@@ -54,6 +54,8 @@ export function spaceWindowWorld() {
     saves: [] as Body[],
     /** The registry's reason for refusing the next save's binding, once: `busy` for a held lock. */
     registryRefuses: null as string | null,
+    /** Whether the main store can be written, which a space is created and edited in. */
+    writable: true,
   }
 }
 type World = ReturnType<typeof spaceWindowWorld>
@@ -78,7 +80,7 @@ function context(state: World) {
     interface_version: 'valkama-context',
     scope: globalScope,
     state: readyState({
-      primary: { data_scope_id: dataScopeId, is_writable: true },
+      primary: { data_scope_id: dataScopeId, is_writable: state.writable },
       spaces: state.spaces.map((space) => {
         const own = membersOf(state, space.key)
         return {

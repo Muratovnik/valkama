@@ -855,14 +855,19 @@ belong to the space, so narrowing it to a project keeps them. A space or a proje
 address names and this workstation lacks stands in its choice marked as missing, and
 cannot be chosen. An address in the retired form, which named a project alone, opens
 nothing: it says it is unavailable and offers «Choose a space», which opens the first
-choice, and it carries none of its state or open card over. Where the workspace is 586px
-wide or narrower, the two choices stack at its full width.
+choice, and it carries none of its state or open card over. After the choices stands the
+space menu, «⋯» named «Space actions»: «New space…», which waits while the main store cannot
+be written, and «Configure space…» while a space of the main store is chosen. It stands at
+the bar's end from the first frame, keeping its box until the spaces are read as the space's
+choice does, so no control moves once they are. Where the workspace is 586px wide or
+narrower, the two choices stack at its full width and the menu stays on the space's line,
+after it.
 
 The space window creates a space of the main store and edits one, as one dialog with one
 save. Its ways in are «New space» over the cards of «All spaces», and on a phone the same;
 a sign «Configure space» beside each card's «Open space», a sign and not a word so that the
-card's ways in stay on one line; and «Create a space» in the empty state where there is no
-space yet. A card of an attached store has no sign: such a store is opened read-only. Under
+card's ways in stay on one line; «Create a space» in the empty state where there is no
+space yet; and the context bar's space menu, on every page. A card of an attached store has no sign: such a store is opened read-only. Under
 the cards a quiet line names the registered projects that are in no space, and only while
 there are some and the registry could be read.
 The window holds the name, the key, the space's projects and its workflow, which it names
