@@ -177,6 +177,12 @@ def _pauses(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> tu
 _MODEL_LENGTH = 64
 
 
+def close() -> None:
+    """Stop what the reads keep running past an answer: the pool the pauses read parses with."""
+
+    pauses.READER.close()
+
+
 def _time(parameters: Mapping[str, list[str]], name: str) -> dt.datetime:
     """The parameter `name`, required, as a time with its offset."""
 
@@ -296,6 +302,7 @@ __all__ = [
     "USES_PATH",
     "WRITE_PATHS",
     "AnalyticsHttpError",
+    "close",
     "error_response",
     "handle_get",
     "handle_post",

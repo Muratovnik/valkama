@@ -10,6 +10,7 @@ import contextlib
 import hashlib
 import io
 import json
+import multiprocessing
 import sqlite3
 import time
 import unittest
@@ -24,6 +25,28 @@ from server.telemetry.usage_steps import NOTICE, NOTIFIED, SERVICE, claude_step,
 from tests.usage_fixtures import HOUR, MINUTE, ORG_A, ORG_B, Case, CodexRun, epoch, stamp, usage
 
 SESSION = "sess-p"
+
+#: How long `slow_chunk` takes over a chunk: a chunk the pool is still reading at a deadline.
+SLOW_SECONDS = 1.5
+
+
+def slow_chunk(targets: list) -> list:
+    """`pauses._chunk_bins` that takes `SLOW_SECONDS` first; a process of the pool imports it."""
+
+    time.sleep(SLOW_SECONDS)
+    return pauses._chunk_bins(targets)
+
+
+def children_gone(within: float = 15.0) -> bool:
+    """Whether this process's children have all ended, waiting for them `within` seconds."""
+
+    ends = time.monotonic() + within
+    while multiprocessing.active_children():
+        if time.monotonic() > ends:
+            return False
+        time.sleep(0.1)
+    return True
+
 
 #: How each client hands a hook's message to the model, as the module of the steps says.
 ASYNC_REWAKE = (
@@ -430,22 +453,22 @@ class ReaderTests(PausesCase):
         with (
             mock.patch.object(pauses, "POOL_FROM", 2),
             mock.patch.object(pauses, "POOL_WORKERS", 2),
-            mock.patch.object(pauses, "_pooled", side_effect=pauses._pooled) as pooled,
+            mock.patch.object(
+                pauses.Reader, "_send", autospec=True, side_effect=pauses.Reader._send
+            ) as pooled,
             mock.patch.object(usage_pauses, "read_requests", side_effect=here),
         ):
             spread = self.report(end=HOUR)
         self.assertEqual(1, pooled.call_count)
-        self.assertEqual(3, len(pooled.call_args.args[0]))
+        self.assertEqual(3, len(pooled.call_args.args[1]))
         self.assertEqual(alone, spread)
         self.assertEqual({"read": 3, "missing": 0}, spread["runs"])
         self.assertEqual([3], [row["requests"] for row in spread["rows"]])
 
     def test_a_read_past_its_deadline_says_how_far_it_got_and_goes_on_from_there(self) -> None:
         # The oracle is the same store read with no deadline. A deadline already past reads no
-        # run here; over the pool, the runs no process started are left: a pool of two takes
-        # at most three runs a chunk each into its queue, which can no longer be called off,
-        # so of eight at least five are left. Either way the read asked again with no
-        # deadline answers what an unbounded read does.
+        # run here; over the pool, it answers before a process could read five of eight. Either
+        # way the read asked again with no deadline answers what an unbounded read does.
         self.three_sessions(8)
         alone = self.report(end=HOUR)
         self.reader.row_factory = sqlite3.Row
@@ -457,6 +480,7 @@ class ReaderTests(PausesCase):
                 mock.patch.object(pauses, "_CHUNK", 1),
             ):
                 reader = pauses.Reader()
+                self.addCleanup(reader.close)
                 past = time.monotonic() - 1
                 with self.assertRaises(pauses.UnfinishedError) as stopped:
                     pauses.read(
@@ -469,19 +493,67 @@ class ReaderTests(PausesCase):
                 again = pauses.read(self.reader, start=epoch(0), end=epoch(HOUR), reader=reader)
                 self.assertEqual(alone, again)
 
-    def test_a_read_waiting_on_another_waits_no_longer_than_its_deadline(self) -> None:
-        self.three_sessions()
+    def slow_reader(self, count: int) -> pauses.Reader:
+        """A reader whose pool takes `SLOW_SECONDS` a chunk, over `count` runs already recorded."""
+
+        self.three_sessions(count)
         self.report(end=HOUR)
         self.reader.row_factory = sqlite3.Row
-        reader = pauses.Reader()
-        with reader._lock:  # another read, still parsing
+        reader = pauses.Reader(slow_chunk)
+        self.addCleanup(reader.close)
+        return reader
+
+    def test_a_read_answers_by_its_deadline_and_the_next_takes_what_the_pool_went_on_reading(
+        self,
+    ) -> None:
+        # Chunks still being read at the deadline are neither waited for nor read again: the read
+        # answers by it, and the read asked again takes their results with nothing sent to the
+        # pool. Once it has nothing left to read the pool's processes end.
+        with (
+            mock.patch.object(pauses, "POOL_FROM", 2),
+            mock.patch.object(pauses, "POOL_WORKERS", 2),
+            mock.patch.object(pauses, "_CHUNK", 1),
+        ):
+            reader = self.slow_reader(3)
+            alone = self.report(end=HOUR)
             began = time.monotonic()
             with self.assertRaises(pauses.UnfinishedError) as stopped:
                 pauses.read(
-                    self.reader, start=epoch(0), end=epoch(HOUR), reader=reader, until=began + 0.2
+                    self.reader, start=epoch(0), end=epoch(HOUR), reader=reader, until=began + 0.3
                 )
-            self.assertLess(time.monotonic() - began, 2)
-        self.assertEqual((0, 3), (stopped.exception.read, stopped.exception.left))
+            self.assertLess(time.monotonic() - began, SLOW_SECONDS)
+            self.assertEqual((0, 3), (stopped.exception.read, stopped.exception.left))
+            real = pauses.futures.ProcessPoolExecutor.submit
+            with mock.patch.object(
+                pauses.futures.ProcessPoolExecutor, "submit", autospec=True, side_effect=real
+            ) as sent:
+                again = pauses.read(self.reader, start=epoch(0), end=epoch(HOUR), reader=reader)
+            self.assertEqual(0, sent.call_count)
+        self.assertEqual(alone, again)
+        self.assertTrue(children_gone())
+
+    def test_closing_the_reader_ends_its_processes_and_calls_off_what_they_had_not_started(
+        self,
+    ) -> None:
+        with (
+            mock.patch.object(pauses, "POOL_FROM", 2),
+            mock.patch.object(pauses, "POOL_WORKERS", 2),
+            mock.patch.object(pauses, "_CHUNK", 1),
+        ):
+            reader = self.slow_reader(8)
+            with self.assertRaises(pauses.UnfinishedError):
+                pauses.read(
+                    self.reader,
+                    start=epoch(0),
+                    end=epoch(HOUR),
+                    reader=reader,
+                    until=time.monotonic(),
+                )
+            reader.close()
+        # Joined, not left to end: no process of the pool outlives the close.
+        self.assertEqual([], multiprocessing.active_children())
+        # A pool of two holds at most three chunks past its queue; the other runs were called off.
+        self.assertLess(len(reader._kept), 8)
 
     def test_a_pool_that_cannot_start_reads_here(self) -> None:
         self.three_sessions()

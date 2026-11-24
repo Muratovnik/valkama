@@ -42,8 +42,9 @@ rounded down to its hour and `to` up. A run's hours are kept here for each state
 (its size and change time), so a period read again reads only the files that changed; many
 runs to read at once are parsed over a pool of processes (`Reader.read`), each of which only
 reads transcripts and returns their bins. A read can be given a deadline: the HTTP surface's
-is, so that a first read of gigabytes of transcripts answers how far it got rather than
-outlast the browser's wait, and the read asked again goes on from there.
+is, so that a first read of gigabytes of transcripts answers how far it got by then rather
+than outlast the browser's wait. The pool goes on parsing after that answer, and the read asked
+again takes what it parsed meanwhile and waits on the rest.
 """
 
 from __future__ import annotations
@@ -55,7 +56,7 @@ import os
 import sqlite3
 import threading
 import time
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from concurrent import futures
 from dataclasses import dataclass
 
@@ -149,7 +150,7 @@ class _Kept:
     path: str
     size: int
     changed: int
-    bins: dict[_Bin, list[float]]
+    bins: dict[_Bin, list[float]] | None
 
 
 #: From this many runs to read on, they are read over a pool of processes: a run's file is
@@ -195,37 +196,6 @@ def _here(targets: Sequence[Target], until: float | None) -> _Read:
     return read
 
 
-def _pooled(targets: Sequence[Target], until: float | None) -> _Read:
-    """`bins_of` of the targets over a pool of processes, by index, those read by `until`.
-
-    At `until` the runs no process has started are left; those started are waited for. Where no
-    pool can run they are read here.
-    """
-
-    workers = min(POOL_WORKERS, os.cpu_count() or 1, len(targets))
-    if workers < 2:
-        return _here(targets, until)
-    chunks = [range(at, min(at + _CHUNK, len(targets))) for at in range(0, len(targets), _CHUNK)]
-    try:
-        with futures.ProcessPoolExecutor(
-            workers, mp_context=multiprocessing.get_context("spawn")
-        ) as pool:
-            jobs = {
-                pool.submit(_chunk_bins, [targets[i] for i in chunk]): chunk for chunk in chunks
-            }
-            wait = None if until is None else max(0.0, until - time.monotonic())
-            futures.wait(jobs, timeout=wait)
-            for job in jobs:
-                job.cancel()
-        read: _Read = {}
-        for job, chunk in jobs.items():
-            if not job.cancelled():
-                read.update(zip(chunk, job.result(), strict=True))
-        return read
-    except (OSError, futures.process.BrokenProcessPool):
-        return _here(targets, until)
-
-
 class UnfinishedError(Exception):
     """A read whose deadline passed before every run was read: how many were and how many not."""
 
@@ -235,12 +205,35 @@ class UnfinishedError(Exception):
         self.left = left
 
 
-class Reader:
-    """The bins of each run, read again only when its file changed. One per process."""
+#: How a process of the pool reads a chunk of runs: `_chunk_bins`, or a slower one a test hands.
+ChunkReader = Callable[[Sequence[Target]], list[dict[_Bin, list[float]] | None]]
+_Key = tuple[str, str]
+_Job = futures.Future
 
-    def __init__(self) -> None:
-        self._lock = threading.Lock()
-        self._kept: dict[tuple[str, str], _Kept] = {}
+
+def _key(target: Target) -> _Key:
+    return (target.session, target.agent)
+
+
+class Reader:
+    """The bins of each run, read again only when its file changed. One per process.
+
+    Many runs are read over a pool of processes that outlives the read that asked them. A read
+    with a deadline answers by it whatever the pool is still reading, and calls nothing off: a
+    chunk still being read lands among the runs kept when it ends (`_land`), so the read asked
+    again finds it there or waits on it, and no run is read twice. The pool retires once it has
+    nothing left to read, and `close` stops it and what it still holds; the server closes the
+    process's reader when it stops, so no process of the pool outlives it.
+    """
+
+    def __init__(self, chunk: ChunkReader = _chunk_bins) -> None:
+        self._chunk = chunk
+        self._lock = threading.RLock()
+        self._kept: dict[_Key, _Kept] = {}
+        #: The job reading each run in the pool now, and for each job its runs' file states.
+        self._flying: dict[_Key, _Job] = {}
+        self._loads: dict[_Job, list[tuple[_Key, _State]]] = {}
+        self._pool: futures.ProcessPoolExecutor | None = None
 
     def _split(
         self, targets: Sequence[Target]
@@ -258,12 +251,86 @@ class Reader:
             except OSError:
                 continue
             state = (path, status.st_size, status.st_mtime_ns)
-            kept = self._kept.get((target.session, target.agent))
+            kept = self._kept.get(_key(target))
             if kept and (kept.path, kept.size, kept.changed) == state:
                 found[index] = kept.bins
             else:
                 stale.append((index, target, state))
         return found, stale
+
+    def _keep(self, key: _Key, state: _State, bins: dict[_Bin, list[float]] | None) -> None:
+        """Keep bins read from `state`, unless a later state of the same file is kept already."""
+
+        with self._lock:
+            kept = self._kept.get(key)
+            if kept is None or kept.changed <= state[2]:
+                self._kept[key] = _Kept(*state, bins)
+
+    def _land(self, job: _Job) -> None:
+        """Keep what a finished job read; a job may land twice, from its callback and its read."""
+
+        with self._lock:
+            loads = self._loads.pop(job, None)
+            if loads is None:
+                return
+            for key, _state in loads:
+                if self._flying.get(key) is job:
+                    del self._flying[key]
+            if not job.cancelled() and job.exception() is None:
+                for (key, state), bins in zip(loads, job.result(), strict=True):
+                    self._keep(key, state, bins)
+            broken = not job.cancelled() and isinstance(
+                job.exception(), futures.process.BrokenProcessPool
+            )
+            if (broken or not self._loads) and self._pool is not None:
+                # Nothing left to read, or no process left to read it: the pool's processes
+                # end once it is shut, and the next read that needs them starts a new one. Not
+                # shut with its jobs called off: a broken pool fails them while it runs this.
+                self._pool.shutdown(wait=False)
+                self._pool = None
+
+    def _send(self, stale: Sequence[tuple[int, Target, _State]]) -> dict[_Key, _Job] | None:
+        """The job reading each stale run in the pool: one already reading that state of its file,
+        or a new chunk's. None where no pool can run, and the runs are read here instead."""
+
+        jobs: dict[_Key, _Job] = {}
+        fresh: list[tuple[Target, _State]] = []
+        with self._lock:
+            for _index, target, state in stale:
+                job = self._flying.get(_key(target))
+                if job is not None and (_key(target), state) in self._loads.get(job, ()):
+                    jobs[_key(target)] = job
+                else:
+                    fresh.append((target, state))
+            if not fresh:
+                return jobs
+            workers = min(POOL_WORKERS, os.cpu_count() or 1)
+            if self._pool is None:
+                if workers < 2:
+                    return None
+                try:
+                    self._pool = futures.ProcessPoolExecutor(
+                        workers, mp_context=multiprocessing.get_context("spawn")
+                    )
+                except OSError:
+                    return None
+            sent: list[_Job] = []
+            try:
+                for at in range(0, len(fresh), _CHUNK):
+                    piece = fresh[at : at + _CHUNK]
+                    job = self._pool.submit(self._chunk, [target for target, _state in piece])
+                    self._loads[job] = [(_key(target), state) for target, state in piece]
+                    for target, _state in piece:
+                        self._flying[_key(target)] = job
+                        jobs[_key(target)] = job
+                    sent.append(job)
+            except (RuntimeError, futures.process.BrokenProcessPool):
+                if not sent:
+                    self._pool = None
+                    return None
+        for job in sent:
+            job.add_done_callback(self._land)
+        return jobs
 
     def read(
         self, targets: Sequence[Target], *, until: float | None = None
@@ -271,30 +338,53 @@ class Reader:
         """Each run's bins, in the order given; None for one whose transcript is nowhere to read.
 
         A run whose file changed since it was read, or was never read, is read again; once
-        `POOL_FROM` of them are, over a pool of processes (`POOL_WORKERS`). With `until`, a
-        `time.monotonic()` moment, the runs not read by then are left and `UnfinishedError` says
-        how many; those read are kept, so the next read starts where this one stopped. A read
-        that waits on another to finish waits no longer than `until` either.
+        `POOL_FROM` of them are, or one is being read there already, over the pool of processes
+        (`POOL_WORKERS`). With `until`, a `time.monotonic()` moment, the read answers by then:
+        the runs not read are left and `UnfinishedError` says how many, while the pool goes on
+        reading them, so the next read finds them kept or waits on the same jobs.
         """
 
-        wait = -1.0 if until is None else max(0.0, until - time.monotonic())
-        if not self._lock.acquire(timeout=wait):
-            _found, stale = self._split(targets)
-            raise UnfinishedError(len(targets) - len(stale), len(stale))
-        try:
+        with self._lock:
             found, stale = self._split(targets)
-            chosen = [target for _index, target, _state in stale]
-            read = _pooled(chosen, until) if len(chosen) >= POOL_FROM else _here(chosen, until)
-            for at, bins in read.items():
-                index, target, (path, size, changed) = stale[at]
-                found[index] = bins
-                if bins is not None:
-                    self._kept[(target.session, target.agent)] = _Kept(path, size, changed, bins)
-        finally:
-            self._lock.release()
-        if len(read) < len(stale):
-            raise UnfinishedError(len(targets) - len(stale) + len(read), len(stale) - len(read))
+            busy = any(_key(target) in self._flying for _index, target, _state in stale)
+        if not stale:
+            return found
+        jobs = self._send(stale) if len(stale) >= POOL_FROM or busy else None
+        here = list(stale) if jobs is None else []
+        if jobs is not None:
+            wait = None if until is None else max(0.0, until - time.monotonic())
+            futures.wait(set(jobs.values()), timeout=wait)
+            for job in set(jobs.values()):
+                if not job.done():
+                    continue
+                self._land(job)
+                failure = None if job.cancelled() else job.exception()
+                if isinstance(failure, futures.process.BrokenProcessPool):
+                    here += [entry for entry in stale if jobs[_key(entry[1])] is job]
+                elif failure is not None:
+                    raise failure
+        for at, bins in _here([target for _index, target, _state in here], until).items():
+            _index, target, state = here[at]
+            self._keep(_key(target), state, bins)
+        left = 0
+        with self._lock:
+            for index, target, (path, size, changed) in stale:
+                kept = self._kept.get(_key(target))
+                if kept and (kept.path, kept.size, kept.changed) == (path, size, changed):
+                    found[index] = kept.bins
+                else:
+                    left += 1
+        if left:
+            raise UnfinishedError(len(targets) - left, left)
         return found
+
+    def close(self) -> None:
+        """Stop the pool: the chunks it has not started are called off, those it reads end."""
+
+        with self._lock:
+            pool, self._pool = self._pool, None
+        if pool is not None:
+            pool.shutdown(wait=True, cancel_futures=True)
 
 
 #: The process's one reader, which the HTTP surface's reads share.

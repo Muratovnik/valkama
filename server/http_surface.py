@@ -1823,4 +1823,5 @@ def serve_main(
         usage.set()
         quota_poll.SUPERVISOR = None
         poll.stop()
+        analytics_api.close()
         server.server_close()
