@@ -40,7 +40,8 @@ export function useHeldTop(surface: () => HTMLElement | null, holds: () => boole
     if (!element || !host || !holds() || !acted.value) return
     const style = getComputedStyle(host)
     const room = host.clientHeight - px(style.paddingTop) - px(style.paddingBottom)
-    offset.value = heldOffset(offset.value, room, element.offsetHeight)
+    // Its height as laid out, to the fraction: rounded, the hold moved it by that fraction.
+    offset.value = heldOffset(offset.value, room, element.getBoundingClientRect().height)
   }
 
   function act() {

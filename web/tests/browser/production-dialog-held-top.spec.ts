@@ -5,7 +5,10 @@
  * hand. Read in two of them, at every width the layout changes at and in both languages: the
  * card's «Put off», as the «whichever comes first» line appears and as a refusal comes, whose
  * reason stands right under why it waits rather than across the reason's empty room; and the
- * split of a part, as its reason goes and as a refusal comes.
+ * split of a part, as its reason goes and as a refusal comes. The press that first holds it
+ * moves it not even for the frame it lands in, with less motion asked for as well: there every
+ * property moves for an instant, and the dialog stood at the room's top under the press, which
+ * came up on whatever stood there instead.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -165,6 +168,44 @@ for (const locale of ['ru', 'en'] as const)
       const gap = await gapUnder(why, refusal)
       expect(gap).toBeGreaterThanOrEqual(0)
       expect(gap).toBeLessThanOrEqual(FIELD_GAP + 0.5)
+    })
+
+    test(`at ${width}px in ${locale} with less motion the press that holds «Put off» moves it not even for a frame`, async ({
+      page,
+    }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      const drawer = await openCard(page, locale, width, { space: closingSpace })
+      await drawer.locator('.card-facts .card-state').first().click()
+      await page.getByRole('option', { name: 'Later' }).click()
+      const dialog = page.getByRole('dialog', { name: words.putOff })
+      // Its step up is an instant now, and still ends a frame after it opens.
+      await expect(dialog).toHaveCSS('transform', 'none')
+      const title = dialog.getByRole('heading', { name: words.putOff, exact: true })
+      const day = dialog.getByLabel(words.day)
+      const shown = await tops([title])
+      // Where the title stands as the button goes down, after the press has held the dialog and
+      // before a frame has passed; and what the press comes up on.
+      const heading = await title.elementHandle()
+      await page.evaluate((element) => {
+        const seen: { down?: number; up?: string } = {}
+        Object.assign(window, { heldPress: seen })
+        const once = { capture: true, once: true }
+        document.addEventListener(
+          'mousedown',
+          () => (seen.down = element?.getBoundingClientRect().top),
+          once,
+        )
+        document.addEventListener(
+          'mouseup',
+          (event) => (seen.up = (event.target as Element).localName),
+          once,
+        )
+      }, heading)
+      await heading?.dispose()
+      await day.click()
+      const seen = await page.evaluate(() => (window as unknown as { heldPress: unknown }).heldPress)
+      expect(seen).toEqual({ down: expect.closeTo(shown[0]?.top ?? Number.NaN, 0), up: 'input' })
+      stood(await tops([title]), shown, ['title'])
     })
 
     test(`at ${width}px in ${locale} the split of a part keeps its title and fields still as its reason goes and a refusal comes`, async ({

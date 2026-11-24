@@ -59,6 +59,14 @@
   transform: translateY(var(--space-2));
 }
 
+/* A dialog held where it stood (`dialogHeldTop.ts`) trades its centring for a margin at once:
+   with less motion asked for, every property moves for 0.01ms, and the margin, moving from
+   nothing, stood the dialog at the room's top for a frame, under the press that held it, while
+   the centring it replaced was already gone. Only what the enter and leave move may move. */
+.overlay-surface-dialog {
+  transition-property: opacity, transform;
+}
+
 .overlay-surface {
   position: relative;
   z-index: 1;
