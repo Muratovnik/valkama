@@ -38,8 +38,10 @@
  * once chosen, the reader's own days. On the narrowest phone the freshness stands in the
  * periods' row, leaving a failure its room: in the cell their short last line leaves, past
  * «Custom», or at the row's end where they leave no such cell. It stays the freshness there,
- * never a period: words in the muted detail ink on the track's ground, with no ground, edge or
- * press of their own, and outside the choice for assistive technology.
+ * never a period: words a size under the periods' names, in the muted ink, on the track's
+ * ground, against the end of their column on the read again's edge where a period's name is
+ * centred, with no ground, edge or press of their own, and outside the choice for assistive
+ * technology.
  */
 import { computed, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -345,9 +347,11 @@ const freshHint = computed(() =>
 /* The narrowest phone (`PeriodBar`'s `beside`): the freshness in the periods' row, so a failure
    has the row under them beside the filter and the read again. At the row's end, on their first
    line, where the periods leave it the third and fourth columns; in the cell their short last
-   line leaves where they keep the whole row (`cell`), on that line's height and as far from the
-   track's end as a period's words from its column's edge. It is not drawn as a segment: the
-   track's ground under it is the periods', and it takes none of its own.
+   line leaves where they keep the whole row (`cell`), on that line's height. It is not drawn as a
+   segment: the track's ground under it is the periods', and it takes none of its own; it is set a
+   size under the periods' names, in the caption size, and stands against its column's end, on
+   the read again's right edge under it, where a period's name is centred. In the periods' size
+   and 12px short of that edge, «1 мин» read as a sixth period.
 
    In the cell it spans the whole row and stands at its end, so it sizes none of the columns the
    row under the periods shares out: on the third and fourth it held the third as wide as itself
@@ -367,7 +371,7 @@ const freshHint = computed(() =>
   .analytics-bar-fresh-cell {
     grid-column: 1 / -1;
     place-self: end;
-    padding-inline-end: var(--space-3);
+    font-size: var(--font-size-meta);
   }
 }
 

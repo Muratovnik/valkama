@@ -3336,9 +3336,13 @@ two over two over one; only where their count leaves no such cell does it take t
 periods wrapping in what it leaves. Standing at that end whatever their count, it left them 182 to
 206px, one column of five lines. In that cell the freshness never reads as a period: it is words,
 not a button; it takes no ground, edge or pressed state of its own, the track's ground under it
-being the periods'; it is in the muted detail ink, never a segment's; it sits on the last line's
-height, as far from the track's end as a period's words from its column's edge; and assistive
-technology reads it as the freshness, outside the choice, which holds the periods alone. A refresh
+being the periods'; it is set a size under the periods' names, in the caption size, 12px against
+their 13, in the muted ink it has elsewhere and never a lighter one; it sits on the last line's
+height against its column's end, its right edge on the right edge of the refresh under it, where
+a period's name stands in the middle of its column; and assistive technology reads it as the
+freshness, outside the choice, which holds the periods alone. In a period's size and ink and 12px
+short of the refresh's edge, «1 мин» read as a sixth period, lined up with nothing, and at 399px
+in Russian the six cells stood as a grid of three over two. A refresh
 that fails keeps what is shown and says so in words before the age at every width, «Could not
 refresh» with a retry: given up on a short line, its words had left a red disc with no hint. A
 refresh whose period before could not be read, where what is shown has it, fails so too: shown,

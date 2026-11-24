@@ -24,8 +24,9 @@
  * more across the whole first row, and the bar is no taller than at 390px. Where the bar is
  * narrower than 19rem the freshness stands in the cell the periods' short last line leaves, past
  * «Свой» and inside the track, overlapping no period; wider, in the row under them. It reads as the
- * freshness and not as a period: no button, no ground of its own, the muted detail ink, outside the
- * choice. Standing beside the periods instead, the freshness left them one column of five lines.
+ * freshness and not as a period: no button, no ground of its own, the muted ink in a size under the
+ * periods', outside the choice; wider, under them, it keeps the detail type. Standing beside the
+ * periods instead, the freshness left them one column of five lines.
  * A refresh that fails there keeps the row under the periods, inside the bar's line, and the
  * freshness in the cell takes none of that row's room, which the field and a failure share.
  *
@@ -274,7 +275,6 @@ const phoneBar = (page: Page, label: string) =>
       Number.parseFloat(barStyle?.paddingLeft ?? '0') -
       Number.parseFloat(barStyle?.paddingRight ?? '0')
     const track = document.querySelector(`[role="radiogroup"][aria-label="${name}"]`)
-    const trackStyle = track ? getComputedStyle(track) : null
     const fresh = document.querySelector<HTMLElement>('.analytics-bar-fresh')
     const drawn = fresh ? getComputedStyle(fresh) : null
     return {
@@ -282,9 +282,6 @@ const phoneBar = (page: Page, label: string) =>
       ems: inside / root,
       bar: bar?.getBoundingClientRect().height ?? 0,
       track: rect(track),
-      trackEnd:
-        (track?.getBoundingClientRect().right ?? Number.NaN) -
-        Number.parseFloat(trackStyle?.paddingRight ?? 'NaN'),
       segments: [...(track?.querySelectorAll('[role="radio"]') ?? [])]
         .map((one) => rect(one))
         .filter((one) => one !== null),
@@ -298,8 +295,14 @@ const phoneBar = (page: Page, label: string) =>
           focusable: fresh.tabIndex >= 0,
           ground: drawn.backgroundColor,
           ink: drawn.color === token(fresh, 'color', 'var(--color-text-muted)'),
-          type: drawn.fontSize === token(fresh, 'fontSize', 'var(--font-detail)'),
         },
+      type: drawn && {
+        size: Number.parseFloat(drawn.fontSize),
+        detail: fresh ? Number.parseFloat(token(fresh, 'fontSize', 'var(--font-detail)')) : 0,
+        period: Number.parseFloat(
+          getComputedStyle(track?.querySelector('[role="radio"]') ?? document.body).fontSize,
+        ),
+      },
       failure: rect(document.querySelector('.refresh-failed')),
       line: rect(document.querySelector('.period-bar-line')),
       field: rect(document.querySelector('.analytics-filter-add')),
@@ -339,13 +342,21 @@ function expectPhone(name: string, state: PhoneBar, tallest: number) {
     expect
       .soft(age.left, `${name}: the age before the free cell`)
       .toBeGreaterThanOrEqual(last.right)
-    expect.soft(age.right, `${name}: the age past the track`).toBeLessThanOrEqual(state.trackEnd)
+    expect.soft(age.right, `${name}: the age past the track`).toBeLessThanOrEqual(track.right)
+    // A size under the periods' names, so it does not read as one of them.
+    expect
+      .soft(state.type?.size, `${name}: the freshness's type beside a period's`)
+      .toBeLessThan(state.type?.period ?? Number.NaN)
     expect.soft(age.top, `${name}: the age over the last line`).toBeGreaterThanOrEqual(last.top)
     expect.soft(age.bottom, `${name}: the age under the last line`).toBeLessThanOrEqual(last.bottom)
-  } else
+  } else {
     expect
       .soft(fresh.top, `${name}: the freshness under the periods`)
       .toBeGreaterThanOrEqual(track.bottom)
+    expect
+      .soft(state.type?.size, `${name}: the freshness's type`)
+      .toBe(state.type?.detail ?? Number.NaN)
+  }
   expect.soft(state.drawn, `${name}: the freshness drawn as the freshness`).toEqual({
     tag: 'P',
     role: null,
@@ -353,7 +364,6 @@ function expectPhone(name: string, state: PhoneBar, tallest: number) {
     focusable: false,
     ground: 'rgba(0, 0, 0, 0)',
     ink: true,
-    type: true,
   })
 }
 
