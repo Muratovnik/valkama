@@ -69,11 +69,22 @@ export const isQuotaSection = (value: unknown): value is QuotaSection =>
   QUOTA_SECTIONS.includes(value as QuotaSection)
 
 /**
- * A section of the page: the overview, the tokens by kind, a section of the quota, or a dimension
- * of the work.
+ * The section of the pauses before model requests: how much of the prompt cache a request read
+ * after a pause of each length. No dimension, and it reads no usage: its own read, of the period
+ * alone, asked only while it is on show. Spelled apart from every dimension.
+ */
+export const PAUSES_SECTION = 'pauses'
+
+/**
+ * A section of the page: the overview, the tokens by kind, a section of the quota, the pauses, or
+ * a dimension of the work.
  */
 export type AnalyticsSection =
-  UsageDimension | typeof OVERVIEW | typeof TOKEN_KINDS_SECTION | QuotaSection
+  | UsageDimension
+  | typeof OVERVIEW
+  | typeof TOKEN_KINDS_SECTION
+  | QuotaSection
+  | typeof PAUSES_SECTION
 
 /**
  * What the side panel over the page shows, while it is open: one value of a dimension, its id or
@@ -131,6 +142,7 @@ export const DEFAULT_VIEW: AnalyticsView = {
 const isSection = (value: unknown): value is AnalyticsSection =>
   value === OVERVIEW ||
   value === TOKEN_KINDS_SECTION ||
+  value === PAUSES_SECTION ||
   isQuotaSection(value) ||
   isUsageDimension(value)
 

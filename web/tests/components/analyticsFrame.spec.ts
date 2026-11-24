@@ -1,7 +1,8 @@
 /**
  * The frame of the Analytics page: a bar over a rail of sections and the panel of the one on show.
- * The oracle is the requirement. The rail lists the overview first, the tokens by kind after it
- * and then each dimension the page may filter on, the one on show marked as the page by more than
+ * The oracle is the requirement. The rail lists the overview first, the tokens by kind after it,
+ * the quota's two windows, the pauses before model requests and then each dimension the page may
+ * filter on, the one on show marked as the page by more than
  * its colour; choosing one is written into the address as a new place, so Back returns to the
  * section it was chosen in, or to the list where the page — its own box, not the window — leaves
  * the panel beside the rail under 640 pixels and shows one at a time. The plain address is the
@@ -90,7 +91,7 @@ afterEach(() => {
 })
 
 describe('the rail of sections', () => {
-  it('lists the overview first, the token kinds and the quota, then every dimension, inside a navigation landmark', async () => {
+  it('lists the overview first, the token kinds, the quota and the pauses, then every dimension, inside a navigation landmark', async () => {
     stubAnalyticsReads((query) => serveUsage(WORLD, query))
     const page = await mountAnalytics()
     expect(page.get('nav.analytics-rail').attributes('aria-label')).toBe('Sections of the usage')
@@ -99,6 +100,7 @@ describe('the rail of sections', () => {
       'Token kinds',
       'Five hours',
       'Week',
+      'Pauses',
       'Account',
       'Organization',
       'Project',
@@ -115,6 +117,7 @@ describe('the rail of sections', () => {
       'token_kind',
       'quota_five_hour',
       'quota_week',
+      'pauses',
       ...USAGE_DIMENSIONS,
     ])
     // The plain address is the overview, where the page opens.
@@ -132,6 +135,7 @@ describe('the rail of sections', () => {
       'token_kind',
       'quota_five_hour',
       'quota_week',
+      'pauses',
       ...USAGE_DIMENSIONS.filter((dimension) => dimension !== 'project'),
     ])
   })

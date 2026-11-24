@@ -46,6 +46,18 @@ and the client (`originator`); a `turn_context` opens each turn with its `effort
 What a record says about the conditions work runs under is a step's `settings`: only the
 names it speaks of, each a column of `usage_segments`, a value of None saying that the
 record knows there is none. A record that says nothing of a name leaves it as it was.
+
+A keep-warm wake is a hook's message that starts with the literal `keepwarm:` (`WAKE_PREFIX`),
+and the record that hands it to the model is a step with `wake` set. Each client hands it over
+in its own shape, as measured on Claude Code 2.1.330 and codex-cli 0.171.0:
+
+- a Claude main session's Stop hook with `asyncRewake` that exits 2: a `user` record of origin
+  `task-notification` whose text says `Stop hook blocking error from command "<hook>": ` and
+  then the message, and the `queue-operation` that enqueued it;
+- a Claude Stop or SubagentStop hook that answers `block`: a `user` record with `isMeta` whose
+  text is `Stop hook feedback:` and the message on the next line;
+- a Codex Stop hook that answers `block`: a user `message` whose text is the message inside
+  `<hook_prompt ...>`.
 """
 
 from __future__ import annotations
@@ -107,6 +119,20 @@ _DISTRIBUTION = re.compile(r"[A-Za-z0-9._-]{1,64}")
 _MODEL_ID = re.compile(r"[A-Za-z0-9._:-]{1,128}")
 #: The class a launch description declares in front of a colon.
 _LAUNCH_CLASS = re.compile(r"([A-Za-z][A-Za-z0-9_-]{0,31}):")
+#: What a keep-warm wake's message starts with, as the hooks that send one write it.
+WAKE_PREFIX = "keepwarm:"
+#: The three shapes a hook's message reaches the model in (see the module), each up to the
+#: message's first character.
+_WAKE = re.compile(
+    r"\A(?:"
+    r"<task-notification>.*?hook blocking error from command[^\n]*?\": "
+    r"|Stop hook feedback:\r?\n(?:- \[[^\]\n]*\]: )?"
+    r"|<hook_prompt\b[^>]*>"
+    r")" + re.escape(WAKE_PREFIX),
+    re.S,
+)
+#: How far into a record's text a wake's message can start.
+_WAKE_HEAD = 4096
 
 
 @dataclass(slots=True)
@@ -157,6 +183,14 @@ class Step:
     packet: str | None = None
     #: What this record says the work runs under, by column name (see the module).
     settings: dict[str, str | None] = field(default_factory=dict)
+    #: Whether this record hands the model a keep-warm wake (see the module).
+    wake: bool = False
+
+
+def is_wake(text: str) -> bool:
+    """Whether a record's text hands the model a keep-warm wake, in any shape (see the module)."""
+
+    return _WAKE.match(text[:_WAKE_HEAD]) is not None
 
 
 def worth_parsing(line: bytes) -> bool:
@@ -336,11 +370,13 @@ def _claude_user(at: float, row: Mapping[str, object], content: object) -> Step:
     if row.get("isCompactSummary"):
         return Step(at, SERVICE)
     if kind == "task-notification" or text.startswith(_NOTICE):
-        return Step(at, NOTICE, links=_links(text), final="<status>" in text)
+        return Step(at, NOTICE, links=_links(text), final="<status>" in text, wake=is_wake(text))
     if kind == "human":
         return Step(at, PROMPT, packet=text)
     if kind is None:
-        return Step(at, SERVICE if row.get("isMeta") else PROMPT, packet=text)
+        if row.get("isMeta"):
+            return Step(at, SERVICE, packet=text, wake=is_wake(text))
+        return Step(at, PROMPT, packet=text)
     return Step(at, PEER, packet=text)
 
 
@@ -389,7 +425,9 @@ def _claude_record(at: float, kind: str, row: Mapping[str, object]) -> Step | No
             return None
         if not content.startswith(_NOTICE):
             return None
-        return Step(at, NOTIFIED, links=_links(content), final="<status>" in content)
+        return Step(
+            at, NOTIFIED, links=_links(content), final="<status>" in content, wake=is_wake(content)
+        )
     if kind == "system":
         return Step(at, FAILURE if row.get("subtype") == "api_error" else SERVICE)
     if kind == "user":
@@ -518,7 +556,8 @@ def codex_step(row: Mapping[str, object], memo: dict) -> Step | None:
     if item in ("function_call_output", "custom_tool_call_output"):
         return Step(at, RESULT, closed=(str(payload.get("call_id")),))
     if item == "message" and payload.get("role") == "user":
-        return Step(at, SERVICE, packet=_codex_text(payload.get("content")))
+        text = _codex_text(payload.get("content"))
+        return Step(at, SERVICE, packet=text, wake=is_wake(text))
     if item in ("message", "reasoning", "agent_message"):
         return Step(at, REPLY)
     return None

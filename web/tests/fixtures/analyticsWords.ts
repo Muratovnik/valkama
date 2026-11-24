@@ -114,6 +114,14 @@ export const ANALYTICS_WORDS: Record<string, WordKind> = {
   'analytics.quota.readings.note': 'label',
   'analytics.quota.readings.line': 'label',
   'analytics.quota.readings.even': 'label',
+  'analytics.pauses': 'label',
+  'analytics.pauses.failed': 'value',
+  'analytics.pauses.failedAgain': 'value',
+  'analytics.pauses.reading': 'value',
+  'analytics.pauses.none': 'value',
+  'analytics.pauses.noPeriod': 'instruction',
+  'analytics.pauses.noneFor': 'value',
+  'analytics.pauses.about': 'caveat',
   'analytics.time': 'value',
   'analytics.time.steps': 'label',
   'analytics.time.estimate': 'caveat',
@@ -123,7 +131,7 @@ export const ANALYTICS_WORDS: Record<string, WordKind> = {
  * A section of the page, as the «ⓘ» of its heading speaks for it: `executor` is the executors'
  * section, which says what an executor is before the caveats of the figures every dimension's says.
  */
-export type CaveatSection = 'executor' | 'kinds' | 'quota' | 'spending'
+export type CaveatSection = 'executor' | 'kinds' | 'pauses' | 'quota' | 'spending'
 
 /**
  * Where each caveat is said: the sections whose «ⓘ» holds it — `spending` is the overview and a
@@ -139,6 +147,14 @@ export const CAVEATS: Record<string, { sections: readonly CaveatSection[]; minut
   'analytics.quota.panel.intro': { sections: ['quota'] },
   'analytics.quota.panel.account': { sections: ['quota'] },
   'analytics.quota.spent.basis': { sections: ['quota'] },
+  'analytics.pauses.about.pause': { sections: ['pauses'] },
+  'analytics.pauses.about.shares': { sections: ['pauses'] },
+  'analytics.pauses.about.cold': { sections: ['pauses'] },
+  'analytics.pauses.about.background': { sections: ['pauses'] },
+  'analytics.pauses.about.person': { sections: ['pauses'] },
+  'analytics.pauses.about.wake': { sections: ['pauses'] },
+  'analytics.pauses.about.period': { sections: ['pauses'] },
+  'analytics.pauses.about.cost': { sections: ['pauses'] },
 }
 
 /** Every message under a part of the catalog, by its key. */

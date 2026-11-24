@@ -11,8 +11,9 @@
  * view by the focus stands clear of the heading row and the total. A table shorter than that
  * height stands at its own. Each column's heading sorts by it, largest first, then the other way; the first sort is the chosen
  * measure. A row is one line: the figures take what they need, the name the rest down to its
- * least, cut where the column is narrower (`SpendingTableName`). Asked to (`twoLineNames`), as the
- * side panel's narrow table is, names of free text, tasks and sessions, take two lines at most, as
+ * least, cut where the column is narrower (`SpendingTableName`); a model's id is never cut, its
+ * column as wide as the longest id the rows name (`SpendingTableColumnHead`'s room). Asked to
+ * (`twoLineNames`), as the side panel's narrow table is, names of free text, tasks and sessions, take two lines at most, as
  * a ranked list does in a narrow place: cut to one line there, a task's name showed its reference
  * alone. Its figures stay on the name's first line. A cost that leaves tokens without
  * a price says how many on a second line of its cell, under its amount (`SpendingTableFigure`):
@@ -34,6 +35,7 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import SpendingTableColumnHead from '@/pages/analytics/components/SpendingTableColumnHead.vue'
 import SpendingTableFigure from '@/pages/analytics/components/SpendingTableFigure.vue'
 import SpendingTableHead from '@/pages/analytics/components/SpendingTableHead.vue'
 import SpendingTableName from '@/pages/analytics/components/SpendingTableName.vue'
@@ -42,6 +44,7 @@ import { useHeadingLines } from '@/pages/analytics/composables/useHeadingLines.t
 import { useReadWaitReport } from '@/pages/analytics/composables/useReadWaits.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { useTableModel } from '@/pages/analytics/composables/useTableModel.ts'
+import type { TableLine } from '@/pages/analytics/composables/useTableModel.ts'
 import { NAME_COLUMN, useTableSort } from '@/pages/analytics/composables/useTableSort.ts'
 import { tableFile } from '@/pages/analytics/utils/spendingCsv.ts'
 import { namedByText } from '@/pages/analytics/utils/splitView.ts'
@@ -57,9 +60,7 @@ import { offerDownload } from '@/shared/lib/fileDownload.ts'
 import ChartTable from '@/shared/ui/ChartTable.vue'
 import FieldError from '@/shared/ui/FieldError.vue'
 import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
-import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
-import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
   /** The second dimension the section is split by; null for none. */
@@ -110,7 +111,11 @@ const acrossWords = computed(() => (props.across ? t(`analytics.byDimension.${pr
 /** The answer the rows are of: by both dimensions while split, the one on show otherwise. */
 const tableUsage = computed(() => crossed.value?.usage ?? props.usage)
 /** What a row names: a pair of values while split, whose name column keeps more room. */
-const rows = computed(() => (crossed.value ? 'pairs' : 'values'))
+/** Its rows: pairs, a model's id each, or another dimension's values. */
+const rows = computed(() => {
+  if (crossed.value) return 'pairs'
+  return props.by === 'model' ? 'ids' : 'values'
+})
 /** Its names take two lines where they are free text, tasks and sessions, and it is asked to. */
 const nameLines = computed(() =>
   props.twoLineNames && namedByText(props.by, crossed.value?.across) ? 2 : 1,
@@ -160,9 +165,15 @@ const headings = computed(() => [
     text: words.dimension(props.by),
     chosen: false,
     numeric: false,
+    room: props.by === 'model' ? modelIds(model.value.lines) : [],
   },
-  ...model.value.columns.map((column) => ({ ...column, numeric: true })),
+  ...model.value.columns.map((column) => ({ ...column, numeric: true, room: [] })),
 ])
+
+/** The model ids the rows name, each once, whose room the column of names holds. */
+const modelIds = (all: readonly TableLine[]) => [
+  ...new Set(all.filter((line) => !line.rest).map((line) => line.valueName)),
+]
 
 /** The whole account of the rows (`counts` of the model), and their order. */
 const summary = computed(() => {
@@ -190,7 +201,10 @@ const emptyWords = computed(() => ({
 const root = ref<HTMLElement | null>(null)
 
 /** Its headings over figures on one line, or on two where one would widen it past its frame. */
-const headingLines = useHeadingLines(root, [model, held])
+const headingLines = useHeadingLines(root, [model, held], () => props.by === 'model')
+/** Its figures' words, measured in the Model section's table alone: absent elsewhere, so they keep
+ * the remark's own wrap there. */
+const figureLines = computed(() => headingLines.value.figures ?? undefined)
 
 /** Brings the table into view, its heading row at the top, with the focus on it. */
 function reveal() {
@@ -208,7 +222,8 @@ defineExpose({ reveal })
     class="spending-table"
     tabindex="-1"
     :data-measure="measure"
-    :data-headings="headingLines"
+    :data-headings="headingLines.headings"
+    :data-figures="figureLines"
     :data-rows="rows"
     :data-found="found"
     :aria-label="model.title"
@@ -278,21 +293,11 @@ defineExpose({ reveal })
             :data-chosen="column.chosen"
             :aria-sort="marks[column.key]?.aria"
           >
-            <button
-              v-tooltip.clipped="column.text"
-              type="button"
-              class="table-sort"
-              :aria-description="t('analytics.panel.table.sortBy', { column: column.text })"
-              @click="sortBy(column.key)"
-            >
-              {{ column.text }}
-              <VIcon
-                v-if="marks[column.key]"
-                class="table-sort-icon"
-                :name="marks[column.key]?.icon ?? 'arrow-down'"
-                :size="12"
-              />
-            </button>
+            <SpendingTableColumnHead
+              :column="column"
+              :mark="marks[column.key]"
+              @sort="sortBy(column.key)"
+            />
           </th>
         </tr>
       </thead>
@@ -426,25 +431,6 @@ defineExpose({ reveal })
   scroll-padding-block-end: 5rem;
 }
 
-/* A heading that sorts: the heading's own words, pressed as a whole, with the way it runs. */
-.table-sort {
-  display: inline-flex;
-  gap: var(--space-1);
-  align-items: center;
-  min-block-size: 0;
-  padding: 0;
-  border: 0;
-  color: inherit;
-  font: inherit;
-  text-align: inherit;
-  background: none;
-  cursor: pointer;
-
-  [data-numeric='true'] > & {
-    justify-content: flex-end;
-  }
-}
-
 /* The column the rows are sorted by: its heading in the ink of the figures, with its arrow and a
    rule under it, so the order reads without the hint. */
 .table-head .chart-heading[aria-sort] {
@@ -480,6 +466,22 @@ defineExpose({ reveal })
 .chart-name {
   inline-size: 100%;
   max-inline-size: 0;
+}
+
+/* A model's id stands whole (`SpendingTableColumnHead`'s room): alone in its row, the column
+   is as wide as the longest id and no wider, and the figures take the rest of the frame,
+   their words on one line while it holds them (`useHeadingLines`). Taking the rest itself,
+   the column stood at 303 pixels for ids of 125, and «No tokens» wrapped beside it. */
+.spending-table[data-rows='ids'] {
+  & .chart-name {
+    inline-size: 1px;
+    min-inline-size: 0;
+    max-inline-size: none;
+  }
+
+  & .chart-cell[data-numeric='true'] {
+    inline-size: auto;
+  }
 }
 
 /* A pair keeps its second value whole, a model's name as long as «· claude-sonnet-5-5», with

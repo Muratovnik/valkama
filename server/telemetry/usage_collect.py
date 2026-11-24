@@ -23,7 +23,7 @@ import math
 import os
 import sqlite3
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 
 from .. import transcripts
@@ -208,6 +208,44 @@ def _read_lines(path: str, offset: int, limit: int) -> tuple[list[bytes], int, b
                 # The client is still writing this one, or it fell writing it.
                 return lines, position, False
     return lines, position, True
+
+
+def chunks(path: str) -> Iterator[list[bytes]]:
+    """A whole file's lines, a chunk at a time, as `_read_lines` gives them."""
+
+    offset, more = 0, True
+    while more:
+        lines, offset, more = _read_lines(path, offset, CHUNK_BYTES)
+        yield lines
+
+
+def steps_of(lines: list[bytes], target: Target, memo: dict) -> list[Step]:
+    """The steps of a transcript's whole lines, in their order, read as `target`'s client.
+
+    `memo` is what a Codex rollout's later records need of its earlier ones, carried from
+    one chunk to the next by whoever reads the rollout; a Claude transcript needs none.
+    """
+
+    steps: list[Step] = []
+    # The path the client reported, which names a WSL distribution the client ran in.
+    reported = target.path or target.parent
+    for line in lines:
+        if not worth_parsing(line):
+            continue
+        try:
+            row = json.loads(line)
+        except (ValueError, RecursionError):
+            continue
+        if not isinstance(row, dict):
+            continue
+        step = (
+            claude_step(row, target.session) if target.client == CLAUDE else codex_step(row, memo)
+        )
+        if step is not None:
+            if ENVIRONMENT in step.settings:
+                step.settings[ENVIRONMENT] = environment(step.settings[ENVIRONMENT], reported)
+            steps.append(step)
+    return steps
 
 
 class Collector:
@@ -479,29 +517,8 @@ class Collector:
         )
 
     def _steps(self, lines: list[bytes], target: Target, state: dict) -> list[Step]:
-        steps: list[Step] = []
         memo = state.setdefault("codex", {}) if target.client == CODEX else {}
-        # The path the client reported, which names a WSL distribution the client ran in.
-        reported = target.path or target.parent
-        for line in lines:
-            if not worth_parsing(line):
-                continue
-            try:
-                row = json.loads(line)
-            except (ValueError, RecursionError):
-                continue
-            if not isinstance(row, dict):
-                continue
-            step = (
-                claude_step(row, target.session)
-                if target.client == CLAUDE
-                else codex_step(row, memo)
-            )
-            if step is not None:
-                if ENVIRONMENT in step.settings:
-                    step.settings[ENVIRONMENT] = environment(step.settings[ENVIRONMENT], reported)
-                steps.append(step)
-        return steps
+        return steps_of(lines, target, memo)
 
     def _events(self, target: Target, after: int) -> list[tuple[float, int, str, str | None]]:
         """What the store knows of this run since last time: writes and permission requests.
