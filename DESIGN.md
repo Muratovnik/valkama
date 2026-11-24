@@ -1583,7 +1583,8 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   a host draws in a choice's option is held to the row, so its own one-line word gives way,
   and the row's hint says the option's words; what it draws for the chosen value is held to
   the trigger the same way, and the trigger's value box says it. A field found by typing that holds
-  one value draws it so while nobody types there, its hint on the field (`SearchCombobox`). A menu's
+  one value draws it so while nobody types there, its hint on the field (`SearchCombobox`), on
+  the line the field draws its own text on, so the first key pressed there moves no word. A menu's
   entry is not such a label: it wraps, and every word of it stays on screen.
 - **The mark:** one drawing — a spark: a long stroke, a triangle under its short
   arm and a four-pointed star — in two tones, owned by `BrandMark`. Inside the
