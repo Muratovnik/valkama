@@ -22,6 +22,12 @@ const props = withDefaults(
      * so the delay before it is shown is not counted twice.
      */
     since?: number
+    /**
+     * How far a long wait has got, said under its word. Given, even empty, it holds its line
+     * from the wait's first moment, so its words arriving or changing move nothing; a line
+     * of its own over the panel pushed the panel down and was a second sign of the wait.
+     */
+    waitDetail?: string
   }>(),
   {
     compact: false,
@@ -60,6 +66,12 @@ const waitShown = computed(() => shownState.value.status === 'loading' && presen
 
 const reason = computed(() => ('reason' in shownState.value ? (shownState.value.reason ?? '') : ''))
 const reasonText = computed(() => (te(reason.value) ? t(reason.value) : reason.value))
+/** The wait's own line, a space while it has no words yet; none for a host that gives none. */
+const waitLine = computed(() =>
+  shownState.value.status === 'loading' && props.waitDetail !== undefined
+    ? props.waitDetail || '\u{A0}'
+    : null,
+)
 
 /**
  * `ready` and `degraded` are one branch, because they render the same payload.
@@ -184,6 +196,13 @@ const failed = computed(
         class="platform-state-reason"
       >
         {{ reasonText }}
+      </p>
+      <p
+        v-else-if="waitLine !== null"
+        class="platform-state-reason"
+        data-part="wait-detail"
+      >
+        {{ waitLine }}
       </p>
     </div>
     <!-- The way out of the state belongs inside the panel that announces it.

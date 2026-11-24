@@ -23,8 +23,8 @@
  * period changes and each time the bar asks a refresh (`refreshes`). Its heading, «ⓘ» and choice
  * of wait stand from the first moment; its first wait, a first read that failed, a period with no
  * end and an answer with no request stand under them in the product's shared state panel; while a
- * first read waits on a server still parsing transcripts, a line says how many runs it has read
- * (`data-note="reading"`). While it
+ * first read waits on a server still parsing transcripts, the wait's own line in that panel says
+ * how many runs it has read (`waitDetail`), a line held from the wait's first moment. While it
  * is read again the answer on show stays; a read again that failed keeps it, and a line under the
  * heading says so (`data-note="failed-again"`).
  *
@@ -200,15 +200,9 @@ const tables = (pauses: Pauses) =>
         :options="waits"
       />
     </template>
-    <p
-      v-if="progress"
-      class="pauses-panel-note"
-      data-note="reading"
-    >
-      {{ progress }}
-    </p>
     <PlatformStatePanel
       :state="state"
+      :wait-detail="progress"
       @retry="refresh"
     >
       <template #default="{ payload }">

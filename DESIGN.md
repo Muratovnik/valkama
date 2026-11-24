@@ -2814,7 +2814,9 @@ that project, each run whole, as the usage read places work, and says the scope 
 heading as the other sections do. Its heading is its name on the rail and stands, with the choice of what
 the pause waited on — the machine, a person or a keep-warm wake, the machine first — from the
 first moment of the read. A first read can outlast the browser's wait, so the server answers how
-many runs it has parsed and the page asks again, saying under the heading how far it got.
+many runs it has parsed and the page asks again, saying how far it got in the wait's one panel,
+on a line the panel holds from the wait's first moment (`PlatformStatePanel`'s `waitDetail`): a
+line of its own over the panel pushed it 41 px down and was a second sign of the one wait.
 «Account» is the subscription account the work was spent on (`seat`), «Organization» the
 organization it was billed to; an old link's `account` filter still filters by organization.
 «Executor» lists the sessions of agents that did the work; planning calls a session by the same
