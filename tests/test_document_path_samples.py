@@ -128,7 +128,7 @@ class SampleTableTests(unittest.TestCase):
         # A question mark after a path ends the sentence and keeps the path.
         self.assertEqual("strong", self.lookup("docs/x.md?")["form"])
         # What stays text.
-        for text in ("AGENTS.md", "/api/documents/read", "`python tools/workbench.py check`"):
+        for text in ("AGENTS.md", "/api/documents/read", "`python tools/build.py check`"):
             self.assertEqual("none", self.lookup(text)["form"], text)
         self.assertEqual("weak", self.lookup("`owner/repo`")["form"])
         self.assertEqual("strong", self.lookup("[x](AGENTS.md)")["form"])

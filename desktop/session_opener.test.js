@@ -9,7 +9,7 @@ const { claudeLiveness } = require('./live_sessions')
 const { PAUSE_MS, copyableCommand, openSessionRequest, writtenFolder } = require('./session_opener')
 
 const APP = 'http://127.0.0.1:8642/'
-const ID = 'f89d66c7-f023-4169-8d1a-2e69d4b1af68'
+const ID = '3c5d7e9f-1a2b-4c6d-8e0f-1a2b3c4d5e6f'
 const FOLDER = 'C:\\work\\repo'
 const CODE = 'C:\\Apps\\VS Code\\Code.exe'
 const WT = 'C:\\WindowsApps\\wt.exe'

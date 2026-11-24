@@ -1178,7 +1178,7 @@
       "note": "a Git Bash path"
     },
     {
-      "text": "`python tools/workbench.py check`",
+      "text": "`python tools/build.py check`",
       "where": "text",
       "form": "none",
       "candidate": null,

@@ -65,8 +65,8 @@ describe('a thread on the card', () => {
         .map((part) => document.querySelector(`[id="${part}"]`)?.textContent?.trim())
         .join(' | ')
     expect(thread(wrapper, 1).element.tagName).toBe('ARTICLE')
-    expect(name(1)).toContain('kolo')
-    expect(name(2)).toMatch(/^Resolved · you · .* · Moved to MAIN-14 \| kolo/u)
+    expect(name(1)).toContain('worker-b')
+    expect(name(2)).toMatch(/^Resolved · you · .* · Moved to MAIN-14 \| worker-b/u)
   })
 
   it('shows the last two of four replies, and the button opens the rest on the first of them', async () => {

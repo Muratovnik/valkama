@@ -50,7 +50,7 @@ describe('headings', () => {
   })
 
   it('slug the words a reader sees, with no comment and no markup', () => {
-    expect(slugs('Цель <!-- kb:v25d-goal -->')).toEqual(['цель'])
+    expect(slugs('Цель <!-- kb:goal -->')).toEqual(['цель'])
     expect(slugs('**Bold** and `code`')).toEqual(['bold-and-code'])
     expect(slugs('[A caption](docs/x.md) tail')).toEqual(['a-caption-tail'])
   })

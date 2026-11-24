@@ -6,14 +6,14 @@ import MetaLine from '@/shared/ui/MetaLine.vue'
 import { hintOf } from '../support/hint.ts'
 
 const line = (session?: string) =>
-  mount(MetaLine, { props: { when: 'Aug 13', session }, slots: { default: 'kolo' } })
+  mount(MetaLine, { props: { when: 'Aug 13', session }, slots: { default: 'worker-b' } })
 
 // The id is one token the line may not break inside, set apart from the name by a no-break
 // space: a reader hears two words, and the line does not break between them, which stood the
 // start alone under the name. Where the pair goes is the browser's (`production-meta-line-unit`).
 it('sets the session apart from the name by a no-break space, as a token of its own', () => {
   const who = line('019a2b3c-4d5e').get('.meta-who')
-  expect(who.element.textContent).toBe('kolo\u{A0}019a2b3c-4d5e')
+  expect(who.element.textContent).toBe('worker-b\u{A0}019a2b3c-4d5e')
   expect(who.get('.meta-session').text()).toBe('019a2b3c-4d5e')
 })
 
@@ -28,6 +28,6 @@ it('prints the start of a whole session id, the whole of it in its tooltip', () 
 
 it('names no session where the entry has none', () => {
   const who = line().get('.meta-who')
-  expect(who.element.textContent).toBe('kolo')
+  expect(who.element.textContent).toBe('worker-b')
   expect(who.find('.meta-session').exists()).toBe(false)
 })

@@ -9,9 +9,9 @@ test('a session baked into an actor name is split into name and session', () => 
     name: 'claude-fable',
     session: '1baa03d7',
   })
-  assert.deepEqual(splitActor('codex [session f89d66c7-f023-4169-8d1a-2e69d4b1af68]'), {
+  assert.deepEqual(splitActor('codex [session 3c5d7e9f-1a2b-4c6d-8e0f-1a2b3c4d5e6f]'), {
     name: 'codex',
-    session: 'f89d66c7-f023-4169-8d1a-2e69d4b1af68',
+    session: '3c5d7e9f-1a2b-4c6d-8e0f-1a2b3c4d5e6f',
   })
   assert.deepEqual(splitActor('агент (сессия 77aa88bb)'), {
     name: 'агент',

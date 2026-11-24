@@ -23,7 +23,7 @@ export const root = (id: number, change: Record<string, unknown> = {}) =>
   ({
     id,
     kind: 'comment',
-    author: 'kolo',
+    author: 'worker-b',
     at: time(id),
     ...asRoot,
     by_person: false,

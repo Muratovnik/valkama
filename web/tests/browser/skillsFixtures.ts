@@ -129,7 +129,7 @@ const matrixProjects = [
     project_title: 'Example Project With A Long Shared Registry Title',
   },
   { project_id: 'sample-project', project_title: 'Alpha Workspace' },
-  { project_id: 'simstow', project_title: 'SimStow' },
+  { project_id: 'sample-tool', project_title: 'Sample Tool' },
 ]
 
 const matrixSkill = (index: number) => ({

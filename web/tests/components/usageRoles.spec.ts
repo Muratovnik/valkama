@@ -68,7 +68,7 @@ describe('who did the work', () => {
       usageOf([
         role({
           role: 'subagent',
-          launch_class: value('bero'),
+          launch_class: value('build'),
           effort: value('high'),
           seconds: 7200,
           estimated_api_cost_usd: 30,
@@ -83,7 +83,7 @@ describe('who did the work', () => {
         }),
         role({
           role: 'advisor',
-          launch_class: value('bero'),
+          launch_class: value('build'),
           effort: value('high'),
           seconds: 0,
           estimated_api_cost_usd: 3,
@@ -92,10 +92,10 @@ describe('who did the work', () => {
       ]),
     )
     expect(rolesOf(wrapper)).toEqual([
-      ['Subagent · bero', '2\u{A0}h', '1K tokens', '≈\u{A0}$30.00'],
+      ['Subagent · build', '2\u{A0}h', '1K tokens', '≈\u{A0}$30.00'],
       ['Main agent · no launch class', '1\u{A0}h', '1K tokens', '≈\u{A0}$12.00'],
       ['Subagent · launch class unknown', '30\u{A0}min', '1K tokens', '≈\u{A0}$6.00'],
-      ['Adviser · bero', 'on the side', '1K tokens', '≈\u{A0}$3.00'],
+      ['Adviser · build', 'on the side', '1K tokens', '≈\u{A0}$3.00'],
       ['Adviser · no launch class', 'on the side', '1K tokens', '≈\u{A0}$2.00'],
     ])
     expect(wrapper.get('[data-breakdown="roles"]').attributes('aria-label')).toBe(
@@ -109,7 +109,7 @@ describe('who did the work', () => {
         role({ role: 'main', effort: value('high'), seconds: 3000, estimated_api_cost_usd: 10 }),
         role({
           role: 'subagent',
-          launch_class: value('bero'),
+          launch_class: value('build'),
           effort: value('high'),
           seconds: 2400,
           tokens: { ...NO_TOKENS, input: 2000 },
@@ -117,7 +117,7 @@ describe('who did the work', () => {
         }),
         role({
           role: 'subagent',
-          launch_class: value('bero'),
+          launch_class: value('build'),
           effort: value('low'),
           seconds: 1200,
           tokens: { ...NO_TOKENS, input: 1000 },
@@ -125,7 +125,7 @@ describe('who did the work', () => {
         }),
         role({
           role: 'subagent',
-          launch_class: value('bero'),
+          launch_class: value('build'),
           effort: value(null, true),
           seconds: 0,
           tokens: { ...NO_TOKENS, input: 3000 },
@@ -134,7 +134,7 @@ describe('who did the work', () => {
         // Another class at the same effort stays a row of its own.
         role({
           role: 'subagent',
-          launch_class: value('alfi'),
+          launch_class: value('audit'),
           effort: value('high'),
           seconds: 600,
           estimated_api_cost_usd: 2,
@@ -144,9 +144,9 @@ describe('who did the work', () => {
     // 2400 + 1200 + 0 seconds is an hour; 2000 + 1000 + 3000 tokens; $8 + $4, the unpriced
     // row adding no cost. The hour now ranks above the main agent's fifty minutes.
     expect(rolesOf(wrapper)).toEqual([
-      ['Subagent · bero', '1\u{A0}h', '6K tokens', '≈\u{A0}$12.00'],
+      ['Subagent · build', '1\u{A0}h', '6K tokens', '≈\u{A0}$12.00'],
       ['Main agent · no launch class', '50\u{A0}min', '1K tokens', '≈\u{A0}$10.00'],
-      ['Subagent · alfi', '10\u{A0}min', '1K tokens', '≈\u{A0}$2.00'],
+      ['Subagent · audit', '10\u{A0}min', '1K tokens', '≈\u{A0}$2.00'],
     ])
   })
 
@@ -165,7 +165,7 @@ describe('who did the work', () => {
         // Under a minute and no tokens until the rows of its class add up to one.
         role({
           role: 'subagent',
-          launch_class: value('bero'),
+          launch_class: value('build'),
           effort: value('high'),
           seconds: 40,
           tokens: NO_TOKENS,
@@ -173,7 +173,7 @@ describe('who did the work', () => {
         }),
         role({
           role: 'subagent',
-          launch_class: value('bero'),
+          launch_class: value('build'),
           effort: value('low'),
           seconds: 20,
           tokens: NO_TOKENS,
@@ -185,7 +185,7 @@ describe('who did the work', () => {
     )
     expect(rolesOf(wrapper).map((row) => row[0])).toEqual([
       'Main agent · no launch class',
-      'Subagent · bero',
+      'Subagent · build',
       'Adviser · no launch class',
     ])
     expect(wrapper.text()).not.toContain('launch class unknown')
@@ -207,7 +207,7 @@ describe('who did the work', () => {
     expect(headFigure(wrapper, 'Agent time')).toBe('≈\u{A0}11\u{A0}h\u{A0}14\u{A0}min')
     expect(headFigure(wrapper, 'Cost')).toBe('≈\u{A0}$240.67')
     expect(rolesOf(wrapper).map((row) => row[0])).toEqual([
-      'Subagent · bero',
+      'Subagent · build',
       'Main agent · no launch class',
       'Adviser · no launch class',
     ])

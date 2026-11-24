@@ -21,7 +21,7 @@ export type DatePlace = 'first line' | 'own line'
  * entry's head, under nothing, wherever icons took the rest of that line. A name with an
  * agent's session is owed its whole width with the session's start, which is one with it
  * (`expectSessionWithName`), so beside a time it does not fit with it takes a line of its own.
- * So is a phrase that says who, «Answered by agent kolo», which the caller says the head holds
+ * So is a phrase that says who, «Answered by agent worker-b», which the caller says the head holds
  * (`phrase`): what the head draws is read, not how it is told to lay it out.
  */
 export async function expectDateHeld(
@@ -159,7 +159,7 @@ type StartPlace = 'after the name' | 'own line'
  * name's last line, right after it, a space apart; the date stands on that line after the start,
  * or, where the pair does not fit beside it, on a line of its own under it, starting where the
  * name starts. Never the date on the first line with the start on a line below it, which is how
- * «kolo» stood over «019a2b3c-4d5e» beside the date on a phone. The start takes a line of its
+ * «worker-b» stood over «019a2b3c-4d5e» beside the date on a phone. The start takes a line of its
  * own under the name only where even the name's last unbreakable piece, after its last space or
  * hyphen, with the no-break space and the start is wider than the head's column, as beside three
  * icons at 320; that width is measured apart from the layout under test. Lines are counted by what is drawn: a rect starts a line

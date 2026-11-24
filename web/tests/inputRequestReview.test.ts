@@ -134,11 +134,11 @@ describe('drawing it', () => {
 
   test('sections keep a group together, with what stands under a point', () => {
     expect(sections(reviewFields).map(({ group, fields }) => [group, fields.length])).toEqual([
-      ['Hooks and client mods', 3],
-      ['Checks and skill texts', 2],
-      ['Instructions', 5],
-      ['Valkama: code', 6],
-      ['Lab and small things', 2],
+      ['Wind and rain sensors', 3],
+      ['Calibration and tables', 2],
+      ['Power budget', 5],
+      ['Station: code', 6],
+      ['Display and the menu', 2],
     ])
   })
 
@@ -192,7 +192,7 @@ describe('choosing a parent', () => {
   })
 })
 
-// What a closed point says of what its verdict opened (the packet's decision 1, row 2).
+// What a closed point says of what its verdict opened.
 describe('the way a closed point names', () => {
   test('is nothing until the verdict holds the option it hangs from', () => {
     expect(wayOf(contractFields, p13, EMPTY_DRAFT)).toBeNull()
