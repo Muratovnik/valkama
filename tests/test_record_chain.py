@@ -48,6 +48,35 @@ BROWSER: Step = (
     0,
     "",
 )
+TYPECHECK: Step = ("npm-run-typecheck", ["C:/node/npm.CMD", "run", "typecheck"], "web", 0, "")
+UI_SYSTEM: Step = (
+    "npm-run-check-ui-system",
+    ["C:/node/npm.CMD", "run", "check:ui-system"],
+    "web",
+    0,
+    "",
+)
+LINT_TYPES: Step = ("npm-run-lint-types", ["C:/node/npm.CMD", "run", "lint:types"], "web", 0, "")
+LINT_DEAD: Step = ("npm-run-lint-dead", ["C:/node/npm.CMD", "run", "lint:dead"], "web", 0, "")
+BUILD: Step = ("npm-run-build", ["C:/node/npm.CMD", "run", "build"], "web", 0, "")
+NPM_TEST: Step = ("npm-test", ["C:/node/npm.CMD", "test"], "web", 0, "")
+FAILED_NPM_TEST: Step = ("npm-test", ["C:/node/npm.CMD", "test"], "web", 1, "")
+
+#: The web package the chain reads: `test` runs lint, typecheck, check:ui-system and lint:dead,
+#: and `lint` runs `lint:types` in turn; `build` is a script `test` does not run.
+PACKAGE = {
+    "scripts": {
+        "test": (
+            "npm run lint && npm run typecheck && npm run check:ui-system && npm run lint:dead"
+        ),
+        "lint": "npm run lint:types",
+        "lint:types": "oxlint src",
+        "lint:dead": "knip --no-progress",
+        "typecheck": "vue-tsc --build",
+        "check:ui-system": "node scripts/check-ui-system.mjs",
+        "build": "vite build",
+    }
+}
 
 #: Which test modules each path reaches, as `tests/affected.py` would say it.
 REACHES = {
@@ -72,6 +101,7 @@ class ChainCase(test_run_record.TreeCase):
         super().setUp()
         self.write("web/src/App.vue", "<template>one</template>\n")
         self.write("web/scripts/tokens.mjs", "const source = { file: 'DESIGN.md' }\n")
+        self.write("web/package.json", json.dumps(PACKAGE, indent=2) + "\n")
         self.write("DESIGN.md", "# Design\n")
         self.write("docs/rules.md", "rules\n")
         self.commit("feat: the web and the documents")
@@ -216,6 +246,78 @@ class WebTests(ChainCase):
         self.assertTrue(said.rstrip().endswith("failed: npm-run-lint"), said)
         code, said = self.judged(self.record("again", [TYPOS, SUBJECTS, LINT]), full)
         self.assertEqual(run_record.PASSED, code, said)
+
+
+class NpmTestTests(ChainCase):
+    def test_a_passed_npm_test_counts_for_the_web_steps_its_test_script_runs(self) -> None:
+        # The lint:types step is the one `lint` runs, so it is covered through two scripts.
+        full = self.record(
+            "full",
+            [TYPOS, SUBJECTS, UNIT, LINT, LINT_TYPES, TYPECHECK, UI_SYSTEM, LINT_DEAD, NPM_TEST],
+        )
+        self.write("DESIGN.md", "# Design\n\nA new rule.\n")
+        self.commit("docs(design): state a new rule")
+
+        code, said = self.judged(self.record("newest", [TYPOS, SUBJECTS, NPM_TEST]), full)
+
+        self.assertEqual(run_record.PASSED, code, said)
+        self.assertIn(f"accepted: a chain of 2 records, the newest at {self.head()}", said)
+        # The control: a failed npm test covers nothing, so the same chain is refused.
+        code, said = self.judged(self.record("failed", [TYPOS, SUBJECTS, FAILED_NPM_TEST]), full)
+        self.assertEqual(run_record.REFUSED, code, said)
+        self.assertIn("step npm-run-lint reads DESIGN.md, which changed since", said)
+
+    def test_without_a_newer_npm_test_the_web_steps_it_runs_are_refused_naming_them(self) -> None:
+        full = self.record(
+            "full", [TYPOS, SUBJECTS, UNIT, LINT, TYPECHECK, UI_SYSTEM, LINT_DEAD, NPM_TEST]
+        )
+        self.write("DESIGN.md", "# Design\n\nA new rule.\n")
+        self.commit("docs(design): state a new rule")
+
+        code, said = self.judged(self.record("newest", [TYPOS, SUBJECTS]), full)
+
+        self.assertEqual(run_record.REFUSED, code, said)
+        for name in (
+            "npm-run-lint",
+            "npm-run-typecheck",
+            "npm-run-check-ui-system",
+            "npm-run-lint-dead",
+            "npm-test",
+        ):
+            self.assertIn(f"step {name} reads DESIGN.md, which changed since", said)
+
+    def test_a_web_step_outside_the_test_script_is_not_covered_by_npm_test(self) -> None:
+        full = self.record("full", [TYPOS, SUBJECTS, UNIT, BUILD, NPM_TEST])
+        self.write("DESIGN.md", "# Design\n\nA new rule.\n")
+        self.commit("docs(design): state a new rule")
+
+        code, said = self.judged(self.record("newest", [TYPOS, SUBJECTS, NPM_TEST]), full)
+
+        self.assertEqual(run_record.REFUSED, code, said)
+        self.assertIn("step npm-run-build reads DESIGN.md, which changed since", said)
+        self.assertNotIn("step npm-test reads", said, "the newer record ran npm test")
+
+    def test_the_expansion_follows_the_test_script_of_web_package_json(self) -> None:
+        without_lint = {
+            "scripts": {
+                "test": "npm run typecheck && npm run check:ui-system && npm run lint:dead",
+                "lint": PACKAGE["scripts"]["lint"],
+                "lint:types": PACKAGE["scripts"]["lint:types"],
+            }
+        }
+        self.write("web/package.json", json.dumps(without_lint, indent=2) + "\n")
+        self.commit("chore(web): take lint out of the test script")
+        full = self.record("full", [TYPOS, SUBJECTS, LINT, NPM_TEST])
+        self.write("DESIGN.md", "# Design\n\nA new rule.\n")
+        self.commit("docs(design): state a new rule")
+
+        code, said = self.judged(self.record("newest", [TYPOS, SUBJECTS, NPM_TEST]), full)
+
+        self.assertEqual(run_record.REFUSED, code, said)
+        self.assertIn("step npm-run-lint reads DESIGN.md, which changed since", said)
+        # The control: the same lint run in the newest record is what the chain needs.
+        linted = self.record("linted", [TYPOS, SUBJECTS, LINT, NPM_TEST])
+        self.assertEqual(run_record.PASSED, self.judged(linted, full)[0])
 
 
 class PlacementTests(ChainCase):
