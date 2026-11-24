@@ -171,14 +171,29 @@ describe('a group of findings', () => {
     expect(button(wrapper, 'Later…').attributes()).not.toHaveProperty('disabled')
   })
 
-  it('keeps Put off unavailable for the same reason once nothing is ticked', async () => {
+  it('holds the room of the reason under the answers while the question waits, ticked or not', async () => {
+    const wrapper = list(group())
+    const room = () => wrapper.findAll('.request-blocked-room').map((word) => word.text())
+    expect(room()).toEqual([UNTICKED])
+    expect(wrapper.get('.request-blocked-room').attributes('aria-hidden')).toBe('true')
+    await untickAll(wrapper)
+    expect(room()).toEqual([UNTICKED])
+    expect(wrapper.get('.request-blocked').text()).toBe(UNTICKED)
+  })
+
+  it('keeps Put off unavailable for the same reason once nothing is ticked, said once', async () => {
     const wrapper = list(group())
     await press(wrapper, 'Later…')
     await wrapper.get('input[type="date"]').setValue('2099-03-01')
     expect(button(wrapper, 'Put off').attributes()).not.toHaveProperty('disabled')
     await untickAll(wrapper)
     expect(button(wrapper, 'Put off').attributes()).toHaveProperty('disabled')
-    expect(wrapper.get('.until-reason').text()).toBe(UNTICKED)
+    const reason = wrapper.get('.until-reason')
+    expect(reason.text()).toBe(UNTICKED)
+    // Said under Put off alone: the line under the answers keeps only its room.
+    expect(wrapper.find('.request-blocked').exists()).toBe(false)
+    for (const name of ['Put off', 'Do: 0'])
+      expect(button(wrapper, name).attributes('aria-describedby')).toBe(reason.attributes('id'))
     expect(answerInputRequest).not.toHaveBeenCalled()
   })
 

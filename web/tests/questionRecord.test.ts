@@ -213,6 +213,14 @@ describe('the answers of a group of findings', () => {
     ])
   })
 
+  it('name the reason an answer that needs a tick can come to give, ticked or not', () => {
+    const none: RequestDraft = { ...EMPTY_DRAFT, answers: { items: [] } }
+    for (const draft of [EMPTY_DRAFT, unticked, none])
+      expect(
+        answersOver(group, draft, counted, UNTICKED).map(({ blockable }) => blockable),
+      ).toEqual([UNTICKED, UNTICKED, undefined])
+  })
+
   it('block every answer that needs a tick while none is, for the reason given, and no other', () => {
     const none: RequestDraft = { ...EMPTY_DRAFT, answers: { items: [] } }
     expect(answersOver(group, none, counted, UNTICKED).map(({ blocked }) => blocked)).toEqual([

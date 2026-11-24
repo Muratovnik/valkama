@@ -132,6 +132,20 @@ describe('SearchCombobox with one value', () => {
     expect(input.element.value).toBe('No goal')
   })
 
+  it('draws the chosen words over the field while nobody types there, and only then', async () => {
+    const { wrapper, input } = host('MAIN-12')
+    const words = () => wrapper.findAll('[data-chosen-words]')
+    // Drawn once, for the eye: the field's own words stay what a reader hears and edits.
+    expect(words().map((one) => [one.text(), one.attributes('aria-hidden')])).toEqual([
+      ['MAIN-12 · Parser rework', 'true'],
+    ])
+    expect(input.element.value).toBe('MAIN-12 · Parser rework')
+    await type(input, 'pars')
+    expect(words()).toHaveLength(0)
+    await press(input, 'Escape')
+    expect(words().map((one) => one.text())).toEqual(['MAIN-12 · Parser rework'])
+  })
+
   it('is named by its label and described by its hint', () => {
     const { wrapper, input } = host('', { hint: 'pick one' })
     const label = wrapper.get('label')
@@ -164,6 +178,12 @@ describe('SearchCombobox with several values', () => {
     // Words an option already says, in any case, are that option and not a new one.
     await type(input, 'DOCS')
     expect(optionNames()).toEqual(['docs'])
+  })
+
+  it('draws no chosen words over the field: its values are chips', () => {
+    const { wrapper } = host(['backend'])
+    expect(chips(wrapper)).toEqual(['backend'])
+    expect(wrapper.findAll('[data-chosen-words]')).toHaveLength(0)
   })
 
   it('removes the last chip on Backspace in an empty field, and none while text is there', async () => {
