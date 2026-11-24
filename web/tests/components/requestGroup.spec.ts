@@ -173,11 +173,11 @@ describe('a group of findings', () => {
 
   it('holds the room of the reason under the answers while the question waits, ticked or not', async () => {
     const wrapper = list(group())
-    const room = () => wrapper.findAll('.request-blocked-room').map((word) => word.text())
-    expect(room()).toEqual([UNTICKED])
-    expect(wrapper.get('.request-blocked-room').attributes('aria-hidden')).toBe('true')
+    const room = () => wrapper.get('.request-blocked-place').attributes('data-room')
+    expect(room()).toBe(UNTICKED)
+    expect(wrapper.find('.request-blocked').exists()).toBe(false)
     await untickAll(wrapper)
-    expect(room()).toEqual([UNTICKED])
+    expect(room()).toBe(UNTICKED)
     expect(wrapper.get('.request-blocked').text()).toBe(UNTICKED)
   })
 

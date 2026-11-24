@@ -133,9 +133,11 @@ const byAnswers = computed(() => props.waiting && props.answers.length > 0)
 const blockedWhy = computed(() =>
   byAnswers.value ? (props.answers.find((answer) => answer.blocked)?.blocked ?? '') : '',
 )
-/** Every reason an answer can come to give under the answers, whose room the line holds. */
+/** Every reason an answer can come to give under the answers, one a line: the line's room. */
 const blockedRoom = computed(() =>
-  byAnswers.value ? [...new Set(props.answers.flatMap(({ blockable }) => blockable ?? []))] : [],
+  byAnswers.value
+    ? [...new Set(props.answers.flatMap(({ blockable }) => blockable ?? []))].join('\n')
+    : '',
 )
 /** The reason stands here, unless under the open choice of a day, which says it there. */
 const blockedHere = computed(() => Boolean(blockedWhy.value) && !props.later?.open)
@@ -313,8 +315,9 @@ defineExpose({ focusWayOut })
       >
     </div>
     <div
-      v-if="blockedRoom.length || blockedWhy"
-      class="request-blocked-place held-room"
+      v-if="blockedRoom || blockedWhy"
+      class="request-blocked-place"
+      :data-room="blockedRoom"
     >
       <p
         v-if="blockedHere"
@@ -322,14 +325,6 @@ defineExpose({ focusWayOut })
         class="request-blocked"
       >
         {{ blockedWhy }}
-      </p>
-      <p
-        v-for="word in blockedRoom"
-        :key="word"
-        class="held-room-unseen request-blocked-room"
-        aria-hidden="true"
-      >
-        {{ word }}
       </p>
     </div>
     <VButton
@@ -340,8 +335,6 @@ defineExpose({ focusWayOut })
     >
   </div>
 </template>
-
-<style scoped src="@/shared/ui/heldRoom.css"></style>
 
 <style scoped>
 .request-actions {
@@ -482,13 +475,27 @@ defineExpose({ focusWayOut })
   min-width: 0;
 }
 
-/* Why an answer is unavailable: a line of its own under the answers, at their end. */
+/* Why an answer is unavailable: a line of its own under the answers, at their end, as tall as
+   the tallest reason it holds the room of, which stands unseen in the same cell. */
 .request-blocked-place {
+  display: grid;
   flex-basis: 100%;
+  grid-template-columns: minmax(0, 1fr);
+
+  > *,
+  &::before {
+    grid-area: 1 / 1;
+  }
+
+  &::before {
+    content: attr(data-room);
+    white-space: pre-line;
+    visibility: hidden;
+  }
 }
 
 .request-blocked,
-.request-blocked-room {
+.request-blocked-place::before {
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
