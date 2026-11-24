@@ -2,12 +2,13 @@
  * Where the keyboard's focus stands in a `DialogFrame` window against what the window says over
  * its foot, by the rule in DESIGN.md («Dialogs and drawers»): no control focused in the window's
  * body stands under what the form says of a change or why a save was refused, not even in part
- * (WCAG 2.4.11, Focus Not Obscured, asks only that it not be hidden whole). Read by the frame's
- * hooks: its body `data-part="dialog-body"`, the box of those words `data-part="said"`.
+ * and not its focus ring (WCAG 2.4.11, Focus Not Obscured, asks only that it not be hidden
+ * whole). Read by the frame's hooks: its body `data-part="dialog-body"`, the box of those words
+ * `data-part="said"`.
  */
 import type { Locator, Page } from '@playwright/test'
 
-/** One stop of the walk: the focused control and how many of its pixels the words cover. */
+/** One stop of the walk: the focused control, and how far the words cover it and its ring. */
 export interface FocusStop {
   covered: number
   height: number
@@ -37,8 +38,14 @@ export async function walkFocus(
       if (!said || said.contains(focused)) return null
       const box = focused.getBoundingClientRect()
       const words = said.getBoundingClientRect()
+      const style = getComputedStyle(focused)
+      const ring =
+        style.outlineStyle === 'none'
+          ? 0
+          : Number.parseFloat(style.outlineWidth) + Number.parseFloat(style.outlineOffset)
+      const bottom = box.bottom + ring
       return {
-        covered: Math.max(0, Math.min(box.bottom, words.bottom) - Math.max(box.top, words.top)),
+        covered: Math.max(0, Math.min(bottom, words.bottom) - Math.max(box.top, words.top)),
         height: box.height,
         name: (focused.getAttribute('aria-label') ?? focused.textContent).trim().slice(0, 40),
       }

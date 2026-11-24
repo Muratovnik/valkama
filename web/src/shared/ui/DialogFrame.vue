@@ -72,8 +72,7 @@ const body = ref<HTMLElement | null>(null)
  * How tall the words over the foot stand while they say something, to the next whole pixel,
  * which the body keeps clear at its lower edge for what the keyboard reaches (`scroll-padding`),
  * so a focused control scrolls out from under them. Without it a Tab stopped on a control wholly
- * under the words, as the browser saw it inside the body; at their own fraction of a pixel, the
- * scroll stopped a part of a pixel short.
+ * under the words, as the browser saw it inside the body.
  */
 const said = ref<HTMLElement | null>(null)
 const saidHeight = ref(0)
@@ -143,7 +142,7 @@ function keepClear(event: FocusEvent) {
         ref="body"
         class="dialog-frame-body"
         data-part="dialog-body"
-        :class="{ 'is-steady': steadyScroll }"
+        :class="{ 'is-steady': steadyScroll, 'is-said-over': Boolean(bodyRoom) }"
         :style="bodyRoom"
         @focusin="keepClear"
       >
@@ -216,9 +215,10 @@ function keepClear(event: FocusEvent) {
    keeps a stuck box clear of the scroller's padding, so the inset passes over the top of it
    with what scrolls showing through: it is told to stand that much further out
    (`--size-stuck-top`, `--size-stuck-bottom`), at the very edge.
-   What the keyboard reaches scrolls clear of the words stuck over the foot, as tall as they
-   stand (`--size-said-room`, measured): the body keeps that much of its lower edge free for it
-   (WCAG 2.4.11, Focus Not Obscured). */
+   While words are stuck over the foot, what the keyboard reaches scrolls clear of them with its
+   focus ring (WCAG 2.4.11, Focus Not Obscured): the body keeps free at its lower edge as much as
+   they stand tall (`--size-said-room`, measured), the ring's offset and width (`base.css`), and
+   a hair, since the scroll stops at a whole pixel and left a fraction of a pixel under them. */
 .dialog-frame-body {
   --size-stuck-top: calc(-1 * var(--space-dialog-inset));
   --size-stuck-bottom: calc(-1 * var(--space-dialog-inset));
@@ -230,7 +230,12 @@ function keepClear(event: FocusEvent) {
   min-height: 0;
   padding: var(--space-dialog-inset);
   overflow-y: auto;
-  scroll-padding-block-end: var(--size-said-room);
+
+  &.is-said-over {
+    scroll-padding-block-end: calc(
+      var(--size-said-room) + var(--space-half) + var(--size-focus-ring) + var(--space-hair)
+    );
+  }
 }
 
 /* Paid for out of the end inset, so the words end where they would with no scrollbar. One that

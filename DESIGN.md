@@ -1080,9 +1080,9 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   nobody's hand, and the dialog stays centred on it. What a dialog says over its
   foot's buttons, a change's meaning or a refusal, stands over what scrolls under
   it, and no control the keyboard reaches stands under those words: the body keeps
-  their height clear at its lower edge for a focused control, so a Tab scrolls it
-  out from under them (WCAG 2.4.11), a text field's whole box and not only its
-  caret. Without that a Tab stopped on remove buttons and fields hidden whole
+  their height clear at its lower edge for a focused control and its ring, so a
+  Tab scrolls it out from under them (WCAG 2.4.11), a text field's whole box and
+  not only its caret. Without that a Tab stopped on remove buttons and fields hidden whole
   under a rename's words.
 - **Inspectors:** persistent right-side detail uses the shared resizable
   inspector. Width is bounded by the actual workspace, not the viewport. The
