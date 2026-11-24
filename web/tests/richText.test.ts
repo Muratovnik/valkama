@@ -140,7 +140,10 @@ describe('the trust boundary', () => {
     '#anchor',
   ])('keeps no address for %s and shows the link text', (href) => {
     expect(safeHref(href)).toBeNull()
-    const paragraph = only(parseRichText(`[click here](<${href}>)`))
+    // An unescaped `<` ends an address in angle brackets, as CommonMark says, and
+    // what is left is no link at all; escaped, the address stays one link.
+    const destination = href.replaceAll(/[<>]/g, String.raw`\$&`)
+    const paragraph = only(parseRichText(`[click here](<${destination}>)`))
     expect(JSON.stringify(paragraph)).not.toContain('"kind":"link"')
     expect(words([paragraph])).toBe('click here')
   })
