@@ -41,7 +41,9 @@ A request counts in the hour it was sent in: a period is read in whole hours of 
 rounded down to its hour and `to` up. A run's hours are kept here for each state of its file
 (its size and change time), so a period read again reads only the files that changed; many
 runs to read at once are parsed over a pool of processes (`Reader.read`), each of which only
-reads transcripts and returns their bins.
+reads transcripts and returns their bins. A read can be given a deadline: the HTTP surface's
+is, so that a first read of gigabytes of transcripts answers how far it got rather than
+outlast the browser's wait, and the read asked again goes on from there.
 """
 
 from __future__ import annotations
@@ -52,6 +54,7 @@ import multiprocessing
 import os
 import sqlite3
 import threading
+import time
 from collections.abc import Iterable, Mapping, Sequence
 from concurrent import futures
 from dataclasses import dataclass
@@ -167,19 +170,68 @@ def bins_of(target: Target) -> dict[_Bin, list[float]] | None:
     return None if requests is None else _bins(requests)
 
 
-def _pooled(targets: Sequence[Target]) -> list[dict[_Bin, list[float]] | None]:
-    """`bins_of` of each target over a pool of processes, or here when no pool can run."""
+#: Runs a process of the pool reads at a time: small enough that one deadline leaves little
+#: reading to wait for, large enough that the pool is not mostly passing work around.
+_CHUNK = 4
+
+_Read = dict[int, dict[_Bin, list[float]] | None]
+#: A file's path, size and change time: the state a run's bins were read from.
+_State = tuple[str, int, int]
+
+
+def _chunk_bins(targets: Sequence[Target]) -> list[dict[_Bin, list[float]] | None]:
+    return [bins_of(target) for target in targets]
+
+
+def _here(targets: Sequence[Target], until: float | None) -> _Read:
+    """`bins_of` of the targets in turn, in this process, until `until` passes."""
+
+    read: _Read = {}
+    for index, target in enumerate(targets):
+        if until is not None and time.monotonic() >= until:
+            break
+        read[index] = bins_of(target)
+    return read
+
+
+def _pooled(targets: Sequence[Target], until: float | None) -> _Read:
+    """`bins_of` of the targets over a pool of processes, by index, those read by `until`.
+
+    At `until` the runs no process has started are left; those started are waited for. Where no
+    pool can run they are read here.
+    """
 
     workers = min(POOL_WORKERS, os.cpu_count() or 1, len(targets))
     if workers < 2:
-        return [bins_of(target) for target in targets]
+        return _here(targets, until)
+    chunks = [range(at, min(at + _CHUNK, len(targets))) for at in range(0, len(targets), _CHUNK)]
     try:
         with futures.ProcessPoolExecutor(
             workers, mp_context=multiprocessing.get_context("spawn")
         ) as pool:
-            return list(pool.map(bins_of, targets, chunksize=4))
+            jobs = {
+                pool.submit(_chunk_bins, [targets[i] for i in chunk]): chunk for chunk in chunks
+            }
+            wait = None if until is None else max(0.0, until - time.monotonic())
+            futures.wait(jobs, timeout=wait)
+            for job in jobs:
+                job.cancel()
+        read: _Read = {}
+        for job, chunk in jobs.items():
+            if not job.cancelled():
+                read.update(zip(chunk, job.result(), strict=True))
+        return read
     except (OSError, futures.process.BrokenProcessPool):
-        return [bins_of(target) for target in targets]
+        return _here(targets, until)
+
+
+class UnfinishedError(Exception):
+    """A read whose deadline passed before every run was read: how many were and how many not."""
+
+    def __init__(self, read: int, left: int) -> None:
+        super().__init__(f"{left} of {read + left} runs are still to read")
+        self.read = read
+        self.left = left
 
 
 class Reader:
@@ -189,39 +241,58 @@ class Reader:
         self._lock = threading.Lock()
         self._kept: dict[tuple[str, str], _Kept] = {}
 
-    def read(self, targets: Sequence[Target]) -> list[dict[_Bin, list[float]] | None]:
+    def _split(
+        self, targets: Sequence[Target]
+    ) -> tuple[list[dict[_Bin, list[float]] | None], list[tuple[int, Target, _State]]]:
+        """The bins kept of each target still as its file is, and the targets to read again."""
+
+        found: list[dict[_Bin, list[float]] | None] = [None] * len(targets)
+        stale: list[tuple[int, Target, _State]] = []
+        for index, target in enumerate(targets):
+            path = usage_collect.source(target)
+            if path is None:
+                continue
+            try:
+                status = os.stat(path)
+            except OSError:
+                continue
+            state = (path, status.st_size, status.st_mtime_ns)
+            kept = self._kept.get((target.session, target.agent))
+            if kept and (kept.path, kept.size, kept.changed) == state:
+                found[index] = kept.bins
+            else:
+                stale.append((index, target, state))
+        return found, stale
+
+    def read(
+        self, targets: Sequence[Target], *, until: float | None = None
+    ) -> list[dict[_Bin, list[float]] | None]:
         """Each run's bins, in the order given; None for one whose transcript is nowhere to read.
 
         A run whose file changed since it was read, or was never read, is read again; once
-        `POOL_FROM` of them are, over a pool of processes (`POOL_WORKERS`).
+        `POOL_FROM` of them are, over a pool of processes (`POOL_WORKERS`). With `until`, a
+        `time.monotonic()` moment, the runs not read by then are left and `UnfinishedError` says
+        how many; those read are kept, so the next read starts where this one stopped. A read
+        that waits on another to finish waits no longer than `until` either.
         """
 
-        found: list[dict[_Bin, list[float]] | None] = [None] * len(targets)
-        with self._lock:
-            stale: list[tuple[int, Target, tuple[str, int, int]]] = []
-            for index, target in enumerate(targets):
-                path = usage_collect.source(target)
-                if path is None:
-                    continue
-                try:
-                    status = os.stat(path)
-                except OSError:
-                    continue
-                state = (path, status.st_size, status.st_mtime_ns)
-                kept = self._kept.get((target.session, target.agent))
-                if kept and (kept.path, kept.size, kept.changed) == state:
-                    found[index] = kept.bins
-                else:
-                    stale.append((index, target, state))
+        wait = -1.0 if until is None else max(0.0, until - time.monotonic())
+        if not self._lock.acquire(timeout=wait):
+            _found, stale = self._split(targets)
+            raise UnfinishedError(len(targets) - len(stale), len(stale))
+        try:
+            found, stale = self._split(targets)
             chosen = [target for _index, target, _state in stale]
-            if len(chosen) >= POOL_FROM:
-                read = _pooled(chosen)
-            else:
-                read = [bins_of(target) for target in chosen]
-            for (index, target, (path, size, changed)), bins in zip(stale, read, strict=True):
+            read = _pooled(chosen, until) if len(chosen) >= POOL_FROM else _here(chosen, until)
+            for at, bins in read.items():
+                index, target, (path, size, changed) = stale[at]
                 found[index] = bins
                 if bins is not None:
                     self._kept[(target.session, target.agent)] = _Kept(path, size, changed, bins)
+        finally:
+            self._lock.release()
+        if len(read) < len(stale):
+            raise UnfinishedError(len(targets) - len(stale) + len(read), len(stale) - len(read))
         return found
 
 
@@ -297,11 +368,13 @@ def read(
     end: float,
     clients: Sequence[str] = (),
     reader: Reader | None = None,
+    until: float | None = None,
 ) -> dict:
     """The report over the hours from `start` to `end`, seconds since the epoch (see the module).
 
     `clients` narrows it to those clients; none is every one. `conn` is only read, and must
-    give rows by name.
+    give rows by name. With `until`, a `time.monotonic()` moment, runs not read by then raise
+    `UnfinishedError`, and a read asked again goes on from the runs this one read.
     """
 
     if end <= start:
@@ -324,7 +397,7 @@ def read(
     read_runs = missing = 0
     finder = Finder(conn, transcripts.directory(_store_path(conn)))
     targets = [target for target in finder.targets(set()) if (target.session, target.agent) in runs]
-    for target, bins in zip(targets, reader.read(targets), strict=True):
+    for target, bins in zip(targets, reader.read(targets, until=until), strict=True):
         run = runs[(target.session, target.agent)]
         if bins is None:
             missing += 1

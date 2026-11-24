@@ -117,6 +117,7 @@ export const ANALYTICS_WORDS: Record<string, WordKind> = {
   'analytics.pauses': 'label',
   'analytics.pauses.failed': 'value',
   'analytics.pauses.failedAgain': 'value',
+  'analytics.pauses.reading': 'value',
   'analytics.pauses.none': 'value',
   'analytics.pauses.noPeriod': 'instruction',
   'analytics.pauses.noneFor': 'value',

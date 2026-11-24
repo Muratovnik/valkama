@@ -61,6 +61,36 @@ describe('the pauses read', () => {
     for (const payload of refused) expect(() => validatePausesAnswer(payload)).toThrow()
   })
 
+  it('asks again while the server says it is still reading, and tells how far it got', async () => {
+    const reading = {
+      interface_version: 'valkama-analytics-api',
+      reading: { runs_read: 3, runs_left: 9 },
+    }
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockImplementationOnce(
+        withSecurityBootstrap(async () => new Response(JSON.stringify(reading), { status: 202 })),
+      )
+      .mockImplementation(
+        withSecurityBootstrap(async () => new Response(JSON.stringify(pausesAnswer(PAUSES)))),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+    const told: unknown[] = []
+    const pauses = await fetchPauses(QUERY, undefined, (progress) => told.push(progress))
+    expect(told).toEqual([{ runs_read: 3, runs_left: 9 }])
+    expect(pauses.rows).toHaveLength(4)
+    const asked = fetchMock.mock.calls.map(([input]) => requestUrl(input ?? ''))
+    expect(asked.filter((url) => url.includes('/api/analytics/pauses'))).toHaveLength(2)
+  })
+
+  it('refuses a still-reading answer the contract does not hold', async () => {
+    answer(
+      { interface_version: 'valkama-analytics-api', reading: { runs_read: -1, runs_left: 0 } },
+      202,
+    )
+    await expect(fetchPauses(QUERY)).rejects.toThrow()
+  })
+
   it('fails on a refusal of the read', async () => {
     answer({}, 503)
     await expect(fetchPauses(QUERY)).rejects.toThrow('HTTP 503')

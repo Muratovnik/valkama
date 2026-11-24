@@ -11,6 +11,7 @@ import hashlib
 import io
 import json
 import sqlite3
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -409,8 +410,8 @@ class ReaderTests(PausesCase):
         self.assertEqual(first["rows"], again["rows"])
         self.assertEqual([2], [row["requests"] for row in later["rows"]])
 
-    def three_sessions(self) -> None:
-        for number in range(3):
+    def three_sessions(self, count: int = 3) -> None:
+        for number in range(count):
             run = self.session(f"{SESSION}-{number}")
             run.prompt(0)
             run.end_turn(2)
@@ -437,6 +438,49 @@ class ReaderTests(PausesCase):
         self.assertEqual(alone, spread)
         self.assertEqual({"read": 3, "missing": 0}, spread["runs"])
         self.assertEqual([3], [row["requests"] for row in spread["rows"]])
+
+    def test_a_read_past_its_deadline_says_how_far_it_got_and_goes_on_from_there(self) -> None:
+        # The oracle is the same store read with no deadline. A deadline already past reads no
+        # run here; over the pool, the runs no process started are left: a pool of two takes
+        # at most three runs a chunk each into its queue, which can no longer be called off,
+        # so of eight at least five are left. Either way the read asked again with no
+        # deadline answers what an unbounded read does.
+        self.three_sessions(8)
+        alone = self.report(end=HOUR)
+        self.reader.row_factory = sqlite3.Row
+        for pool_from in (10**6, 2):
+            with (
+                self.subTest(pool_from=pool_from),
+                mock.patch.object(pauses, "POOL_FROM", pool_from),
+                mock.patch.object(pauses, "POOL_WORKERS", 2),
+                mock.patch.object(pauses, "_CHUNK", 1),
+            ):
+                reader = pauses.Reader()
+                past = time.monotonic() - 1
+                with self.assertRaises(pauses.UnfinishedError) as stopped:
+                    pauses.read(
+                        self.reader, start=epoch(0), end=epoch(HOUR), reader=reader, until=past
+                    )
+                self.assertEqual(8, stopped.exception.read + stopped.exception.left)
+                self.assertGreaterEqual(stopped.exception.left, 5)
+                if pool_from > 8:
+                    self.assertEqual((0, 8), (stopped.exception.read, stopped.exception.left))
+                again = pauses.read(self.reader, start=epoch(0), end=epoch(HOUR), reader=reader)
+                self.assertEqual(alone, again)
+
+    def test_a_read_waiting_on_another_waits_no_longer_than_its_deadline(self) -> None:
+        self.three_sessions()
+        self.report(end=HOUR)
+        self.reader.row_factory = sqlite3.Row
+        reader = pauses.Reader()
+        with reader._lock:  # another read, still parsing
+            began = time.monotonic()
+            with self.assertRaises(pauses.UnfinishedError) as stopped:
+                pauses.read(
+                    self.reader, start=epoch(0), end=epoch(HOUR), reader=reader, until=began + 0.2
+                )
+            self.assertLess(time.monotonic() - began, 2)
+        self.assertEqual((0, 3), (stopped.exception.read, stopped.exception.left))
 
     def test_a_pool_that_cannot_start_reads_here(self) -> None:
         self.three_sessions()
@@ -510,6 +554,30 @@ class HttpReadTests(PausesCase):
         # The caller's midnight at two hours east of UTC, as a whole hour of UTC.
         self.assertEqual("2030-03-03T22:00:00+00:00", report["from"])
         self.assertEqual([("person", "6-30m")], [(r["wait"], r["bucket"]) for r in report["rows"]])
+
+    def test_a_read_out_of_time_answers_202_with_how_far_it_got(self) -> None:
+        run = self.session(SESSION)
+        run.prompt(0)
+        run.end_turn(2)
+        run.prompt(7 * MINUTE)
+        run.end_turn(7 * MINUTE + 2)
+        self.ticks((0, 30 * MINUTE))
+        self.read()
+        self.reader.row_factory = sqlite3.Row
+        period = {"from": ["2030-03-04"], "to": ["2030-03-05"], "utc_offset": ["120"]}
+        with mock.patch.object(api, "PAUSES_BUDGET_SECONDS", -1.0):
+            status, body = api.handle_get(self.reader, api.PAUSES_PATH, period)
+        self.assertEqual(202, status)
+        self.assertEqual(
+            {
+                "interface_version": api.ANALYTICS_API_INTERFACE,
+                "reading": {"runs_read": 0, "runs_left": 1},
+            },
+            body,
+        )
+        status, body = api.handle_get(self.reader, api.PAUSES_PATH, period)
+        self.assertEqual(200, status)
+        self.assertEqual(1, len(body["pauses"]["rows"]))
 
     def test_another_parameter_or_no_period_is_refused(self) -> None:
         for parameters in (

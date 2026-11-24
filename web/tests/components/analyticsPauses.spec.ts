@@ -113,6 +113,31 @@ describe('the pauses section', () => {
     expect(environments(page)).toHaveLength(2)
   })
 
+  it('says how many runs a first read has parsed while the server is still reading', async () => {
+    let asks = 0
+    const reads = stubAnalyticsReads(usage, undefined, () => {
+      asks += 1
+      if (asks === 1)
+        return {
+          status: 202,
+          body: {
+            interface_version: 'valkama-analytics-api',
+            reading: { runs_read: 640, runs_left: 1199 },
+          },
+        }
+      return 'hold'
+    })
+    const page = await mountAnalytics({ routeState: { by: 'pauses' } })
+    await vi.waitFor(() => expect(reads.held).toHaveLength(1))
+    expect(page.get('[data-note="reading"]').text()).toBe(
+      'Reading the transcripts: 640 of 1,839 runs.',
+    )
+    reads.held[0]?.release(pausesAnswer(PAUSES))
+    await flushPromises()
+    expect(page.find('[data-note="reading"]').exists()).toBe(false)
+    expect(environments(page)).toHaveLength(2)
+  })
+
   it('shows a table per environment with the buckets of the wait and their sum, for the machine first', async () => {
     stubAnalyticsReads(usage, undefined, () => pausesAnswer(PAUSES))
     const page = await mountAnalytics({ routeState: { by: 'pauses' } })

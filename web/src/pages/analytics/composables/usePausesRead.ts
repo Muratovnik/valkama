@@ -15,16 +15,17 @@ import { periodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
 
 import type { AnalyticsView } from '@/shared/api/analyticsAddress.ts'
 import { fetchPauses } from '@/shared/api/analyticsPausesApi.ts'
-import type { Pauses } from '@/shared/api/analyticsPausesApi.ts'
+import type { Pauses, PausesReading } from '@/shared/api/analyticsPausesApi.ts'
 
 /**
- * Where the read stands: not asked yet or its first wait, an answer (`readAt`, the moment it came,
+ * Where the read stands: not asked yet or its first wait (`progress`, how far the server got once
+ * it says it is still reading), an answer (`readAt`, the moment it came,
  * `refreshing` while the next is read, `failedAgain` once a read again failed and this one stayed),
  * a first read that failed, or a period the view names none of.
  */
 export type PausesRead =
   | { status: 'failed' }
-  | { status: 'loading' }
+  | { status: 'loading'; progress?: PausesReading; }
   | { status: 'no-period' }
   | { failedAgain: boolean; pauses: Pauses; readAt: string; refreshing: boolean; status: 'ready' }
 
@@ -44,7 +45,10 @@ export function usePausesRead(options: { view: () => AnalyticsView }) {
     const held = read.value
     read.value = held.status === 'ready' ? { ...held, refreshing: true } : { status: 'loading' }
     try {
-      const pauses = await fetchPauses(bounds, controller.signal)
+      const pauses = await fetchPauses(bounds, controller.signal, (progress) => {
+        if (!controller.signal.aborted && read.value.status === 'loading')
+          read.value = { status: 'loading', progress }
+      })
       if (controller.signal.aborted) return
       read.value = {
         status: 'ready',

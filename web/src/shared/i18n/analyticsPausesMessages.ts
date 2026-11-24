@@ -14,6 +14,7 @@ export const analyticsPausesMessages = {
     tile: 'Cache after a pause',
     failed: 'The pauses before model requests could not be loaded.',
     failedAgain: 'The pauses could not be loaded again, so these are from the read before.',
+    reading: 'Reading the transcripts: {read} of {total} runs.',
     none: 'No model request followed a pause in this period. Choose a longer period.',
     noPeriod: 'The period has no end yet. Choose its last day.',
     waits: {
@@ -71,6 +72,7 @@ export const analyticsPausesMessages = {
     tile: 'Кэш после паузы',
     failed: 'Не удалось загрузить паузы перед запросами к модели.',
     failedAgain: 'Не удалось загрузить паузы заново, поэтому показаны прежние.',
+    reading: 'Читаю транскрипты: {read} из {total} прогонов.',
     none: 'В этом периоде ни один запрос к модели не шёл после паузы. Выберите период длиннее.',
     noPeriod: 'У периода ещё нет конца. Выберите его последний день.',
     waits: {

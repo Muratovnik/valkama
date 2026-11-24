@@ -18,7 +18,9 @@
  * It reads the pauses itself (`usePausesRead`), not the page's usage: when it opens, when the
  * period changes and each time the bar asks a refresh (`refreshes`). Its heading, «ⓘ» and choice
  * of wait stand from the first moment; its first wait, a first read that failed, a period with no
- * end and an answer with no request stand under them in the product's shared state panel. While it
+ * end and an answer with no request stand under them in the product's shared state panel; while a
+ * first read waits on a server still parsing transcripts, a line says how many runs it has read
+ * (`data-note="reading"`). While it
  * is read again the answer on show stays; a read again that failed keeps it, and a line under the
  * heading says so (`data-note="failed-again"`).
  *
@@ -120,6 +122,14 @@ const ABSENT = '—'
 const count = (value: number) => new Intl.NumberFormat(locale.value).format(value)
 const shareOf = (ratio: number | null) => (ratio === null ? ABSENT : words.share(ratio))
 
+/** How far a first read got, in words, once the server says it is still reading. */
+const progress = computed(() => {
+  const read = pausesRead.value
+  if (read.status !== 'loading' || !read.progress) return ''
+  const { runs_read: done, runs_left: left } = read.progress
+  return t('analytics.pauses.reading', { read: count(done), total: count(done + left) })
+})
+
 /**
  * The columns every table shares — the pause, then its figures — at the same widths, which the
  * longest heading in either language and an estimate of thousands of dollars fit beside the
@@ -176,6 +186,13 @@ const tables = (pauses: Pauses) =>
         :options="waits"
       />
     </template>
+    <p
+      v-if="progress"
+      class="pauses-panel-note"
+      data-note="reading"
+    >
+      {{ progress }}
+    </p>
     <PlatformStatePanel
       :state="state"
       @retry="refresh"

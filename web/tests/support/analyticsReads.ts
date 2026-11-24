@@ -21,14 +21,15 @@ interface HeldRead {
 
 const respond = (given: unknown) =>
   given && typeof given === 'object' && 'status' in given && typeof given.status === 'number'
-    ? new Response('{}', { status: given.status })
+    ? new Response(JSON.stringify('body' in given ? given.body : {}), { status: given.status })
     : new Response(JSON.stringify(given), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })
 
 /**
- * `answer` gives a body, `{ status }` for a refusal, or `'hold'` to keep the read waiting;
+ * `answer` gives a body, `{ status }` for a refusal, `{ status, body }` for an answer of
+ * another status, or `'hold'` to keep the read waiting;
  * `quota`, the quota read's body or `{ status }`, its query kept in `quotaAsked`; `pauses`, the
  * pauses read's body, `{ status }` or `'hold'`, its query kept in `pausesAsked`.
  */

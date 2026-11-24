@@ -1209,6 +1209,13 @@ time with its offset. It is read in whole hours of UTC. Any other parameter is r
 transcripts, and only the files that changed since the last read are read again. The
 store is only read. No MCP tool reads it.
 
+A first read can have gigabytes of transcripts to parse. A read that has not parsed them
+all within about 8 seconds answers `202` with how far it got:
+`{"interface_version": "valkama-analytics-api", "reading": {"runs_read": 640,
+"runs_left": 1199}}`. What it parsed is kept, so the same read asked again goes on from
+there. Ask again until the answer is `200` with the report. The CLI waits for the whole
+report and never answers this way.
+
 ### Subscription quota samples and accounts
 
 Analytics will read the subscription quota from samples the store keeps, beside the

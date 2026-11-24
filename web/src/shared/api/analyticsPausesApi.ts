@@ -3,7 +3,9 @@
  * `GET /api/analytics/pauses`: the report `valkama usage pauses --json` prints, under `pauses`.
  * Its fields are described in `docs/guides/commands.md` ("usage pauses") and the read in
  * `docs/connection-contract.md` ("Pauses before model requests"). Strict like every contract
- * here: a field nobody declared is refused rather than drawn.
+ * here: a field nobody declared is refused rather than drawn. A first read parses gigabytes of
+ * transcripts, so the server answers 202 with how far it got (`PausesReading`) before the
+ * browser's wait runs out, and the read asks again until the report comes.
  */
 
 import { boundedText, parseContract, positiveInt, strictObject, z } from '@/shared/api/contract.ts'
@@ -72,7 +74,16 @@ const answerSchema = strictObject({
   pauses: pausesSchema,
 })
 
+const readingSchema = strictObject({
+  interface_version: z.literal('valkama-analytics-api', {
+    message: 'expected valkama-analytics-api',
+  }),
+  reading: strictObject({ runs_read: count(), runs_left: count() }),
+})
+
 export type Pauses = z.infer<typeof pausesSchema>
+/** How far a read the server has not finished got: the runs read, and those left. */
+export type PausesReading = z.infer<typeof readingSchema>['reading']
 export type PauseRow = z.infer<typeof rowSchema>
 
 /** The pauses answer, or a refusal naming what does not fit the contract. */
@@ -87,14 +98,39 @@ export interface PausesQuery {
   utcOffset: number
 }
 
-export async function fetchPauses(query: PausesQuery, signal?: AbortSignal): Promise<Pauses> {
+/** How long the read waits before it asks again a server that is still reading. */
+export const PAUSES_ASK_AGAIN_MS = 300
+
+const pause = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(resolve, ms)
+    signal?.addEventListener('abort', () => {
+      clearTimeout(timer)
+      reject(signal.reason)
+    })
+  })
+
+/**
+ * The report over the period. While the server answers that it is still reading, each answer
+ * goes to `reading` and the read asks again; an abort ends it between two asks too.
+ */
+export async function fetchPauses(
+  query: PausesQuery,
+  signal?: AbortSignal,
+  reading?: (progress: PausesReading) => void,
+): Promise<Pauses> {
   const path = '/api/analytics/pauses'
   const parameters = new URLSearchParams({
     from: query.from,
     to: query.to,
     utc_offset: String(query.utcOffset),
   })
-  const { response, payload } = await readJsonResponse(`${path}?${parameters}`, { signal })
-  if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`)
-  return validatePausesAnswer(payload)
+  for (;;) {
+    const { response, payload } = await readJsonResponse(`${path}?${parameters}`, { signal })
+    if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`)
+    if (response.status !== 202) return validatePausesAnswer(payload)
+    const progress = parseContract(readingSchema, payload, 'analytics.pauses', invalid).reading
+    reading?.(progress)
+    await pause(PAUSES_ASK_AGAIN_MS, signal)
+  }
 }
