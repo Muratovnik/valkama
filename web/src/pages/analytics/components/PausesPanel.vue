@@ -328,10 +328,10 @@ const tables = (pauses: Pauses) =>
    the table before, and read as that table's last line. */
 [data-environment] {
   gap: var(--space-2);
-}
 
-[data-environment] + [data-environment] {
-  margin-block-start: var(--space-section-part);
+  & + [data-environment] {
+    margin-block-start: var(--space-section-part);
+  }
 }
 
 /* The sum of the lines over it, in the full ink and the heavier weight, as the token kinds' sum. */
