@@ -312,8 +312,8 @@ function addFolder() {
 
 .project-row {
   display: grid;
-  grid-column: 1 / -1;
   grid-template-columns: subgrid;
+  grid-column: 1 / -1;
   row-gap: var(--space-2);
   align-items: center;
   min-height: var(--size-control-height);
