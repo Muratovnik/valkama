@@ -119,8 +119,16 @@ and no compatibility layer.
      accepted, asks the owner with a question of `purpose` `return`; while that
      question is open an agent's claim of the item, and its move anywhere but a
      cancelled state, is refused with `acceptance_question`, which `force` does
-     not carry. A close, a delete or a merge that brings work back answers
-     with `returned`;
+     not carry. A close or a delete that brings work back answers with
+     `brought_back`, the references of that work. It is a key of its own
+     because `returned` already names the record that says why one item came
+     back, and one key that is a record on a read and a list on a write made
+     every reader tell the two apart by shape. The list took the new name, not
+     the record: the record pairs with `deferred` and with the history action
+     `returned`, and the skill names it, while the list is one of a write's
+     lists beside `cancelled`, `released` and `freed`, and nothing in the
+     product reads it. A merge brings nothing back: it passes the
+     wait to the item it merged into;
    - the same refusal holds while the owner is asked whether to do an item in
      `triage` (a question of `purpose` `goal`, `task` or `triage`): an agent's
      claim of it, its move out of `triage` anywhere but a cancelled state, an
