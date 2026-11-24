@@ -858,6 +858,36 @@ nothing: it says it is unavailable and offers «Choose a space», which opens th
 choice, and it carries none of its state or open card over. Where the workspace is 586px
 wide or narrower, the two choices stack at its full width.
 
+The space window creates a space of the main store and edits one, as one dialog with one
+save. Its ways in are «New space» over the cards of «All spaces», and on a phone the same;
+a sign «Configure space» beside each card's «Open space», a sign and not a word so that the
+card's ways in stay on one line; and «Create a space» in the empty state where there is no
+space yet. A card of an attached store has no sign: such a store is opened read-only. Under
+the cards a quiet line names the registered projects that are in no space, and only while
+there are some and the registry could be read.
+The window holds the name, the key, the space's projects and its workflow, which it names
+and does not change. A new space's key is the server's for the name until the reader types
+one; a name the server derives none from, such as a Cyrillic one, leaves the field empty and
+says why under it. Once the space has issued a number its key stands as text with the reason
+it does not change, since it is in those numbers; a renamed space says under its name that
+what names the space by its name will no longer find it. Each project is a row: a radio that
+makes it the default, its name, its folder cut at its end and shown whole in its hint, and
+its remove. The default has no remove while the space has other projects, so the window
+repeats the server's rule rather than meeting its refusal, and the first project added
+becomes the default by itself. «Add project» searches the registered projects the space does
+not have, those in no space first, then those of other spaces with what moving one means;
+another space's default that space keeps others beside is listed with its reason and cannot
+be chosen. «New project from folder…» takes the folder's path, a name and an identifier the
+folder's name suggests. While the registry cannot be read the window says so in place of
+the projects, and an edit waits, since its save would leave the space with none. Only a space with no work items offers «Remove space», at the start
+of the foot, and it asks in the window before anything goes. A refused save keeps what was
+typed and says why, in the reader's language, at the end of the form. A save whose space
+stood while the registry refused its projects says so above the fields and turns its button
+into «Retry binding», which saves the same draft as that space's edit and never creates a
+second one. After a save the shell follows the space: into a new one, onto a changed key,
+and to «All spaces» from a removed one. Where the dialog is under 520px wide a project's
+folder goes under its name.
+
 The chrome says only what it has read. Until the module list names the module, the
 context bar's title stands empty on its line; until the spaces are read and the
 place a launch comes back to is restored, the space choice keeps its box and paints
