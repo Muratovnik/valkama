@@ -2722,12 +2722,25 @@ a failed write, the question before a takeover or before a draft is lost — sta
 band between the bar and the scroller, at full width, however far down the write was made.
 Its height follows what it says and never the scroller. The body names only blockers
 that are still open. Overview opens with what stops the work: work put off says «Отложено до 20
-ноября» or «Отложено до закрытия MAIN-12» and why it waits, then each open blocker, «Ждёт MAIN-12».
+ноября», «Отложено до 3 новых комментариев», «Отложено до 20 ноября или до 3 новых комментариев —
+что наступит раньше» or «Отложено до закрытия MAIN-12» and why it waits, then each open blocker,
+«Ждёт MAIN-12».
 **Closing work from its card.** Each write that closes work or puts it off asks before it goes,
-and a refusal keeps what was chosen with the server's reason under it. «Отложить» asks «До даты»
-or «До закрытия карточки», one choice of the two, the card found by its number or title among the
-space's open cards, and why it waits, which the server takes nothing without; «Отложить» is
-unavailable, the reason under the fields, until both are said and for a day already gone. A
+and a refusal keeps what was chosen with the server's reason under it. «Отложить» asks when the
+work comes back and why it waits, which the server takes nothing without. It comes back on a
+day, «До даты»; after a count of new comments, «Новых комментариев», from 1 to 999, every
+comment and reply written on the card after it is put off counting; on both together, whichever
+comes first; or on the close of a card, «До закрытия карточки», found by its number or title among
+the space's open cards. A card stands alone: choosing one clears the day and the count, and a day
+or a count clears the card. With a day and a count both chosen, a line says «Вернётся в этот день
+или после этих комментариев — что наступит раньше.» It stands 8px under the day and the count it
+qualifies, before the card wherever the card is not beside them, as in this window, where each
+field stands across it; where the card is beside them, it ends the fields, so the card does not
+move as it appears. Under the card it read as a word about the card. «Отложить» is unavailable,
+the reason under the fields, until both are said, for a day already gone and for a count that is
+no whole number from 1 to 999. The reason holds the room of every reason it can come to say, so
+the value that makes the press available moves nothing: given room only while it stood, it took
+that room with it, and the window, centred on the screen, moved the fields under the hand. A
 task's cancel asks its reason in the band under the bar, the caret in the field, then «Отменить
 MAIN-12? Карточка закроется как «Отменено».» with «Отменить задачу»; the reason is the move's and
 the summary's why, since a close needs a summary. A goal's or a stage's cancel at work opens
@@ -2924,12 +2937,19 @@ says, through the same write as Send. Nobody declines such a question. An answer
 taken back asks first, as Don't answer does: its own box says Back, the box beside it says the
 answer in the danger's ink, the asking stands where Don't answer's does, and every box holds room
 for each word it can come to say; «Cancel» and «Don't do» are such answers. «Later…» opens in
-place «Until a day» and «Until a card closes», a search over the open cards of the question's own
-space, and «Put off», unavailable with the reason under it until a day from today on or a card is
-chosen; the one chosen last is what the question waits for, and it is part of the draft. Where the
-listing names the question's space and project, the head's first line says them around the task's
-number, the space before it and the project after. A question its task's closing withdrew folds on
-«Question withdrawn: MAIN-12 was closed».
+place the choice «Отложить» asks of when work comes back (**Closing work from its card**), with
+the card searched among the open cards of the question's own space: «Until a day», «New comments»,
+both, whichever comes first, or «Until a card closes». Its fields stand on a line, the card beside
+the day and the count where the line holds all three and under them where it does not, and the
+«whichever comes first» line stands as that passage says. «Put off» stands under the fields,
+unavailable with the reason under it until a day from today on, a count from 1 to 999 or a card
+is chosen. It stands there whether a reason does or not, and the reason holds the room of every
+reason it can come to say, so a value becoming one the server takes moves nothing but what the
+«whichever comes first» line takes. Beside the fields once its reason went, the press took their
+width, and the card beside the day and the count went under them. What is chosen is part of the
+draft. Where the listing names the question's space and project, the head's first line says them
+around the task's number, the space before it and the project after. A question its task's
+closing withdrew folds on «Question withdrawn: MAIN-12 was closed».
 The kind follows the question's purpose: a review shows the task's outcome under what to check
 and answers Accept or Return to work; a group of findings shows the goal it proposes with its
 conditions, its findings and why, and a goal its description, conditions and how much open work
@@ -2963,7 +2983,8 @@ is ticked, and once any is unticked Do names how many go: «Do: 7». The server 
 and the reason stands under the answers, as it stands under an unavailable «Put off»; a choice of a
 day already open keeps its «Put off» unavailable for the same reason. «Don't do» stays, and drops
 the whole group.
-«Later…» puts the goal off with the findings ticked, to a day or until a card closes. «Don't do»
+«Later…» puts the goal off with the findings ticked, to a day, to new comments, to whichever of
+the two comes first, or until a card closes. «Don't do»
 asks first, as every answer that cancels does. Where open work stands under the goal that the
 question did not ask about, the server refuses it with the list of that work; the list stands
 over the answers, what closes with who holds it and what waits on it, the reference it waits on
