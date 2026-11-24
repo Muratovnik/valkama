@@ -168,8 +168,8 @@ labels, source, the ids of its projects (see
 [The projects an item changes](#the-projects-an-item-changes)), summary,
 comments, decisions or questions hold every word, in any order and across
 fields, each word matched by its first five letters as a prefix. A project id
-is split into words as any text is, so `relay` and `service` each find an item
-that names `event-relay-service`; a project's display name is not searched, and
+is split into words as any text is, so `host` and `runtime` each find an item
+that names `example-host-runtime`; a project's display name is not searched, and
 a goal or stage, which names no projects, is not found by those of its tasks.
 Words such as `the` or `and` are left out of a query that has others.
 The best match comes first, the title weighing three times the rest, and a tie
