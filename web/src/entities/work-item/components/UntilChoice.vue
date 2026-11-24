@@ -21,17 +21,24 @@ function joined(day: string, count: string): string {
   return day ? `${day} or ${counted}` : counted
 }
 
+/** Every reason `untilProblem` gives, as message keys, so that a room can be held for each. */
+export const UNTIL_PROBLEMS = {
+  none: 'requests.kinds.untilEither',
+  count: 'requests.record.untilCount',
+  past: 'requests.record.untilPast',
+} as const
+
 /**
  * Why work cannot be put off until `value` yet, as a message key; null once it can. Nothing is
  * chosen, the count is no whole number from 1 to 999, or the day chosen is gone: `today` is the
  * first day it can be put off to.
  */
 export function untilProblem(value: string, today: string): string | null {
-  if (!value) return 'requests.kinds.untilEither'
+  if (!value) return UNTIL_PROBLEMS.none
   const { day, count } = parts(value)
   if (count && !(/^\d+$/u.test(count) && Number(count) >= 1 && Number(count) <= COMMENTS_MOST))
-    return 'requests.record.untilCount'
-  return day && day < today ? 'requests.record.untilPast' : null
+    return UNTIL_PROBLEMS.count
+  return day && day < today ? UNTIL_PROBLEMS.past : null
 }
 </script>
 
@@ -150,7 +157,6 @@ function chooseCard(reference: string) {
    not fit. Its width is what the line's order of the fields is decided by. */
 .until.is-line {
   display: flex;
-  flex: 1 1 22rem;
   flex-wrap: wrap;
   align-items: flex-end;
   container: until-line / inline-size;

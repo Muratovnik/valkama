@@ -178,7 +178,7 @@ describe('a group of findings', () => {
     expect(button(wrapper, 'Put off').attributes()).not.toHaveProperty('disabled')
     await untickAll(wrapper)
     expect(button(wrapper, 'Put off').attributes()).toHaveProperty('disabled')
-    expect(wrapper.get('.request-later-reason').text()).toBe(UNTICKED)
+    expect(wrapper.get('.until-reason').text()).toBe(UNTICKED)
     expect(answerInputRequest).not.toHaveBeenCalled()
   })
 

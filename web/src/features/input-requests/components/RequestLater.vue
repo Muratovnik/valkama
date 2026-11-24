@@ -10,11 +10,18 @@
  * gone or a count that is no whole number from 1 to 999; the reason stands under it, where the
  * press would have been read. What is chosen is part of what the form holds, so it stays while the
  * question is open, and is said as unsent if the question closes some other way.
+ *
+ * The press stands under the fields whether a reason stands or not, and the reason holds the room
+ * of each it can come to say (`UntilReason`), so a value becoming valid moves nothing. With the
+ * press beside the fields once the reason went, the fields gave it their width and the card's
+ * field, beside the day and the count until then, went under them; and what stood under the press
+ * rose.
  */
 import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import UntilChoice, { untilProblem } from '@/entities/work-item/components/UntilChoice.vue'
+import UntilReason from '@/entities/work-item/components/UntilReason.vue'
 
 import { localDay } from '@/shared/api/analyticsAddress.ts'
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
@@ -50,6 +57,8 @@ const reason = computed(() => {
   const problem = untilProblem(props.value, today)
   return problem ? t(problem) : ''
 })
+/** The answer's own reason, whose room the one shown holds too while it is given. */
+const blockedRoom = computed(() => (props.blocked ? [props.blocked] : []))
 const busyMark = computed(() => props.busy || undefined)
 const pressDisabled = computed(() => props.disabled || reason.value !== '')
 const reasonRef = computed(() => (reason.value ? reasonId : undefined))
@@ -85,25 +94,21 @@ defineExpose({
         @click="emit('put-off')"
         >{{ t('requests.record.putOff') }}</VButton
       >
-      <p
-        v-if="reason"
+      <UntilReason
         :id="reasonId"
-        class="request-later-reason"
-      >
-        {{ reason }}
-      </p>
+        :reason="reason"
+        :also="blockedRoom"
+      />
     </div>
   </div>
 </template>
 
 <style scoped>
-/* The day, the card and the press on one line where they fit; the card takes what the day
-   leaves, and the press goes under them where they do not fit. */
+/* The day, the count and the card on their line, and the press under them. */
 .request-later {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-3);
-  align-items: flex-end;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -112,11 +117,5 @@ defineExpose({
   gap: var(--space-1);
   justify-items: start;
   min-width: 0;
-}
-
-.request-later-reason {
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-detail);
 }
 </style>

@@ -2,13 +2,13 @@
  * Closing work and putting it off from its card, in the built application.
  *
  * A move that closes work or puts it off is not sent as it is chosen from the state's menu:
- * putting off asks until when and why in a window, a task's cancel asks its reason in place,
- * and a goal's cancel lists what closes with it first. That list is the server's: when the work
- * under the goal changed between reading it and pressing, the server refuses again with the new
- * list, and the window shows it, marked, and asks again. A goal awaiting confirmation is
- * confirmed against its conditions or its description; one whose work opened again while it was
- * confirmed says it is at work again and has nothing to confirm. A step a former holder marked is
- * confirmed beside its mark.
+ * putting off asks until when and why in a window, where saying the last of them moves nothing,
+ * a task's cancel asks its reason in place, and a goal's cancel lists what closes with it first.
+ * That list is the server's: when the work under the goal changed between reading it and
+ * pressing, the server refuses again with the new list, and the window shows it, marked, and asks
+ * again. A goal awaiting confirmation is confirmed against its conditions or its description; one
+ * whose work opened again while it was confirmed says it is at work again and has nothing to
+ * confirm. A step a former holder marked is confirmed beside its mark.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -33,7 +33,13 @@ import {
 } from './served/closing.ts'
 import { stepBoxOffsets } from './stepBoxes.ts'
 import { test } from './test.ts'
-import { eitherUnderTheCount, UNTIL_WORDS, untilFields } from './untilChoice.ts'
+import {
+  eitherUnderTheCount,
+  placesIn,
+  stayedPut,
+  UNTIL_WORDS,
+  untilFields,
+} from './untilChoice.ts'
 
 const CARD = serializePlatformRoute({
   module_id: 'planning',
@@ -138,8 +144,17 @@ for (const width of [1280, 620, 390]) {
     await expect(press).toBeDisabled()
     await dialog.getByLabel('Until a day').fill('2099-01-02')
     await expect(press).toBeDisabled()
-    await dialog.getByLabel('Why it waits').fill('After the release')
+    const why = dialog.getByLabel('Why it waits')
+    // Saying the last thing takes the reason away and moves nothing: the window is centred, and
+    // its shrinking moved the fields under the hand.
+    await page.waitForFunction(() =>
+      document.getAnimations().every(({ playState }) => playState !== 'running'),
+    )
+    const places = () => placesIn(page.locator('body'), dialog, UNTIL_WORDS.en, [why, press])
+    const asked = await places()
+    await why.fill('After the release')
     await expect(press).toBeEnabled()
+    stayedPut(await places(), asked)
     await fitsWindow(page, dialog)
     await page.screenshot(shot(info.outputPath(`dialogs-${width}-defer-date.png`)))
     await press.click()
