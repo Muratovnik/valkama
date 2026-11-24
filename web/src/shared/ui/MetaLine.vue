@@ -25,15 +25,15 @@
  * The name and the start are one: a no-break space holds the start to the name's last word, and
  * the pair keeps the time's line only where it fits there whole, its whole width the basis the
  * line breaks on; otherwise the time takes a line of its own. On the name's 14ch the pair broke
- * between them beside the time, «kolo» over «019a2b3c-4d5e», the start alone under the name. A
+ * between them beside the time, «worker-b» over «019a2b3c-4d5e», the start alone under the name. A
  * name too long for a line wraps by its own words, and the start ends its last line; where even
  * the name's last word and the start are wider than the head's column, beside three icons at
  * 320–370px or two beside a long name at 320px, the start stands on a line of its own under the
  * name, from its left edge, and the time under it.
  *
- * A head that says who in a phrase, «Answered by agent kolo», passes `phrase`: the phrase is one
+ * A head that says who in a phrase, «Answered by agent worker-b», passes `phrase`: the phrase is one
  * unit as the name and its start are, so the time keeps its line only beside the whole phrase.
- * On the name's 14ch the line broke inside it beside the time, «Answered by agent» over «kolo».
+ * On the name's 14ch the line broke inside it beside the time, «Answered by agent» over «worker-b».
  *
  * `after` is a short state of the entry, «пока без ответа», said after the time, a dot between.
  * It comes after the time, so the time stands where it stands without it. It stays beside the

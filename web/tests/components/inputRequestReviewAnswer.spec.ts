@@ -121,16 +121,18 @@ describe('the answered review', () => {
     expect(point('P9 ').text()).toContain('Your own option')
     expect(point('P9 ').text()).toContain('Labels only, no filtering')
     expect(point('P17 ').text()).toContain('undecided')
-    expect(point('P1 ').get('code').text()).toBe('shell-guard')
+    expect(point('P1 ').get('code').text()).toBe('wind-tap')
     // The steps of an accepted point, every option with what was chosen.
     const p10 = present(
-      wrapper.findAll('.request-answer').find((field) => field.text().includes('Lock the browser')),
+      wrapper
+        .findAll('.request-answer')
+        .find((field) => field.text().includes('Lock the rain gauge')),
       'p10 steps',
     )
     expect(p10.findAll('.request-option')).toHaveLength(13)
     expect(p10.text().match(/selected/gu)).toHaveLength(5)
     // A point put off or rejected opened nothing, so nothing of its steps stands.
-    expect(wrapper.text()).not.toContain('The «main first parent» rule')
+    expect(wrapper.text()).not.toContain('The «first reading» rule')
     expect(buttonNamed(wrapper, 'Hide the rows').attributes('aria-expanded')).toBe('true')
   })
 
@@ -194,12 +196,12 @@ describe('its earlier answers', () => {
   it('read as what each change changed, row by row, in the person’s words', async () => {
     const before = {
       ...answers,
-      'p10-steps': ['lock', 'dirty'],
+      'p10-steps': ['lock', 'damp'],
       'p12': 'later',
     }
     const wrapper = card(
       answered({
-        answers: { ...answers, 'p10-steps': ['dirty', 'managed'], 'p12': 'accept' },
+        answers: { ...answers, 'p10-steps': ['damp', 'sealed'], 'p12': 'accept' },
         answer_version: 2,
         revision: 3,
         history: [
@@ -219,7 +221,7 @@ describe('its earlier answers', () => {
     await press(wrapper, 'Previous answers (1)')
     expect(wrapper.findAll('.request-history-line').map((line) => line.text())).toEqual([
       'P12 put off → accepted',
-      'P10 · Steps +serve --managed and the bundle from the working tree −Lock the browser suite with its owner; free ports or a variable',
+      'P10 · Steps +serve --sealed and the image from the working copy −Lock the rain gauge with its keeper; free the pins or a variable',
       'P15 comment: Frozen until spring',
     ])
   })
