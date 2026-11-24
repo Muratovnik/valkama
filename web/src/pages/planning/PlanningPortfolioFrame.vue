@@ -8,7 +8,8 @@
  * missing and lays out the ones that exist, each a click away.
  *
  * With no space at all its empty state offers to create the first one, where the main store
- * can be written (`data-part="create-first"`).
+ * can be written (`data-part="create-first"`), and names the projects in no space under it,
+ * which are every registered one.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -16,6 +17,7 @@ import { useI18n } from 'vue-i18n'
 import PlanningPortfolio from '@/pages/planning/PlanningPortfolio.vue'
 
 import { useSpaceWindow } from '@/features/space-window/spaceWindowHost.ts'
+import UnplacedProjects from '@/features/space-window/UnplacedProjects.vue'
 
 import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import type { PlatformPlanningReady } from '@/shared/api/platformPlanningTypes.ts'
@@ -68,15 +70,17 @@ const missingState = computed(() =>
         @retry="emit('retry')"
       >
         <template
-          v-if="createFirst"
+          v-if="portfolio.status === 'empty'"
           #action
         >
           <VButton
+            v-if="createFirst"
             variant="primary"
             data-part="create-first"
             @click="newSpace"
             >{{ t('spaceWindow.createFirst') }}</VButton
           >
+          <UnplacedProjects :hint="false" />
         </template>
         <template #default="{ payload }">
           <PlanningPortfolio

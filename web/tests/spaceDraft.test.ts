@@ -11,10 +11,14 @@ import assert from 'node:assert/strict'
 import { describe, test } from 'vitest'
 
 import {
+  byName,
   draftChanged,
   draftGap,
   draftOf,
   emptyDraft,
+  folderNameOf,
+  namesFirst,
+  pathParts,
   projectChoices,
   projectIdOf,
   removable,
@@ -171,8 +175,72 @@ describe('the list «Add project»', () => {
   })
 })
 
-describe('a folder’s project id', () => {
-  test('is the folder’s name in a project id’s form, or nothing that form takes', () => {
+const named = (id: string, name: string, root: string, space: typeof ATL | null) => ({
+  ...project(id, space),
+  display_name: name,
+  root,
+})
+
+describe('a search in «Add project»', () => {
+  const registered = [
+    named('tools', 'Tools', 'D:/work/beacon/tools', null),
+    named('beacon', 'Beacon', 'D:/work/beacon', NW),
+    named('docs', 'Docs', 'D:/work/beacon/docs', null),
+    named('beacon-app', 'Beacon app', 'D:/apps/app', null),
+  ]
+
+  test('lists the projects a name matches first, those in no space first among them', () => {
+    const choices = projectChoices(emptyDraft(), registered, null)
+    assert.deepEqual(
+      namesFirst(choices, ' BEACON ').map((one) => one.project.project_id),
+      ['beacon-app', 'beacon', 'docs', 'tools'],
+    )
+  })
+
+  test('with nothing typed keeps the projects in no space first, each by name', () => {
+    const choices = projectChoices(emptyDraft(), registered, null)
+    assert.deepEqual(
+      namesFirst(choices, '').map((one) => one.project.project_id),
+      ['beacon-app', 'docs', 'tools', 'beacon'],
+    )
+  })
+})
+
+describe('the window’s rows', () => {
+  test('stand in the order of their names, whatever order the projects joined in', () => {
+    let draft = emptyDraft()
+    for (const name of ['Zeta', 'alpha', 'Mid']) draft = withProject(draft, row(name))
+    assert.deepEqual(
+      byName(draft.projects).map((one) => one.display_name),
+      ['alpha', 'Mid', 'Zeta'],
+    )
+    assert.deepEqual(
+      draft.projects.map((one) => one.display_name),
+      ['Zeta', 'alpha', 'Mid'],
+    )
+  })
+})
+
+describe('a folder’s path', () => {
+  test('is cut before its last folder, the two parts making the path as written', () => {
+    assert.deepEqual(pathParts('D:\\code\\atlas\\web'), { head: 'D:\\code\\atlas', tail: '\\web' })
+    assert.deepEqual(pathParts('/srv/code/atlas/'), { head: '/srv/code', tail: '/atlas/' })
+    assert.deepEqual(pathParts('C:/Проекты/Атлас'), { head: 'C:/Проекты', tail: '/Атлас' })
+  })
+
+  test('with no folder before its last is its last folder alone', () => {
+    assert.deepEqual(pathParts('atlas'), { head: '', tail: 'atlas' })
+    assert.deepEqual(pathParts('/atlas'), { head: '', tail: '/atlas' })
+  })
+})
+
+describe('a folder’s project', () => {
+  test('is offered the folder’s own name, in any script', () => {
+    assert.equal(folderNameOf('D:\\code\\Новый проект\\'), 'Новый проект')
+    assert.equal(folderNameOf(' /srv/code/atlas_web '), 'atlas_web')
+  })
+
+  test('is offered the folder’s name in a project id’s form, or nothing that form takes', () => {
     assert.equal(projectIdOf('D:\\code\\Atlas Docs\\'), 'atlas-docs')
     assert.equal(projectIdOf('/srv/code/atlas_web'), 'atlas-web')
     assert.equal(projectIdOf('D:/code/2024-notes'), 'notes')

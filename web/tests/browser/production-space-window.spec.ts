@@ -16,130 +16,18 @@
  * the real save does.
  */
 import { expect } from '@playwright/test'
-import type { Page, TestInfo } from '@playwright/test'
+import type { Page } from '@playwright/test'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
-import { record } from './analyticsPage.ts'
-import { globalScope } from './planningFixtures.ts'
 import {
   installSpaceWindowBackend,
   spaceRefOf as ref,
   spaceWindowWorld as world,
 } from './spaceWindowBackend.ts'
+import { describedText, measureDialog } from './spaceWindowMeasures.ts'
+import { openPortfolio, SIZES, WORDS } from './spaceWindowPage.ts'
 import { test } from './test.ts'
-
-const SIZES = [
-  { lang: 'en', width: 1280, height: 800 },
-  { lang: 'en', width: 620, height: 800 },
-  { lang: 'en', width: 390, height: 844 },
-  { lang: 'ru', width: 1280, height: 800 },
-  { lang: 'ru', width: 620, height: 800 },
-  { lang: 'ru', width: 390, height: 844 },
-] as const
-
-const WORDS = {
-  en: {
-    newSpace: 'New space',
-    menu: 'Space actions',
-    createEntry: 'New space…',
-    configureEntry: 'Configure space…',
-    configure: (key: string) => `Configure space ${key}`,
-    editTitle: (key: string) => `Space ${key}`,
-    name: 'Name',
-    key: 'Key',
-    add: 'Add project',
-    create: 'Create',
-    save: 'Save',
-    remove: 'Remove space',
-    removeGo: 'Remove',
-    retry: 'Retry binding',
-    underivable: 'no key comes from this name',
-    renamed: 'will no longer find it',
-    locked: 'does not change: it is in the numbers of its work items',
-    held: 'unavailable: the default project of NW',
-    keyTaken: 'Nothing was changed: another space already has this key.',
-    busy: 'Space ATL was created; its projects were not bound: another command is writing the project registry right now; try again.',
-  },
-  ru: {
-    newSpace: 'Новое пространство',
-    menu: 'Действия с пространством',
-    createEntry: 'Новое пространство…',
-    configureEntry: 'Настроить пространство…',
-    configure: (key: string) => `Настроить пространство ${key}`,
-    editTitle: (key: string) => `Пространство ${key}`,
-    name: 'Название',
-    key: 'Ключ',
-    add: 'Добавить проект',
-    create: 'Создать',
-    save: 'Сохранить',
-    remove: 'Удалить пространство',
-    removeGo: 'Удалить',
-    retry: 'Повторить привязку',
-    underivable: 'из этого имени ключ не выводится',
-    renamed: 'перестанут его находить',
-    locked: 'не меняется: он в номерах задач',
-    held: 'недоступно: основной проект NW',
-    keyTaken: 'Ничего не изменено: этот ключ уже у другого пространства.',
-    busy: 'Пространство ATL создано, проекты не привязаны: реестр проектов сейчас пишет другая команда; повторите.',
-  },
-} as const
-
-/** How far apart the farthest of these edges are. */
-const spread = (edges: number[]) => (edges.length ? Math.max(...edges) - Math.min(...edges) : 0)
-
-/** The open dialog stays inside the window, and nothing in it runs past its own width. */
-async function measureDialog(page: Page, info: TestInfo, tag: string, width: number) {
-  const box = await page.getByRole('dialog').evaluate((dialog) => {
-    const rect = dialog.getBoundingClientRect()
-    const body = dialog.querySelector('.dialog-frame-body')
-    const names = [...dialog.querySelectorAll('[data-part="name"]')].map((name) => ({
-      text: name.textContent.trim(),
-      cut: name.scrollWidth - name.clientWidth,
-    }))
-    return {
-      left: rect.left,
-      right: rect.right,
-      sideways: body ? body.scrollWidth - body.clientWidth : Number.NaN,
-      names,
-      rows: [...dialog.querySelectorAll('[data-project]')].map((row) => {
-        const edge = (part: string) =>
-          row.querySelector(`[data-part="${part}"]`)?.getBoundingClientRect()
-        const name = row.querySelector('[data-part="name"]')
-        const line = document.createRange()
-        if (name?.firstChild) line.setStart(name.firstChild, 0)
-        if (name?.firstChild) line.setEnd(name.firstChild, 1)
-        const first = line.getBoundingClientRect()
-        const radio = edge('default')
-        return {
-          name: edge('name')?.left ?? Number.NaN,
-          root: edge('root')?.left ?? Number.NaN,
-          radioOffLine: radio
-            ? Math.abs(radio.top + radio.height / 2 - (first.top + first.height / 2))
-            : 0,
-          removeOver: (edge('remove')?.height ?? 0) - row.getBoundingClientRect().height,
-        }
-      }),
-    }
-  })
-  expect(box.left, JSON.stringify(box)).toBeGreaterThanOrEqual(0)
-  expect(box.right, JSON.stringify(box)).toBeLessThanOrEqual(width)
-  expect(box.sideways, JSON.stringify(box)).toBeLessThanOrEqual(0)
-  expect(box.names.filter((name) => name.cut > 0.5)).toEqual([])
-  // The rows' names and folders each start at one edge, the radio sits on the name's first
-  // line and the remove is no taller than its row.
-  expect(spread(box.rows.map((row) => row.name)), JSON.stringify(box.rows)).toBeLessThanOrEqual(1)
-  expect(spread(box.rows.map((row) => row.root)), JSON.stringify(box.rows)).toBeLessThanOrEqual(1)
-  for (const row of box.rows) {
-    expect(row.radioOffLine, JSON.stringify(row)).toBeLessThanOrEqual(1)
-    expect(row.removeOver, JSON.stringify(row)).toBeLessThanOrEqual(0)
-  }
-  await page.screenshot({
-    path: info.outputPath(`space-window-${tag}.png`),
-    animations: 'disabled',
-  })
-  await record(info, `space window ${tag}`, box)
-}
 
 /** The space's choice and the menu after it share one line, and the menu stays in the bar. */
 async function menuBesideChoice(page: Page) {
@@ -157,12 +45,6 @@ async function menuBesideChoice(page: Page) {
   ).toBeLessThanOrEqual(0.5)
   expect(menu.x - (choice.x + choice.width), said).toBeGreaterThan(0)
   expect(menu.x + menu.width, said).toBeLessThanOrEqual(bar.x + bar.width)
-}
-
-async function openPortfolio(page: Page, size: (typeof SIZES)[number]) {
-  await page.setViewportSize({ width: size.width, height: size.height })
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: globalScope }))
-  await expect(page.locator('[data-part="configure"]').first()).toBeVisible()
 }
 
 for (const size of SIZES) {
@@ -184,6 +66,10 @@ for (const size of SIZES) {
       await expect(dialog.getByLabel(words.name, { exact: true })).toBeFocused()
       await dialog.getByLabel(words.name, { exact: true }).fill('Атлас')
       await expect(dialog).toContainText(words.underivable)
+      // The key's form is said once, by the reason: a hint that says it again is a second
+      // sentence about one rule.
+      const keyWords = await describedText(dialog.getByLabel(words.key, { exact: true }))
+      expect(keyWords.match(words.keyRule), keyWords).toHaveLength(1)
       await expect(dialog.getByRole('button', { name: words.create })).toBeDisabled()
       await dialog.getByLabel(words.key, { exact: true }).fill('ats')
       await expect(dialog.getByLabel(words.key, { exact: true })).toHaveValue('ATS')
@@ -298,8 +184,10 @@ for (const size of SIZES) {
       await expect(dialog.getByRole('button', { name: words.remove })).toHaveCount(0)
       await expect(dialog.getByRole('button', { name: words.save })).toBeDisabled()
 
-      await dialog.getByLabel(words.name, { exact: true }).fill('Atlas works')
-      await expect(dialog).toContainText(words.renamed)
+      const name = dialog.getByLabel(words.name, { exact: true })
+      expect(await describedText(name)).not.toContain(words.renamed)
+      await name.fill('Atlas works')
+      await expect(name).toHaveAccessibleDescription(new RegExp(words.renamed, 'u'))
       const search = dialog.getByRole('combobox', { name: words.add })
       await search.click()
       // Another space's default, which that space keeps others beside, is offered with its

@@ -5,16 +5,20 @@
  *
  * The key is the server's for the name until the reader types one, and can be typed until the
  * space has issued a number: from then on it is in those numbers, and the window shows it as
- * text with that reason. A renamed space says under its name what a new name changes.
+ * text with that reason; while the key's error says why it cannot be sent, which states the
+ * key's form, no hint says the form again. A renamed space says under its name what a new name
+ * changes, in a room the edit holds for it, so the fields under the name stay where they stood.
  *
  * A space with no work items can be removed, after a question asked in the window; one with
- * work has no Remove. A refused save keeps what was typed and says why. A save whose space
+ * work has no Remove, and where the foot cannot hold all three the way out and the save change
+ * lines together. A refused save keeps what was typed and says why through the dialog's own
+ * error, seen above the foot's buttons however long the form (`DialogFrame`). A save whose space
  * stood while the registry refused its projects says so above the fields, and its button
  * becomes «Retry binding», which saves the same draft as that space's edit.
  *
  * Its parts are `data-part` `notice`, `key-locked`, `workflow` and `remove`.
  */
-import { computed, ref, useTemplateRef, watch } from 'vue'
+import { computed, ref, useId, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { draftChanged, projectChoices } from '@/features/space-window/spaceDraft.ts'
@@ -72,7 +76,9 @@ const keyLocked = computed(() => origin.value?.keyLocked === true)
 const keyMoves = computed(
   () => origin.value !== null && !keyLocked.value && draft.value.key !== origin.value.key,
 )
+/** What the key's field says under it; nothing while its error says why, which states the form. */
 const keyHint = computed(() => {
+  if (keyError.value) return ''
   if (keyMoves.value) return t('spaceWindow.keyMoves')
   return draft.value.key
     ? t('spaceWindow.keyHint', { key: draft.value.key })
@@ -104,10 +110,17 @@ const registryLine = computed(() =>
 )
 const closeLabel = computed(() => (notice.value ? t('spaceWindow.close') : t('spaceWindow.cancel')))
 const busy = computed(() => saving.value || phase.value === 'reading')
-/** What a new name changes, said under the name once it differs from the space's. */
-const nameHint = computed(() =>
-  renamed.value && origin.value ? t('spaceWindow.renamed', { key: origin.value.key }) : '',
+/**
+ * What a new name changes, said under the name once it differs from the space's, in a room the
+ * edit holds for it from the start: given room only as it came, it pushed the whole form down
+ * under the caret at the first letter typed.
+ */
+const renameWords = computed(() =>
+  origin.value ? t('spaceWindow.renamed', { key: origin.value.key }) : '',
 )
+const renameHintId = useId()
+/** The name is described by what a new name changes while it stands, and by nothing before. */
+const nameDescribedBy = computed(() => (renamed.value ? renameHintId : undefined))
 /**
  * A new space's caret goes into its name as the field appears: the reader opened the window
  * to type one. An edit leaves focus where the dialog puts it.
@@ -133,6 +146,7 @@ const submitLabel = computed(() => {
     :close-label="closeLabel"
     :busy="busy"
     :error="error"
+    steady-scroll
     @close="close"
     @submit="save"
   >
@@ -159,14 +173,32 @@ const submitLabel = computed(() => {
       <VButton @click="retry">{{ t('spaceWindow.retry') }}</VButton>
     </div>
     <template v-else>
-      <VTextInput
-        ref="nameField"
-        v-model="draft.name"
-        autocomplete="off"
-        :label="t('spaceWindow.name')"
-        :maxlength="200"
-        :hint="nameHint"
-      />
+      <div class="space-name">
+        <VTextInput
+          ref="nameField"
+          v-model="draft.name"
+          autocomplete="off"
+          :label="t('spaceWindow.name')"
+          :maxlength="200"
+          :describedby="nameDescribedBy"
+        />
+        <div
+          v-if="origin"
+          class="held-room"
+        >
+          <small
+            v-if="renamed"
+            :id="renameHintId"
+            class="space-name-hint"
+            >{{ renameWords }}</small
+          >
+          <small
+            class="held-room-unseen space-name-hint"
+            aria-hidden="true"
+            >{{ renameWords }}</small
+          >
+        </div>
+      </div>
       <div
         v-if="keyLocked && origin"
         class="space-key-locked"
@@ -234,18 +266,43 @@ const submitLabel = computed(() => {
         @click="asking = true"
         >{{ t('spaceWindow.remove') }}</VButton
       >
-      <VButton @click="close">{{ closeLabel }}</VButton>
-      <VButton
-        variant="primary"
-        type="submit"
-        :disabled="!sendable || saving"
-        >{{ submitLabel }}</VButton
-      >
+      <span class="space-foot-pair">
+        <VButton @click="close">{{ closeLabel }}</VButton>
+        <VButton
+          variant="primary"
+          type="submit"
+          :disabled="!sendable || saving"
+          >{{ submitLabel }}</VButton
+        >
+      </span>
     </template>
   </DialogFrame>
 </template>
 
+<style scoped src="@/shared/ui/heldRoom.css"></style>
+
 <style scoped>
+/* The name's field and what a new name changes, as a field and its hint stand. */
+.space-name {
+  display: grid;
+  gap: var(--space-label-value);
+  min-width: 0;
+}
+
+.space-name-hint {
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+}
+
+/* The way out and the save change lines together: where the foot cannot hold all three, Remove
+   stands alone on the first line and the two on the next, rather than the save alone. */
+.space-foot-pair {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  justify-content: flex-end;
+}
+
 .space-notice {
   padding: var(--space-3) var(--space-4);
   margin: 0;

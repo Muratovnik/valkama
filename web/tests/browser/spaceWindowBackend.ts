@@ -56,9 +56,92 @@ export function spaceWindowWorld() {
     registryRefuses: null as string | null,
     /** Whether the main store can be written, which a space is created and edited in. */
     writable: true,
+    /** The code the next save is refused with as a whole, once, before anything is written. */
+    saveRefuses: null as string | null,
   }
 }
 type World = ReturnType<typeof spaceWindowWorld>
+
+/**
+ * The names of the long space's projects, in the order a reader sorts them: three wrap onto
+ * more lines than one at every width the spec opens, and every one sits deep in folders that
+ * start alike, its last folder its own.
+ */
+export const LONG_SPACE_NAMES = [
+  'Archive of signed agreements and their scanned appendices',
+  'Billing',
+  'Customer onboarding portal with partner integrations and single sign-on',
+  'Design tokens',
+  'Field service scheduling',
+  'Internal tools',
+  'Mobile companion',
+  'Nightly reconciliation of ledgers across every regional branch office',
+  'Release notes',
+  'Search indexer',
+  'Telemetry',
+  'Warehouse',
+] as const
+
+/** Where every project of the long space sits, one folder of its own deeper. */
+const LONG_ROOT = 'D:/work/clients/northern-region/shared-services/archived-and-active-projects'
+
+/** The folder a long space's project sits in: short, and different from every other's. */
+export const longFolderOf = (name: string) => name.split(' ')[0]?.toLowerCase() ?? name
+
+/**
+ * `spaceWindowWorld` with one more space, LNG: an empty one whose key can still change, so its
+ * window offers Remove beside the way out and the save, holding twelve projects of long names
+ * and deep folders. Two more projects stand in no space, one whose folder's path names the
+ * other and runs on with no space or hyphen a line could break at.
+ */
+export function longSpaceWorld() {
+  const state = spaceWindowWorld()
+  state.spaces.push({ key: 'LNG', name: 'Long-running client programme', issued: false, items: 0 })
+  // Registered in the reverse of their names' order, as projects join a space in any order.
+  const members = LONG_SPACE_NAMES.map((name, index) => ({
+    project_id: `long-${String(index + 1)}`,
+    display_name: name,
+    root: `${LONG_ROOT}/${longFolderOf(name)}`,
+    space: 'LNG',
+    default: index === 0,
+  }))
+  state.projects.push(
+    ...members.reverse(),
+    {
+      ...project('harbor', null),
+      display_name: 'Harbor docs',
+      root: 'D:/work/clients/NorthernRegion/LighthouseArchivedDocumentationAndHandbooks/HarborDocs',
+    },
+    { ...project('lighthouse-app', null), display_name: 'Lighthouse app' },
+  )
+  return state
+}
+
+/** Projects in no space, each name of several words and none wider than the narrowest line. */
+export const UNPLACED_NAMES = [
+  'Customer onboarding portal',
+  'Archive of old prototypes',
+  'Command line companion',
+  'Nightly ledger reconciliation',
+] as const
+
+/**
+ * `spaceWindowWorld` with four more projects in no space; with `empty`, its spaces gone and
+ * every project in none, as on a store that has no space yet.
+ */
+export function unplacedWorld(empty = false) {
+  const state = spaceWindowWorld()
+  if (empty) {
+    state.spaces = []
+    for (const one of state.projects) Object.assign(one, { space: null, default: false })
+  }
+  const loose = UNPLACED_NAMES.map((name, index) => ({
+    ...project(`loose-${String(index + 1)}`, null),
+    display_name: name,
+  }))
+  state.projects.push(...loose)
+  return state
+}
 
 export const spaceRefOf = (key: string) => ({ data_scope_id: dataScopeId, space_key: key })
 const membersOf = (state: World, key: string) => state.projects.filter((one) => one.space === key)
@@ -97,7 +180,18 @@ function context(state: World) {
   }
 }
 
+/** The directory of every space; with none, empty, as the server answers a store with none. */
 function directory(state: World) {
+  if (!state.spaces.length)
+    return {
+      interface_version: 'valkama-planning',
+      scope: globalScope,
+      state: {
+        interface_version: 'valkama-ui-state',
+        status: 'empty',
+        reason: 'platform.planning.noSpaces',
+      },
+    }
   return {
     interface_version: 'valkama-planning',
     scope: globalScope,
@@ -174,6 +268,9 @@ function bind(state: World, key: string, body: Body) {
 
 /** The save as the server makes it: the store's part, then the registry's, which may refuse. */
 function save(state: World, body: Body): Answer {
+  const whole = state.saveRefuses
+  state.saveRefuses = null
+  if (whole) return refusal(whole)
   const edited = body.space as { space_key: string } | undefined
   const space = edited && state.spaces.find((one) => one.key === edited.space_key)
   if (edited && !space) return refusal('space_missing', 404)
