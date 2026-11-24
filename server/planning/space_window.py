@@ -55,8 +55,13 @@ class SpaceWindowError(Exception):
         self.detail = detail
 
 
+#: The refusals this module answers itself; Planning's own mapping answers the rest its
+#: write raises, the owner-only refusal among them (`http_surface`).
+REFUSALS = (SpaceWindowError, model.SpaceRefusedError, registry_owner.RegistryOwnerError)
+
+
 def error_response(error: BaseException) -> tuple[int, dict]:
-    """The status and body of a refused save; anything unforeseen is the boundary's to hide."""
+    """The status and body of one of the window's own refusals (`REFUSALS`)."""
 
     if isinstance(error, SpaceWindowError):
         return error.status, {
@@ -66,8 +71,6 @@ def error_response(error: BaseException) -> tuple[int, dict]:
         return 409, {"error": {"code": error.code, "message": str(error)}}
     if isinstance(error, registry_owner.RegistryOwnerError):
         return 409, _registry_error(error)
-    if isinstance(error, model.PlanningError):
-        return 400, {"error": {"code": "invalid_request", "message": str(error)}}
     raise error
 
 

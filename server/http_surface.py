@@ -684,6 +684,14 @@ def _kernel_answer(error: Exception, render: Callable[[Exception], tuple[int, di
     return _generic_failure(500) if response[0] == 500 else response
 
 
+def _space_window_error(error: Exception) -> _Answer:
+    """The space window's own refusals, and Planning's for whatever else its write raises."""
+
+    if isinstance(error, planning_space_window.REFUSALS):
+        return planning_space_window.error_response(error)
+    return planning_api.error_response(error)
+
+
 def _exact_error(error: Exception) -> _Answer:
     """Planning's exact-scope routes and the app shell: the `ui_state` envelope."""
 
@@ -802,7 +810,7 @@ _POST_BOUNDARIES: tuple[_Boundary, ...] = (
     _Boundary(
         exact=frozenset(planning_space_window.WRITE_PATHS),
         handler=_space_window_write,
-        errors=planning_space_window.error_response,
+        errors=_space_window_error,
         commit=_Commit.DOMAIN,
         notify=_Notify(),
     ),

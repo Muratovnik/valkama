@@ -77,7 +77,7 @@ class SpaceWindowTests(unittest.TestCase):
     def refused(self, code: str, **payload: object) -> dict:
         with self.assertRaises(Exception) as caught:
             self.save(**payload)
-        status, body = window.error_response(caught.exception)
+        status, body = http_surface._space_window_error(caught.exception)
         self.assertEqual(code, body["error"]["code"], body)
         self.assertGreaterEqual(status, 400)
         return body["error"]
@@ -371,7 +371,8 @@ class SpaceWindowTests(unittest.TestCase):
         self.create_main()
         with self.assertRaises(Exception) as caught:
             window.save(self.conn, {"name": "Agent's", "projects": []})
-        self.assertEqual("owner_only", api.error_response(caught.exception)[1]["error"]["code"])
+        status, body = http_surface._space_window_error(caught.exception)
+        self.assertEqual((403, "owner_only"), (status, body["error"]["code"]))
         other = {"data_scope_id": "33333333-3333-4333-8333-333333333333", "space_key": "MAIN"}
         self.refused("not_main_store", space=other, name="Атлас", projects=[])
         self.refused("space_missing", space=self.ref("NONE"), name="Атлас", projects=[])
@@ -380,6 +381,7 @@ class SpaceWindowTests(unittest.TestCase):
         boundary = http_surface._boundary(http_surface._POST_BOUNDARIES, window.WRITE_PATH)
         assert boundary is not None
         self.assertIs(http_surface._Commit.DOMAIN, boundary.commit)
+        self.assertIs(http_surface._space_window_error, boundary.errors)
         self.assertIsNone(api.handle_post(self.conn, window.WRITE_PATH, {}))
 
     # -- the reads ----------------------------------------------------------------
