@@ -111,7 +111,11 @@ class PreconditionTests(StoreCase):
 
     def test_a_registry_of_format_3_is_refused_naming_the_upgrade(self) -> None:
         registry(self, self.directory.name, raw=b'{"projects": [], "schema_version": 3}')
-        self.assert_refused("registry.schema_version must be 4: run valkama projects upgrade first")
+        report = self.assert_refused(
+            "Valkama project registry has the older schema 3; this build reads schema 4:"
+            " run valkama projects upgrade first"
+        )
+        self.assertNotIn("malformed", report["message"])
 
     def test_no_registry_is_refused_naming_the_upgrade(self) -> None:
         os.remove(os.path.join(os.environ["LOCALAPPDATA"], "Valkama", "projects.json"))
@@ -507,6 +511,7 @@ class MapItemsTests(StoreCase):
         with open(self.registry_file, "wb") as handle:
             handle.write(b'{"projects": [], "schema_version": 3}')
         code, _ = self.command("projects", "map-items", "--output", self.output)
+        self.assertIn("has the older schema 3", str(code))
         self.assertIn("run valkama projects upgrade first", str(code))
         self.assertFalse(os.path.exists(self.output))
 

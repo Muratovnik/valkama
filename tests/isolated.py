@@ -56,8 +56,13 @@ the file `map-items` writes stays inside the profile as well. Served unmigrated,
 copy was refused with "run `valkama migrate work-model` once".
 
 `profile` makes the same home with no server, for a rehearsal run by hand: the
-store copy, the project registry, the installed Host Runtime (`~/.agent-host-runtime`),
-a copy of the global Git configuration and each `--copy PATH` of the caller's home.
+store copy, the project registry, what a rehearsal reads of the installed Host
+Runtime (`~/.agent-host-runtime`: `HOST_RUNTIME_READ`), a copy of the global Git
+configuration and each `--copy PATH` of the caller's home. The rest of that
+directory is the machine's own sessions' state, and a lease another session holds
+locked there failed the copy. A copied record of the status line Host Runtime's
+installer replaced names the profile's settings file, not the caller's: with the
+caller's, the profile's installer finds no record of its own and refuses.
 It writes the child's environment twice, as `env.json` for a program and as
 `env.ps1` for a `pwsh` that dot-sources it, with a free `VALKAMA_PORT` and the
 client homes `CLAUDE_CONFIG_DIR` and `CODEX_HOME` removed. Two more rules hold
@@ -76,6 +81,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import dataclasses
+import hashlib
 import json
 import os
 import re
@@ -112,6 +118,15 @@ PROFILE_ENV = "env.json"
 PROFILE_SCRIPT = "env.ps1"
 #: The installed Host Runtime, which a rehearsal of the transition installs into.
 HOST_RUNTIME = ".agent-host-runtime"
+#: What a rehearsal reads of it: the release and its launcher, which it backs up,
+#: replaces and puts back, the state directory of its hook installers, and the former
+#: project inventory. The rest is the machine's own sessions' state, such as the
+#: heavy-process gate's leases, which another session holds locked while it runs.
+HOST_RUNTIME_READ = ("current", "bin", "monitor-state", "project-registry.toml")
+#: Host Runtime's record of the status line its Claude Code installer replaced, one
+#: per settings file: `valkama-claude-statusline-<digest>.json`, named by the first
+#: 16 hex digits of the SHA-256 of the settings path, case-folded, and naming it.
+STATUSLINE_RECORDS = "valkama-claude-statusline-*.json"
 #: Where an agent client reads its own state when set; a profile's child must not.
 CLIENT_HOMES = ("CLAUDE_CONFIG_DIR", "CODEX_HOME")
 
@@ -1291,14 +1306,53 @@ def _copy_git_config(target: Path) -> None:
         target.write_bytes(b"")
 
 
+def _statusline_record(state: Path, settings: Path) -> Path:
+    digest = hashlib.sha256(str(settings).casefold().encode("utf-8")).hexdigest()[:16]
+    return state / STATUSLINE_RECORDS.replace("*", digest)
+
+
+def readdress_statusline_records(caller: Path, home: Path) -> list[tuple[Path, Path, Path]]:
+    """Point each copied status line record of the caller's settings at the profile's.
+
+    The installer keeps the record under the name of the settings file it read, as
+    it resolves that file's directory, and refuses a record naming another file. A
+    copy that still names the caller's settings would leave the profile's installer
+    without the status line it must restore. A record of a file outside the caller's
+    home is left as it is. Answers each record as it was, the settings it names now
+    and the record as it is now.
+    """
+
+    state = home / HOST_RUNTIME / "monitor-state"
+    moved: list[tuple[Path, Path, Path]] = []
+    for source in sorted(state.glob(STATUSLINE_RECORDS)) if state.is_dir() else []:
+        document = json.loads(source.read_text(encoding="utf-8"))
+        try:
+            relative = Path(document["settings"]).relative_to(caller)
+        except (KeyError, TypeError, ValueError):
+            continue
+        target = home / relative
+        settings = target.parent.resolve() / target.name
+        document["settings"] = str(settings)
+        record = _statusline_record(state, settings)
+        source.unlink()
+        record.write_text(
+            json.dumps(document, ensure_ascii=False, indent=1) + "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        moved.append((source, settings, record))
+    return moved
+
+
 def _size(directory: Path) -> int:
     return sum(path.lstat().st_size for path in directory.rglob("*") if path.is_file())
 
 
 def build_profile(
     out: Path, source: Path, copies: Sequence[str], registry: Sequence[Path]
-) -> tuple[list[Path], int]:
-    """Fill the new directory `out`: the links under the copied paths left out, and the port.
+) -> tuple[list[Path], list[tuple[Path, Path, Path]], int]:
+    """Fill the new directory `out`: the links under the copied paths left out, the
+    status line records pointed at the profile's settings, and the port.
 
     The store copy is left as the caller's store is: the rehearsal runs the
     transition's commands on it by hand, each timed.
@@ -1312,7 +1366,8 @@ def build_profile(
             raise ValueError(f"{relative}: {path} does not exist")
     runtime = _named(caller, HOST_RUNTIME)
     if runtime.exists():
-        named = {HOST_RUNTIME: runtime, **named}
+        parts = {f"{HOST_RUNTIME}/{part}": runtime / part for part in HOST_RUNTIME_READ}
+        named = {relative: path for relative, path in parts.items() if path.exists()} | named
     else:
         _say(f"there is no {runtime} to copy")
     _make_home(home)
@@ -1321,9 +1376,10 @@ def build_profile(
     left_out: list[Path] = []
     for relative, path in named.items():
         left_out += copy_without_links(path, home / relative)
+    moved = readdress_statusline_records(caller, home)
     port = free_port()
     write_environment(out, *profile_environment(home, port))
-    return left_out, port
+    return left_out, moved, port
 
 
 def profile(out: Path, source: Path, copies: Sequence[str], registry: Sequence[Path]) -> int:
@@ -1336,13 +1392,15 @@ def profile(out: Path, source: Path, copies: Sequence[str], registry: Sequence[P
         _say(f"{out} already exists; a profile is made only in a new directory")
         return 1
     try:
-        left_out, port = build_profile(out, source, copies, registry)
+        left_out, moved, port = build_profile(out, source, copies, registry)
     except (OSError, sqlite3.Error, RuntimeError, ValueError) as error:
         removed = remove_tree(out)
         _say(f"profile failed: {error}" + ("" if removed else f"; {out} is still on disk"))
         return 1
     for link in left_out:
         _say(f"not copied, a link: {link}")
+    for record, settings, now in moved:
+        _say(f"status line record {record.name} names {settings} now, as {now.name}")
     _say(
         f"profile {out}: {_size(out) / 2**20:.1f} MiB in {time.monotonic() - started:.1f}s,"
         f" port {port}; load it with . {out / PROFILE_SCRIPT}"

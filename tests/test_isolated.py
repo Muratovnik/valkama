@@ -8,6 +8,7 @@ the owner of the machine uses, and the store it copies is one made here.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import http.client
 import io
 import json
@@ -97,6 +98,43 @@ keys = (
 report = {"paths": paths, "env": {key: os.environ.get(key) for key in keys}}
 Path(sys.argv[1]).write_text(json.dumps(report), encoding="utf-8")
 """
+
+
+#: What a rehearsal reads of the installed Host Runtime (`~/.agent-host-runtime`):
+#: the release and its launcher, which it backs up, replaces and puts back, the
+#: installers' state directory, and the former project inventory.
+RUNTIME_READ = {
+    "current/release.txt": "release",
+    "bin/launcher.cmd": "launcher",
+    "monitor-state/valkama-claude-hooks-1.snapshot": "snapshot",
+    "project-registry.toml": "# former inventory",
+}
+#: What the machine keeps there for its own sessions: a profile has no use for it.
+RUNTIME_LEFT = (
+    "heavy-gate/leases/held.lock",
+    "release-freeze/marker.json",
+    "rollback/20260101T000000Z/current/release.txt",
+)
+
+
+def status_line(command: str) -> dict:
+    return {"type": "command", "command": command}
+
+
+def statusline_name(settings: Path) -> str:
+    """The name Host Runtime's installer gives the status line record of one settings file."""
+
+    digest = hashlib.sha256(str(settings).casefold().encode("utf-8")).hexdigest()[:16]
+    return f"valkama-claude-statusline-{digest}.json"
+
+
+def statusline_record(state: Path, settings: Path, command: str) -> Path:
+    """A record of the status line Host Runtime's installer replaced in `settings`."""
+
+    path = state / statusline_name(settings)
+    record = {"record_schema": 1, "settings": str(settings), "original": status_line(command)}
+    path.write_text(json.dumps(record, indent=1), encoding="utf-8")
+    return path
 
 
 def files_under(directory: Path) -> list[Path]:
@@ -1598,9 +1636,13 @@ class ProfileTests(Workspace):
         self.outside.mkdir()
         (self.outside / "kept.txt").write_text("outside", encoding="utf-8")
         runtime = self.real / ".agent-host-runtime"
-        (runtime / "current").mkdir(parents=True)
-        (runtime / "current" / "release.txt").write_text("release", encoding="utf-8")
-        link_directory(runtime / "linked", self.outside)
+        for relative, text in RUNTIME_READ.items():
+            (runtime / relative).parent.mkdir(parents=True, exist_ok=True)
+            (runtime / relative).write_text(text, encoding="utf-8")
+        for relative in RUNTIME_LEFT:
+            (runtime / relative).parent.mkdir(parents=True, exist_ok=True)
+            (runtime / relative).write_text("the machine's own", encoding="utf-8")
+        link_directory(runtime / "current" / "linked", self.outside)
         (self.real / ".claude").mkdir()
         (self.real / ".claude" / "settings.json").write_text("{}", encoding="utf-8")
         (self.real / ".gitconfig").write_text("[user]\n\tname = Fixture\n", encoding="utf-8")
@@ -1644,22 +1686,79 @@ class ProfileTests(Workspace):
         expected = {
             "AppData/Local/Valkama/projects.json": '{"projects": []}',
             "AppData/Local/Valkama/project-registry.toml": "# inventory",
-            ".agent-host-runtime/current/release.txt": "release",
+            **{f".agent-host-runtime/{name}": text for name, text in RUNTIME_READ.items()},
             ".claude/settings.json": "{}",
             ".gitconfig": "[user]\n\tname = Fixture\n",
         }
         for relative, content in expected.items():
             self.assertEqual(content, (self.profile_home / relative).read_text("utf-8"), relative)
 
+    def test_of_the_installed_host_runtime_only_what_a_rehearsal_reads_is_copied(self) -> None:
+        self.made()
+
+        runtime = self.profile_home / ".agent-host-runtime"
+        for relative in RUNTIME_LEFT:
+            self.assertFalse(os.path.lexists(runtime / relative), relative)
+        self.assertEqual(
+            sorted({Path(relative).parts[0] for relative in RUNTIME_READ}),
+            sorted(p.name for p in runtime.iterdir()),
+        )
+
+    @unittest.skipUnless(sys.platform == "win32", "a byte-range lock refuses a reader on Windows")
+    def test_a_file_another_holder_has_locked_in_the_machine_s_gate_does_not_fail_it(
+        self,
+    ) -> None:
+        import msvcrt
+
+        lease = self.real / ".agent-host-runtime" / "heavy-gate" / "leases" / "held.lock"
+        with open(lease, "r+b") as holder:
+            msvcrt.locking(holder.fileno(), msvcrt.LK_NBLCK, 1)
+            try:
+                with self.assertRaises(OSError):
+                    lease.read_bytes()
+                said = self.made()
+            finally:
+                holder.seek(0)
+                msvcrt.locking(holder.fileno(), msvcrt.LK_UNLCK, 1)
+
+        self.assertIn("port", said)
+        self.assertFalse(os.path.lexists(self.profile_home / ".agent-host-runtime" / "heavy-gate"))
+
+    def test_the_status_line_record_of_the_caller_s_settings_names_the_profile_s_settings(
+        self,
+    ) -> None:
+        state = self.real / ".agent-host-runtime" / "monitor-state"
+        own = statusline_record(state, self.real / ".claude" / "settings.json", "echo own")
+        elsewhere = self.root / "elsewhere" / "settings.json"
+        other = statusline_record(state, elsewhere, "echo other")
+
+        said = self.made("--copy", ".claude")
+
+        copied = self.profile_home / ".agent-host-runtime" / "monitor-state"
+        settings = (self.profile_home / ".claude").resolve() / "settings.json"
+        record = copied / statusline_name(settings)
+        self.assertEqual(
+            {"record_schema": 1, "settings": str(settings), "original": status_line("echo own")},
+            json.loads(record.read_text("utf-8")),
+        )
+        self.assertFalse((copied / own.name).exists())
+        self.assertEqual(other.read_bytes(), (copied / other.name).read_bytes())
+        self.assertIn(f"status line record {own.name} names {settings}", said)
+        self.assertEqual(status_line("echo own"), json.loads(own.read_text("utf-8"))["original"])
+
     def test_a_link_under_a_copied_path_is_neither_entered_nor_copied_but_named(self) -> None:
         said = self.made()
 
-        self.assertFalse(os.path.lexists(self.profile_home / ".agent-host-runtime" / "linked"))
+        linked = Path(".agent-host-runtime", "current", "linked")
+        self.assertFalse(os.path.lexists(self.profile_home / linked))
         self.assertEqual([], [p for p in files_under(self.profile) if p.name == "kept.txt"])
-        self.assertIn(f"not copied, a link: {self.real / '.agent-host-runtime' / 'linked'}", said)
+        self.assertIn(f"not copied, a link: {self.real / linked}", said)
 
     def test_a_named_path_that_is_or_passes_a_link_is_refused_and_nothing_is_left(self) -> None:
-        for named in (".agent-host-runtime/linked", ".agent-host-runtime/linked/kept.txt"):
+        for named in (
+            ".agent-host-runtime/current/linked",
+            ".agent-host-runtime/current/linked/kept.txt",
+        ):
             with self.subTest(named):
                 code, said = self.make("--copy", named)
 
