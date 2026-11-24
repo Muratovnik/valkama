@@ -33,12 +33,13 @@
  * nothing: neither the bar's height nor its controls.
  *
  * On a phone the periods take the first row whole; under it the filter, a failure, the freshness
- * and the read again, by its icon; with a filter set, the chips' row right under them; and, once
- * chosen, the reader's own days. On the narrowest phone the freshness stands in the periods' row,
- * leaving a failure its room: in the cell their short last line leaves, past «Custom», or at the
- * row's end where they leave no such cell. It stays the freshness there, never a period: words in
- * the muted detail ink on the track's ground, with no ground, edge or press of their own, and
- * outside the choice for assistive technology.
+ * and the read again, by its icon; with a filter set, the chips' row right under them, where one
+ * chip yields its room to «Clear filters» and the two keep one line whatever name comes; and,
+ * once chosen, the reader's own days. On the narrowest phone the freshness stands in the
+ * periods' row, leaving a failure its room: in the cell their short last line leaves, past
+ * «Custom», or at the row's end where they leave no such cell. It stays the freshness there,
+ * never a period: words in the muted detail ink on the track's ground, with no ground, edge or
+ * press of their own, and outside the choice for assistive technology.
  */
 import { computed, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -115,6 +116,8 @@ const filter = useAnalyticsFilter({
 })
 /** Whether a filter is set, its chips then taking a row of their own. */
 const filtered = computed(() => filter.chips.value.length > 0)
+/** Whether one chip stands alone, which on a phone yields its room to «Clear filters». */
+const oneChip = computed(() => filter.chips.value.length === 1)
 
 function choosePeriod(period: PeriodPreset) {
   emit('amend', period === 'custom' ? { period, ...customDays(new Date()) } : { period })
@@ -253,6 +256,7 @@ const freshHint = computed(() =>
       <AnalyticsChipRow
         ref="filterChips"
         class="analytics-bar-chips"
+        :class="{ 'analytics-bar-chips-one': oneChip }"
         :filter="filter"
       />
     </template>
@@ -323,6 +327,18 @@ const freshHint = computed(() =>
   /* With a filter set its chips take the row right under the field's (`PeriodBar`'s `under`). */
   .analytics-bar-chips {
     grid-area: 3 / 1 / 4 / -1;
+  }
+
+  /* One chip yields its room to «Clear filters» rather than send it to a line of its own: the
+     two keep one line whatever name comes, a name with no room cut at its end with its hint
+     (`FacetFilterChips`), so the bar keeps its height when the name comes. The widest chip's
+     room, held until the first answer, sent «Снять фильтры» to a second line at 380 to 401px in
+     Russian, and a short name brought it back: the bar shrank by 32px on the first answer.
+     Several chips keep their words and wrap. */
+  .analytics-bar .analytics-bar-chips-one {
+    --filter-chip-shrink: 1;
+
+    flex-wrap: nowrap;
   }
 }
 

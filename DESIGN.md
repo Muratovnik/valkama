@@ -3383,6 +3383,16 @@ names a task, a project or a session, its chip says its dimension and «…» in
 widest chip, never the value's id, which said «Task: 00000000-0…»; any other value is named
 from its id alone, «Role: Main agent». Read again for another period, a chip keeps the name
 it had, where it said the id until the answer and put «Clear filters» on a line of its own.
+On a phone a chip that stands alone yields its room to «Clear filters» rather than wrap: the
+two keep one line whatever name comes, a name the line has no room for is cut at its end with
+its hint saying it whole, as every one-line label is (Shared component grammar), and a name
+that fits has no hint; the widest chip's room, held until the first answer, is held only as far
+as the line leaves it. Wrapped beside that room, «Clear filters» stood on a line of its own
+until a short name came and brought it back, and the bar shrank by 32px on the page's first
+answer at 380 to 401px in Russian and 340 to 370px in English; a narrower room only moved that
+jump to 320 to 370px. That one height costs the name its end at 320 to 370px in Russian, where
+«Задача: MAIN-1 One» keeps about 98px. Two chips or more keep their words and wrap, and their
+row may still change its height as their names come.
 The field is never narrower than its words need, 176px, or on a short bar and on a phone its
 short «Filter», 62px with less air at
 its ends: the line gives up its other parts only once the field has given up the room past

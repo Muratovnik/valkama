@@ -1,16 +1,20 @@
 /**
  * The Analytics bar's chip while the name of the value it holds is read, on phones of 320 to 430px,
- * in Russian and in English, from a past period and from a live one (DESIGN.md, the Analytics bar:
- * «a filter set has its dimension's read to name its chip»).
+ * in Russian and in English, from a past period and from a live one, for a task, a project and a
+ * session, the values only a read names (DESIGN.md, the Analytics bar: «a filter set has its
+ * dimension's read to name its chip»).
  *
  * Before the first answer the chip says its dimension and never the value's id: it said «Задача:
  * 00000000-0…». Once named, a chip keeps its name while its dimension is read again for another
- * period, rather than its id until the new answer, and so the bar keeps its height through that
- * read: the id took the widest chip's room and put «Снять фильтры» on a second line, 32px, at 380
- * to 401px in Russian. A refresh that fails leaves the name as it was.
+ * period, rather than its id until the new answer. A refresh that fails leaves the name as it was.
  *
- * How tall the bar stands before the first answer and after it is measured and recorded, not held:
- * a name the answer brings may be wider or narrower than the room the chip held for it.
+ * On a phone one chip yields its room to «Clear filters» rather than send it to a line of its own:
+ * the two stand on one line whatever name comes, a name with no room cut with its hint saying it
+ * whole and a name that fits with no hint. So the bar keeps one height before the first answer,
+ * once named, while another period is read and once it is: the room of the widest chip, which the
+ * chip holds before the answer, sent «Снять фильтры» to a second line, 32px, at 380 to 401px in
+ * Russian and 340 to 370px in English, and a short name then brought it back. Two chips keep their
+ * words and wrap, as the row did before.
  */
 import { expect } from '@playwright/test'
 import type { Page, Route } from '@playwright/test'
@@ -18,21 +22,37 @@ import type { Page, Route } from '@playwright/test'
 import { task } from '../fixtures/analytics.ts'
 import { failRefresh, frames, serveFailing } from './analyticsBarFailure.ts'
 import { pageAt, record } from './analyticsPage.ts'
+import { hint, pass } from './hintFramesPage.ts'
+import { PROJECT, SESSION } from './served/analyticsBarStates.ts'
 import { test } from './test.ts'
 
 const WIDTHS = [320, 340, 360, 370, 380, 384, 390, 399, 400, 401, 410, 430] as const
 
-/** The task the filter holds, as the double names it (`served/analyticsBarStates.ts`). */
-const FILTERED = task(1, 'One').id ?? ''
-const FILTER = JSON.stringify({ work_item: [FILTERED] })
-/** What the chip says of it once named, in either language. */
-const NAMED = /MAIN-1 One/u
-/** The start of the task's id, which the chip never says. */
-const ID = FILTERED.slice(0, 8)
+/**
+ * The values a filter is set to, as the double names them (`served/analyticsBarStates.ts`): what
+ * the chip says once named, and the id it never says.
+ */
+const VALUES = {
+  task: { dimension: 'work_item', id: task(1, 'One').id ?? '', named: 'MAIN-1 One' },
+  project: { dimension: 'project', id: PROJECT.id, named: PROJECT.name },
+  session: { dimension: 'executor', id: SESSION.id, named: SESSION.title },
+} as const
+
+type Value = keyof typeof VALUES
 
 const WORDS = {
-  ru: { dimension: 'Задача', today: 'Сегодня', week: 'Эта неделя' },
-  en: { dimension: 'Task', today: 'Today', week: 'This week' },
+  ru: {
+    clear: 'Снять фильтры',
+    dimensions: { task: 'Задача', project: 'Проект', session: 'Исполнитель' },
+    today: 'Сегодня',
+    week: 'Эта неделя',
+  },
+  en: {
+    clear: 'Clear filters',
+    dimensions: { task: 'Task', project: 'Project', session: 'Executor' },
+    today: 'Today',
+    week: 'This week',
+  },
 } as const
 
 /** A past period and a live one, each with the one it switches to. */
@@ -67,101 +87,205 @@ async function holdReads(page: Page) {
   }
 }
 
-/** A read of what the task filter offers: by task, and not itself filtered by one. */
-const offering = (query: URLSearchParams) =>
-  (query.get('group_by') ?? '').split(',').includes('work_item') && !query.has('work_item')
+/** A read of what a dimension's filter offers: by that dimension, and not itself filtered by it. */
+const offering = (dimension: string) => (query: URLSearchParams) =>
+  (query.get('group_by') ?? '').split(',').includes(dimension) && !query.has(dimension)
 
-/** The bar's height and what each chip says. */
-const chipState = (page: Page) =>
-  page.evaluate(() => ({
-    bar: document.querySelector('.analytics-bar')?.getBoundingClientRect().height ?? 0,
-    chips: [...document.querySelectorAll('.analytics-bar [data-filter-chip]')].map(
-      (chip) => chip.textContent?.trim() ?? '',
-    ),
-  }))
+/**
+ * The bar's height; each chip, what it says, its box and whether it shows less than it holds
+ * (a box in it that hides what it holds across); and the box of «Clear filters», by its name.
+ */
+const chipState = (page: Page, clear: string) =>
+  page.evaluate((name) => {
+    // This body is serialized and evaluated in the page, so a module-scope
+    // helper would not be in scope here.
+    // eslint-disable-next-line unicorn/consistent-function-scoping -- see above
+    const rect = (found: Element | null | undefined) => {
+      const box = found?.getBoundingClientRect()
+      return box ? { left: box.left, top: box.top, right: box.right, bottom: box.bottom } : null
+    }
+    const bar = document.querySelector('.analytics-bar')
+    const chips = [...(bar?.querySelectorAll('[data-filter-chip]') ?? [])]
+    const button = [...(bar?.querySelectorAll('button') ?? [])].find(
+      (one) => one.textContent?.trim() === name,
+    )
+    return {
+      window: document.documentElement.clientWidth,
+      bar: bar?.getBoundingClientRect().height ?? 0,
+      chips: chips.map((chip) => chip.textContent?.trim() ?? ''),
+      boxes: chips.map((chip) => rect(chip)),
+      cut: chips.map((chip) =>
+        [chip, ...chip.querySelectorAll('*')].some(
+          (box) =>
+            getComputedStyle(box).overflowX !== 'visible' && box.scrollWidth > box.clientWidth,
+        ),
+      ),
+      clear: rect(button),
+    }
+  }, clear)
 
 type ChipState = Awaited<ReturnType<typeof chipState>>
 
-/** The state at each width, the page settled after each resize. */
-async function acrossWidths(page: Page) {
+/** The state at each of `widths`, the page settled after each resize. */
+async function acrossWidths(page: Page, clear: string, widths: readonly number[] = WIDTHS) {
   const seen: Record<number, ChipState> = {}
-  for (const width of WIDTHS) {
+  for (const width of widths) {
     await page.setViewportSize({ width, height: 900 })
     await page.evaluate(() => document.fonts.ready)
     await frames(page)
-    seen[width] = await chipState(page)
+    seen[width] = await chipState(page, clear)
   }
   return seen
 }
 
-/** One chip, saying the dimension, and never the task's id. */
-function expectNoId(name: string, seen: Record<number, ChipState>, dimension: string) {
+/** One chip, saying the dimension, and never the value's id. */
+function expectNoId(name: string, seen: Record<number, ChipState>, dimension: string, id: string) {
   for (const [width, state] of Object.entries(seen)) {
     expect.soft(state.chips, `${name} at ${width}px: the chips`).toHaveLength(1)
     expect.soft(state.chips[0], `${name} at ${width}px: the chip's dimension`).toContain(dimension)
-    expect.soft(state.chips[0], `${name} at ${width}px: the task's id`).not.toContain(ID)
+    expect.soft(state.chips[0], `${name} at ${width}px: the value's id`).not.toContain(id)
   }
+}
+
+/** The middle of a box, down. */
+const middle = (box: { bottom: number; top: number }) => (box.top + box.bottom) / 2
+
+/** One chip and «Clear filters» after it on one line, inside the window. */
+function expectOneLine(name: string, seen: Record<number, ChipState>) {
+  for (const [width, state] of Object.entries(seen)) {
+    const chip = state.boxes[0] ?? { left: 0, top: 0, right: Number.NaN, bottom: 0 }
+    const clear = state.clear ?? { left: Number.NaN, top: 0, right: Number.NaN, bottom: 0 }
+    expect
+      .soft(
+        Math.abs(middle(clear) - middle(chip)),
+        `${name} at ${width}px: «Clear filters» wrapped`,
+      )
+      .toBeLessThanOrEqual(1)
+    expect
+      .soft(clear.left, `${name} at ${width}px: «Clear filters» before the chip's end`)
+      .toBeGreaterThanOrEqual(chip.right)
+    expect
+      .soft(clear.right, `${name} at ${width}px: «Clear filters» past the window`)
+      .toBeLessThanOrEqual(state.window)
+  }
+}
+
+/**
+ * At each width, the chip's hint while the pointer rests on it: its whole words where it is cut,
+ * none where it is whole. Returns the widths it was cut at.
+ */
+async function expectHints(page: Page, name: string, seen: Record<number, ChipState>) {
+  const cutAt: number[] = []
+  const chip = page.locator('.analytics-bar [data-filter-chip]')
+  for (const width of WIDTHS) {
+    await page.setViewportSize({ width, height: 900 })
+    await frames(page)
+    const cut = seen[width]?.cut[0] ?? false
+    if (cut) cutAt.push(width)
+    await chip.hover()
+    await pass(page, 1000)
+    if (cut) await expect.soft(hint(page), `${width}px: the cut chip's hint`).toHaveText(name)
+    else await expect.soft(hint(page), `${width}px: the whole chip's hint`).toHaveCount(0)
+    await page.mouse.move(0, 0)
+    await expect(hint(page)).toHaveCount(0)
+  }
+  return cutAt
+}
+
+/**
+ * A session's name has no room beside «Clear filters» on the narrowest phone, and a task's has it
+ * on the widest: both of the hint's cases are reached.
+ */
+function expectBothHints(kind: Value, cutAt: readonly number[]) {
+  if (kind === 'session') expect.soft(cutAt, 'the session cut at 320px').toContain(320)
+  if (kind === 'task') expect.soft(cutAt, 'the task cut at 430px').not.toContain(430)
 }
 
 for (const locale of ['ru', 'en'] as const)
   for (const [from, period] of Object.entries(PERIODS))
-    test(`a chip says no id while its name is read, from ${from} in ${locale}`, async ({
-      page,
-    }, info) => {
-      const words = WORDS[locale]
-      await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
-      const fail = await serveFailing(page, WIDTHS[0])
-      const reads = await holdReads(page)
-      const chip = page.locator('.analytics-bar [data-filter-chip]')
+    for (const [kind, value] of Object.entries(VALUES) as [Value, (typeof VALUES)[Value]][])
+      test(`one chip of a ${kind} keeps the bar's height while its name is read, from ${from} in ${locale}`, async ({
+        page,
+      }, info) => {
+        const words = WORDS[locale]
+        const dimension = words.dimensions[kind]
+        await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
+        const fail = await serveFailing(page, WIDTHS[0])
+        const reads = await holdReads(page)
+        const chip = page.locator('.analytics-bar [data-filter-chip]')
+        const filters = JSON.stringify({ [value.dimension]: [value.id] })
 
-      // Before the first answer: every read held.
-      reads.hold(() => true)
-      await page.goto(pageAt({ ...period.state, filters: FILTER }))
-      await expect(chip).toHaveCount(1)
-      await expect.poll(() => reads.held.length).toBeGreaterThan(0)
-      const first = await acrossWidths(page)
-      expectNoId('before the first answer', first, words.dimension)
+        // Before the first answer: every read held.
+        reads.hold(() => true)
+        await page.goto(pageAt({ ...period.state, filters }))
+        await expect(chip).toHaveCount(1)
+        await expect.poll(() => reads.held.length).toBeGreaterThan(0)
+        const first = await acrossWidths(page, words.clear)
+        expectNoId('before the first answer', first, dimension, value.id)
 
-      // Named by the answer.
-      await reads.release()
-      await expect(chip).toHaveText(NAMED)
-      const named = await acrossWidths(page)
+        // Named by the answer.
+        await reads.release()
+        await expect(chip).toContainText(value.named)
+        const named = await acrossWidths(page, words.clear)
 
-      // Another period: the chip's dimension read again, held.
-      reads.hold(offering)
-      await page.getByRole('radio', { name: words[period.next] }).click()
-      await expect.poll(() => reads.held.length).toBeGreaterThan(0)
-      const switching = await acrossWidths(page)
-      await reads.release()
-      await expect(page.locator('.analytics-bar-fresh time')).toBeVisible()
-      await expect.poll(() => reads.held.length).toBe(0)
-      const settled = await acrossWidths(page)
+        // Another period: the chip's dimension read again, held.
+        reads.hold(offering(value.dimension))
+        await page.getByRole('radio', { name: words[period.next] }).click()
+        await expect.poll(() => reads.held.length).toBeGreaterThan(0)
+        const switching = await acrossWidths(page, words.clear)
+        await reads.release()
+        await expect(page.locator('.analytics-bar-fresh time')).toBeVisible()
+        await expect.poll(() => reads.held.length).toBe(0)
+        const settled = await acrossWidths(page, words.clear)
 
-      // A refresh that fails leaves the name.
-      fail(true)
-      await failRefresh(page)
-      const failed = await acrossWidths(page)
+        // A refresh that fails leaves the name.
+        fail(true)
+        await failRefresh(page)
+        const failed = await acrossWidths(page, words.clear)
 
-      await record(info, `bar chips read ${locale} ${from}`, {
-        first,
-        named,
-        switching,
-        settled,
-        failed,
+        const states = { first, named, switching, settled, failed }
+        const cutAt = await expectHints(page, `${dimension}: ${value.named}`, settled)
+        await record(info, `bar chips read ${locale} ${from} ${kind}`, { ...states, cutAt })
+        expectNoId('read again for another period', switching, dimension, value.id)
+        for (const [name, seen] of Object.entries(states)) expectOneLine(name, seen)
+        for (const width of WIDTHS) {
+          const was = named[width]?.chips
+          expect
+            .soft(switching[width]?.chips, `switching at ${width}px: the chip's name`)
+            .toEqual(was)
+          expect.soft(settled[width]?.chips, `settled at ${width}px: the chip's name`).toEqual(was)
+          expect.soft(failed[width]?.chips, `failed at ${width}px: the chip's name`).toEqual(was)
+          const height = settled[width]?.bar
+          for (const [name, seen] of Object.entries(states))
+            expect.soft(seen[width]?.bar, `${name} at ${width}px: the bar's height`).toBe(height)
+        }
+        expectBothHints(kind, cutAt)
       })
-      expectNoId('read again for another period', switching, words.dimension)
-      for (const width of WIDTHS) {
-        const was = named[width]?.chips
-        expect
-          .soft(switching[width]?.chips, `switching at ${width}px: the chip's name`)
-          .toEqual(was)
-        expect.soft(settled[width]?.chips, `settled at ${width}px: the chip's name`).toEqual(was)
-        expect.soft(failed[width]?.chips, `failed at ${width}px: the chip's name`).toEqual(was)
-        expect
-          .soft(switching[width]?.bar, `switching at ${width}px: the bar's height`)
-          .toBe(settled[width]?.bar)
-        expect
-          .soft(failed[width]?.bar, `failed at ${width}px: the bar's height`)
-          .toBe(settled[width]?.bar)
-      }
+
+/**
+ * Two chips keep their words, the row wrapping where it has no room for them, at a phone's widths
+ * and on the wider bars.
+ */
+for (const locale of ['ru', 'en'] as const)
+  test(`two chips keep their words and wrap in ${locale}`, async ({ page }, info) => {
+    const words = WORDS[locale]
+    await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
+    await serveFailing(page, WIDTHS[0])
+    const filters = JSON.stringify({
+      [VALUES.task.dimension]: [VALUES.task.id],
+      [VALUES.project.dimension]: [VALUES.project.id],
     })
+    await page.goto(pageAt({ filters }))
+    const chip = page.locator('.analytics-bar [data-filter-chip]')
+    await expect(chip).toHaveCount(2)
+    for (const named of [VALUES.task.named, VALUES.project.named])
+      await expect(chip.filter({ hasText: named })).toHaveCount(1)
+    const seen = await acrossWidths(page, words.clear, [...WIDTHS, 620, 1024, 1440])
+    await record(info, `bar chips two ${locale}`, seen)
+    for (const [width, state] of Object.entries(seen)) {
+      expect.soft(state.chips, `${width}px: the chips`).toHaveLength(2)
+      expect.soft(state.cut, `${width}px: a chip cut`).toEqual([false, false])
+      const right = Math.max(...state.boxes.map((box) => box?.right ?? Number.NaN))
+      expect.soft(right, `${width}px: a chip past the window`).toBeLessThanOrEqual(state.window)
+    }
+  })
