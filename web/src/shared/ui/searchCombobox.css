@@ -31,23 +31,29 @@
   }
 }
 
-/* The field and, while nobody types, its chosen words drawn over it, in one cell. */
-.combo-field {
+/* Of one value, the field and, while nobody types, its chosen words drawn over it, share one
+   cell, and the chevron has the other. The field stays the box's own child, which the list is
+   placed and sized by and a press reaches. */
+.combo-box.single {
   display: grid;
-  flex: 1 1 8ch;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: center;
-  width: 0;
-  min-width: 8ch;
+  grid-template-columns: minmax(8ch, 1fr) auto;
 
-  > * {
+  > .combo-input,
+  > .combo-shown {
     grid-area: 1 / 1;
+    width: auto;
+    min-width: 0;
+  }
+
+  > .combo-chevron {
+    grid-area: 1 / 2;
   }
 }
 
 .combo-input {
-  width: 100%;
-  min-width: 0;
+  flex: 1 1 8ch;
+  width: 0;
+  min-width: 8ch;
   min-height: var(--size-control-inline);
   padding: 0;
   border: 0;
@@ -63,8 +69,10 @@
   }
 }
 
+/* A press goes through them to the field, whose hint they are part of. */
 .combo-shown {
   font: var(--font-control);
+  pointer-events: none;
 }
 
 .combo-chevron {

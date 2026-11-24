@@ -70,9 +70,14 @@ async function chooseLong(page: Page, scope: Locator, label: string) {
 
 /**
  * The chosen words are the card's number and title, drawn once; cut, they end in an ellipsis,
- * and the pointer resting on them brings the whole words. `rest` lets the hint's rest pass.
+ * and the pointer resting on the field brings the whole words. `rest` lets the hint's rest pass.
  */
-async function cutByTheRule(page: Page, scope: Locator, rest: () => Promise<unknown>) {
+async function cutByTheRule(
+  page: Page,
+  scope: Locator,
+  label: string,
+  rest: () => Promise<unknown>,
+) {
   const words = scope.locator('[data-chosen-words]')
   await expect(words).toHaveCount(1)
   await expect(words).toHaveText(LABEL)
@@ -82,7 +87,7 @@ async function cutByTheRule(page: Page, scope: Locator, rest: () => Promise<unkn
   }))
   // The title is longer than any field either place gives it.
   expect(drawn).toEqual({ cut: true, ending: 'ellipsis' })
-  await words.hover()
+  await scope.getByRole('combobox', { name: label }).hover()
   await rest()
   await expect(hint(page)).toHaveText(LABEL)
 }
@@ -110,7 +115,7 @@ for (const locale of ['ru', 'en'] as const)
       await chooseLong(page, one, words.card)
       await expect(putOff).toBeEnabled()
       stayedPut(await places(), before)
-      await cutByTheRule(page, one, () => page.clock.runFor(1000))
+      await cutByTheRule(page, one, words.card, () => page.clock.runFor(1000))
     })
 
     test(`at ${width}px in ${locale} a long card chosen in the card's «Put off» moves nothing and is cut with its hint`, async ({
@@ -139,6 +144,6 @@ for (const locale of ['ru', 'en'] as const)
       await chooseLong(page, dialog, words.card)
       stayedPut(await places(), before)
       // The hint comes after half a second's rest on the page's own clock.
-      await cutByTheRule(page, dialog, () => Promise.resolve())
+      await cutByTheRule(page, dialog, words.card, () => Promise.resolve())
     })
   }

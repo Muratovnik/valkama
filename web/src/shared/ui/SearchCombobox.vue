@@ -25,8 +25,8 @@
  * One chosen value too long for its field ends in an ellipsis, whole in the field's hint, as a
  * one-line label does: a field draws its words without one, so they stood cut at the box's edge
  * with nothing to say there were more. While nobody types, the words are drawn over the field,
- * whose own stay what is read and edited (`data-chosen-words`); a press anywhere on them is a
- * press on the field.
+ * whose own stay what is read and edited (`data-chosen-words`); a press on them is a press on
+ * the field, and the pointer resting there brings the field's hint.
  * The popup is ChoiceSelect's surface at the field's own width, so it never reaches past
  * the dialog the field stands in. A long option wraps inside it at a space, a hyphen or
  * after a `/` (`slashBreaks.ts`): a goal's option is its title, and a label is as often
@@ -275,8 +275,9 @@ defineExpose({ show })
     >
       <!-- eslint-disable-next-line vuejs-accessibility/click-events-have-key-events, vuejs-accessibility/no-static-element-interactions -->
       <ComboboxAnchor
+        v-tooltip.clipped="coveredWords"
         class="combo-box"
-        :class="{ disabled, invalid: error }"
+        :class="{ disabled, invalid: error, single: !several }"
         @click="pressBox"
       >
         <SearchComboboxChips
@@ -286,34 +287,29 @@ defineExpose({ show })
           :remove-label="removeLabel"
           @remove="remove"
         />
+        <ComboboxInput
+          :id="controlId"
+          ref="field"
+          v-model="text"
+          class="combo-input"
+          :class="{ 'is-covered': covered }"
+          :display-value="display"
+          :maxlength="maxlength"
+          :aria-describedby="describedBy"
+          :aria-activedescendant="activeRow"
+          :aria-invalid="invalidMark"
+          :placeholder="standIn"
+          @input="typed"
+          @click="clearWords"
+          @keydown="keydown"
+        />
         <span
-          v-tooltip.clipped="coveredWords"
-          class="combo-field"
+          v-if="covered"
+          class="combo-shown one-line"
+          aria-hidden="true"
+          data-chosen-words
+          >{{ shownLabel }}</span
         >
-          <ComboboxInput
-            :id="controlId"
-            ref="field"
-            v-model="text"
-            class="combo-input"
-            :class="{ 'is-covered': covered }"
-            :display-value="display"
-            :maxlength="maxlength"
-            :aria-describedby="describedBy"
-            :aria-activedescendant="activeRow"
-            :aria-invalid="invalidMark"
-            :placeholder="standIn"
-            @input="typed"
-            @click="clearWords"
-            @keydown="keydown"
-          />
-          <span
-            v-if="covered"
-            class="combo-shown one-line"
-            aria-hidden="true"
-            data-chosen-words
-            >{{ shownLabel }}</span
-          >
-        </span>
         <VIcon
           class="combo-chevron"
           name="chevron-down"
