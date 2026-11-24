@@ -6,7 +6,7 @@ const test = require('node:test')
 const { claudeLiveness, processAlive, registryDirectory } = require('./live_sessions')
 
 const DIRECTORY = 'C:\\work\\claude-config\\sessions'
-const LIVE = 'f89d66c7-f023-4169-8d1a-2e69d4b1af68'
+const LIVE = '3c5d7e9f-1a2b-4c6d-8e0f-1a2b3c4d5e6f'
 const CRASHED = '0b5a2f4e-31c4-4c1e-9a61-5d3c7d2a9e10'
 
 /** A registry as Claude Code leaves it: a record per process, key files beside them. */

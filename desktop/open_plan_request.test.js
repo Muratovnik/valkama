@@ -28,14 +28,14 @@ test('the plan is asked for as a same-origin fetch, with the query it was given'
   try {
     const answer = await fetchOpenPlan(server.appUrl, {
       target: 'session',
-      session: 'f89d66c7-f023-4169-8d1a-2e69d4b1af68',
+      session: '3c5d7e9f-1a2b-4c6d-8e0f-1a2b3c4d5e6f',
       surface: 'desktop',
       fallback: 'vscode',
     })
     assert.deepEqual(answer, { status: 200, body: '{"surface":"desktop"}' })
     assert.equal(
       server.seen[0].url,
-      '/api/open-plan?target=session&session=f89d66c7-f023-4169-8d1a-2e69d4b1af68&surface=desktop&fallback=vscode',
+      '/api/open-plan?target=session&session=3c5d7e9f-1a2b-4c6d-8e0f-1a2b3c4d5e6f&surface=desktop&fallback=vscode',
     )
     assert.equal(server.seen[0].headers['sec-fetch-site'], 'same-origin')
     assert.equal(server.seen[0].headers.authorization, undefined)
