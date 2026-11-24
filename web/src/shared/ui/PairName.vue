@@ -15,8 +15,8 @@
  * end under the start, and each is cut at its own end: a task's title is on either side of a pair
  * there, and each part's start, a task's reference, stays whole on its line.
  *
- * Whole (`whole`), as a model's id asks, the start is never cut: the end follows it on its line
- * while there is room for its first words, and takes the next line otherwise, cut at its own end.
+ * Whole (`whole`), as a model's id asks, the start is never cut, and the end beside it takes
+ * what the line leaves, cut at its own end: the host keeps the line as wide as the start.
  *
  * The words are the name's whole text, in order, as the element around it reads them: a host
  * that names a control by its content, or reads it into a hint while it is cut, gets the whole
@@ -108,12 +108,8 @@ const parts = computed(() =>
   white-space: pre;
 }
 
-/* The start whole on its line; the end takes what the line leaves, down to a few words, and
-   the next line where it leaves fewer. */
+/* The start whole on its line; the end takes what the line leaves, cut at its end. */
 .pair-whole {
-  display: flex;
-  flex-wrap: wrap;
-
   & .pair-start {
     flex: none;
     overflow: visible;
@@ -121,9 +117,9 @@ const parts = computed(() =>
   }
 
   & .pair-end {
-    flex: 1 1 0;
-    min-inline-size: min(100%, 6em);
-    max-inline-size: 100%;
+    flex: 0 1 auto;
+    min-inline-size: 0;
+    max-inline-size: none;
   }
 }
 

@@ -8,9 +8,13 @@
  * taller instead. On one line of its own the remark still set the column, 192 pixels where its
  * figures asked about 100, and pushed the change past a frame of 686 pixels; beside the figure,
  * «≈ 1 109,00 $, 40 тыс. токенов без цены» made it 273. The cell still says the two as one, with
- * the comma between them, as the bars and a hint say them (`besides`). A figure that is words,
- * a cost with no price at all, «201.3K tokens without a price», wraps the same way: on one line
- * it held a cost column at 209 pixels where its amounts asked 85.
+ * the comma between them, as the bars and a hint say them (`besides`).
+ *
+ * In the Model section's table (`data-figures`, `useHeadingLines`) the remark and a figure that
+ * is its sentence alone, «201.3K tokens without a price», stand on one line while the table holds
+ * them so in its frame, and wrap between their words only once it would not: there the room the
+ * ids keep whole comes first. A figure of words with no count, «No tokens», is a label and keeps
+ * its line; wrapped, «Нет токенов» took three.
  *
  * The table lays the cell out (`SpendingTable`): its width, its ink when it holds the chosen
  * measure, and its place in the total row that stays at the panel's edge. The cell is marked
@@ -30,8 +34,11 @@ const props = defineProps<{ cell: TableCell }>()
  * and kept inside a count, «40 тыс.», whose space follows its digits.
  */
 const remark = computed(() => props.cell.remark.replaceAll(/(?<!\d)\u{A0}/gu, ' '))
-/** Whether the figure is words, which have no amount to sort by: a cost with no price. */
-const wordsOnly = computed(() => props.cell.sort === null)
+/**
+ * Whether the figure is words with a count in them, the remark's sentence alone, «201.3K tokens
+ * without a price», which wraps as the remark does; a label with none, «No tokens», keeps its line.
+ */
+const countWords = computed(() => props.cell.sort === null && /\d/u.test(props.cell.text))
 </script>
 
 <template>
@@ -41,7 +48,7 @@ const wordsOnly = computed(() => props.cell.sort === null)
     :data-measure="cell.key"
     :data-chosen="cell.chosen"
   >
-    <span :class="{ 'figure-words': wordsOnly }">{{ cell.text }}</span>
+    <span :class="{ 'figure-words': countWords }">{{ cell.text }}</span>
     <template v-if="cell.remark">
       <span class="visually-hidden">{{ REMARK_JOINT }}</span>
       <span class="chart-detail figure-remark">{{ remark }}</span>
@@ -55,15 +62,23 @@ const wordsOnly = computed(() => props.cell.sort === null)
 /* The remark asks its column for no width of its own (`contain`): it takes the width the
    figures give the column and wraps in it, between words, its last line never one short word
    alone («цены»). */
-.figure-remark,
-.figure-words {
+.figure-remark {
   text-wrap: balance;
   white-space: normal;
   contain: inline-size;
 }
 
-/* A block, as the remark is, so its width can be contained. */
-.figure-words {
+/* In the Model section's table: on one line while the table holds it so. */
+[data-figures='one'] .figure-remark {
+  white-space: nowrap;
+  contain: none;
+}
+
+/* And past that, the words as the remark: between words, as narrow as the column's
+   figures leave them, a block so the line breaks under the figure. */
+[data-figures='wrap'] .figure-words {
   display: block;
+  text-wrap: balance;
+  white-space: normal;
 }
 </style>

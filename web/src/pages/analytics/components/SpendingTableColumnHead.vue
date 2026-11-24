@@ -85,5 +85,13 @@ const { t } = useI18n()
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   visibility: hidden;
+
+  /* Beside an id in a pair, room for the start of the other value as well, a task's reference
+     and its first word: cut to «· MAIN-1…» beside the id, rows of one model read alike. */
+  [data-rows='pairs'] &::after {
+    content: '';
+    display: inline-block;
+    inline-size: 5em;
+  }
 }
 </style>

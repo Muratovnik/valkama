@@ -1552,11 +1552,15 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   model's side panel are drawn so. In the Model section's tables, the main one, its
   splits by task and by executor and the panel of every value, an id is never cut
   either: the name column keeps the room of the longest id its rows name, held
-  unseen in its heading (`SpendingTableColumnHead`), and the other value of a pair
-  takes the next line, cut at its own end, where the id leaves it too little
-  (`PairName`'s `whole`). A cost with no price at all is words, «201.3K tokens without a price»,
-  and wraps under its column as a remark does, so the room the ids take adds no
-  scroll. Cut at their end, «claude-fable-5-1» and «claude-fable-5-2» both read
+  unseen in its heading (`SpendingTableColumnHead`). Alone in its row, the id's
+  column is that wide and no wider, the figures taking the rest; in a pair it
+  keeps room for the start of the other value too, which follows the id on its
+  line, cut at its own end (`PairName`'s `whole`). The figures' words, the remark
+  under a cost and a cost with no price at all, «201.3K tokens without a price»,
+  stand on one line while the table holds them so in its frame, and wrap under
+  their figures only where it would not (`useHeadingLines`); a label, «No tokens»,
+  keeps its line. Taking the rest, the column stood at 303 px for ids of 125, and
+  the words, wrapped always, took three and four lines at 1440. Cut at their end, «claude-fable-5-1» and «claude-fable-5-2» both read
   «claude-fa…»; broken at its hyphen, «claude-» stood above «opus-5-5» in the
   Pauses headings on a phone. A browser offers no break
   after a `/`, so `loading/empty/error/unavailable` was one word to it, wider than a

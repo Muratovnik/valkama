@@ -111,7 +111,11 @@ const acrossWords = computed(() => (props.across ? t(`analytics.byDimension.${pr
 /** The answer the rows are of: by both dimensions while split, the one on show otherwise. */
 const tableUsage = computed(() => crossed.value?.usage ?? props.usage)
 /** What a row names: a pair of values while split, whose name column keeps more room. */
-const rows = computed(() => (crossed.value ? 'pairs' : 'values'))
+/** Its rows: pairs, a model's id each, or another dimension's values. */
+const rows = computed(() => {
+  if (crossed.value) return 'pairs'
+  return props.by === 'model' ? 'ids' : 'values'
+})
 /** Its names take two lines where they are free text, tasks and sessions, and it is asked to. */
 const nameLines = computed(() =>
   props.twoLineNames && namedByText(props.by, crossed.value?.across) ? 2 : 1,
@@ -197,7 +201,10 @@ const emptyWords = computed(() => ({
 const root = ref<HTMLElement | null>(null)
 
 /** Its headings over figures on one line, or on two where one would widen it past its frame. */
-const headingLines = useHeadingLines(root, [model, held])
+const headingLines = useHeadingLines(root, [model, held], () => props.by === 'model')
+/** Its figures' words, measured in the Model section's table alone: absent elsewhere, so they keep
+ * the remark's own wrap there. */
+const figureLines = computed(() => headingLines.value.figures ?? undefined)
 
 /** Brings the table into view, its heading row at the top, with the focus on it. */
 function reveal() {
@@ -215,7 +222,8 @@ defineExpose({ reveal })
     class="spending-table"
     tabindex="-1"
     :data-measure="measure"
-    :data-headings="headingLines"
+    :data-headings="headingLines.headings"
+    :data-figures="figureLines"
     :data-rows="rows"
     :data-found="found"
     :aria-label="model.title"
@@ -458,6 +466,22 @@ defineExpose({ reveal })
 .chart-name {
   inline-size: 100%;
   max-inline-size: 0;
+}
+
+/* A model's id stands whole (`SpendingTableColumnHead`'s room): alone in its row, the column
+   is as wide as the longest id and no wider, and the figures take the rest of the frame,
+   their words on one line while it holds them (`useHeadingLines`). Taking the rest itself,
+   the column stood at 303 pixels for ids of 125, and «No tokens» wrapped beside it. */
+.spending-table[data-rows='ids'] {
+  & .chart-name {
+    inline-size: 1px;
+    min-inline-size: 0;
+    max-inline-size: none;
+  }
+
+  & .chart-cell[data-numeric='true'] {
+    inline-size: auto;
+  }
 }
 
 /* A pair keeps its second value whole, a model's name as long as «· claude-sonnet-5-5», with

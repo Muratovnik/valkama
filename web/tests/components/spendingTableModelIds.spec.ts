@@ -2,9 +2,10 @@
  * A model's id in the Model section's table is never cut (the owner's decision of 2026-11-24): the
  * heading of the names holds the room of each id the rows name, so the column is as wide as the
  * longest; the id stands on one line, unclamped and uncut, alone or as the first value of a pair,
- * whose other value takes the next line where the id leaves it too little. A section of free
- * text keeps its names cut on one line, its heading holding no room. A cost with no price at all
- * is words, which wrap under the column as a remark does instead of widening it.
+ * whose other value beside it is cut at its own end. Alone in its row, the id's column is the
+ * table's to size by its room alone (`data-rows`). A section of free text keeps its names cut
+ * on one line, its heading holding no room. A cost with no price at all is words, which the
+ * table lays on one line or wraps as it fits (`useHeadingLines`, `headingLines.spec.ts`).
  */
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
@@ -74,6 +75,7 @@ describe('a model id in the Model section’s table', () => {
 
   it('draws each id whole on one line, neither cut nor clamped', () => {
     const wrapper = table('model', BY_MODEL)
+    expect(wrapper.attributes('data-rows')).toBe('ids')
     const names = wrapper.findAll('tbody th')
     expect(names).toHaveLength(3)
     for (const name of names) {
@@ -83,8 +85,9 @@ describe('a model id in the Model section’s table', () => {
     }
   })
 
-  it('keeps the id of a pair whole and lets its other value take the next line', () => {
+  it('keeps the id of a pair whole, its other value beside it', () => {
     const wrapper = table('model', BY_MODEL_AND_TASK, 'work_item')
+    expect(wrapper.attributes('data-rows')).toBe('pairs')
     const pair = wrapper.get('tbody th .pair-name')
     expect(pair.classes()).toContain('pair-whole')
     expect(pair.get('.pair-start').text()).toBe('claude-fable-5-1')
@@ -97,17 +100,27 @@ describe('a model id in the Model section’s table', () => {
     const wrapper = table('work_item', [
       { day: 0, group: { work_item: ALPHA }, spend: { seconds: 3600 } },
     ])
+    expect(wrapper.attributes('data-rows')).toBe('values')
     expect(wrapper.find('.column-room').exists()).toBe(false)
     expect(wrapper.find('tbody th .whole-words').exists()).toBe(false)
     expect(wrapper.find('tbody th .one-line').exists()).toBe(true)
   })
 
-  it('wraps a cost with no price at all as words, and an amount not', () => {
+  it('marks a cost with no price at all as words with a count, and an amount not', () => {
     const wrapper = table('model', BY_MODEL)
     const costs = wrapper.findAll('tbody td[data-measure="cost"]')
     const unpriced = costs.find((cell) => cell.text().includes('without a price'))
     expect(unpriced?.find('.figure-words').exists()).toBe(true)
     const priced = costs.find((cell) => cell.text().includes('$1.50'))
     expect(priced?.find('.figure-words').exists()).toBe(false)
+  })
+
+  it('leaves a label of words with no count, «No tokens», to keep its line', () => {
+    const wrapper = table('model', [
+      { day: 0, group: { model: value('model-a') }, spend: { seconds: 600 } },
+    ])
+    const tokens = wrapper.get('tbody td[data-measure="tokens"]')
+    expect(tokens.text()).toBe('No tokens')
+    expect(tokens.find('.figure-words').exists()).toBe(false)
   })
 })
