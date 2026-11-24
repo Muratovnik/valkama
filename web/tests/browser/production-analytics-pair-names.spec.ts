@@ -9,12 +9,21 @@
  *
  * In the bars, the small charts' names, the day chart's legend and the table, every name is its
  * whole pair, and the separator and the second part are inside every box that clips them. The
- * small charts' names and the table's at 1200 in English are cut, so the run holds the cut case
- * and not only names that fit. The bars give a pair's name a line of its own, where these pairs
- * fit; the task pairs' spec holds their cut case, with titles longer than any line. A
- * cut name is said whole in its hint, or in the table, where it is all its hint says, laid whole
- * over itself, and each name of the table, its row's control, is named by its whole pair, as a
- * cut one is too. Each run prints what it measured.
+ * small charts' names at 1200 in English are cut, so the run holds the cut case and not only
+ * names that fit. The bars give a pair's name a line of its own, where these pairs fit; the task
+ * pairs' spec holds their cut case, with titles longer than any line. A cut name is said whole in
+ * its hint, or in the table, where it is all its hint says, laid whole over itself, and each name
+ * of the table, its row's control, is named by its whole pair, as a cut one is too. Each run
+ * prints what it measured.
+ *
+ * The Model section's table cuts no model's id (`DESIGN.md`, Long titles: the owner's decision of
+ * 2026-11-24): its column keeps the room of the longest id and of the start of the other value
+ * after it, so an effort's pair stands whole there at every size, where it was cut at 1200 in
+ * English. Its cut case is the Model section split by task: the id stands whole and the task's
+ * title, longer than any line beside it, stays on the id's line and is cut at its own end, with an
+ * ellipsis and a hint that says the pair whole, while the short task's pair stands whole with no
+ * hint. That the second part of a pair, a task or a session, keeps the id's line and is cut there
+ * rather than taking a line of its own is the owner's decision of 2026-11-24.
  *
  * A control of a bar, a small chart or the legend is named by what pressing it does, which for a
  * pair names its model alone: «Details of claude-opus-5-5» names the high and the medium row
@@ -26,8 +35,10 @@
  * words to each side and 8px over and under, and counted as a cut it raised the hint of every
  * name, «claude-sonnet-5-5 · high» whole at 1280 in Russian among them.
  *
- * A single name cut in a table's button ends in an ellipsis: a 50-character model name at 1280
- * was cut at the button's edge with none, «claude-opus-5-5-with-a-rather-».
+ * A single model's id stands whole in a table's button, on one line, however long: a 50-character
+ * synthetic name was cut at the button's edge, «claude-opus-5-5-with-a-rather-», before ids were
+ * kept whole; its column is now as wide as it, and the frame scrolls where the window is
+ * narrower than the table it makes, which the run prints.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -44,7 +55,14 @@ import {
 import { drawLined } from './drawnViews.ts'
 import { hint as hintUp } from './hintFramesPage.ts'
 import { pairNames } from './pairNames.ts'
-import { LONG_MODEL, ONE_LONG, SHORT_MODEL, WORLD } from './served/analyticsPairNames.ts'
+import {
+  LONG_MODEL,
+  LONG_TASK,
+  ONE_LONG,
+  SHORT_MODEL,
+  TASK_WORLD,
+  WORLD,
+} from './served/analyticsPairNames.ts'
 import { test } from './test.ts'
 const PAIRS = [
   'claude-opus-5-5 · high',
@@ -121,13 +139,11 @@ const hintsShort = (hints: Record<string, Awaited<ReturnType<typeof hintOfCut>>>
     .map(([where]) => where)
 
 /**
- * Whether the small charts and the table both hold a cut name in English at 1200, so the run
- * holds the cut case; elsewhere a name may fit or not, and nothing is held.
+ * Whether the small charts hold a cut name in English at 1200, so the run holds the cut case;
+ * elsewhere a name may fit or not, and nothing is held there.
  */
 const cutWhereHeld = (locale: string, width: number, measured: Record<string, Measured>) =>
-  locale !== 'en' ||
-  width !== 1200 ||
-  [measured.multiples, measured.table].every((found) => found?.some((one) => one.cut))
+  locale !== 'en' || width !== 1200 || (measured.multiples ?? []).some((one) => one.cut)
 
 for (const locale of ['en', 'ru'] as const)
   for (const size of SIZES)
@@ -159,8 +175,10 @@ for (const locale of ['en', 'ru'] as const)
       }
       // A cut name says its whole pair in its hint.
       expect(hintsShort(hints)).toEqual([])
-      // The cut case: in English at 1200 the small charts' and the table's names are cut.
+      // The cut case: in English at 1200 the small charts' names are cut.
       expect(cutWhereHeld(locale, size.width, measured)).toBe(true)
+      // The table cuts none: the id stands whole, and the effort in the room kept after it.
+      expect(measured.table.filter((one) => one.cut).map((one) => one.words)).toEqual([])
 
       // Each name of the table is its row's control, named by its whole pair, cut or not.
       const presses = page.locator('.spending-table tbody th .chart-press')
@@ -236,19 +254,33 @@ async function hintShows(page: Page, index: number) {
   return false
 }
 
-/**
- * Whether the case reported holds both sides: at 1280 in Russian the high sonnet stands whole and
- * a medium pair is cut. Elsewhere a name may fit or not, and nothing is held.
- */
-const bothWhereReported = (
-  locale: string,
-  width: number,
-  seen: readonly { cut: boolean; words: string }[],
-) =>
-  locale !== 'ru' ||
-  width !== 1280 ||
-  (seen.some((one) => one.words === 'claude-sonnet-5-5 · high' && !one.cut) &&
-    seen.some((one) => one.cut))
+const TASK_PAIRS = [`claude-opus-5-5 · MAIN-2 ${LONG_TASK}`, 'claude-5 · MAIN-3 Fix']
+
+/** Each pair of the table as drawn: its id and whether the id or the rest is cut, and how. */
+const pairParts = (page: Page) =>
+  page.evaluate(() =>
+    [...document.querySelectorAll('.spending-table tbody th .pair-name')].map((pair) => {
+      const start = pair.querySelector('.pair-start')
+      const end = pair.querySelector('.pair-end')
+      if (!start || !end) throw new Error('a pair with no two parts')
+      // Wider laid out whole than its box: this body runs in the page, so it stays here.
+      // eslint-disable-next-line unicorn/consistent-function-scoping -- see above
+      const cut = (part: Element) => {
+        const range = document.createRange()
+        range.selectNodeContents(part)
+        return range.getBoundingClientRect().width > part.getBoundingClientRect().width + 0.5
+      }
+      // eslint-disable-next-line unicorn/consistent-function-scoping -- runs in the page, as `cut`
+      const top = (part: Element) => Math.round(part.getBoundingClientRect().top)
+      return {
+        id: start.textContent?.trim() ?? '',
+        idCut: cut(start),
+        restCut: cut(end),
+        ellipsis: getComputedStyle(end).textOverflow === 'ellipsis',
+        oneLine: top(start) === top(end),
+      }
+    }),
+  )
 
 for (const locale of ['en', 'ru'] as const)
   for (const size of SIZES) {
@@ -292,8 +324,40 @@ for (const locale of ['en', 'ru'] as const)
       }))
       await record(info, `table hints ${locale} ${size.width}`, seen)
       for (const one of seen) expect(one.hint, `${one.words}, cut: ${one.cut}`).toBe(one.cut)
-      // Where it was reported, the run holds a whole name and a cut one.
-      expect(bothWhereReported(locale, size.width, seen)).toBe(true)
+      // The id stands whole, and the effort in the room kept after it: none is cut, none hinted.
+      expect(seen.filter((one) => one.cut || one.hint)).toEqual([])
+    })
+
+    test(`in ${locale} at ${size.width}×${size.height}, split by task, the id stands whole and the task is cut at its end, with its hint only while cut`, async ({
+      page,
+    }, info) => {
+      await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
+      await page.clock.install({ time: NOW })
+      await serve(page, TASK_WORLD)
+      await openReport(page, size.width, pageAt({ by: 'model', across: 'work_item' }))
+      await page.setViewportSize(size)
+      await expect(page.locator(PLACES.table)).toHaveCount(TASK_PAIRS.length)
+      await page.evaluate(() => document.fonts.ready)
+      await page.clock.runFor(100)
+      const found = await pairNames(page, PLACES.table)
+      const parts = await pairParts(page)
+      const hints: boolean[] = []
+      for (const index of found.keys()) hints.push(await hintShows(page, index))
+      await record(info, `task pairs ${locale} ${size.width}`, { found, parts, hints })
+      expect(found.map((one) => one.words)).toEqual(TASK_PAIRS)
+      // The long task's pair is cut, the short one's whole; the hint comes only for the cut one.
+      expect(found.map((one) => one.cut)).toEqual([true, false])
+      expect(hints).toEqual([true, false])
+      // The cut is the task's, on the id's line and at its own end with an ellipsis (the owner's
+      // decision of 2026-11-24); the id stands whole in both.
+      expect(parts).toEqual([
+        { id: 'claude-opus-5-5', idCut: false, restCut: true, ellipsis: true, oneLine: true },
+        { id: 'claude-5', idCut: false, restCut: false, ellipsis: true, oneLine: true },
+      ])
+      // Each name is its row's control, named by its whole pair, cut or not.
+      const presses = page.locator('.spending-table tbody th .chart-press')
+      for (const [index, pair] of TASK_PAIRS.entries())
+        await expect(presses.nth(index)).toHaveAccessibleName(pair)
     })
   }
 
@@ -333,7 +397,7 @@ async function buttonNames(page: Page) {
 
 for (const locale of ['en', 'ru'] as const)
   for (const size of SIZES)
-    test(`in ${locale} at ${size.width}×${size.height}, a single name cut in a table's button ends in an ellipsis`, async ({
+    test(`in ${locale} at ${size.width}×${size.height}, a single model's id stands whole in a table's button`, async ({
       page,
     }, info) => {
       await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
@@ -343,10 +407,15 @@ for (const locale of ['en', 'ru'] as const)
       await expect(page.locator(PLACES.table)).toHaveCount(2)
       await page.evaluate(() => document.fonts.ready)
       const found = await buttonNames(page)
-      await record(info, `single names ${locale} ${size.width}`, found)
-      // The long name is cut at every size, and ends in the ellipsis; the short one stands whole.
-      expect(found[0]).toEqual({ words: LONG_MODEL, cut: true, ellipsis: true })
-      expect(found[1]).toMatchObject({ words: SHORT_MODEL, cut: false })
+      const frame = await page
+        .locator('.spending-table .chart-table-frame')
+        .evaluate((box) => box.scrollWidth - box.clientWidth)
+      await record(info, `single names ${locale} ${size.width}`, { found, frame })
+      // The long id stands whole at every size, and so does the short one.
+      expect(found.map((one) => ({ words: one.words, cut: one.cut }))).toEqual([
+        { words: LONG_MODEL, cut: false },
+        { words: SHORT_MODEL, cut: false },
+      ])
     })
 
 for (const locale of ['en', 'ru'] as const)

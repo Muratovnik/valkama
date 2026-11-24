@@ -46,6 +46,34 @@
   }
 }
 
+/* A table of a stack laid out alike (`layout`): its columns take the widths it is given, whatever
+   its figures, so each column stands at the same edges in every table of the stack; the cells
+   keep the tighter inline air of a dense table, and none at the table's two ends, where its text
+   stands on the edges its heading and its frame stand on, so seven columns fit the panel beside
+   the rail. */
+.chart-table-fixed {
+  table-layout: fixed;
+
+  & .chart-cell {
+    padding-inline: var(--space-2);
+  }
+
+  & .chart-cell:first-child {
+    padding-inline-start: 0;
+  }
+
+  & .chart-cell:last-child {
+    padding-inline-end: 0;
+  }
+
+  /* A heading that wraps in its column takes the head row's height, and every heading stands on
+     the row's foot, next to the figures it heads: on its first line, a heading of one line stood
+     36 px over the first row, nearer the table's own heading than its table. */
+  & .chart-heading {
+    vertical-align: bottom;
+  }
+}
+
 .chart-heading {
   color: var(--color-text-tertiary);
   font: var(--font-column-head);

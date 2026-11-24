@@ -5,8 +5,9 @@ import { defineComponent, h, nextTick, ref } from 'vue'
  * it takes at each step. The oracle is DESIGN.md, Rows and tables: whether the columns fit the frame
  * decides the step, never the window — the first of the page's steps at which every table of the
  * box stands inside its frame, and where none does, the page's answer (a table of figures scrolls
- * at its second step, one of words stacks). A step known to run past a frame is not laid out again
- * while what the table holds is the same, and is once it changes.
+ * at its second step, one of words stacks, one whose cells the page lets wrap wraps them). A step
+ * known to run past a frame is not laid out again while what the table holds is the same, and is
+ * once it changes.
  */
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -19,6 +20,8 @@ const BAR = 15
 
 const FIGURES: TableFitRule = { steps: ['one', 'two', 'least'], otherwise: 'two' }
 const WORDS: TableFitRule = { steps: ['one'], otherwise: 'stack' }
+/** The Analytics Model section's: its headings on two lines before its figures' words wrap. */
+const WRAPS: TableFitRule = { steps: ['one', 'two'], otherwise: 'wrap' }
 
 type Needs = Partial<Record<TableFit, number>>
 
@@ -152,5 +155,20 @@ describe('how a table stands in its frame', () => {
     await nextTick()
     await nextTick()
     expect(laidOut).toEqual(['one', 'two', 'least'])
+  })
+
+  it("puts the headings on two lines before the page's cells wrap, and wraps them only past that", async () => {
+    // 900 pixels with everything on one line, 800 with the headings on two, 700 wrapped as well.
+    const needs = { one: 900, two: 800, wrap: 700 }
+    const one = mountBox(WRAPS, [needs], 900)
+    const two = mountBox(WRAPS, [needs], 850)
+    await nextTick()
+    expect([one.fit(), two.fit()]).toEqual(['one', 'two'])
+    laidOut = []
+    const wrapped = mountBox(WRAPS, [needs], 750)
+    await nextTick()
+    expect(wrapped.fit()).toBe('wrap')
+    // The page's answer is what is left: it is never laid out.
+    expect(laidOut).toEqual(['one', 'two'])
   })
 })

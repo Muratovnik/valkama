@@ -14,9 +14,12 @@
  *
  * Where no step fits, the table takes the page's answer for that (`otherwise`): a table of
  * records read as words, and Volumes' work outside goals with each figure beside its category's
- * name, stands each record as a block of its own (`stack`), and another table of figures keeps its
- * headings on two lines and scrolls sideways in its frame, its names held at its start; the least
- * only pays for its narrower columns when it brings every column in. Which step fits depends on
+ * name, stands each record as a block of its own (`stack`), a table whose cells the page lets
+ * wrap, the Analytics Model section's, has its headings as at `two` and those cells wrapped
+ * (`wrap`), and another table of figures keeps its headings on two lines; where it still does not
+ * fit, it scrolls sideways in its frame, its names held at its start. The page's answer is taken
+ * without being laid out, since nothing narrower follows it. The least only pays for its narrower
+ * columns when it brings every column in. Which step fits depends on
  * the words as much as on the frame — in Analytics «Ранее, 10 нояб., 00:00–14:30» over «Today» is
  * longer than the week's — so it is measured, never guessed from a width: a table of words
  * stacked by the width of a phone alone left «What was decided» past its frame at 1024 and 760,
@@ -45,8 +48,9 @@ import { useEventListener, useResizeObserver } from '@vueuse/core'
 /** The width the box's tables share for their names' column, set on each of them. */
 const NAMES = '--table-names-inline-size'
 
-/** The steps a table is laid out at, narrowest last, and its block layout (`stack`). */
-export type TableFit = 'one' | 'two' | 'least' | 'stack'
+/** The steps a table is laid out at, narrowest last, its block layout (`stack`) and its cells
+ * wrapped (`wrap`). */
+export type TableFit = 'one' | 'two' | 'least' | 'stack' | 'wrap'
 
 /** The steps a table may stand at, in order, and what it does where none of them fits. */
 export interface TableFitRule {
