@@ -139,13 +139,17 @@ function projectsLine(space: PortfolioSpace): string {
         <VButton
           v-if="configurable(space)"
           v-tooltip.name="t('spaceWindow.configure')"
+          class="space-configure"
           variant="ghost"
           data-part="configure"
           :aria-label="configureName(space)"
           icon
           @click="configure(space)"
         >
-          <VIcon name="settings" />
+          <VIcon
+            name="settings"
+            :size="20"
+          />
         </VButton>
         <VButton
           class="open-space"
@@ -258,5 +262,13 @@ function projectsLine(space: PortfolioSpace): string {
   gap: var(--space-2);
   align-items: center;
   margin-block-start: auto;
+}
+
+/* The sign's glyph stands on the edge the card's words start at, its target reaching out past
+   it: the target's own edge there drew the glyph 10px in from every line above it. */
+.space-configure {
+  --configure-glyph: 20px;
+
+  margin-inline-start: calc(var(--configure-glyph) / 2 - var(--size-control-height) / 2);
 }
 </style>
