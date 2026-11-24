@@ -30,14 +30,9 @@ from unittest import mock
 import tests
 from server import store
 from server.store_identity.refs import planning_space_entity
-from tests import isolated, machine_lock, parallel
+from tests import heavy_gate, heavy_gate_double, isolated, legacy_lock, parallel
 from tests import test_planning_work_model_migration as work_model
-from tests.test_machine_lock import (
-    DEADLINE_SECONDS,
-    HELD_SECONDS,
-    goes_in_at_once,
-    held_elsewhere,
-)
+from tests.test_legacy_lock import earlier_whole_machine_run
 from tests.test_mcp_front import alive, wait_until
 from tests.test_registry_owner import _former_inventory, _former_projection
 from tests.test_release import link_directory
@@ -610,18 +605,22 @@ class GateTests(Workspace):
         self.assertTrue(self.home.exists())
 
 
-class HeavyLockTests(Workspace):
-    """The unittest step waits for the machine's heavy-test lock; no other step takes it.
+class HeavyGateTests(Workspace):
+    """The unittest step runs under a lease at the heavy-process gate; no other step takes one.
 
-    At a count of 1, one run at a time, so no step reads this machine's load.
+    The gate is `tests/heavy_gate_double.py` and the earlier branches' lock a file here.
     """
 
     def setUp(self) -> None:
         super().setUp()
         self.lock = self.root / "heavy.lock"
-        count = mock.patch.dict(os.environ, {machine_lock.CPUS_VARIABLE: "1"})
-        count.start()
-        self.addCleanup(count.stop)
+        self.state = self.root / "gate"
+        self.entry = str(heavy_gate_double.write_entry_point(self.state))
+        environment = mock.patch.dict(os.environ)
+        environment.start()
+        self.addCleanup(environment.stop)
+        for name in (legacy_lock.HELD_BY_ANCESTOR, heavy_gate.LEASE_VARIABLE):
+            os.environ.pop(name, None)
 
     def gate_runs(self, *only: str, each: bool = False) -> list[isolated.Run]:
         """The runs `gates --only ...` would hand to `run_gates`; with `each`, one `--only` a name."""
@@ -645,14 +644,29 @@ class HeavyLockTests(Workspace):
         self.assertIn("desktop-test", repeated)
         self.assertIn("web-test", repeated)
 
-    def test_of_the_whole_list_only_the_unittest_step_takes_the_lock(self) -> None:
+    def test_of_the_whole_list_only_the_unittest_step_takes_a_lease(self) -> None:
         gated = [run.name for run in self.gate_runs("python", "web", "desktop") if run.gated]
         self.assertEqual(["unittest"], gated)
 
-    def test_a_selection_without_the_unittest_step_takes_no_lock(self) -> None:
+    def test_a_selection_without_the_unittest_step_takes_none(self) -> None:
         self.assertEqual([], [run.name for run in self.gate_runs("coverage", "web") if run.gated])
 
-    def test_the_gated_step_waits_for_the_holder_and_a_light_one_does_not(self) -> None:
+    def gates(self, runs: list[isolated.Run], environment: dict[str, str] | None = None) -> int:
+        code, _ = quietly(
+            lambda: isolated.run_gates(
+                runs,
+                self.out,
+                os.environ if environment is None else environment,
+                lock=self.lock,
+                gate=self.entry,
+                record={"format": 1},
+            )
+        )
+        return code
+
+    def test_the_gated_step_runs_under_a_lease_of_the_runners_kind_and_a_light_one_does_not(
+        self,
+    ) -> None:
         marker = self.root / "ran"
         heavy = isolated.Run(
             "unittest",
@@ -660,135 +674,79 @@ class HeavyLockTests(Workspace):
             ROOT,
             gated=True,
         )
-        result: list[tuple[int, str]] = []
-        with held_elsewhere(self.lock, "another checkout's suite") as release:
-            code, _ = quietly(
-                lambda: isolated.run_gates(
-                    [self.run_python("light", "print(1)")], self.out, os.environ, lock=self.lock
-                )
-            )
-            self.assertEqual(0, code, "a light step waited for the lock")
-
-            waiting = threading.Thread(
-                target=lambda: result.append(
-                    quietly(
-                        lambda: isolated.run_gates([heavy], self.out, os.environ, lock=self.lock)
-                    )
-                ),
-                daemon=True,
-            )
-            waiting.start()
-            waiting.join(HELD_SECONDS)
-            self.assertFalse(marker.exists(), "the unittest step ran beside the holder")
-            release.set()
-            waiting.join(DEADLINE_SECONDS)
+        self.assertEqual(0, self.gates([self.run_python("light", "print(1)"), heavy]))
 
         self.assertTrue(marker.exists())
-        self.assertEqual(0, result[0][0])
-        summary = (self.out / isolated.SUMMARY).read_text(encoding="utf-8")
-        self.assertIn("it is held by another checkout's suite", summary)
-        self.assertIn("took the heavy-test lock after", summary)
+        [call] = heavy_gate_double.calls(self.state)
+        self.assertEqual(["run", "--kind", parallel.KIND], call[:3])
+        # The runner inside runs the share the gate gives of the processes it would run.
+        self.assertEqual(str(parallel.default_jobs()), call[call.index("--want") + 1])
+        self.assertEqual(heavy.argv, call[-len(heavy.argv) :])
         # The step's own log opens with what the gate said, which its record reads.
         said = (self.out / isolated.LOGS / "unittest.log").read_text(encoding="utf-8")
-        self.assertTrue(said.startswith("waiting for the heavy-test lock "), said)
-        self.assertIn("\ntook the heavy-test lock after ", said)
-        goes_in_at_once(self, self.lock)
+        self.assertTrue(
+            said.startswith(f"heavy-gate: admitted valkama:{parallel.KIND} after"), said
+        )
+        light = (self.out / isolated.LOGS / "light.log").read_text(encoding="utf-8")
+        self.assertNotIn("heavy-gate", light)
+        summary = (self.out / isolated.SUMMARY).read_text(encoding="utf-8")
+        self.assertIn("unittest       runs under the heavy-process gate as valkama:", summary)
+        # The record keeps the step as the instructions spell it, and its admission.
+        record = json.loads((self.out / "record.json").read_text(encoding="utf-8"))
+        step = record["steps"][1]
+        self.assertEqual(heavy.argv, step["argv"])
+        self.assertEqual(f"valkama:{parallel.KIND}", step["admitted"][0]["lease"])
 
-    def test_the_gated_step_declares_what_the_suite_s_processes_need(self) -> None:
-        # The step's runner starts under this hold and declares nothing more of its own,
-        # so the hold is what its default number of processes would declare at the gate.
-        heavy = isolated.Run("unittest", [sys.executable, "-c", "0"], ROOT, gated=True)
-        with mock.patch.object(machine_lock, "held", wraps=machine_lock.held) as held:
-            quietly(lambda: isolated.run_gates([heavy], self.out, os.environ, lock=self.lock))
-        runner = parallel.gate_command([], "the whole suite", parallel.default_jobs())
-        declared = runner[runner.index("--cpus") + 1]
-        self.assertEqual(declared, str(held.call_args.kwargs["cpus"]))
-
-    def taking_the_lock(self, name: str, *, gated: bool = False) -> isolated.Run:
-        """A step that takes the lock itself, as the suite in the unittest step and `npm test` do."""
-
-        return isolated.Run(
-            name,
-            [
-                *(sys.executable, str(ROOT / "tests" / "machine_lock.py"), "run"),
-                *(f"--run=the {name} step's own run", f"--path={self.lock}"),
-                *("--", sys.executable, "-c", "print('in')"),
-            ],
+    def test_in_an_agent_session_no_room_fails_the_step_at_once_and_the_suite_never_runs(
+        self,
+    ) -> None:
+        marker = self.root / "ran"
+        heavy = isolated.Run(
+            "unittest",
+            [sys.executable, "-c", f"open({str(marker)!r}, 'w').close()"],
             ROOT,
-            gated=gated,
+            gated=True,
         )
+        (self.state / "refuse").write_text("")
+        self.assertEqual(1, self.gates([heavy], {**os.environ, "CLAUDECODE": "1"}))
 
-    def gates_in_a_thread(
-        self, runs: list[isolated.Run], environment: dict[str, str]
-    ) -> tuple[threading.Thread, list[tuple[int, str]]]:
-        result: list[tuple[int, str]] = []
-        thread = threading.Thread(
-            target=lambda: result.append(
-                quietly(lambda: isolated.run_gates(runs, self.out, environment, lock=self.lock))
-            ),
-            daemon=True,
+        self.assertFalse(marker.exists())
+        summary = (self.out / isolated.SUMMARY).read_text(encoding="utf-8")
+        self.assertIn(f"unittest       exit={heavy_gate.EXIT_NO_ROOM}", summary)
+        self.assertIn(heavy_gate_double.REFUSAL, summary)
+
+    def suite_step(self) -> isolated.Run:
+        """The unittest step as the suite inside takes its lease: `load_tests`'s own call."""
+
+        source = (
+            f"import sys; sys.path.insert(0, {str(ROOT)!r}); from pathlib import Path;"
+            "from tests import heavy_gate;"
+            f"heavy_gate.hold_until_exit('unittest-suite', lock=Path({str(self.lock)!r}),"
+            f" gate={self.entry!r}); print('in')"
         )
-        thread.start()
-        return thread, result
+        return isolated.Run("unittest", [sys.executable, "-c", source], ROOT, gated=True)
 
-    def unmarked(self) -> dict[str, str]:
-        """This environment without a mark, as the gates build each step's."""
+    def test_the_suite_inside_the_gated_step_takes_no_lease_of_its_own(self) -> None:
+        self.assertEqual(0, self.gates([self.suite_step()]))
 
-        return {
-            name: value
-            for name, value in os.environ.items()
-            if name != machine_lock.HELD_BY_ANCESTOR
-        }
-
-    def test_the_suite_inside_the_gated_step_does_not_wait_for_its_own_step(self) -> None:
-        thread, result = self.gates_in_a_thread(
-            [self.taking_the_lock("unittest", gated=True)], self.unmarked()
-        )
-        thread.join(DEADLINE_SECONDS)
-
-        self.assertFalse(thread.is_alive(), "the step waited for the lock its own step holds")
-        self.assertEqual(0, result[0][0])
-        self.assertNotIn(
-            "waiting", (self.out / isolated.LOGS / "unittest.log").read_text(encoding="utf-8")
-        )
-
-    def test_a_light_step_that_takes_the_lock_itself_waits_for_another_holder(self) -> None:
-        log = self.out / isolated.LOGS / "web-test.log"
-        with held_elsewhere(self.lock, "another checkout's browser run") as release:
-            thread, result = self.gates_in_a_thread(
-                [self.taking_the_lock("web-test")], self.unmarked()
-            )
-            self.assertTrue(
-                wait_until(
-                    lambda: log.exists() and b"it is held by" in log.read_bytes(),
-                    seconds=DEADLINE_SECONDS,
-                ),
-                "the step never said it was waiting",
-            )
-            self.assertNotIn("in", log.read_text(encoding="utf-8").splitlines())
-            release.set()
-            thread.join(DEADLINE_SECONDS)
-
-        self.assertEqual(0, result[0][0])
-        said = log.read_text(encoding="utf-8")
-        self.assertIn("it is held by another checkout's browser run", said)
-        self.assertIn("took the heavy-test lock after", said)
+        verbs = [call[0] for call in heavy_gate_double.calls(self.state)]
+        self.assertEqual(["run"], verbs)
+        said = (self.out / isolated.LOGS / "unittest.log").read_text(encoding="utf-8")
         self.assertIn("in", said.splitlines())
 
-    def test_a_gates_run_under_a_holder_passes_the_hold_on_to_every_step(self) -> None:
-        with held_elsewhere(self.lock, "the run that started the gates"):
-            with mock.patch.dict(os.environ, machine_lock.marker(self.lock)):
-                thread, result = self.gates_in_a_thread(
-                    [
-                        self.taking_the_lock("web-test"),
-                        self.taking_the_lock("unittest", gated=True),
-                    ],
-                    self.unmarked(),
-                )
-                thread.join(DEADLINE_SECONDS)
-
-        self.assertFalse(thread.is_alive(), "a step waited for the run that started the gates")
-        self.assertEqual(0, result[0][0])
+    def test_a_gates_run_under_a_holder_passes_the_mark_on_to_every_step(self) -> None:
+        # The run that started the gates holds the earlier branches' lock; its steps are
+        # its own, so none of them waits for it, even where none may wait.
+        with earlier_whole_machine_run(self.lock):
+            with mock.patch.dict(os.environ, legacy_lock.marker(self.lock)):
+                unmarked = {
+                    name: value
+                    for name, value in os.environ.items()
+                    if name != legacy_lock.HELD_BY_ANCESTOR
+                }
+                code = self.gates([self.suite_step()], {**unmarked, "CLAUDECODE": "1"})
+        self.assertEqual(0, code)
+        self.assertEqual(["run"], [call[0] for call in heavy_gate_double.calls(self.state)])
 
 
 def locked_entry(name: str, version: str, **flags: object) -> dict:

@@ -1,6 +1,6 @@
 """Run test modules in several processes at once, with one verdict for all of them.
 
-    python tests/parallel.py [--jobs N] [--coverage] [--run WHAT] [MODULE ...]
+    python tests/parallel.py [--jobs N] [--coverage] [MODULE ...]
 
 With no MODULE it runs the whole suite: every module `unittest discover -s . -p
 "test_*.py"` finds, found the way discovery walks the `tests` package. Each
@@ -18,9 +18,12 @@ error of its module, and so does one whose exit code disagrees with its report;
 nothing is lost because a module took its process down. A module named twice
 runs once.
 
-The run holds a place at the machine's heavy-test gate, `tests/machine_lock.py`,
-declaring one CPU for every `PROCESSES_PER_CPU` processes it runs at once, unless
-a holder started it, as `tests/isolated.py gates` does. `--coverage` runs every process
+The run takes a lease at the machine's heavy-process gate, through
+`tests/heavy_gate.py`, as the kind `KIND` sized by its modules and wanting `--jobs`
+processes at once, and runs as many as the share K the gate gives; unless a holder
+started it, as `tests/isolated.py gates` does, whose lease gives it K the same way.
+In an agent's session a run that finds no room exits 75 at once, saying why;
+`HEAVY_GATE_WAIT=1` makes it wait. `--coverage` runs every process
 under `coverage run --parallel-mode` and combines their data at the end, into
 the data file `coverage report` reads.
 
@@ -54,17 +57,16 @@ ROOT = Path(__file__).resolve().parents[1]
 
 #: The pattern the gates' discovery is spelled with.
 PATTERN = "test_*.py"
-#: How many worker processes count as one logical CPU at the gate. A test process
-#: waits on its disk, its children and its sockets far more than it computes: eight
-#: at once over 132 modules used 1.5 CPUs on average and 3.1 at most over any ten
-#: seconds, their children included, so eight declare four.
-PROCESSES_PER_CPU = 2
+#: The kind of run this is at the heavy-process gate, as `.heavy-gate.toml` declares it.
+KIND = "unittest-parallel"
 #: How many processes run at once by default, and fewer on a machine with fewer CPUs.
 DEFAULT_JOBS = 8
-#: The variable a holder of the heavy-test lock sets for what it starts,
-#: `tests.machine_lock.HELD_BY_ANCESTOR`, held equal by a test: not imported from
+#: The variable a run under a lease sets for what it starts,
+#: `tests.legacy_lock.HELD_BY_ANCESTOR`, held equal by a test: not imported from
 #: there, since importing the package moves the environment the workers inherit.
 HELD_VARIABLE = "VALKAMA_HEAVY_TEST_LOCK_HELD"
+#: The share of processes the gate gave the lease this run is under.
+K_VARIABLE = "HEAVY_GATE_K"
 #: The last run's seconds for each module, which orders the next run.
 DURATIONS = ROOT / ".cache" / "test-durations.json"
 #: How often the caller looks at its workers.
@@ -79,10 +81,14 @@ def default_jobs(cpus: int | None = None) -> int:
     return max(1, min(DEFAULT_JOBS, (cpus or os.cpu_count() or 1) // 2))
 
 
-def declared_cpus(jobs: int) -> int:
-    """What a run of `jobs` processes at once declares at the heavy-test gate."""
+def granted_jobs(jobs: int, environment: Mapping[str, str] = os.environ) -> int:
+    """The processes a run under a lease runs at once: the share K its gate gave, else `jobs`."""
 
-    return -(-jobs // PROCESSES_PER_CPU)
+    try:
+        k = int(environment.get(K_VARIABLE, ""))
+    except ValueError:
+        return jobs
+    return k if k >= 1 else jobs
 
 
 def whole_suite(root: Path = ROOT, pattern: str = PATTERN, package: str = "tests") -> list[str]:
@@ -415,13 +421,13 @@ def _coverage(*arguments: str, cwd: Path) -> int:
     ).returncode
 
 
-def gate_command(argv: Sequence[str], what: str, jobs: int) -> list[str]:
-    """This run again, through the machine's heavy-test gate, declaring what `jobs` processes need."""
+def gate_command(argv: Sequence[str], modules: int, jobs: int) -> list[str]:
+    """This run again, under a lease at the heavy-process gate for `modules` wanting `jobs`."""
 
-    lock = str(ROOT / "tests" / "machine_lock.py")
+    gate = str(ROOT / "tests" / "heavy_gate.py")
     return [
-        *(sys.executable, lock, "run", "--run", what, "--cpus", str(declared_cpus(jobs))),
-        *("--", sys.executable, str(Path(__file__).resolve()), *argv),
+        *(sys.executable, gate, "run", "--kind", KIND, "--size", str(modules)),
+        *("--want", str(jobs), "--", sys.executable, str(Path(__file__).resolve()), *argv),
     ]
 
 
@@ -441,7 +447,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--jobs", type=int, default=default_jobs(), help="processes at once (default %(default)s)"
     )
     parser.add_argument("--coverage", action="store_true", help="measure every process")
-    parser.add_argument("--run", help="what the run is, as a waiter at the gate reads it")
     parser.add_argument("--worker", type=Path, metavar="REPORT", help=argparse.SUPPRESS)
     arguments = list(sys.argv[1:] if argv is None else argv)
     options = parser.parse_args(arguments)
@@ -454,11 +459,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     modules = list(dict.fromkeys(options.modules)) or whole_suite()
     jobs = min(options.jobs, len(modules))
     if HELD_VARIABLE not in os.environ:
-        whole = (
-            "the whole unittest suite" if not options.modules else f"{len(modules)} test modules"
-        )
-        what = options.run or f"tests/parallel.py: {whole}, {jobs} at a time"
-        return subprocess.run(gate_command(arguments, what, jobs), check=False).returncode
+        return subprocess.run(gate_command(arguments, len(modules), jobs), check=False).returncode
+    jobs = min(granted_jobs(jobs), len(modules))
     if options.coverage:
         _coverage("erase", cwd=ROOT)
     code = run(modules, jobs, coverage=options.coverage, say=_say)

@@ -33,7 +33,7 @@ from unittest import mock
 
 from server import store
 from server.store_identity.refs import planning_space_entity
-from tests import agent_probes, agent_probes_judge, machine_lock
+from tests import agent_probes, agent_probes_judge
 from tests import test_planning_work_model_migration as work_model
 from tests.test_registry_owner import _former_inventory as former_inventory
 from tests.test_registry_owner import _former_projection as former_projection
@@ -1237,11 +1237,7 @@ class HomeLockTests(unittest.TestCase):
                 mock.patch.object(agent_probes, "_say", said.append),
                 mock.patch.object(agent_probes, "build_profile", build),
             ):
-                with machine_lock.held(
-                    "the first probe run",
-                    path=agent_probes.home_lock(home),
-                    say=lambda _line: None,
-                ):
+                with agent_probes.home_held("the first probe run", home, say=lambda _line: None):
                     waiter.start()
                     deadline = time.monotonic() + 15.0
                     while not said and time.monotonic() < deadline:

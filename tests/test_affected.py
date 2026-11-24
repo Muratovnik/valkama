@@ -181,10 +181,11 @@ class RunTest(unittest.TestCase):
         )
 
     def test_a_larger_selection_runs_in_several_processes_through_the_runner(self) -> None:
-        # The runner goes through the machine's heavy-test gate itself, declaring its processes.
+        # The runner takes its lease at the machine's heavy-process gate itself.
         command = affected.run_command(["tests.test_a", "tests.test_b"], 4)
         self.assertEqual(
-            [sys.executable, str(affected.ROOT / "tests" / "parallel.py"), "--run"], command[:3]
+            [sys.executable, str(affected.ROOT / "tests" / "parallel.py"), "tests.test_a"],
+            command[:3],
         )
         self.assertEqual(["tests.test_a", "tests.test_b"], command[-2:])
         self.assertNotIn("--jobs", command)
@@ -195,14 +196,15 @@ class RunTest(unittest.TestCase):
     def test_one_job_runs_a_heavy_selection_in_one_process_through_the_gate(self) -> None:
         command = affected.run_command(["tests.test_a", "tests.test_b"], 4, jobs=1)
         self.assertEqual(
-            [sys.executable, str(affected.ROOT / "tests" / "machine_lock.py"), "run"], command[:3]
+            [sys.executable, str(affected.ROOT / "tests" / "heavy_gate.py"), "run"], command[:3]
         )
         self.assertEqual(
             [*self.UNITTEST, "tests.test_a", "tests.test_b"], command[command.index("--") + 1 :]
         )
-        # Declaring nothing asks the gate for the whole machine: nothing would go beside it.
+        # The kind of the whole suite in one process, sized by the modules it runs.
         options = command[: command.index("--")]
-        self.assertEqual(str(tests.WHOLE_SUITE_CPUS), options[options.index("--cpus") + 1])
+        self.assertEqual(tests.WHOLE_SUITE_KIND, options[options.index("--kind") + 1])
+        self.assertEqual("2", options[options.index("--size") + 1])
 
 
 def present(commit: str) -> bool:

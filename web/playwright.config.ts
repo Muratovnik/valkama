@@ -48,7 +48,7 @@ const testIgnore = clipboardIgnore(process.env)
 const production = /(?:^|[\\/])production-(?!locale\.)[a-z0-9-]+\.spec\.ts$/
 const inEnglish = { ...devices['Desktop Chrome'], baseURL: app, locale: 'en-US' }
 
-// A failed run names who holds the heavy-test lock as it ends; a `--reporter` given on the
+// A failed run names the heavy runs going as it ends; a `--reporter` given on the
 // command line replaces both, as the suite runner's does.
 const reporter: ReporterDescription[] = [['line'], [join(specs, 'lockHolderReporter.ts')]]
 
