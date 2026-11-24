@@ -104,15 +104,17 @@ for (const colorScheme of ['light', 'dark'] as const)
       await page.goto(pageAt())
       await expect(entry(page, 'quota_week').locator('.rail-tile-lead')).toHaveText(NIGHT_NAME)
 
-      // The quota's tiles after the token kinds, before the dimensions.
+      // The quota's tiles after the token kinds; then the pauses, before the dimensions
+      // (`usePageSections`, DESIGN.md: the rail).
       const sections = await page
         .locator('.analytics-rail-entry')
         .evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).dataset.section))
-      expect(sections.slice(0, 5)).toEqual([
+      expect(sections.slice(0, 6)).toEqual([
         'overview',
         'token_kind',
         'quota_five_hour',
         'quota_week',
+        'pauses',
         'seat',
       ])
       await expect(entry(page, 'quota_five_hour')).toContainText('a1b2c3d4')
