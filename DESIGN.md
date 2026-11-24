@@ -895,10 +895,12 @@ takes at most two fifths of the row and wraps there rather than take its folder'
 folder, cut in its middle so that its last folder, which tells one project from the next, stays
 whole while the row has room for it, and shown whole in its hint, its «…» against that last
 folder in every row: given the whole room before the last folder, the cut start hid whole
-letters and left what was left of one empty after its «…», from none to some 8px; and its
-remove. The default has no remove while the space has other projects, so the window repeats the
-server's rule rather than meeting its refusal, and the first project added becomes the default
-by itself. «Add project» searches the registered projects the space does not have, those in no
+letters and left what was left of one empty after its «…», from none to some 8px; a last
+folder cut too leaves the start its first letter and the whole «…», which a fixed share drew as
+the letter and one dot; and its remove. The default has no remove while the space has other
+projects, so the window repeats the server's rule rather than meeting its refusal, and the first
+project added becomes the default by itself. «Add project» searches the registered projects
+the space does not have, those in no
 space first, then those of other spaces with what moving one means, each part by name as the
 rows are; what is typed finds a project by its name before one only its folder matches, those
 in no space still first among the names, and a folder's path in the list breaks where its line

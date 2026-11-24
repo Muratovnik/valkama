@@ -16,7 +16,9 @@
  * The start of a cut folder is as wide as what it shows of itself and its «…», worked out from
  * the room its row leaves it (`ellipsisFit`), so the «…» stands against the last folder in every
  * row: given all that room, the start hid whole letters and left what remained of one empty
- * after its «…», from none to some 8px a row.
+ * after its «…», from none to some 8px a row. A last folder cut too leaves the start its first
+ * letter and the whole «…» (`ellipsisLeast`): a fixed 1.5em left some starts less, and the
+ * browser drew the letter and one dot of the «…».
  *
  * «Add project» is a search over the registered projects the space does not have: those in
  * no space first, then those of other spaces, which say what moving one means. What is typed
@@ -45,7 +47,7 @@ import {
 import type { ProjectChoice, SpaceDraft } from '@/features/space-window/spaceDraft.ts'
 import SpaceFolderProject from '@/features/space-window/SpaceFolderProject.vue'
 
-import { ellipsisFit } from '@/shared/lib/ellipsisFit.ts'
+import { ellipsisFit, ellipsisLeast } from '@/shared/lib/ellipsisFit.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import SearchCombobox from '@/shared/ui/SearchCombobox.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
@@ -108,30 +110,40 @@ const folderOpen = ref(false)
 /**
  * How wide each cut folder's start stands, by its project: what it shows of itself and its «…»
  * in the room the row leaves it beside the last folder, the «…» measured on one drawn in the
- * folders' type (`dots`). Read again whenever a folder's box or its last folder's changes, which
- * covers another width, another row and the fonts arriving.
+ * folders' type (`dots`); and the least a start shows, its first letter and its «…», which a
+ * last folder cut too leaves it. Read again whenever a folder's box or its last folder's
+ * changes, which covers another width, another row and the fonts arriving.
  */
 const dots = useTemplateRef<HTMLElement>('dots')
 const roots = useTemplateRef<HTMLElement[]>('roots')
 const tails = useTemplateRef<HTMLElement[]>('tails')
 const headFits = shallowRef<Partial<Record<string, number>>>({})
+const headLeasts = shallowRef<Partial<Record<string, number>>>({})
 function fitHeads() {
   const fits: Partial<Record<string, number>> = {}
+  const leasts: Partial<Record<string, number>> = {}
   for (const root of roots.value ?? []) {
     const words = root.querySelector('[data-part="root-head"]')?.firstChild
     const tail = root.querySelector<HTMLElement>('[data-part="root-tail"]')
     const project = root.closest<HTMLElement>('[data-project]')?.dataset.project
     if (!(words instanceof Text) || !tail || !dots.value || project === undefined) continue
     const room = root.getBoundingClientRect().width - tail.getBoundingClientRect().width
-    const fit = ellipsisFit(words, room, dots.value.getBoundingClientRect().width)
+    const dotsWidth = dots.value.getBoundingClientRect().width
+    leasts[project] = ellipsisLeast(words, dotsWidth)
+    const fit = ellipsisFit(words, room, dotsWidth)
     if (fit !== null) fits[project] = fit
   }
   headFits.value = fits
+  headLeasts.value = leasts
 }
 useResizeObserver(() => [...(roots.value ?? []), ...(tails.value ?? [])], fitHeads)
 const headFit = (project: string) => {
   const fit = headFits.value[project]
   return fit === undefined ? undefined : { '--root-head-fit': `${String(fit)}px` }
+}
+const headLeast = (project: string) => {
+  const least = headLeasts.value[project]
+  return least === undefined ? undefined : { '--root-head-least': `${String(least)}px` }
 }
 </script>
 
@@ -187,6 +199,7 @@ const headFit = (project: string) => {
           v-tooltip.clipped="project.root"
           class="project-root"
           data-part="root"
+          :style="headLeast(project.project_id)"
           ><span
             v-if="project.path.head"
             class="root-head one-line"
@@ -332,10 +345,12 @@ const headFit = (project: string) => {
 
 /* Cut in its middle: what comes before its last folder gives way first, ending in «…», and
    the last folder, with the separator before it, stays whole while the row has room for it,
-   then is cut at its end too. A little of the start is always left, so the «…» says a part is
-   missing. A cut start is as wide as what it shows (`--root-head-fit`), so its «…» stands
-   against the last folder. */
+   then is cut at its end too. The start's first letter and its whole «…» are always left
+   (`--root-head-least`, measured), so the «…» says a part is missing. A cut start is as wide
+   as what it shows (`--root-head-fit`), so its «…» stands against the last folder. */
 .project-root {
+  --root-head-least: 1.5em;
+
   display: flex;
   min-width: 0;
   color: var(--color-text-muted);
@@ -361,8 +376,6 @@ const headFit = (project: string) => {
 }
 
 .root-tail {
-  --root-head-least: 1.5em;
-
   flex: 0 0 auto;
   max-width: calc(100% - var(--root-head-least));
 
