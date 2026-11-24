@@ -41,8 +41,12 @@ function runner(lists: Record<string, string> = {}, more: readonly string[] = []
   const written: string[][] = []
   const said: string[] = []
   const playwright = vi.fn(
-    (_args: readonly string[], _clipboard: boolean, _lock: string | null, _list: string) =>
-      Promise.resolve(0),
+    (
+      _args: readonly string[],
+      _clipboard: boolean,
+      _lease: { size: number } | null,
+      _list: string,
+    ) => Promise.resolve(0),
   )
   const io: RunnerIo = {
     playwright,
@@ -221,16 +225,15 @@ describe('the allowed browser run', () => {
     expect(batch.playwright.mock.calls[0]?.[0]).toContain('--test-list=list.txt')
   })
 
-  it('holds the heavy-test lock for a run, naming what it runs, and for --list holds none', async () => {
+  it('runs under a lease sized by the specs it runs, and for --list under none', async () => {
     const whole = runner()
     expect(await runAllowed([], whole.io)).toBe(0)
-    expect(whole.playwright.mock.calls[0]?.[2]).toMatch(
-      /^npm run test:browser:allowed, the whole suite, harness port \d+$/,
-    )
+    // The whole allowed set: the clipboard specs are left out.
+    expect(whole.playwright.mock.calls[0]?.[2]).toEqual({ size: allowed.length })
 
     const batch = runner({ 'batch.txt': 'ui-buttons.spec.ts\n' })
     expect(await runAllowed(['--specs=batch.txt'], batch.io)).toBe(0)
-    expect(batch.playwright.mock.calls[0]?.[2]).toContain('the specs batch.txt names')
+    expect(batch.playwright.mock.calls[0]?.[2]).toEqual({ size: 1 })
 
     const listed = runner()
     expect(await runAllowed(['--list'], listed.io)).toBe(0)
@@ -257,17 +260,22 @@ describe('the allowed browser run', () => {
     expect(realIo.suiteSpecs()).toEqual(expect.arrayContaining([...clipboardSpecs]))
   })
 
-  it('runs Playwright through the gate declaring no CPUs, so it asks for the whole machine', async () => {
-    expect(
-      await realIo.playwright(['--workers=4'], false, 'the whole browser suite', 'list.txt'),
-    ).toBe(0)
+  it('runs Playwright through the gate as the browser suite, sized by its specs', async () => {
+    expect(await realIo.playwright(['--workers=4'], false, { size: 12 }, 'list.txt')).toBe(0)
     expect(spawnInherited).toHaveBeenCalledTimes(1)
     const [call] = vi.mocked(spawnInherited).mock.calls
     const command = call?.[0] ?? []
     const gate = command.slice(0, command.indexOf('--'))
-    expect(gate).toContain('--run=the whole browser suite')
-    // The present control is the Vitest run's `--cpus=8`, in `unitRun.test.ts`.
+    expect(gate).toEqual(expect.arrayContaining(['run', '--kind=browser-suite', '--size=12']))
+    // The gate counts the run by its kind and size, not by CPUs it declares.
     expect(gate.some((word) => word.startsWith('--cpus'))).toBe(false)
     expect(command.at(-1)).toBe('--workers=4')
+  })
+
+  it('runs Playwright straight, under no lease, for a run that takes none', async () => {
+    vi.mocked(spawnInherited).mockClear()
+    expect(await realIo.playwright(['--list'], false, null, 'list.txt')).toBe(0)
+    const [call] = vi.mocked(spawnInherited).mock.calls
+    expect(call?.[0]).toEqual([process.execPath, expect.stringMatching(/cli\.js$/), '--list'])
   })
 })

@@ -17,7 +17,15 @@
  * column at the least that breaks no word where two lines still do not (`least`), the page
  * letting its own columns give way there; a page may keep its headings to two lines instead
  * (`least` off). Where even that does not fit, a table of figures keeps two lines and scrolls
- * sideways in its frame, the first column held at its start.
+ * sideways in its frame, the first column held at its start. A page whose cells may take more
+ * lines asks to (`wrap`): where two lines over its figures do not fit, the table stands at
+ * `wrap`, its headings as at `two` and the page's cells wrapped, before it scrolls; a page that
+ * keeps its figures' words on one line until then says so in its own cells' rules.
+ *
+ * A page whose names keep their own width (`rest`, the Model section's ids, which are never cut)
+ * lets the figures share what the names leave instead, each heading no narrower than its words.
+ * What else a heading holds after its sort button is the page's (`heading`), such as the unseen
+ * room of the longest name, which sets its column's least width as a heading cell does.
  *
  * The page's rows (`rows`) are rows of the table's body, each written with the cells the columns
  * name; a page whose rows are a tree's says so (`tree`). While the page has nothing to table yet
@@ -65,14 +73,26 @@ const props = withDefaults(
      * scrolls; without it, its headings keep to two lines and it scrolls.
      */
     least?: boolean
+    /** Which columns take the width the others leave: the names' first column, or the figures'. */
+    rest?: 'figures' | 'names'
     /** Where its columns do not fit, each row stands as a block of its cells rather than scrolling. */
     stack?: boolean
     /** The rows are a tree's, every one of them drawn (`ChartTable`). */
     tree?: boolean
+    /** Where two lines over its figures do not fit, the page's cells wrap before it scrolls. */
+    wrap?: boolean
     /** What a heading's press does, in words, for each column's words. */
     sortWords: (column: string) => string
   }>(),
-  { held: false, holds: () => [], least: true, stack: false, tree: false },
+  {
+    held: false,
+    holds: () => [],
+    least: true,
+    rest: 'names',
+    stack: false,
+    tree: false,
+    wrap: false,
+  },
 )
 /** A column's heading pressed to sort by it. */
 const emit = defineEmits<{ sort: [column: string] }>()
@@ -83,6 +103,8 @@ defineSlots<{
   foot?: () => unknown
   /** The page's heading over the table. */
   head?: () => unknown
+  /** What a column's heading holds after its sort button. */
+  heading?: (props: { column: { key: string } }) => unknown
   /** What stands in the frame's place while the page has nothing to table yet. */
   held?: () => unknown
   /** The rows of the table's body. */
@@ -102,9 +124,10 @@ const rule = computed((): TableFitRule =>
     : { steps: ['one'], otherwise: 'one' },
 )
 /** How it stands in its frame: the first step whose columns fit, else stacked or scrolling. */
-const fit = useTableFit(root, [() => props.holds, () => props.held], () =>
-  props.stack ? { ...rule.value, otherwise: 'stack' } : rule.value,
-)
+const fit = useTableFit(root, [() => props.holds, () => props.held], () => {
+  if (props.stack) return { ...rule.value, otherwise: 'stack' }
+  return props.wrap ? { ...rule.value, otherwise: 'wrap' } : rule.value
+})
 
 /** Brings the table into view, its heading row at the top, with the focus on it. */
 function reveal() {
@@ -122,6 +145,7 @@ defineExpose({ reveal })
     class="section-table"
     tabindex="-1"
     :data-fit="fit"
+    :data-rest="rest"
     :aria-label="label"
   >
     <slot name="head" />
@@ -164,6 +188,10 @@ defineExpose({ reveal })
                 :size="12"
               />
             </button>
+            <slot
+              name="heading"
+              :column="column"
+            />
           </th>
         </tr>
       </thead>
@@ -263,11 +291,17 @@ defineExpose({ reveal })
   white-space: nowrap;
 }
 
+/* Where the figures take what the names leave (`rest`), a column of figures takes its share. */
+.section-table[data-rest='figures'] .chart-cell[data-numeric='true'] {
+  inline-size: auto;
+}
+
 /* The headings over figures on two lines, each column at its least: the frame of a narrower table,
    or headings longer than its frame has room for on one line. A figure then stands inside the
    frame's edge rather than past it. Where the least would leave the table a sliver past its
-   frame, the headings give it (`ChartTable`). */
-.section-table[data-fit='two'] .chart-heading[data-numeric='true'] {
+   frame, the headings give it (`ChartTable`). The page's cells wrapped (`wrap`), they stand so
+   as well. */
+.section-table:is([data-fit='two'], [data-fit='wrap']) .chart-heading[data-numeric='true'] {
   min-inline-size: calc(7em - var(--chart-table-give, 0px));
   white-space: normal;
 }

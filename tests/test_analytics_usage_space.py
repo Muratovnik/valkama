@@ -13,11 +13,12 @@ from __future__ import annotations
 
 from unittest import mock
 
+from server.analytics import usage
 from server.planning import service as planning
 from server.projects import project_registry
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
-from tests.analytics_fixtures import UsageStore, day
+from tests.analytics_fixtures import DAY, START, UsageStore, day
 from tests.registry_fixtures import project_entry, registry_bytes
 
 #: The seconds of each stretch, by what it was spent on.
@@ -208,6 +209,25 @@ class SpaceAndProjectTests(SpaceCase):
             seconds("main-beta", "beta-beta", "beta-both", "place-beta"),
             self.total(project="beta"),
         )
+
+
+class ProjectRunsTests(SpaceCase):
+    """The runs a project narrows the pauses read to (`usage.project_runs`): those with a
+    stretch the usage read's project filter admits."""
+
+    def placed(self, project: str) -> set:
+        start = START.timestamp()
+        return usage.project_runs(self.conn, project, start=start, end=start + DAY)
+
+    def test_a_run_on_an_item_is_the_projects_it_names_and_one_on_none_its_places(self) -> None:
+        # MAIN's item naming beta, worked from a session standing in alpha's root: the projects
+        # the item names place it, not its space's project nor the session's place.
+        self.session("s-task", self.alpha_root)
+        self.segment("s-task", 2000, 2001, item=self.items["main-beta"])
+        alpha, beta = self.placed("alpha"), self.placed("beta")
+        self.assertEqual((False, True), (("s-task", "") in alpha, ("s-task", "") in beta))
+        self.assertEqual((True, False), (("s-in-alpha", "") in alpha, ("s-in-alpha", "") in beta))
+        self.assertEqual(set(), self.placed("gamma"))
 
 
 class SpaceRefusalTests(SpaceCase):

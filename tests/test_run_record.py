@@ -19,7 +19,7 @@ from pathlib import Path
 from unittest import mock
 
 from server import git_worktrees, processes
-from tests import isolated, machine_lock, run_record
+from tests import heavy_gate, isolated, legacy_lock, run_record
 from windows import release
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -361,8 +361,8 @@ class RunTests(TreeCase):
         versions = mock.patch.object(run_record, "tool_versions", return_value={"python": "3"})
         versions.start()
         self.addCleanup(versions.stop)
-        # The machine's lock is another checkout's business; a test asks a stand-in.
-        note = mock.patch.object(machine_lock, "load_note", return_value=None)
+        # The machine's gate is another checkout's business; a test asks a stand-in.
+        note = mock.patch.object(heavy_gate, "load_note", return_value=None)
         self.load_note = note.start()
         self.addCleanup(note.stop)
 
@@ -442,33 +442,33 @@ class RunTests(TreeCase):
             said,
         )
 
-    def test_a_failed_command_says_who_holds_the_heavy_test_lock_and_a_passing_one_does_not(
+    def test_a_failed_command_says_which_heavy_runs_were_going_and_a_passing_one_does_not(
         self,
     ) -> None:
-        self.load_note.return_value = "the heavy-test lock L was held as this run ended, by R"
+        self.load_note.return_value = "heavy runs were going as this run ended: R"
 
         said = self.ran("python", "-c", "pass")[1]
-        self.assertNotIn("heavy-test lock", said)
+        self.assertNotIn("heavy runs were going", said)
         self.load_note.assert_not_called()
         said = self.ran("python", "-c", "raise SystemExit(1)")[1]
-        self.assertIn("the heavy-test lock L was held as this run ended, by R\n", said)
+        self.assertIn("heavy runs were going as this run ended: R\n", said)
 
-    def test_the_command_runs_in_the_environment_given_and_under_no_lock(self) -> None:
+    def test_the_command_runs_in_the_environment_given_and_under_no_lease(self) -> None:
         show = "import os; print(os.environ.get('VALKAMA_PROBE'), os.environ.get(sys.argv[1]))"
         given = {
             name: value
             for name, value in os.environ.items()
-            if name != machine_lock.HELD_BY_ANCESTOR
+            if name != legacy_lock.HELD_BY_ANCESTOR
         }
         with (
-            mock.patch.object(machine_lock, "held", side_effect=AssertionError("took a lock")),
-            mock.patch.object(machine_lock, "hold_until_exit", side_effect=AssertionError),
+            mock.patch.object(heavy_gate, "run", side_effect=AssertionError("took a lease")),
+            mock.patch.object(heavy_gate, "hold_until_exit", side_effect=AssertionError),
         ):
             code, _ = self.ran(
                 "python",
                 "-c",
                 f"import sys; {show}",
-                machine_lock.HELD_BY_ANCESTOR,
+                legacy_lock.HELD_BY_ANCESTOR,
                 name="env",
                 environment={**given, "VALKAMA_PROBE": "given"},
             )
@@ -583,25 +583,26 @@ class ToolVersionTests(unittest.TestCase):
 
 
 class AdmissionTests(unittest.TestCase):
-    """What the heavy-test gate said as a step's runs went in, read back from the step's log."""
+    """What the heavy-process gate said as a step's runs went in, read back from the step's log."""
 
     def setUp(self) -> None:
         directory = tempfile.TemporaryDirectory(prefix="vk-gate-", ignore_cleanup_errors=True)
         self.addCleanup(directory.cleanup)
         self.log = Path(directory.name) / "web-test.log"
 
-    def test_each_admission_is_recorded_with_its_wait_its_load_and_the_runs_beside_it(
+    def test_each_admission_is_recorded_with_its_wait_its_share_its_load_and_its_neighbours(
         self,
     ) -> None:
-        beside = [
-            machine_lock.Entry("unittest", "C:/a", 11, 1_800_000_000.0, 2, 0, Path("a")),
-            machine_lock.Entry("browser batch", "C:/b", 22, 1_800_000_000.0, 4, 0, Path("b")),
-        ]
-        # The lines as the gate writes them: the record reads the gate's own words back.
+        # The gate's admission lines as its contract gives them, word for word, and the
+        # line of the earlier branches' lock as `tests/legacy_lock.py` writes it.
         lines = [
-            "waiting for the heavy-test lock L: it is held by someone",
-            machine_lock.admission_line(161.4, 8, 32, 0.37, beside),
-            machine_lock.admission_line(0.1, 1, 1, None, []),
+            "heavy-gate: waiting: 30.1 cores would be busy",
+            "heavy-gate: admitted valkama:browser-suite after 2 min 41 s: K=16, profile 13.1"
+            " cores 6.2 GB, machine 9.4 of 32 busy, beside 2 leases (rover:check,"
+            " valkama:vitest-suite)",
+            legacy_lock.admission_line(3.2, 14, Path("C:/T/valkama-heavy-tests-u.lock")),
+            "heavy-gate: admitted valkama:unittest-suite after 4 min 0 s: no profile yet,"
+            " machine 30.0 of 32 busy, alone, past the CPU limit, serial mode",
         ]
         self.log.write_bytes(("\r\n".join(lines) + "\r\n Tests  3 passed (3)\r\n").encode())
 
@@ -610,19 +611,39 @@ class AdmissionTests(unittest.TestCase):
         self.assertEqual(3, entry["tests"])
         admitted = entry["admitted"]
         assert isinstance(admitted, list)
-        self.assertEqual([161, 0], [gate["waited"] for gate in admitted])
-        self.assertEqual([0.37, None], [gate["busy"] for gate in admitted])
-        first, second = (gate["beside"] for gate in admitted)
-        self.assertEqual(2, len(first))
-        self.assertTrue(first[0].startswith("unittest in C:/a, process 11, since "), first)
-        self.assertTrue(first[1].endswith(", with 4 CPUs"), first)
-        self.assertEqual([], second)
+        first, earlier, last = admitted
+        self.assertEqual(
+            {
+                "gate": "heavy-gate",
+                "lease": "valkama:browser-suite",
+                "waited": 161,
+                "k": 16,
+                "profile_cores": 13.1,
+                "profile_memory_gb": 6.2,
+                "busy": round(9.4 / 32, 3),
+                "beside": ["rover:check", "valkama:vitest-suite"],
+                "past_cpu_limit": False,
+                "serial": False,
+            },
+            first,
+        )
+        self.assertEqual({"gate": "earlier branches' lock", "waited": 3, "cpus": 14}, earlier)
+        self.assertEqual(240, last["waited"])
+        self.assertIsNone(last["k"])
+        self.assertIsNone(last["profile_cores"])
+        self.assertEqual([], last["beside"])
+        self.assertTrue(last["past_cpu_limit"])
+        self.assertTrue(last["serial"])
 
     def test_a_step_whose_log_says_no_admission_records_none(self) -> None:
-        self.log.write_bytes(b"took the heavy-test lock after a while\n")
+        # The line of the lock before the gate is no admission at the gate.
+        self.log.write_bytes(b"took the heavy-test lock after 41 s: 2 of 32 CPUs, alone\n")
         self.assertNotIn("admitted", run_record.step("web-test", ["npm"], ROOT, self.log, 0))
         # Nor a refused step, whose log holds only the refusal.
-        self.log.write_bytes(machine_lock.admission_line(0, 1, 1, None, []).encode())
+        self.log.write_bytes(
+            b"heavy-gate: admitted valkama:x after 0 s: no profile yet, machine 1.0 of 32 busy,"
+            b" alone\n"
+        )
         self.assertNotIn("admitted", run_record.step("web-test", ["npm"], ROOT, self.log, None))
 
 

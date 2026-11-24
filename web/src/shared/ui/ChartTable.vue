@@ -6,7 +6,9 @@
  * phone makes one of a period table, scrolls in its own frame instead of widening the page,
  * and Tab reaches that frame, named as the table, only while it scrolls (`keyScroll`); one that
  * would scroll by less than the least target gives that sliver from its headings' floors
- * instead (`useChartTableGive`). The frame
+ * instead (`useChartTableGive`). Tables stacked one over another that should read as one give
+ * each the same `layout`: their columns then take its widths whatever their figures, so a column
+ * stands at the same edges in every table, and under its least width a table scrolls. The frame
  * is `data-region="table-frame"` and the empty state `data-region="table-empty"`, for a reader of
  * the page to measure either by. A table whose rows are a tree's, drawn whole, says so with the
  * tree's role (`tree`, `treeGridAttrs`).
@@ -24,6 +26,11 @@ const props = defineProps<{
   /** What the table shows, as its caption and the scrolling frame's name. */
   label: string
   words: { empty: string; emptyDescription?: string }
+  /**
+   * Each column's width, in order, and the least width of the whole; none lets each column take
+   * what its figures need.
+   */
+  layout?: { columns: readonly string[]; least: string }
   /** The rows are a tree's, every one of them drawn. */
   tree?: boolean
 }>()
@@ -34,6 +41,11 @@ const tableAttrs = computed(() =>
 )
 
 const vKeyScroll = keyScroll
+
+/** The least width of a table laid out alike with others, under which it scrolls. */
+const tableStyle = computed(() =>
+  props.layout ? { minInlineSize: props.layout.least } : undefined,
+)
 
 const frame = ref<HTMLElement | null>(null)
 useChartTableGive(frame)
@@ -57,12 +69,21 @@ useChartTableGive(frame)
     <table
       class="chart-table"
       v-bind="tableAttrs"
+      :class="{ 'chart-table-fixed': layout }"
+      :style="tableStyle"
     >
       <caption class="visually-hidden">
         {{
           label
         }}
       </caption>
+      <colgroup v-if="layout">
+        <col
+          v-for="(width, index) in layout.columns"
+          :key="index"
+          :style="{ inlineSize: width }"
+        />
+      </colgroup>
       <slot />
     </table>
   </div>

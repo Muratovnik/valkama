@@ -25,13 +25,14 @@ the same `<spec>__` prefix. The `server-` specs, run with `VALKAMA_BROWSER_STORE
 the exception: the Python server serves `web/dist` alone, so they build there.
 Each command below runs in `web/`:
 
-- One spec: `npx playwright test <file> --workers=4`. A name is a prefix, so give
-  the whole file name when it begins another. Every test of the suite that bounds
+- One spec, under a lease at the heavy-process gate (below):
+  `python ../tests/heavy_gate.py run --kind browser-targeted --want 4 -- npx playwright test <file> '--workers={k}'`.
+  A name is a prefix, so give the whole file name when it begins another. Every test of the suite that bounds
   a time (`web/tests/browser/timedChecks.ts`) runs after it, alone: Playwright runs
   that project whole, and only the runner's list narrows it.
 - A probe spec kept outside the suite, such as in a worktree's ignored
-  `tmp/<name>/`: `VALKAMA_BROWSER_PROBES=<its directory> npx playwright test
-  --config tests/browser/probe.config.ts`. Name the file
+  `tmp/<name>/`: `VALKAMA_BROWSER_PROBES=<its directory> python ../tests/heavy_gate.py run --kind browser-targeted --want 4 --
+  npx playwright test --config tests/browser/probe.config.ts '--workers={k}'`. Name the file
   `ui-<name>.spec.mts` or `production-<name>.spec.mts` for the project it runs
   in. Both run in `en-US`: a probe that reads the Russian interface sets
   `test.use({ locale: 'ru-RU' })`. It imports `expect` and the types from
@@ -154,32 +155,52 @@ steps with `AGENTS.md`.
 It does not move `TEMP`, which is what keeps the suite's renames from failing
 with `PermissionError`.
 
-Heavy runs wanting more CPUs than there are fail tests that pass alone, so each
-goes through one gate, `tests/machine_lock.py`, at a file in the system's
-temporary directory no TEMP or profile moves, declaring its CPUs:
-`tests/parallel.py` one for every two processes it runs at once (8 by default,
-half the CPUs on a smaller machine), and the whole unittest suite in one process 2,
-from its package's `load_tests` until its process ends;
-`npm run test:unit` up to 8 workers, all given `--maxWorkers`;
-`npm run test:browser:allowed` but `--list` all. In arrival order, a run goes in
-alone at once, beside others if it fits their CPUs and the load;
-`VALKAMA_HEAVY_TEST_CPUS=1` lets one in at a time.
-Targeted runs take none — a unittest module, subpackage, `-p` or `-k`, Vitest
-given files or `-t`, `npx playwright test <file>` — nor do the light gate steps,
-and `npm test` with no Python says so and runs unlocked. What a holder starts goes
-in at once: `gates` holds a place for `unittest`, whose wait opens its log, and
-`npm test`'s is in `logs/web-test.log`. Its locks are the OS's: they go with a
-run that dies. A waiter waits without limit, saying why at once and every
-minute, then how long it waited:
+Heavy runs beside one another fail tests that pass alone, so each goes through
+the machine's heavy-process gate, `heavy-gate`, which Host Runtime installs with
+its `heavy-gate.json` in `%USERPROFILE%/.agent-host-runtime/bin`.
+`.heavy-gate.toml` declares Valkama's kinds of run, and `tests/heavy_gate.py`
+takes the lease for each: `unittest-parallel`, `tests/parallel.py`, sized by
+its modules, which runs K processes at once of the 8 it wants by default (half
+the CPUs on a smaller machine); `unittest-suite`, the whole unittest suite in one
+process, from its package's `load_tests` until its process ends; `vitest-suite`,
+`npm run test:unit`, whose `--maxWorkers` becomes K, the share the gate gives of
+the 8 workers it wants or the count the caller gave; `browser-suite`,
+`npm run test:browser:allowed` but `--list`, sized by its number of specs; and
+`browser-targeted`, one spec or a probe. The gate admits a run by what earlier
+runs of its kind and size used, beside others while the machine has room.
+In an agent's session a run that finds no room exits 75 at once and says why;
+`HEAVY_GATE_WAIT=1` makes it wait instead, saying why every minute. Its leases
+are the OS's: they go with a run that dies. `heavy-gate mode serial` lets one
+heavy run in at a time across the machine, and `heavy-gate mode measured` goes
+back. Where no gate is installed, the run goes direct and says so. The gate's
+hook refuses a heavy command started outside it, naming the command to run.
+Targeted runs take no lease — a unittest module, subpackage, `-p` or `-k`,
+Vitest given files or `-t` — nor do the light gate steps, and `npm test` with no
+Python says so and runs without one. What a holder starts runs under its lease:
+`gates` runs `unittest` under one, whose wait opens its log, and `npm test`'s is
+in `logs/web-test.log`. The gate says on stderr what it admitted:
 
 ```text
-waiting for the heavy-test lock <file>: <who holds its CPUs, how many are free, or who is ahead>
-took the heavy-test lock after 41 s: 2 of 32 CPUs, the machine 31% busy, alone
+heavy-gate: admitted valkama:browser-suite after 41 s: K=16, profile 13.3 cores 3.1 GB, machine 4 of 32 busy, alone
 ```
 
-A command of its own goes through the gate as `python tests/machine_lock.py run
---run <what it is> [--cpus N] -- <command>`. The gate finds the command's
-program on `PATH` before it waits, so a name it cannot find fails at once, and
+Branches from before the gate still share the machine through the earlier lock,
+a file in the logon temporary directory no TEMP or profile moves. Until they are
+gone, `tests/legacy_lock.py` keeps them and a gated run apart: a run takes its
+lease first and then that lock's byte shared, with an entry in `<lock>.runs/`
+counting the cores of its profile, or the whole machine where the gate counts
+it so, so an earlier run sees it and waits. An earlier run that holds the whole machine keeps
+a gated run out: it refuses with 75 in an agent's session, or waits under its
+lease and says so:
+
+```text
+took the earlier branches' heavy-test lock <file> after 2 s: shared, counting 14 CPUs
+```
+
+A command of its own goes through the gate as `python tests/heavy_gate.py run
+--kind <kind> [--size N] [--want N] -- <command>`, `{k}` in the command standing
+for K. It finds the command's
+program on `PATH` before it asks for a lease, so a name it cannot find fails at once, and
 `npx` starts as the `npx.cmd` it is; Windows finds only an `.exe` by a bare
 name, and looks in its own directory before `PATH`. The Windows `timeout` is
 refused there, since it runs no command: a `timeout` found first on `PATH`, as

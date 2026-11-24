@@ -32,13 +32,16 @@ Each rule here is a way a hand-written wrapper went wrong:
   directory of the task it was first written for.
 - `serve` says when the committed `web/dist` it serves is behind `web/src`. A
   browser check once took screenshots of a bundle ten commits behind its sources.
-- The `unittest` step holds a place at the machine's heavy-test gate,
-  `tests/machine_lock.py`, for its own duration and no longer, declaring the CPUs
-  the suite's processes declare as `tests/parallel.py` runs them, and runs marked
-  as under it, because the runner takes that place itself. The whole suite beside another checkout's heavy runs failed
-  timing budgets that hold alone, so the step waits until it fits, and what the
-  gate said while it waited opens the step's log. No other step is held here; the
-  Vitest run of `npm test` goes through the gate on its own and says so in its log.
+- The `unittest` step runs under a lease at the machine's heavy-process gate,
+  through `tests/heavy_gate.py`, for its own duration and no longer, as the kind
+  `tests/parallel.py` takes, wanting the processes it runs by default, so the
+  runner inside, which would take that lease itself, finds it held and runs the
+  share K the gate gave. The whole suite beside another checkout's heavy runs
+  failed timing budgets that hold alone, so the step goes in when it fits, and
+  what the gate said opens the step's log. In an agent's session a step that
+  finds no room fails at once with exit code 75, as the gate's commands do;
+  `HEAVY_GATE_WAIT=1` makes it wait. No other step is held here; the Vitest run
+  of `npm test` goes through the gate on its own and says so in its log.
 - A run is cited, not retold: reports that retyped results got them wrong, so
   each `gates` run leaves the record `tests/run_record.py` describes and checks.
 
@@ -74,7 +77,6 @@ there:
 from __future__ import annotations
 
 import argparse
-import contextlib
 import dataclasses
 import json
 import os
@@ -167,7 +169,7 @@ class Step:
     directory: str = "."
     #: It reads the commits of the checkout, so a directory without them refuses it.
     needs_history: bool = False
-    #: It holds a place at the machine's heavy-test gate while it runs.
+    #: It runs under a lease at the machine's heavy-process gate.
     gated: bool = False
 
     @property
@@ -429,12 +431,8 @@ def _tail(log: Path) -> str:
     return " | ".join(_log_line(line).strip() for line in lines[-3:])
 
 
-def _run_step(
-    run: Run, log: Path, environment: Mapping[str, str], preface: Sequence[str] = ()
-) -> int:
+def _run_step(run: Run, log: Path, environment: Mapping[str, str]) -> int:
     with log.open("wb") as output:
-        output.write("".join(f"{line}\n" for line in preface).encode())
-        output.flush()
         try:
             return subprocess.run(
                 run.argv,
@@ -475,28 +473,29 @@ def run_gates(
     environment: Mapping[str, str],
     *,
     lock: Path | None = None,
+    gate: str | None = None,
     record: Mapping[str, object] | None = None,
 ) -> int:
     """Run every step; the result is 0 only when at least one ran and none failed or was refused.
 
     The modules are read again at each step, because another session's `npm ci`
-    may have replaced them while the steps before it ran. A gated step waits
-    at the heavy-test gate, the machine's unless `lock` names another file, needing
-    what the suite's processes declare as `tests/parallel.py` runs them by default,
-    and runs marked as under it, so the runner inside does not wait for its own
-    step; what the gate said opens its log.
-    Given the start of a `record`, it writes the whole record into `out` at the end.
+    may have replaced them while the steps before it ran. A gated step runs under
+    a lease of the kind `tests/parallel.py` takes, wanting the processes it runs by
+    default, so the runner inside takes none of its own and runs the share the gate
+    gave; what the gate said opens its log. `lock` and `gate` stand in for the
+    earlier branches' lock and the installed gate, in a test. Given the start of a
+    `record`, it writes the whole record into `out` at the end.
     """
 
     # Imported here, not at the top, for the reason `_refusal` gives.
-    from tests import machine_lock, parallel, run_record
+    from tests import heavy_gate, legacy_lock, parallel, run_record
 
     # A hold of the run that started this one covers the steps too, though their
     # environment was built without the caller's `VALKAMA_*`.
-    if machine_lock.HELD_BY_ANCESTOR in os.environ:
+    if legacy_lock.HELD_BY_ANCESTOR in os.environ:
         environment = {
             **environment,
-            machine_lock.HELD_BY_ANCESTOR: os.environ[machine_lock.HELD_BY_ANCESTOR],
+            legacy_lock.HELD_BY_ANCESTOR: os.environ[legacy_lock.HELD_BY_ANCESTOR],
         }
     logs = out / LOGS
     logs.mkdir(parents=True, exist_ok=True)
@@ -520,25 +519,17 @@ def run_gates(
                 report(f"{run.name:<14} refused  {detail}")
                 steps.append(run_record.step(run.name, run.argv, run.cwd, log, None))
                 continue
-            gate_said: list[str] = []
+            executed = run
             if run.gated:
-
-                def told(line: str, said: list[str] = gate_said) -> None:
-                    report(line)
-                    said.append(line)
-
-                holding: contextlib.AbstractContextManager[None] = machine_lock.held(
-                    f"tests/isolated.py gates: the {run.name} step",
-                    path=lock,
-                    cpus=parallel.declared_cpus(parallel.default_jobs()),
-                    say=told,
+                report(
+                    f"{run.name:<14} runs under the heavy-process gate as"
+                    f" {heavy_gate.PROJECT}:{parallel.KIND}; what it says is in {log}"
                 )
-                step_environment = {**environment, **machine_lock.marker(lock)}
-            else:
-                holding = contextlib.nullcontext()
-                step_environment = dict(environment)
-            with holding:
-                code = _run_step(run, log, step_environment, gate_said)
+                argv = heavy_gate.gated_command(
+                    parallel.KIND, run.argv, want=parallel.default_jobs(), lock=lock, gate=gate
+                )
+                executed = run._replace(argv=argv)
+            code = _run_step(executed, log, environment)
             if code != 0:
                 failed.append(run.name)
             report(f"{run.name:<14} exit={code}  {_tail(log)}")

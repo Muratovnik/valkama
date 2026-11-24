@@ -4,9 +4,11 @@
  * panel's table of values named by free text, tasks and sessions, whose names take two lines at
  * most, as a ranked list does in a narrow place: the reference and the start of the title stand
  * together, an ellipsis ends the second line, and the hint says the name whole. A short name keeps
- * one line, a model's name keeps one line there, a session's detail takes a line of its own under
- * its name, and the section's own table keeps every name on one line. The row's figures stand on
- * the name's first line, every cell of the row on one baseline. Each run prints what it measured.
+ * one line, a model's name keeps one line there and stands whole, never cut nor broken at its
+ * hyphens (`DESIGN.md`, Long titles: the owner's decision of 2026-11-24), a session's detail takes
+ * a line of its own under its name, and the section's own table keeps every name on one line. The
+ * row's figures stand on the name's first line, every cell of the row on one baseline. Each run
+ * prints what it measured, the frame's side scroll the long id leaves among it.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -31,7 +33,10 @@ const LONG_TITLE =
   'Keep the period switch beside the measure and hold its words whole on a narrow screen'
 const LONG_NAME = `MAIN-41 ${LONG_TITLE}`
 const SHORT_NAME = 'MAIN-42 Fix'
-/** A model's name of one long run, which would break inside if its row could wrap. */
+/**
+ * A model's name of one long run, which would break inside if its row could wrap, and was cut
+ * before a model's id was kept whole; its column is now as wide as it.
+ */
 const LONG_MODEL = 'model-with-a-name-long-enough-to-run-past-its-column'
 const LONG_SESSION =
   'Draw the quota window with its forecast and the restarts it has seen this week'
@@ -182,8 +187,16 @@ for (const width of [1440, 1024])
     const modelTable = await openEvery(page, models, 'model')
     const longModel = await drawnName(rowNamed(modelTable, LONG_MODEL))
     expect(longModel.lines, "the model's long name on one line").toBe(1)
-    expect(longModel.shown.length, "the model's long name cut").toBeLessThan(LONG_MODEL.length)
+    expect(longModel.shown, "the model's long name whole").toBe(LONG_MODEL)
     expectOneBaseline(longModel, "the long model's row")
+    const frame = await modelTable.evaluate((table) => {
+      const box = table.closest('.chart-table-frame') ?? table
+      return box.scrollWidth - box.clientWidth
+    })
 
-    await record(info, `every value's sessions and models ${width}`, { longSession, longModel })
+    await record(info, `every value's sessions and models ${width}`, {
+      longSession,
+      longModel,
+      frame,
+    })
   })

@@ -9,7 +9,7 @@ directory, beside `gates.txt` and the step logs, and `run` writes one for checks
 no gate step is, such as a targeted test run, a command at a time: the working
 tree it ran in, the commit and the uncommitted changes it ran on, each step's
 command and exit code, the tests each test step ran, how long its heavy runs
-waited at the heavy-test gate, at what load and beside which runs, and the
+waited at the heavy-process gate, at what load and beside which runs, and the
 versions of the tools. A report cites the record instead of retelling it. `check` accepts a
 record made in DIR, by default this checkout, at the state DIR is in now, and
 refuses one made in another working tree, at another commit or on other
@@ -60,37 +60,74 @@ TEST_COUNTS: dict[str, re.Pattern[bytes]] = {
 }
 
 
-#: What a run says as it goes through the heavy-test gate, `tests/machine_lock.py`'s
-#: `admission_line`, in any step: how long it waited, how busy the machine was, and
-#: the runs it went beside, one after another.
+#: What a run says as the heavy-process gate admits it, the gate's stable admission
+#: line, in any step: the lease's project and kind, how long it waited, its share K,
+#: the profile it was counted by, how busy the machine was, the leases it went beside,
+#: and whether it came in past the lone run's CPU limit or in serial mode.
 ADMISSION = re.compile(
-    rb"^took the heavy-test lock after (?:(\d+) min )?(\d+) s: [^\n]*?,"
-    rb" (?:the machine (\d+)% busy|the load not measured),"
-    rb" (?:alone|beside \d+ runs?: ([^\n]*?))\r?$",
+    rb"^heavy-gate: admitted (\S+) after (?:(\d+) min )?(\d+) s: (?:K=(\d+), )?"
+    rb"(?:profile ([\d.]+) cores ([\d.]+) GB|no profile yet),"
+    rb" machine ([\d.]+) of (\d+) busy,"
+    rb" (?:alone|beside \d+ leases? \(([^\n]*?)\))"
+    rb"(, past the CPU limit)?(, serial mode)?\r?$",
+    re.MULTILINE,
+)
+#: What a run under a lease says once it also holds its place at the earlier branches'
+#: lock, `tests/legacy_lock.py`'s `admission_line`: how long it waited there.
+EARLIER_ADMISSION = re.compile(
+    rb"^took the earlier branches' heavy-test lock [^\n]* after (?:(\d+) min )?(\d+) s:"
+    rb" shared, counting (\d+) CPUs?\r?$",
     re.MULTILINE,
 )
 
 
 def admissions(log: Path) -> list[dict[str, object]]:
-    """Each place a step's runs took at the heavy-test gate, by its log, in order.
+    """Each admission a step's runs had, by its log, in the order the log says them.
 
-    The seconds it waited, the busy fraction it went in at (None where the load was
-    not measured) and each run it went beside, as the gate named them.
+    For the gate: the lease's name, the seconds it waited, K, the profile's cores and
+    memory, the busy fraction of the machine it went in at, the leases it went beside
+    and the two marks. For the earlier branches' lock: the seconds it waited there and
+    the CPUs it counted.
     """
 
-    found: list[dict[str, object]] = []
-    for minutes, seconds, busy, beside in ADMISSION.findall(log.read_bytes()):
-        # Names for a reader of the record, in whatever code page the console wrote a
-        # checkout's path; nothing decides on them.
-        runs = beside.decode("utf-8", errors="replace")
-        found.append(
-            {
-                "waited": int(minutes or 0) * 60 + int(seconds),
-                "busy": int(busy) / 100 if busy else None,
-                "beside": runs.split("; ") if runs else [],
-            }
+    text = log.read_bytes()
+    found: list[tuple[int, dict[str, object]]] = []
+    for match in ADMISSION.finditer(text):
+        name, minutes, seconds, k, cores, memory, busy, machine, beside, past, serial = (
+            match.groups()
         )
-    return found
+        # Names for a reader of the record; nothing decides on them.
+        leases = (beside or b"").decode("utf-8", errors="replace")
+        found.append(
+            (
+                match.start(),
+                {
+                    "gate": "heavy-gate",
+                    "lease": name.decode("utf-8", errors="replace"),
+                    "waited": int(minutes or 0) * 60 + int(seconds),
+                    "k": int(k) if k else None,
+                    "profile_cores": float(cores) if cores else None,
+                    "profile_memory_gb": float(memory) if memory else None,
+                    "busy": round(float(busy) / int(machine), 3) if int(machine) else None,
+                    "beside": leases.split(", ") if leases else [],
+                    "past_cpu_limit": past is not None,
+                    "serial": serial is not None,
+                },
+            )
+        )
+    for match in EARLIER_ADMISSION.finditer(text):
+        minutes, seconds, cpus = match.groups()
+        found.append(
+            (
+                match.start(),
+                {
+                    "gate": "earlier branches' lock",
+                    "waited": int(minutes or 0) * 60 + int(seconds),
+                    "cpus": int(cpus),
+                },
+            )
+        )
+    return [entry for _start, entry in sorted(found, key=lambda pair: pair[0])]
 
 
 def _git_bytes(root: Path, *arguments: str, stdin: bytes | None = None) -> bytes:
@@ -409,11 +446,11 @@ def run(
     The step joins the record already in `out` while `root` is as that record says;
     otherwise a new record replaces it, and this says why. The command gets
     `environment` as it is: no throwaway profile and no lock, so a targeted test run
-    stays a targeted run, and a failed one says who holds the heavy-test lock.
+    stays a targeted run, and a failed one says which heavy runs were going.
     """
 
     # Imported here, not at the top, for the reason `tests/isolated.py` gives `_refusal`.
-    from tests import isolated, machine_lock
+    from tests import heavy_gate, isolated
 
     warning = placement_warning(root, out)
     if warning is not None:
@@ -440,7 +477,7 @@ def run(
     steps.append(entry)
     result = 0 if all(entry["exit"] == 0 for entry in steps) else 1
     _say(f"{label:<14} exit={code}  {isolated._tail(log)}")
-    note = machine_lock.load_note() if code != 0 else None
+    note = heavy_gate.load_note() if code != 0 else None
     if note is not None:
         _say(note)
     _say(f"record: {write(out, record, steps, result)}")

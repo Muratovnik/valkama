@@ -114,7 +114,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from server import processes, store
+from server import processes, store, store_lock
 from server.projects import project_registry
 from server.transcripts import ARCHIVED
 
@@ -2150,11 +2150,7 @@ def run(
         coordinator=options.claude_coordinator.resolve(),
     )
     home, out = options.client_home.resolve(), options.out.resolve()
-    from tests import machine_lock
-
-    with machine_lock.held(
-        f"a probe run into {out}", path=home_lock(home), say=_say, name="probe-home lock"
-    ):
+    with home_held(f"a probe run into {out}", home, say=_say):
         live = LiveFiles.of(inputs, registry, git_config)
         return _run_locked(
             options, chosen, choices, scenarios, inputs, home, out, source, registry, live
@@ -2166,11 +2162,57 @@ def home_lock(home: Path) -> Path:
 
     A run clears the home before it builds the profile, so a second run beside the
     first would take the profile, the logins aside, from under the first's clients.
-    It waits for the lock instead, saying whose run holds it, as the heavy test runs
-    of `tests/machine_lock.py` do with the same primitive.
+    It waits for the lock instead, saying whose run holds it: `home_held`.
     """
 
     return home.with_name(f"{home.name}.lock")
+
+
+@contextlib.contextmanager
+def home_held(
+    run: str, home: Path, *, say: Callable[[str], None] = _say, poll_seconds: float = 0.25
+) -> Iterator[None]:
+    """Hold the lock of the client home `home` for `run`, waiting while another run holds it.
+
+    The lock is the operating system's on the first byte of `home_lock(home)`, the
+    one `server/store_lock.py` takes, so it goes with a run that dies. After that
+    byte the holder records itself, and a waiter says once whose run it waits for.
+    """
+
+    path = home_lock(home)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a+b") as handle:
+        told = False
+        while not store_lock.try_lock(handle):
+            if not told:
+                say(f"waiting for the probe-home lock {path}: it is held by {_home_holder(path)}")
+                told = True
+            time.sleep(poll_seconds)
+        try:
+            since = time.strftime("%Y-%m-%d %H:%M:%S")
+            record = {"run": run, "checkout": ROOT.as_posix(), "pid": os.getpid(), "since": since}
+            # Append mode writes at the end: after the locked byte, which stays as it is.
+            handle.truncate(1)
+            handle.write(json.dumps(record).encode())
+            handle.flush()
+            yield
+        finally:
+            handle.truncate(1)
+            handle.flush()
+            store_lock.unlock(handle)
+
+
+def _home_holder(path: Path) -> str:
+    """Who holds the lock at `path`, by the record after its first byte."""
+
+    try:
+        with path.open("rb") as handle:
+            # From the second byte: on Windows the first is locked, and reading it fails.
+            handle.seek(1)
+            record = json.loads(handle.read())
+        return f"{record['run']} in {record['checkout']}, process {record['pid']}, since {record['since']}"
+    except (OSError, ValueError, KeyError, TypeError):
+        return "a run that has not recorded itself yet"
 
 
 def job_homes(home: Path, jobs: int) -> list[Path]:

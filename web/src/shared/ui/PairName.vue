@@ -15,6 +15,9 @@
  * end under the start, and each is cut at its own end: a task's title is on either side of a pair
  * there, and each part's start, a task's reference, stays whole on its line.
  *
+ * Whole (`whole`), as a model's id asks, the start is never cut, and the end beside it takes
+ * what the line leaves, cut at its own end: the host keeps the line as wide as the start.
+ *
  * The words are the name's whole text, in order, as the element around it reads them: a host
  * that names a control by its content, or reads it into a hint while it is cut, gets the whole
  * pair. `innerText` alone breaks a line between the two parts, which are boxes of their own. The
@@ -42,6 +45,8 @@ const props = defineProps<{
   runs?: readonly TextRun[]
   /** A part a line, each cut at its own end. */
   stacked?: boolean
+  /** The start never cut, the end beside it or under it. */
+  whole?: boolean
 }>()
 
 /** What gives way: the name before its end, or null where the name has no end to keep. */
@@ -61,7 +66,7 @@ const parts = computed(() =>
   <span
     v-if="start !== null"
     class="pair-name"
-    :class="{ 'pair-stacked': stacked }"
+    :class="{ 'pair-stacked': stacked, 'pair-whole': whole }"
     ><template v-if="parts"
       ><span
         v-text-runs="parts[0]"
@@ -101,6 +106,21 @@ const parts = computed(() =>
   flex: none;
   max-inline-size: calc(100% - 1em);
   white-space: pre;
+}
+
+/* The start whole on its line; the end takes what the line leaves, cut at its end. */
+.pair-whole {
+  & .pair-start {
+    flex: none;
+    overflow: visible;
+    text-overflow: clip;
+  }
+
+  & .pair-end {
+    flex: 0 1 auto;
+    min-inline-size: 0;
+    max-inline-size: none;
+  }
 }
 
 /* A part a line, the whole width each; the end's leading space falls at its line's start and

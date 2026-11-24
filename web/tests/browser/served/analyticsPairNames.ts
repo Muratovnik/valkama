@@ -1,7 +1,7 @@
 /**
  * The work production-analytics-pair-names.spec.ts serves as usage.
  */
-import { value } from '../../fixtures/analytics.ts'
+import { task, value } from '../../fixtures/analytics.ts'
 import type { TimedStretch } from '../../fixtures/analytics.ts'
 import type { Served } from '../servedContracts.ts'
 import { usageServed } from '../servedUsage.ts'
@@ -31,7 +31,10 @@ export const WORLD: TimedStretch[] = [
   stretch(11, 'claude-haiku-5-5', 'high', 0.5),
 ]
 
-/** A model whose name is 50 characters, longer than a table's name column at any of the sizes. */
+/**
+ * A model whose name is 50 characters, longer than a table's name column held at any of the
+ * sizes before ids were kept whole.
+ */
 export const LONG_MODEL = 'claude-opus-5-5-with-a-rather-long-synthetic-names'
 /**
  * A model whose name is shorter than the least a table's name column keeps, so it stands whole
@@ -43,7 +46,28 @@ export const ONE_LONG: TimedStretch[] = [
   stretch(10, SHORT_MODEL, 'high', 2),
 ]
 
+/** A task whose title is longer than any line a table's name has beside a model's id. */
+export const LONG_TASK =
+  'Keep the period switch beside the measure and hold its words whole on a narrow screen'
+/**
+ * The Model section split by task: a model at the long task, and a short one at a short task,
+ * whose pair fits the room the column keeps after the longest id.
+ */
+export const TASK_WORLD: TimedStretch[] = [
+  {
+    at: at(9),
+    group: { model: value('claude-opus-5-5'), work_item: task(2, LONG_TASK) },
+    spend: { seconds: 4 * HOUR },
+  },
+  {
+    at: at(10),
+    group: { model: value('claude-5'), work_item: task(3, 'Fix') },
+    spend: { seconds: 2 * HOUR },
+  },
+]
+
 export const served: Served[] = [
   ...usageServed('served/analyticsPairNames.ts WORLD', WORLD),
   ...usageServed('served/analyticsPairNames.ts ONE_LONG', ONE_LONG),
+  ...usageServed('served/analyticsPairNames.ts TASK_WORLD', TASK_WORLD),
 ]

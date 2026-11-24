@@ -1748,7 +1748,24 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   outside the primitive, and lets a checkbox, a radio and the search box
   through as the different controls they are.
 - **Long titles** break at a space, after a hyphen and after each `/`, and inside a
-  word only when that one word is wider than its line. A browser offers no break
+  word only when that one word is wider than its line. A model id is the exception:
+  it is one name and stays whole, never broken at its hyphen, and goes to the next
+  line whole instead (`vWholeWords`): an environment's heading in «Pauses» and a
+  model's side panel are drawn so. In the Model section's tables, the main one, its
+  splits by task and by executor and the panel of every value, an id is never cut
+  either: the name column keeps the room of the longest id its rows name, held
+  unseen in its heading (`SpendingTable`, through `SectionTable`'s `heading`). Alone
+  in its row, the id's column is that wide and no wider, the figures taking the rest
+  (`rest`); in a pair it
+  keeps room for the start of the other value too, which follows the id on its
+  line, cut at its own end (`PairName`'s `whole`). The figures' words, the remark
+  under a cost and a cost with no price at all, «201.3K tokens without a price»,
+  stand on one line while the table holds them so in its frame, and wrap under
+  their figures only where it would not (`SectionTable`'s `wrap`); a label, «No tokens»,
+  keeps its line. Taking the rest, the column stood at 303 px for ids of 125, and
+  the words, wrapped always, took three and four lines at 1440. Cut at their end, «claude-fable-5-1» and «claude-fable-5-2» both read
+  «claude-fa…»; broken at its hyphen, «claude-» stood above «opus-5-5» in the
+  Pauses headings on a phone. A browser offers no break
   after a `/`, so `loading/empty/error/unavailable` was one word to it, wider than a
   phone's line, and `overflow-wrap: anywhere` broke it where the line ran out:
   «un» above «available». The `v-slash-breaks` directive (`slashBreaks.ts`) draws
@@ -3454,8 +3471,27 @@ line, and on a narrow screen the way back over the section names nothing a secon
 sentence longer than 90 characters, and each caveat stands in its section's «ⓘ» alone.
 
 The rail holds a tile for the overview, one for the token kinds, two for the subscription
-quota — «Five hours» and «Week» — and one for each dimension of the read: account,
-organization, project, task, executor, role, launch class, model, effort and environment.
+quota — «Five hours» and «Week» —, an entry for «Pauses» and one tile for each dimension of the
+read: account, organization, project, task, executor, role, launch class, model, effort and
+environment. «Pauses» shows how much of the prompt cache a model request read after a pause of
+each length, a table per client, role, model and sign-in with a line per bucket of pause its
+requests fell in. The tables are stacked, and every one has the same seven columns at the same
+widths (`ChartTable`'s `layout`), so a column stands at the same edges down the section and fits
+the panel beside the rail; under that width a table scrolls in its own frame. A column's share is
+what its heading's longest word and its widest figure ask, so no heading runs past its figures;
+a heading that wraps stands on the foot of the head row, by the figures it heads, and an
+environment's heading stands nearer its own table than the table before it. Its read goes back
+to the transcripts — gigabytes over four weeks, parsed over several processes — so its entry says
+what the section shows instead of a figure, and the section asks its read only while it is on
+show: when it opens, when the period or the project changes and on the bar's refresh; the
+filters and the measure do not reach it. In a project's scope it counts the runs with work in
+that project, each run whole, as the usage read places work, and says the scope beside its
+heading as the other sections do. Its heading is its name on the rail and stands, with the choice of what
+the pause waited on — the machine, a person or a keep-warm wake, the machine first — from the
+first moment of the read. A first read can outlast the browser's wait, so the server answers how
+many runs it has parsed and the page asks again, saying how far it got in the wait's one panel,
+on a line the panel holds from the wait's first moment (`PlatformStatePanel`'s `waitDetail`): a
+line of its own over the panel pushed it 41 px down and was a second sign of the one wait.
 «Account» is the subscription account the work was spent on (`seat`), «Organization» the
 organization it was billed to; an old link's `account` filter still filters by organization.
 «Executor» lists the sessions of agents that did the work; planning calls a session by the same

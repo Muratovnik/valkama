@@ -28,9 +28,11 @@ import { timedList } from './timedChecks.ts'
  * run fails when a test of either part does, and the timed ones run whatever the rest ended in.
  * Playwright runs that project whole, so `--grep` and its other filters of tests do not reach it.
  *
- * A run holds the machine's heavy-test lock, `tests/machine_lock.py`, for as long as Playwright
- * runs, asking for the whole machine, so any other heavy run of any checkout waits for it and
- * says whose run it waits for. A run under `--list` runs no test, and takes no lock.
+ * A run holds a lease at the machine's heavy-process gate, through `tests/heavy_gate.py`, for as
+ * long as Playwright runs, on the 16 workers its configuration gives. The gate counts it by what
+ * earlier runs of as many specs used, not as the whole machine; with no room it exits 75 at once
+ * in an agent's session, saying why, and waits elsewhere or with `HEAVY_GATE_WAIT=1`. A run
+ * under `--list` runs no test, and takes no lease.
  *
  *   npm run test:browser:allowed -- --list                 what would run, and the total
  *   npm run test:browser:allowed -- --specs=<file>         the specs a file names, one a line
@@ -63,14 +65,14 @@ export interface ProjectRule {
 export interface RunnerIo {
   /**
    * Runs Playwright with these arguments and resolves with its exit code; `clipboard` says
-   * whether its configuration may select the clipboard specs, `lock` names the run that
-   * holds the heavy-test lock while Playwright runs, or is null for no lock, and `list` is the
-   * list file it runs, which its configuration reads for the timed project (`timedList`).
+   * whether its configuration may select the clipboard specs, `lease` gives the size of the
+   * selection Playwright runs under a lease of, or is null for no lease, and `list` is the list
+   * file it runs, which its configuration reads for the timed project (`timedList`).
    */
   playwright: (
     args: readonly string[],
     clipboard: boolean,
-    lock: string | null,
+    lease: { size: number } | null,
     list: string,
   ) => Promise<number>
   /** The projects of the configuration Playwright will load, the clipboard specs let in. */
@@ -148,6 +150,8 @@ function selectSpecs(request: Request, io: RunnerIo): string[] {
 }
 
 const web = fileURLToPath(new URL('../..', import.meta.url))
+/** The gate's kind for a run of the suite or a batch of it, as `.heavy-gate.toml` declares it. */
+const suiteKind = 'browser-suite'
 const suiteDirectory = join(web, 'tests/browser')
 
 /** Refuses the listed specs no project runs, with the rule of each project. */
@@ -188,16 +192,12 @@ export async function runAllowed(argv: readonly string[], io: RunnerIo): Promise
   const left = clipboardSpecs.filter((name) => !specs.includes(name))
   io.say(`${specs.length} spec files; clipboard specs left out: ${left.join(', ') || 'none'}`)
   const summary = fileURLToPath(new URL('runSummary.ts', import.meta.url))
-  const batch =
-    request.listFile === undefined ? 'the whole suite' : `the specs ${request.listFile} names`
-  const lock = request.playwright.includes('--list')
-    ? null
-    : `npm run test:browser:allowed, ${batch}, harness port ${harnessPort}`
+  const lease = request.playwright.includes('--list') ? null : { size: specs.length }
   const list = io.writeList(specs)
   return io.playwright(
     ['test', `--test-list=${list}`, `--reporter=line,${summary}`, ...request.playwright],
     request.withClipboard.length > 0,
-    lock,
+    lease,
     list,
   )
 }
@@ -261,10 +261,10 @@ async function configProjects(): Promise<ProjectRule[]> {
 
 /** The real file system and Playwright, run from `web/` with this process's Node. */
 export const realIo: RunnerIo = {
-  playwright: (args, clipboard, lock, list) => {
+  playwright: (args, clipboard, lease, list) => {
     const command = [process.execPath, join(web, 'node_modules/@playwright/test/cli.js'), ...args]
-    // It declares no CPUs, so it asks for the whole machine: the browsers take whatever it has.
-    return spawnInherited(lock === null ? command : lockedCommand(lock, command), {
+    const run = lease === null ? command : lockedCommand(suiteKind, command, { size: lease.size })
+    return spawnInherited(run, {
       cwd: web,
       env: playwrightEnvironment(process.env, clipboard, list),
     })

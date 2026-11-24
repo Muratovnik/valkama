@@ -11,8 +11,10 @@
  * view by the focus stands clear of the heading row and the total. A table shorter than that
  * height stands at its own. Each column's heading sorts by it, largest first, then the other way
  * (`useTableSort`); the first sort is the chosen measure. A row is one line: the figures take what they need, the name the rest down to its
- * least, cut where the column is narrower (`SpendingTableName`). Asked to (`twoLineNames`), as the
- * side panel's narrow table is, names of free text, tasks and sessions, take two lines at most, as
+ * least, cut where the column is narrower (`SpendingTableName`); a model's id is never cut, its
+ * column as wide as the longest id the rows name (the unseen room its heading holds), and the
+ * figures share the rest (`rest`). Asked to
+ * (`twoLineNames`), as the side panel's narrow table is, names of free text, tasks and sessions, take two lines at most, as
  * a ranked list does in a narrow place: cut to one line there, a task's name showed its reference
  * alone. Its figures stay on the name's first line. A cost that leaves tokens without
  * a price says how many on a second line of its cell, under its amount (`SpendingTableFigure`):
@@ -44,6 +46,7 @@ import type { CrossRead } from '@/pages/analytics/composables/useCrossRead.ts'
 import { useReadWaitReport } from '@/pages/analytics/composables/useReadWaits.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { useTableModel } from '@/pages/analytics/composables/useTableModel.ts'
+import type { TableLine } from '@/pages/analytics/composables/useTableModel.ts'
 import { NAME_COLUMN, useTableSort } from '@/pages/analytics/composables/useTableSort.ts'
 import { tableFile } from '@/pages/analytics/utils/spendingCsv.ts'
 import { namedByText } from '@/pages/analytics/utils/splitView.ts'
@@ -110,8 +113,12 @@ const acrossWords = computed(() => (props.across ? t(`analytics.byDimension.${pr
 
 /** The answer the rows are of: by both dimensions while split, the one on show otherwise. */
 const tableUsage = computed(() => crossed.value?.usage ?? props.usage)
-/** What a row names: a pair of values while split, whose name column keeps more room. */
-const rows = computed(() => (crossed.value ? 'pairs' : 'values'))
+/** What a row names: a pair of values while split, whose name column keeps more room, a model's
+ * id each, or another dimension's value. */
+const rows = computed(() => {
+  if (crossed.value) return 'pairs'
+  return props.by === 'model' ? 'ids' : 'values'
+})
 /** Its names take two lines where they are free text, tasks and sessions, and it is asked to. */
 const nameLines = computed(() =>
   props.twoLineNames && namedByText(props.by, crossed.value?.across) ? 2 : 1,
@@ -165,6 +172,11 @@ const headings = computed(() => [
   ...model.value.columns.map((column) => ({ ...column, numeric: true })),
 ])
 
+/** The model ids the rows name, each once, whose room the column of names holds. */
+const modelIds = (all: readonly TableLine[]) => [
+  ...new Set(all.filter((line) => !line.rest).map((line) => line.valueName)),
+]
+
 /** The whole account of the rows (`counts` of the model), and their order. */
 const summary = computed(() => {
   const column = headings.value.find(({ key }) => key === sort.value.column)?.text ?? ''
@@ -191,6 +203,19 @@ const emptyWords = computed(() => ({
 /** What the headings' lines are measured again for: what the table holds. */
 const holds = computed(() => [model.value])
 const sortWords = (column: string) => t('analytics.panel.table.sortBy', { column })
+/**
+ * The Model section's figures' words keep to one line while the table stands in its frame so, and
+ * wrap at its last step only (`wrap`, `SpendingTableFigure`): wrapped always, they took three and
+ * four lines at 1440 pixels, where the table had room for each on one.
+ */
+const wraps = computed(() => props.by === 'model')
+/** Marks the table whose figures' words are fitted so (`SpendingTableFigure`); none elsewhere. */
+const figureWords = computed(() => (wraps.value ? 'fitted' : undefined))
+/** The figures share what the names leave where the names are ids, kept whole. */
+const rest = computed(() => (rows.value === 'ids' ? 'figures' : 'names'))
+/** The words whose room a column's heading holds unseen: the names', a model's id each. */
+const roomOf = (column: string) =>
+  column === NAME_COLUMN && props.by === 'model' ? modelIds(model.value.lines) : []
 
 const table = ref<InstanceType<typeof SectionTable> | null>(null)
 /** Brings the table into view, its heading row at the top, with the focus on it. */
@@ -206,6 +231,7 @@ defineExpose({ reveal })
     class="spending-table"
     :columns="headings"
     :data-measure="measure"
+    :data-figures="figureWords"
     :data-rows="rows"
     :data-found="found"
     :empty="!lines.length"
@@ -215,9 +241,20 @@ defineExpose({ reveal })
     :label="model.title"
     :least="false"
     :marks="marks"
+    :rest="rest"
     :sort-words="sortWords"
+    :wrap="wraps"
     @sort="sortBy"
   >
+    <template #heading="{ column }">
+      <span
+        v-for="word in roomOf(column.key)"
+        :key="word"
+        class="column-room"
+        aria-hidden="true"
+        >{{ word }}</span
+      >
+    </template>
     <template #head>
       <SpendingTableHead
         :by="by"
@@ -388,9 +425,44 @@ defineExpose({ reveal })
   max-inline-size: 0;
 }
 
+/* A model's id stands whole (its heading's room, below): alone in its row, the column is as wide
+   as the longest id and no wider, and the figures take the rest of the frame (`rest`), their
+   words on one line while it holds them (`wrap`). Taking the rest itself, the column stood at
+   303 pixels for ids of 125, and «No tokens» wrapped beside it. */
+.spending-table[data-rows='ids'] {
+  & .chart-name {
+    inline-size: 1px;
+    min-inline-size: 0;
+    max-inline-size: none;
+  }
+
+  & .chart-cell[data-numeric='true'] {
+    inline-size: auto;
+  }
+}
+
 /* A pair keeps its second value whole, a model's name as long as «· claude-sonnet-5-5», with
    the start of its first before it (`PairName`): its column keeps the 12rem that holds them. */
 .spending-table[data-rows='pairs'] .chart-name {
   min-inline-size: 12rem;
+}
+
+/* The room of a word the column's cells hold, unseen and of no height, in the cells' own font:
+   the heading is as wide as the longest, and so is its column. Beside an id in a pair, room for
+   the start of the other value as well, a task's reference and its first word: cut to
+   «· MAIN-1…» beside the id, rows of one model read alike. */
+.column-room {
+  display: block;
+  block-size: 0;
+  font: var(--font-line);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  visibility: hidden;
+
+  .spending-table[data-rows='pairs'] &::after {
+    content: '';
+    display: inline-block;
+    inline-size: 5em;
+  }
 }
 </style>

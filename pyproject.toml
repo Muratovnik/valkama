@@ -380,7 +380,8 @@ files = [
   "tests/agent_probes.py",
   "tests/agent_probes_judge.py",
   "tests/commit_subjects.py",
-  "tests/machine_lock.py",
+  "tests/heavy_gate.py",
+  "tests/legacy_lock.py",
   "tests/parallel.py",
   "tests/run_record.py",
   "tests/worktree.py",
@@ -416,7 +417,7 @@ warn_unused_configs = true
 # measured figure rises; never lower it to make a run green.
 [tool.coverage.run]
 branch = true
-# `tests.isolated`, `tests.commit_subjects`, `tests.machine_lock`,
+# `tests.isolated`, `tests.commit_subjects`, `tests.heavy_gate`, `tests.legacy_lock`,
 # `tests.parallel`, `tests.run_record` and `tests.worktree` are tools that happen to
 # live beside the tests rather than tests, so they are measured like the code they
 # run beside.
@@ -424,7 +425,8 @@ source = [
   "server",
   "tests.isolated",
   "tests.commit_subjects",
-  "tests.machine_lock",
+  "tests.heavy_gate",
+  "tests.legacy_lock",
   "tests.parallel",
   "tests.run_record",
   "tests.worktree",

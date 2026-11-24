@@ -13,10 +13,12 @@ import subprocess
 import sys
 import tempfile
 import textwrap
+import tomllib
 import unittest
 from pathlib import Path
+from unittest import mock
 
-from tests import machine_lock, parallel
+from tests import legacy_lock, parallel
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = "alpha_suite"
@@ -260,26 +262,67 @@ class SuiteTests(unittest.TestCase):
 
 
 class GateTests(unittest.TestCase):
-    def test_the_figure_copied_from_the_package_is_its_own(self) -> None:
-        self.assertEqual(machine_lock.HELD_BY_ANCESTOR, parallel.HELD_VARIABLE)
+    def test_the_figures_copied_from_the_package_and_the_rules_are_their_own(self) -> None:
+        self.assertEqual(legacy_lock.HELD_BY_ANCESTOR, parallel.HELD_VARIABLE)
+        kinds = tomllib.loads((ROOT / ".heavy-gate.toml").read_text(encoding="utf-8"))["kind"]
+        declared = {kind["name"]: kind for kind in kinds}
+        self.assertIn(parallel.KIND, declared)
+        self.assertIn("python tests/parallel.py", declared[parallel.KIND]["commands"])
+        self.assertTrue(declared[parallel.KIND]["self_gated"])
 
-    def test_a_run_not_under_a_holder_goes_through_the_gate_declaring_its_processes(self) -> None:
-        command = parallel.gate_command(["--jobs", "3", "tests.test_a"], "three modules", 3)
+    def test_a_run_not_under_a_holder_takes_a_lease_of_its_kind_sized_by_its_modules(self) -> None:
+        command = parallel.gate_command(["--jobs", "3", "tests.test_a"], 1, 3)
 
         self.assertEqual(
-            [sys.executable, str(ROOT / "tests" / "machine_lock.py"), "run"], command[:3]
+            [sys.executable, str(ROOT / "tests" / "heavy_gate.py"), "run"], command[:3]
         )
         options = command[: command.index("--")]
-        self.assertEqual("three modules", options[options.index("--run") + 1])
-        # Two processes count as one CPU, and a part of one as a whole one.
-        self.assertEqual("2", options[options.index("--cpus") + 1])
+        self.assertEqual(parallel.KIND, options[options.index("--kind") + 1])
+        self.assertEqual("1", options[options.index("--size") + 1])
+        self.assertEqual("3", options[options.index("--want") + 1])
         self.assertEqual(
             [sys.executable, str(ROOT / "tests" / "parallel.py"), "--jobs", "3", "tests.test_a"],
             command[command.index("--") + 1 :],
         )
 
-    def test_the_processes_declare_one_cpu_for_every_two(self) -> None:
-        self.assertEqual([1, 1, 2, 4], [parallel.declared_cpus(jobs) for jobs in (1, 2, 3, 8)])
+    def test_a_run_under_a_lease_runs_the_share_its_gate_gave(self) -> None:
+        self.assertEqual(3, parallel.granted_jobs(8, {"HEAVY_GATE_K": "3"}))
+        for given in ({}, {"HEAVY_GATE_K": ""}, {"HEAVY_GATE_K": "0"}, {"HEAVY_GATE_K": "x"}):
+            with self.subTest(given=given):
+                self.assertEqual(8, parallel.granted_jobs(8, given))
+
+        modules = ["tests.test_a", "tests.test_b", "tests.test_c", "tests.test_d"]
+        held = {parallel.HELD_VARIABLE: "the lock", "HEAVY_GATE_K": "2"}
+        with (
+            mock.patch.dict(os.environ, held),
+            mock.patch.object(parallel, "run", return_value=0) as ran,
+        ):
+            self.assertEqual(0, parallel.main(["--jobs", "8", *modules]))
+        self.assertEqual(2, ran.call_args.args[1])
+        # Never more processes than modules, whatever the gate gave.
+        with (
+            mock.patch.dict(os.environ, {**held, "HEAVY_GATE_K": "16"}),
+            mock.patch.object(parallel, "run", return_value=0) as ran,
+        ):
+            parallel.main(modules[:3])
+        self.assertEqual(3, ran.call_args.args[1])
+
+    def test_a_run_not_under_a_holder_runs_nothing_itself_but_its_gate_command(self) -> None:
+        environment = {
+            name: value for name, value in os.environ.items() if name != parallel.HELD_VARIABLE
+        }
+        with (
+            mock.patch.dict(os.environ, environment, clear=True),
+            mock.patch.object(parallel.subprocess, "run") as started,
+            mock.patch.object(parallel, "run") as ran,
+        ):
+            started.return_value.returncode = 75
+            self.assertEqual(75, parallel.main(["--jobs", "2", "tests.test_a", "tests.test_b"]))
+        ran.assert_not_called()
+        command = started.call_args.args[0]
+        self.assertEqual(
+            parallel.gate_command(["--jobs", "2", "tests.test_a", "tests.test_b"], 2, 2), command
+        )
 
     def test_the_default_takes_half_the_machine_up_to_its_ceiling(self) -> None:
         self.assertEqual(
@@ -306,7 +349,7 @@ class GateTests(unittest.TestCase):
         stream = open(os.devnull, "w", encoding="utf-8")
         self.addCleanup(stream.close)
 
-        name = f"{__name__}.GateTests.test_the_figure_copied_from_the_package_is_its_own"
+        name = f"{__name__}.GateTests.test_the_figures_copied_from_the_package_and_the_rules_are_their_own"
 
         code = parallel.work(name, report, stream)
 

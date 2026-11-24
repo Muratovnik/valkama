@@ -6,12 +6,12 @@ RANGE is what `git diff` takes, such as `HEAD~1..HEAD` after a commit; `--staged
 reads the index; with neither, the working tree against `HEAD`, untracked files
 included. Without `--list` the modules run from the repository root and the exit
 code is the run's. A selection of a quarter of the test modules or fewer runs in
-one `python -m unittest` and takes no lock, as any targeted run. A larger one is a
-heavy run, as `tests/machine_lock.py` names one: it runs through
-`tests/parallel.py`, `--jobs` processes at once, which goes through the machine's
-heavy-test gate declaring their CPUs and waits there while another checkout's runs
-leave it no room. `--jobs 1` runs it in one `python -m unittest` instead, through
-the gate with what the whole suite in one process declares.
+one `python -m unittest` and takes no lease, as any targeted run. A larger one is
+a heavy run: it runs through `tests/parallel.py`, which takes a lease at the
+machine's heavy-process gate wanting `--jobs` processes at once and runs the share
+the gate gives. `--jobs 1` runs it in one `python -m unittest` instead, under a
+lease of the kind the whole suite in one process takes. In an agent's session a
+run that finds no room exits 75 at once, saying why; `HEAVY_GATE_WAIT=1` waits.
 
 A test module is reached when:
 
@@ -78,13 +78,12 @@ SURFACES: Mapping[str, str] = {
 
 #: Past this share of the test modules a selection is no longer a targeted run:
 #: two such runs at once fail timing-sensitive tests that pass alone, which is
-#: what the machine's heavy-test lock is for.
+#: what the machine's heavy-process gate is for.
 HEAVY_SHARE = 0.25
-#: The logical CPUs a heavy selection run in one process declares at the gate, as the
-#: whole suite in one process does: `tests.WHOLE_SUITE_CPUS`, held equal by a test.
-#: Not imported from there: importing the `tests` package moves the environment that
-#: the run started here inherits.
-HEAVY_SELECTION_CPUS = 2
+#: The gate's kind for a heavy selection run in one process, the whole suite's in one
+#: process: `tests.WHOLE_SUITE_KIND`, held equal by a test. Not imported from there:
+#: importing the `tests` package moves the environment that the run started here inherits.
+HEAVY_SELECTION_KIND = "unittest-suite"
 #: The runner of a heavy selection in several processes, run as a script.
 PARALLEL = ROOT / "tests" / "parallel.py"
 
@@ -236,14 +235,13 @@ def run_command(chosen: Sequence[str], test_modules: int, jobs: int | None = Non
     command = [sys.executable, "-m", "unittest", *chosen]
     if len(chosen) <= test_modules * HEAVY_SHARE:
         return command
-    what = f"tests/affected.py: {len(chosen)} of {test_modules} test modules"
     if jobs != 1:
-        parallel = [sys.executable, str(PARALLEL), "--run", what]
+        parallel = [sys.executable, str(PARALLEL)]
         return [*parallel, *([] if jobs is None else ["--jobs", str(jobs)]), *chosen]
-    lock = str(ROOT / "tests" / "machine_lock.py")
+    gate = str(ROOT / "tests" / "heavy_gate.py")
     return [
-        *(sys.executable, lock, "run", "--run", what),
-        *("--cpus", str(HEAVY_SELECTION_CPUS), "--", *command),
+        *(sys.executable, gate, "run", "--kind", HEAVY_SELECTION_KIND),
+        *("--size", str(len(chosen)), "--", *command),
     ]
 
 
