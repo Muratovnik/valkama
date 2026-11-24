@@ -89,7 +89,8 @@ const body = ref<HTMLElement | null>(null)
       >
         <slot />
         <!-- A refused submit is announced where the operator is looking: at the
-             end of the form they just tried to send, not in a corner banner. -->
+             end of the form they just tried to send, not in a corner banner, and
+             above the foot's buttons while the form is longer than the dialog. -->
         <p
           v-if="error"
           class="dialog-frame-error"
@@ -165,10 +166,21 @@ const body = ref<HTMLElement | null>(null)
   padding: var(--space-dialog-inset);
 }
 
+/* At the end of the form, and while the form is longer than the dialog, at the body's lower
+   edge over what scrolls under it, right above the foot's buttons: at the end of a long form
+   alone it stood out of sight under the fold, and a press on Save seemed to do nothing. It
+   sticks at the very edge (`--size-stuck-bottom`) on the dialog's own ground, which reaches
+   that edge and a step above its words, given back by its margins so that a form that fits
+   lays it where it always stood. */
 .dialog-frame-error {
-  margin: 0;
+  position: sticky;
+  inset-block-end: var(--size-stuck-bottom);
+  z-index: 1;
+  padding-block: var(--space-3) var(--space-dialog-inset);
+  margin: calc(-1 * var(--space-3)) 0 calc(-1 * var(--space-dialog-inset));
   color: var(--color-danger);
   font-size: var(--font-size-dense);
+  background: var(--color-surface);
 }
 
 .dialog-frame-footer {
