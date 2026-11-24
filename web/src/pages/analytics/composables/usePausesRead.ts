@@ -1,17 +1,19 @@
 /**
  * The pauses before model requests over the page's period, as the pauses section reads them: one
- * read of `GET /api/analytics/pauses` at the browser's own offset, of the page's project's runs
- * in a project scope (`projectId`) and of every run on the global page.
+ * read of `GET /api/analytics/pauses` at the browser's own offset, narrowed to the page's scope
+ * (`UsageScope`) as its other reads are: the runs on the work its space's board holds, those of
+ * its project in a project scope, and every run on the global page.
  *
  * The read goes back to the transcripts, which takes seconds over a long period, so it is asked
- * only while the section is on show — its panel owns it: when the panel opens, when the period
- * or the project changes, and on the bar's refresh (`refresh`). Nothing else reaches it: not the filters, the
- * measure or the live interval. While it is read again the answer on show stays; a read again
+ * only while the section is on show — its panel owns it: when the panel opens, when the period,
+ * the space or the project changes, and on the bar's refresh (`refresh`). Nothing else reaches
+ * it: not the filters, the measure or the live interval. While it is read again the answer on show stays; a read again
  * that fails keeps it and says so, and a first read that fails says the pauses could not be read.
  * A later read always replaces an earlier one, so a slow answer never draws over a newer one.
  */
 import { onScopeDispose, shallowRef, watch } from 'vue'
 
+import type { UsageScope } from '@/pages/analytics/composables/useSharedUsage.ts'
 import { periodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
 
 import type { AnalyticsView } from '@/shared/api/analyticsAddress.ts'
@@ -30,10 +32,7 @@ export type PausesRead =
   | { status: 'no-period' }
   | { failedAgain: boolean; pauses: Pauses; readAt: string; refreshing: boolean; status: 'ready' }
 
-export function usePausesRead(options: {
-  projectId: () => string | null
-  view: () => AnalyticsView
-}) {
+export function usePausesRead(options: { scope: () => UsageScope; view: () => AnalyticsView }) {
   const read = shallowRef<PausesRead>({ status: 'loading' })
   let reading: AbortController | null = null
 
@@ -49,7 +48,8 @@ export function usePausesRead(options: {
     const held = read.value
     read.value = held.status === 'ready' ? { ...held, refreshing: true } : { status: 'loading' }
     try {
-      const query = { ...bounds, project: options.projectId() }
+      const { space, projectId } = options.scope()
+      const query = { ...bounds, project: projectId, space }
       const pauses = await fetchPauses(query, controller.signal, (progress) => {
         if (!controller.signal.aborted && read.value.status === 'loading')
           read.value = { status: 'loading', progress }
@@ -71,11 +71,11 @@ export function usePausesRead(options: {
     }
   }
 
-  /** What names the read: the project and the period, a preset or its own ends. The moment
+  /** What names the read: the scope and the period, a preset or its own ends. The moment
    * moving changes nothing. */
   const period = () => {
     const { period: preset, from, to } = options.view()
-    return `${options.projectId() ?? ''}|${preset}|${from}|${to}`
+    return JSON.stringify({ scope: options.scope(), preset, from, to })
   }
   watch(period, () => void refresh(), { immediate: true })
   onScopeDispose(() => reading?.abort())

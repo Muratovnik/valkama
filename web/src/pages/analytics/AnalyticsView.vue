@@ -8,7 +8,7 @@
  * pauses before model requests, then a dimension each — and the panel of the section on show.
  * The quota's two sections read where each account's quota stands now (`QuotaPanel`), which no
  * filter changes; the period reaches only each window's step line, which draws every window of
- * its kind the period overlaps. The pauses read the period alone, and only while their section is
+ * its kind the period overlaps. The pauses read the period in the page's scope, none of its filters, and only while their section is
  * on show (`PausesPanel`). The rail and the panel scroll on their own, so the bar and the rail stay in sight while the panel is
  * read. Where the page leaves the panel beside the rail too narrow for its charts (`usePanelRoom`)
  * the rail is the screen, a list, and a section chosen there takes its place as a new place in the
@@ -382,7 +382,7 @@ const emptyDescription = computed(() => {
           v-else-if="view.by === PAUSES_SECTION"
           :view="view"
           :refreshes="refreshes"
-          :project-id="projectId"
+          :scope="scope()"
         />
         <PlatformStatePanel
           v-else

@@ -8,7 +8,8 @@
  * shows, for the wait chosen (the machine first), a table per environment with a line for each
  * bucket its requests fell in, and none for another, and a line of their sum whose shares are of
  * the sum's tokens. In a project's scope it reads that project's runs and says so beside its
- * heading; on the global page every run. An environment's heading breaks between its words, so
+ * heading, in a space's the runs on the work its board holds, and a new space or project is read
+ * again; on the global page every run. An environment's heading breaks between its words, so
  * its model id never ends a line at its hyphen. Every table has the same seven columns;
  * the cold requests sent during background work are «—» where the client does not tell it. A
  * wait with no request, an answer with none, a first read that failed and a read again that
@@ -117,6 +118,32 @@ describe('the pauses section', () => {
     await flushPromises()
     expect(reads.pausesAsked.map((query) => query.has('project'))).toEqual([true, false])
     expect(page.get('.pauses-panel [data-part="scope"]').text()).toBe('all projects')
+  })
+
+  it('counts the runs of the space the context strip chose, and reads again when it changes', async () => {
+    const reads = stubAnalyticsReads(usage, undefined, () => pausesAnswer(PAUSES))
+    const page = await mountAnalytics({
+      routeState: { by: 'pauses' },
+      space: 'MAIN',
+      spaceTitle: 'Main',
+    })
+    const asked = () => reads.pausesAsked.map((query) => [query.get('space'), query.get('project')])
+    expect(asked()).toEqual([['MAIN', null]])
+    expect(page.get('.pauses-panel [data-part="scope"]').text()).toBe('space Main')
+
+    await page.setProps({ space: 'BETA', spaceTitle: 'Beta' })
+    await flushPromises()
+    expect(asked()).toEqual([
+      ['MAIN', null],
+      ['BETA', null],
+    ])
+    await page.setProps({ projectId: 'beta', projectTitle: 'Beta project' })
+    await flushPromises()
+    expect(asked().at(-1)).toEqual(['BETA', 'beta'])
+    await page.setProps({ space: null, spaceTitle: null, projectId: null, projectTitle: null })
+    await flushPromises()
+    expect(asked()).toHaveLength(4)
+    expect(asked().at(-1)).toEqual([null, null])
   })
 
   it('shows its heading and choice of wait while the first read waits', async () => {
