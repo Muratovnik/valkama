@@ -91,9 +91,10 @@ split with it:
   The integrator runs the full list above and the whole browser suite once, on
   the integrated head, through `npm run test:browser:allowed` in `web/`. Only one
   such run goes on a machine at a time: two at once fail tests that pass alone.
-  The runner, `npm test` and the whole `unittest` suite go through one gate for
-  every checkout on the machine, each declaring its CPUs, the runner all: a run
-  waits until it fits, saying why when it starts and every minute.
+  The runner, `npm test` and the whole `unittest` suite go through the
+  machine's heavy-process gate for every checkout on it, each as a kind of run
+  `.heavy-gate.toml` declares: in an agent's session a run that finds no room
+  exits 75 and says why, and `HEAVY_GATE_WAIT=1` makes it wait.
   A defect that depends on a neighbouring worktree shows up only at this run.
 - Each worktree is made with `python tests/worktree.py add` and removed with
   `python tests/worktree.py remove`. The first links its `web` and `desktop`

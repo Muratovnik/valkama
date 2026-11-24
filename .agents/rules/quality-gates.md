@@ -19,11 +19,12 @@ traces in `web/test-results/<port>/results`, so a run leaves the committed
 the exception: the Python server serves `web/dist` alone, so they build there.
 Each command below runs in `web/`:
 
-- One spec: `npx playwright test <file> --workers=4`. A name is a prefix, so give
-  the whole file name when it begins another.
+- One spec, under a lease at the heavy-process gate (below):
+  `python ../tests/heavy_gate.py run --kind browser-targeted --want 4 -- npx playwright test <file> '--workers={k}'`.
+  A name is a prefix, so give the whole file name when it begins another.
 - A probe spec kept outside the suite, such as in a worktree's ignored
-  `tmp/<name>/`: `VALKAMA_BROWSER_PROBES=<its directory> npx playwright test
-  --config tests/browser/probe.config.ts`. Name the file `ui-…` or
+  `tmp/<name>/`: `VALKAMA_BROWSER_PROBES=<its directory> python ../tests/heavy_gate.py run --kind browser-targeted --want 4 --
+  npx playwright test --config tests/browser/probe.config.ts '--workers={k}'`. Name the file `ui-…` or
   `production-…` for the project it runs in; it imports `@playwright/test`, `@/`
   and the suite's own `test` from `web/tests/browser/test.ts` as a spec does, so
   it needs no configuration of its own.
@@ -118,25 +119,45 @@ steps with `AGENTS.md`.
 It does not move `TEMP`, which is what keeps the suite's renames from failing
 with `PermissionError`.
 
-Heavy runs wanting more CPUs than there are fail tests that pass alone, so each
-goes through one gate, `tests/machine_lock.py`, at a file in the system's
-temporary directory no TEMP or profile moves, declaring its CPUs: the whole
-unittest suite 2, from its package's `load_tests` until its process ends;
-`npm run test:unit` up to 8 workers, all given `--maxWorkers`;
-`npm run test:browser:allowed` but `--list` all. In arrival order, a run goes in
-alone at once, beside others if it fits their CPUs and the load;
-`VALKAMA_HEAVY_TEST_CPUS=1` lets one in at a time.
-Targeted runs take none — a unittest module, subpackage, `-p` or `-k`, Vitest
-given files or `-t`, `npx playwright test <file>` — nor do the light gate steps,
-and `npm test` with no Python says so and runs unlocked. What a holder starts goes
-in at once: `gates` holds a place for `unittest`, whose wait opens its log, and
-`npm test`'s is in `logs/web-test.log`. Its locks are the OS's: they go with a
-run that dies. A waiter waits without limit, saying why at once and every
-minute, then how long it waited:
+Heavy runs beside one another fail tests that pass alone, so each goes through
+the machine's heavy-process gate, `heavy-gate`, which Host Runtime installs with
+its `heavy-gate.json` in `%USERPROFILE%/.agent-host-runtime/bin`.
+`.heavy-gate.toml` declares Valkama's kinds of run, and `tests/heavy_gate.py`
+takes the lease for each: `unittest-suite`, the whole unittest suite, from its
+package's `load_tests` until its process ends; `vitest-suite`,
+`npm run test:unit`, whose `--maxWorkers` becomes K, the share the gate gives of
+the 8 workers it wants or the count the caller gave; `browser-suite`,
+`npm run test:browser:allowed` but `--list`, sized by its number of specs; and
+`browser-targeted`, one spec or a probe. The gate admits a run by what earlier
+runs of its kind and size used, beside others while the machine has room.
+In an agent's session a run that finds no room exits 75 at once and says why;
+`HEAVY_GATE_WAIT=1` makes it wait instead, saying why every minute. Its leases
+are the OS's: they go with a run that dies. `heavy-gate mode serial` lets one
+heavy run in at a time across the machine, and `heavy-gate mode measured` goes
+back. Where no gate is installed, the run goes direct and says so. The gate's
+hook refuses a heavy command started outside it, naming the command to run.
+Targeted runs take no lease — a unittest module, subpackage, `-p` or `-k`,
+Vitest given files or `-t` — nor do the light gate steps, and `npm test` with no
+Python says so and runs without one. What a holder starts runs under its lease:
+`gates` runs `unittest` under one, whose wait opens its log, and `npm test`'s is
+in `logs/web-test.log`. The gate says on stderr what it admitted:
 
 ```text
-waiting for the heavy-test lock <file>: <who holds its CPUs, how many are free, or who is ahead>
-took the heavy-test lock after 41 s: 2 of 32 CPUs, the machine 31% busy, alone
+heavy-gate: admitted valkama:browser-suite after 41 s: K=16, profile 13.3 cores 3.1 GB, machine 4 of 32 busy, alone
+```
+
+Branches from before the gate still share the machine through the earlier lock,
+a file in the logon temporary directory no TEMP or profile moves. Until they are
+gone, `tests/legacy_lock.py` keeps them and a gated run apart: a run takes its
+lease first and then that lock's byte shared, with an entry in `<lock>.runs/`
+counting the cores of its profile, or the whole machine where the gate counts
+it so, so an
+earlier run sees it and waits. An earlier run that holds the whole machine keeps
+a gated run out: it refuses with 75 in an agent's session, or waits under its
+lease and says so:
+
+```text
+took the earlier branches' heavy-test lock <file> after 2 s: shared, counting 14 CPUs
 ```
 
 `tests/commit_subjects.py` reads the subject of every commit `HEAD` reaches,
