@@ -21,6 +21,12 @@
  * on hover and focus, doubled when refused — so the two read as one kind of field side by
  * side; a press anywhere on it is a press on the field. The chips are `SearchComboboxChips`'s,
  * and the highlighted row keeps an edge in a forced palette, where it clears every fill.
+ *
+ * One chosen value too long for its field ends in an ellipsis, whole in the field's hint, as a
+ * one-line label does: a field draws its words without one, so they stood cut at the box's edge
+ * with nothing to say there were more. While nobody types, the words are drawn over the field,
+ * whose own stay what is read and edited (`data-chosen-words`); a press anywhere on them is a
+ * press on the field.
  * The popup is ChoiceSelect's surface at the field's own width, so it never reaches past
  * the dialog the field stands in. A long option wraps inside it at a space, a hyphen or
  * after a `/` (`slashBreaks.ts`): a goal's option is its title, and a label is as often
@@ -44,6 +50,7 @@ import { choiceToken, freshToken, searchChoices, tokenValue } from '@/shared/ui/
 import SearchComboboxChips from '@/shared/ui/SearchComboboxChips.vue'
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 import { vTextRuns } from '@/shared/ui/textRuns.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VField from '@/shared/ui/VField.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -134,6 +141,10 @@ const internal = computed(() => {
 })
 const display = (entry: unknown) => (typeof entry === 'string' ? labelOf(tokenValue(entry)) : '')
 const shownLabel = computed(() => (several.value ? '' : display(internal.value)))
+/** The chosen words stand drawn over the field, cut where they must be: nobody is typing there. */
+const covered = computed(
+  () => !several.value && !open.value && shownLabel.value !== '' && text.value === shownLabel.value,
+)
 const chips = computed(() =>
   several.value
     ? chosen.value.map((value) => ({ value, label: labelOf(value), runs: runsOf(value) }))
@@ -273,21 +284,34 @@ defineExpose({ show })
           :remove-label="removeLabel"
           @remove="remove"
         />
-        <ComboboxInput
-          :id="controlId"
-          ref="field"
-          v-model="text"
-          class="combo-input"
-          :display-value="display"
-          :maxlength="maxlength"
-          :aria-describedby="describedBy"
-          :aria-activedescendant="activeRow"
-          :aria-invalid="invalidMark"
-          :placeholder="standIn"
-          @input="typed"
-          @click="clearWords"
-          @keydown="keydown"
-        />
+        <span
+          v-tooltip.clipped="covered ? shownLabel : ''"
+          class="combo-field"
+        >
+          <ComboboxInput
+            :id="controlId"
+            ref="field"
+            v-model="text"
+            class="combo-input"
+            :class="{ 'is-covered': covered }"
+            :display-value="display"
+            :maxlength="maxlength"
+            :aria-describedby="describedBy"
+            :aria-activedescendant="activeRow"
+            :aria-invalid="invalidMark"
+            :placeholder="standIn"
+            @input="typed"
+            @click="clearWords"
+            @keydown="keydown"
+          />
+          <span
+            v-if="covered"
+            class="combo-shown one-line"
+            data-chosen-words
+            aria-hidden="true"
+            >{{ shownLabel }}</span
+          >
+        </span>
         <VIcon
           class="combo-chevron"
           name="chevron-down"
@@ -367,119 +391,4 @@ defineExpose({ show })
   </VField>
 </template>
 
-<style scoped>
-.combo-box {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-  align-items: center;
-  min-height: var(--size-control-height);
-  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
-  border: 1px solid var(--color-rule-strong);
-  background: var(--color-control-surface);
-  border-radius: var(--radius-control);
-  cursor: text;
-
-  &:hover:not(.disabled, :has(.combo-input:focus-visible)) {
-    border-color: var(--color-action-primary);
-  }
-
-  &:has(.combo-input:focus-visible) {
-    border-color: var(--color-focus-ring);
-  }
-
-  &.invalid {
-    outline: 1px solid var(--color-text-muted);
-    outline-offset: -2px;
-  }
-
-  &.disabled {
-    color: var(--color-text-disabled);
-    background: var(--color-control-disabled-surface);
-    border-color: var(--color-rule);
-    cursor: not-allowed;
-  }
-}
-
-.combo-input {
-  flex: 1 1 8ch;
-  width: 0;
-  min-width: 8ch;
-  min-height: var(--size-control-inline);
-  padding: 0;
-  border: 0;
-  color: inherit;
-  font: var(--font-control);
-  background: transparent;
-  outline: 0;
-}
-
-.combo-chevron {
-  margin-inline-start: auto;
-  color: var(--color-text-muted);
-  pointer-events: none;
-}
-
-.combo-popup {
-  width: var(--reka-combobox-trigger-width);
-  max-width: calc(100vw - 24px);
-  max-height: min(320px, var(--reka-combobox-content-available-height));
-  padding: var(--space-1);
-  border: 1px solid var(--color-rule-strong);
-  color: var(--color-text);
-  background: var(--color-surface);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  border-radius: var(--radius-control);
-  box-shadow: 0 14px 34px var(--color-shadow);
-}
-
-.combo-option {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 18px;
-  gap: var(--space-3);
-  align-items: center;
-  min-height: var(--size-control-height);
-  padding: var(--space-2);
-  border-radius: var(--radius-status);
-  cursor: pointer;
-
-  &[data-highlighted] {
-    background: var(--color-surface-active);
-
-    @media (forced-colors: active) {
-      outline: var(--size-focus-ring) solid Highlight;
-      outline-offset: -2px;
-    }
-  }
-
-  &[data-disabled] {
-    opacity: 0.58;
-    cursor: not-allowed;
-  }
-
-  &:not([data-state='checked']) .combo-check {
-    visibility: hidden;
-  }
-}
-
-.combo-title {
-  display: block;
-  font: var(--font-row-title);
-  overflow-wrap: anywhere;
-}
-
-.combo-note {
-  display: block;
-  color: var(--color-text-muted);
-  font: var(--font-detail);
-}
-
-.combo-empty {
-  padding: var(--space-3);
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-interface);
-  text-align: center;
-}
-</style>
+<style scoped src="./searchCombobox.css"></style>

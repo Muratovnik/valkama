@@ -1,0 +1,137 @@
+.combo-box {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  align-items: center;
+  min-height: var(--size-control-height);
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
+  border: 1px solid var(--color-rule-strong);
+  background: var(--color-control-surface);
+  border-radius: var(--radius-control);
+  cursor: text;
+
+  &:hover:not(.disabled, :has(.combo-input:focus-visible)) {
+    border-color: var(--color-action-primary);
+  }
+
+  &:has(.combo-input:focus-visible) {
+    border-color: var(--color-focus-ring);
+  }
+
+  &.invalid {
+    outline: 1px solid var(--color-text-muted);
+    outline-offset: -2px;
+  }
+
+  &.disabled {
+    color: var(--color-text-disabled);
+    background: var(--color-control-disabled-surface);
+    border-color: var(--color-rule);
+    cursor: not-allowed;
+  }
+}
+
+/* The field and, while nobody types, its chosen words drawn over it, in one cell. */
+.combo-field {
+  display: grid;
+  flex: 1 1 8ch;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  width: 0;
+  min-width: 8ch;
+
+  > * {
+    grid-area: 1 / 1;
+  }
+}
+
+.combo-input {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--size-control-inline);
+  padding: 0;
+  border: 0;
+  color: inherit;
+  font: var(--font-control);
+  background: transparent;
+  outline: 0;
+
+  /* Its words are drawn over it; the caret stays in the field's ink. */
+  &.is-covered {
+    color: transparent;
+    caret-color: var(--color-text);
+  }
+}
+
+.combo-shown {
+  font: var(--font-control);
+}
+
+.combo-chevron {
+  margin-inline-start: auto;
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.combo-popup {
+  width: var(--reka-combobox-trigger-width);
+  max-width: calc(100vw - 24px);
+  max-height: min(320px, var(--reka-combobox-content-available-height));
+  padding: var(--space-1);
+  border: 1px solid var(--color-rule-strong);
+  color: var(--color-text);
+  background: var(--color-surface);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: var(--radius-control);
+  box-shadow: 0 14px 34px var(--color-shadow);
+}
+
+.combo-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 18px;
+  gap: var(--space-3);
+  align-items: center;
+  min-height: var(--size-control-height);
+  padding: var(--space-2);
+  border-radius: var(--radius-status);
+  cursor: pointer;
+
+  &[data-highlighted] {
+    background: var(--color-surface-active);
+
+    @media (forced-colors: active) {
+      outline: var(--size-focus-ring) solid Highlight;
+      outline-offset: -2px;
+    }
+  }
+
+  &[data-disabled] {
+    opacity: 0.58;
+    cursor: not-allowed;
+  }
+
+  &:not([data-state='checked']) .combo-check {
+    visibility: hidden;
+  }
+}
+
+.combo-title {
+  display: block;
+  font: var(--font-row-title);
+  overflow-wrap: anywhere;
+}
+
+.combo-note {
+  display: block;
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+}
+
+.combo-empty {
+  padding: var(--space-3);
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-interface);
+  text-align: center;
+}
