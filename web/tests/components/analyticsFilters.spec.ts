@@ -8,7 +8,9 @@
  *   dimensions, the one stepped into, every one while typed text searches them all;
  * - a wait is said once it has lasted and held for the minimum, a failed read says so, and a read
  *   that answers inside the delay says nothing;
- * - a value a link names that the period did not spend stays chosen, under its id.
+ * - a value a link names that the period did not spend stays chosen, under its id;
+ * - a chip never says its value's id before its dimension's read names it: it says the
+ *   dimension and «…» before the first answer, and the name it had while read again.
  */
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -86,6 +88,10 @@ const setFilters = (chips: ReturnType<typeof mountChips>, filters: UsageFilters)
   chips.setProps({ view: { ...DEFAULT_VIEW, filters } })
 
 type Chips = ReturnType<typeof mountChips>
+
+/** What each chip in the bar says. */
+const chipWords = (chips: Chips) =>
+  chips.findAll('.analytics-bar-chips [data-filter-chip]').map((chip) => chip.text())
 
 /** The dimensions' rows, as the menu opens on them. */
 async function dimensionRows(chips: Chips) {
@@ -240,5 +246,38 @@ describe('a dimension whose values are being read', () => {
     await openDimension(other, 'Role')
     expect(menuNote(other).exists()).toBe(false)
     expect(menuRows(other)).toEqual(['Main agent'])
+  })
+})
+
+describe('a chip while its value’s name is read', () => {
+  const TASK = task(1, 'One').id ?? ''
+
+  it('says its dimension and no id before the first answer, then the name', async () => {
+    const chips = mountChips({}, { work_item: [TASK] })
+    expect(chipWords(chips)).toEqual(['Task: …'])
+    await chips.setProps({ values: { work_item: 'loading' } })
+    expect(chipWords(chips)).toEqual(['Task: …'])
+    await chips.setProps({ values: allRead() })
+    expect(chipWords(chips)).toEqual(['Task: MAIN-1 One'])
+  })
+
+  it('keeps the name it had while its dimension is read again for another period', async () => {
+    const chips = mountChips(allRead(), { work_item: [TASK] })
+    expect(chipWords(chips)).toEqual(['Task: MAIN-1 One'])
+    // A new period drops what was offered, then reads it again.
+    await chips.setProps({ values: {} })
+    expect(chipWords(chips)).toEqual(['Task: MAIN-1 One'])
+    await chips.setProps({ values: { work_item: 'loading' } })
+    expect(chipWords(chips)).toEqual(['Task: MAIN-1 One'])
+    await chips.setProps({ values: { work_item: 'failed' } })
+    expect(chipWords(chips)).toEqual(['Task: MAIN-1 One'])
+  })
+
+  it('says «none» by its words, and the id after a read that failed with no name before', () => {
+    // Its controls: a value named without a read, and the one place an id still stands.
+    expect(chipWords(mountChips({}, { work_item: [null] }))).toEqual(['Task: No task'])
+    expect(chipWords(mountChips({ work_item: 'failed' }, { work_item: [TASK] }))).toEqual([
+      `Task: ${TASK}`,
+    ])
   })
 })
