@@ -31,7 +31,9 @@ otherwise, naming the step and the path. What a step reads, conservatively:
   `web/dist`, and every file a source there names; the browser suite
   (`test:browser`, `playwright`) reads everything under `web/` but `web/dist`,
   `server/`, `valkama.py`, which its configuration serves, and the files outside
-  them its sources read (`BROWSER_READS`);
+  them its sources read (`BROWSER_READS`). An untouched, passed `npm test` in
+  `web/` covers the `npm run NAME` steps its `test` script runs, expanded through
+  the scripts those run, so a touched one of them needs no record of its own;
 - a path outside `web/`, `server/`, `tests/`, `docs/`, `.agents/`, `valkama.py`
   and the Markdown files at the top is not placed, and is an input of every step.
 
@@ -46,6 +48,7 @@ matter: of two that both carry a step, the newer one's run of it decides.
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -230,6 +233,65 @@ def _directory(entry: Mapping[str, object]) -> str:
 
 def _web(worktree: str) -> str:
     return git_worktrees.canonical(Path(worktree) / "web")
+
+
+def _npm_script(entry: Mapping[str, object]) -> str | None:
+    """The script an `npm` step runs: NAME of `npm run NAME`, `test` for `npm test`, else None."""
+
+    argv = _argv(entry)
+    if len(argv) < 2 or _word(argv[0]).lower().rsplit(".", 1)[0] != "npm":
+        return None
+    arguments = argv[1:]
+    if arguments[0] == "test":
+        return "test"
+    if arguments[0] == "run" and len(arguments) > 1:
+        return arguments[1]
+    return None
+
+
+def _npm_runs(script: str) -> list[str]:
+    """The NAME of each `npm run NAME` part of a script's `&&` chain; other parts are ignored."""
+
+    names = []
+    for part in script.split("&&"):
+        words = part.split()
+        if words[:2] == ["npm", "run"] and len(words) > 2:
+            names.append(words[2])
+    return names
+
+
+def _test_expansion(top: str) -> frozenset[str]:
+    """The scripts `npm test` runs in the checked tree's `web/`, each expanded through its own script."""
+
+    try:
+        package = json.loads((Path(top) / "web" / "package.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return frozenset()
+    scripts = package.get("scripts") if isinstance(package, dict) else None
+    if not isinstance(scripts, dict) or not isinstance(scripts.get("test"), str):
+        return frozenset()
+    found: set[str] = set()
+    pending = _npm_runs(scripts["test"])
+    while pending:
+        name = pending.pop()
+        if name not in found:
+            found.add(name)
+            body = scripts.get(name)
+            if isinstance(body, str):
+                pending.extend(_npm_runs(body))
+    return frozenset(found)
+
+
+def _tested_by_npm(
+    plain: Sequence[tuple[Link, Mapping[str, object], tuple[object, ...], str | None]], top: str
+) -> frozenset[str]:
+    """The web scripts an untouched, passed `npm test` in `web/` covers, none without such a step."""
+
+    passed = any(
+        touched is None and key[0] == WEB and _npm_script(entry) == "test" and entry["exit"] == 0
+        for _, entry, key, touched in plain
+    )
+    return _test_expansion(top) if passed else frozenset()
 
 
 def identity(entry: Mapping[str, object], worktree: str) -> tuple[object, ...]:
@@ -478,8 +540,10 @@ def _judge(
     problems: list[str] = []
     counting: list[tuple[Link, Mapping[str, object]]] = []
     valid = {key for _, _, key, touched in plain if touched is None}
+    tested = _tested_by_npm(plain, top)
     for link, entry, key, touched in plain:
-        if touched is not None and key not in valid:
+        by_npm_test = key[0] == WEB and _npm_script(entry) in tested
+        if touched is not None and key not in valid and not by_npm_test:
             problems.append(
                 f"{link.path}: step {entry['name']} {touched}, and no record has it untouched"
             )
