@@ -20,7 +20,10 @@
  * A chip keeps its words and the row wraps. A host that would rather a chip
  * yield its room, as the Analytics bar's one chip on a phone does beside its
  * «Clear filters», declares `--filter-chip-shrink: 1`: the chip then narrows to
- * what its row leaves, its name cut as a one-line label is, with its hint.
+ * what its row leaves, its name cut as a one-line label is, with its hint. A
+ * name given in its two parts (`parts`) that has no room whole there drops the
+ * words that say what the value is and shows the value's start: «Задача:» took
+ * all of a 320px phone's room and the value showed as its ellipsis alone.
  */
 import { computed, useId, useTemplateRef, watch } from 'vue'
 
@@ -43,6 +46,13 @@ export interface FacetChip {
   join?: string
   /** The «is» / «is not» toggle, for a value that can be negated; named for what it would switch. */
   operator?: { name: string; pressed: boolean }
+  /**
+   * The name as the words that say what the value is and the value after them, «Задача: » and
+   * «MAIN-1 One», the value as runs where it has them. A chip that yields its room
+   * (`--filter-chip-shrink`) and has none for the whole name drops the words; `name` and the
+   * remove button's name keep them. A chip not named yet says its name whole.
+   */
+  parts?: { lead: string; value: string; runs?: readonly TextRun[] }
   /**
    * The value's name is not read yet: the chip stands in the room of the widest chip, so the name
    * that comes in its place can only narrow it, as a cut name did.
@@ -196,7 +206,23 @@ defineExpose({ focusLast })
           @keydown="keydown($event, index)"
         >
           <span
-            v-if="chip.runs"
+            v-if="chip.parts && !chip.pending"
+            class="filter-chip-name filter-chip-parts"
+          >
+            <span class="filter-chip-lead">{{ chip.parts.lead }}</span>
+            <span
+              v-if="chip.parts.runs"
+              v-text-runs="chip.parts.runs"
+              class="filter-chip-value one-line"
+            />
+            <span
+              v-else
+              class="filter-chip-value one-line"
+              >{{ chip.parts.value }}</span
+            >
+          </span>
+          <span
+            v-else-if="chip.runs"
             v-text-runs="chip.runs"
             class="filter-chip-name one-line"
           />
@@ -327,6 +353,35 @@ defineExpose({ focusLast })
   &:focus-visible {
     outline: var(--size-focus-ring) solid var(--color-focus-ring);
     outline-offset: 1px;
+  }
+}
+
+/* A name in its two parts stands on one line, its value cut at its end. Where the chip yields its
+   room (`--filter-chip-shrink`) the value comes first in the row and is drawn after the words
+   (`row-reverse`), so a name with no room whole keeps the value on the line the box shows and
+   wraps the words onto the line under it, out of sight and still counted as cut, so the hint
+   says the name whole. Whether it wraps is the whole name's width against the chip's room, not
+   what is cut now, so the words stand or go the same in every state of a width. */
+.filter-chip-parts {
+  display: flex;
+  min-width: 0;
+  max-block-size: 1lh;
+  overflow: hidden;
+}
+
+.filter-chip-lead {
+  flex: none;
+  white-space: pre;
+}
+
+@container style(--filter-chip-shrink: 1) {
+  .filter-chip-parts {
+    flex-flow: row-reverse wrap;
+    justify-content: flex-end;
+  }
+
+  .filter-chip-lead {
+    order: 1;
   }
 }
 
