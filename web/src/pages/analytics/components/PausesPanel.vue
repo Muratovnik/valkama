@@ -142,11 +142,17 @@ const progress = computed(() => {
 })
 
 /**
- * The columns every table shares — the pause, then its figures — at the same widths, which the
- * longest heading in either language and an estimate of thousands of dollars fit beside the
- * rail; under the least width a table scrolls in its frame.
+ * The columns every table shares — the pause, then its figures — at the same widths. Each takes
+ * the share its own need asks: the longest word of its heading in either language, its widest
+ * figure (a bucket's name, thousands of dollars) and its cells' air, 541 px together, so at the
+ * least width no heading runs past its column, and «Cold in background» keeps to one line from a
+ * table of 866 px. Under the least width a table scrolls in its frame. In even shares
+ * «background» stood past its cell and «Requests» past its figures.
  */
-const COLUMNS = { columns: ['16%', '13%', '11%', '11%', '14%', '15%', '20%'], least: '34rem' }
+const COLUMNS = {
+  columns: ['14.71%', '13.62%', '10.68%', '11.29%', '15.06%', '16.71%', '17.93%'],
+  least: '34rem',
+}
 const HEADS = ['requests', 'read', 'written', 'cold', 'background', 'cost'] as const
 const heads = computed(() => HEADS.map((head) => t(`analytics.pauses.heads.${head}`)))
 
@@ -314,6 +320,18 @@ const tables = (pauses: Pauses) =>
   margin: 0;
   color: var(--color-text);
   font: var(--font-detail);
+}
+
+/* An environment's heading stands nearer its own table than the table before it: its table
+   8px under it, and the next environment a section's part further down. At the section's one
+   gap, a heading over a head row that wraps stood 42px over its first heading and 34px under
+   the table before, and read as that table's last line. */
+[data-environment] {
+  gap: var(--space-2);
+}
+
+[data-environment] + [data-environment] {
+  margin-block-start: var(--space-section-part);
 }
 
 /* The sum of the lines over it, in the full ink and the heavier weight, as the token kinds' sum. */

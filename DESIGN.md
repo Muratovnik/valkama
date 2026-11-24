@@ -2805,7 +2805,10 @@ environment. «Pauses» shows how much of the prompt cache a model request read 
 each length, a table per client, role, model and sign-in with a line per bucket of pause its
 requests fell in. The tables are stacked, and every one has the same seven columns at the same
 widths (`ChartTable`'s `layout`), so a column stands at the same edges down the section and fits
-the panel beside the rail; under that width a table scrolls in its own frame. Its read goes back
+the panel beside the rail; under that width a table scrolls in its own frame. A column's share is
+what its heading's longest word and its widest figure ask, so no heading runs past its figures;
+a heading that wraps stands on the foot of the head row, by the figures it heads, and an
+environment's heading stands nearer its own table than the table before it. Its read goes back
 to the transcripts — gigabytes over four weeks, parsed over several processes — so its entry says
 what the section shows instead of a figure, and the section asks its read only while it is on
 show: when it opens, when the period or the project changes and on the bar's refresh; the
