@@ -3,7 +3,7 @@
  * the owner answers is drawn as its kind, with the content and the answers of the kinds table, and
  * one press writes the option it names; «Later…» puts a question off to a day, to new comments,
  * to whichever of the two comes first, said by a line right under the day and the count, or
- * to a card's close; a question its card's close took
+ * to a card's close, and a value becoming one it takes moves nothing; a question its card's close took
  * away says so; and the tabs over the list show one kind's questions, drop a kind with none, give
  * way to «All» when the open kind empties, and are what «Question N of M» counts. A task in a goal shows its goal and the goal's conditions, the goal
  * read by the reference the task's card names it by, at a phone's width in both languages too.
@@ -20,7 +20,7 @@ import { expectInside } from './requestRow.ts'
 import { held } from './served/preview.ts'
 import { briefAnswer, itemAnswer } from './servedAnswers.ts'
 import { test } from './test.ts'
-import { eitherUnderTheCount, untilFields } from './untilChoice.ts'
+import { eitherUnderTheCount, placesIn, stayedPut, untilFields } from './untilChoice.ts'
 
 const WIDTHS = [1280, 620, 390] as const
 const POLL = 30_000
@@ -116,7 +116,7 @@ for (const width of WIDTHS) {
     await day.getByRole('button', { name: 'Later…', exact: true }).click()
     const putOff = day.getByRole('button', { name: 'Put off', exact: true })
     await expect(putOff).toBeDisabled()
-    await expect(day.locator('.request-later-reason')).toHaveText(
+    await expect(putOff).toHaveAccessibleDescription(
       'Choose a day, a number of new comments, or a card whose closing brings it back.',
     )
     await day.getByLabel('Until a day').fill('2099-03-01')
@@ -224,7 +224,7 @@ for (const width of WIDTHS) {
 
 for (const locale of ['ru', 'en'] as const)
   for (const width of WIDTHS)
-    test(`at ${width}px in ${locale} «whichever comes first» of «Later…» stands under the day and the count`, async ({
+    test(`at ${width}px in ${locale} a valid value in «Later…» moves nothing, and «whichever comes first» stands under the day and the count`, async ({
       page,
     }) => {
       await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
@@ -235,30 +235,40 @@ for (const locale of ['ru', 'en'] as const)
         width,
       )
       const both = record('Put off by both')
-      await both.getByRole('button', { name: words.later, exact: true }).click()
+      const later = both.getByRole('button', { name: words.later, exact: true })
+      await later.click()
       const day = both.getByLabel(words.day)
       const count = both.getByLabel(words.count)
       const either = both.locator('[data-until="either"]')
+      const putOff = both.getByRole('button', { name: words.putOff, exact: true })
+      // The fields, «Put off» and the answers under them.
+      const places = () => placesIn(both, both, words, [putOff, later])
 
-      // A count the server does not take keeps its reason under «Put off», which leaves the
-      // fields the whole width of the row: from 620px it holds the card beside the day and the
-      // count, and the line, appearing, ends the fields without moving the card.
+      // A count the server does not take keeps «Put off» unavailable with its reason, and
+      // one it takes makes it available: the reason goes and nothing moves, the card's field
+      // beside the day and the count from 620px either way.
       await count.fill('1000')
-      let before = await untilFields(both, words)
+      await expect(putOff).toBeDisabled()
+      const refused = await places()
+      const before = await untilFields(both, words)
       expect(before.card.top < before.count.bottom).toBe(width >= 620)
-      await day.fill('2099-03-01')
-      await eitherUnderTheCount(both, words, before)
-
-      // A count it takes gives «Put off» the room beside the fields, and the card goes under them.
-      await day.fill('')
-      await expect(either).toHaveCount(0)
       await count.fill('3')
-      before = await untilFields(both, words)
-      expect(before.card.top).toBeGreaterThanOrEqual(before.count.bottom)
+      await expect(putOff).toBeEnabled()
+      stayedPut(await places(), refused)
+
+      // So with a day too: the line appears, taking its own room and no other, and stays as the
+      // count becomes one the server takes, which moves nothing.
+      await count.fill('1000')
+      await expect(putOff).toBeDisabled()
       await day.fill('2099-03-01')
       await eitherUnderTheCount(both, words, before)
+      const lined = await places()
+      await count.fill('3')
+      await expect(putOff).toBeEnabled()
+      await expect(either).toBeVisible()
+      stayedPut(await places(), lined)
 
-      await both.getByRole('button', { name: words.putOff, exact: true }).click()
+      await putOff.click()
       await expect
         .poll(() => requests.writes.map((write) => write.body.answers))
         .toEqual([{ answer: 'later', until: '2099-03-01 or 3 comments' }])

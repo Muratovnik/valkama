@@ -54,6 +54,39 @@ export async function untilFields(scope: Locator, words: Words) {
 }
 
 /**
+ * The day's, the count's and the card's fields, then each of `also`, from the top left of the
+ * box `origin` as one frame draws them: what a change of value must leave where it was.
+ */
+export async function placesIn(
+  origin: Locator,
+  scope: Locator,
+  words: Words,
+  also: Locator[] = [],
+) {
+  const [frame, ...boxes] = await framed([origin, ...parts(scope, words), ...also])
+  if (!frame || boxes.length !== 3 + also.length) throw new Error('a part is not drawn')
+  return boxes.map((box) => ({ ...from(box, frame), width: box.right - box.left }))
+}
+
+/** Every part of `now` stands where it stood `before`, as wide. */
+export function stayedPut(
+  now: Awaited<ReturnType<typeof placesIn>>,
+  before: Awaited<ReturnType<typeof placesIn>>,
+) {
+  const seen = JSON.stringify({ now, before })
+  expect(now, seen).toHaveLength(before.length)
+  for (const [index, place] of now.entries()) {
+    const was = before[index]
+    if (!was) throw new Error('nothing to compare')
+    for (const key of ['x', 'y', 'width'] as const)
+      expect(
+        Math.abs(place[key] - was[key]),
+        `${key} of part ${index}: ${seen}`,
+      ).toBeLessThanOrEqual(0.5)
+  }
+}
+
+/**
  * The line that says which comes first, drawn once a day and a count are both chosen, stands
  * right under the day and the count it qualifies, one row gap below them, across the fields'
  * width. Where the card's field does not stand beside them, the line comes before it: under the

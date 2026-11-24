@@ -421,15 +421,15 @@ describe('the answers of a kind', () => {
     expect(document.activeElement).toBe(dayInput(wrapper).element)
     const putOff = () => buttonNamed(wrapper, 'Put off')
     expect(putOff().attributes('disabled')).toBeDefined()
-    expect(wrapper.get('.request-later-reason').text()).toBe(
+    expect(wrapper.get('.until-reason').text()).toBe(
       'Choose a day, a number of new comments, or a card whose closing brings it back.',
     )
     await dayInput(wrapper).setValue('2000-01-01')
     expect(putOff().attributes('disabled')).toBeDefined()
-    expect(wrapper.get('.request-later-reason').text()).toBe('Choose today or a later day.')
+    expect(wrapper.get('.until-reason').text()).toBe('Choose today or a later day.')
     await dayInput(wrapper).setValue(DAY)
     expect(putOff().attributes('disabled')).toBeUndefined()
-    expect(wrapper.find('.request-later-reason').exists()).toBe(false)
+    expect(wrapper.find('.until-reason').exists()).toBe(false)
     await press(wrapper, 'Later…')
     expect(wrapper.find('.request-later').exists()).toBe(false)
   })
