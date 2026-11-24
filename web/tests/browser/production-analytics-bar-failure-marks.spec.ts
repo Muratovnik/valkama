@@ -7,6 +7,11 @@
  * a failure's beside its words however many lines they take. Beside the words wrapped onto two
  * lines the failure's disc was squeezed to an oval 4.4 to 7.7px wide.
  *
+ * Whole, the disc leaves the failure's words room for no more lines than the row under the
+ * periods holds, so the failure still moves nothing: with a button's air at the ends of the words
+ * that are the retry, beside a live period in Russian at 400 and 401px they took three lines and
+ * the bar grew by 10.78px.
+ *
  * The retry's focus ring stands clear of the disc before it, by a pixel at least, and inside the
  * row it shares with the refresh: drawn round it, it touched the disc at every width, and round
  * the words on two lines it stood 1.6px past that row.
@@ -72,6 +77,7 @@ const marks = (page: Page) =>
       }
     }
     return {
+      bar: document.querySelector('.analytics-bar')?.getBoundingClientRect().height ?? 0,
       live: box(document.querySelector('.analytics-bar-fresh-mark')),
       failure: box(document.querySelector('.refresh-failed-mark')),
       row: box(document.querySelector('.analytics-refresh')),
@@ -118,6 +124,8 @@ for (const locale of ['ru', 'en'] as const)
         seen[width] = { rest, failed }
         const name = `${width}px failed`
         expectDisc(name, failed.failure)
+        // The disc whole, the failure still moves nothing (DESIGN.md).
+        expect.soft(failed.bar, `${name}: the bar's height`).toBe(rest.bar)
         expect.soft(failed.drawn, `${name}: the retry's ring drawn`).toBe(true)
         const ring = failed.ring ?? { left: Number.NaN, top: Number.NaN, bottom: Number.NaN }
         const disc = failed.failure ?? { right: Number.NaN }

@@ -3351,7 +3351,10 @@ rest. The retry is reached at every width too: where the line has no room for «
 are the retry, named «Could not refresh · Retry» with «Retry» as their hint, and take no room the
 words did not. Dropped there, a phone and a span of days in Russian offered no retry of its own,
 only the refresh beside it. The failure's disc keeps its 8px whatever lines its words take:
-beside the words on two lines of a phone it was squeezed to an oval 4 to 8px wide. The retry's
+beside the words on two lines of a phone it was squeezed to an oval 4 to 8px wide. The words
+that are the retry keep the narrow gap at their ends, so the whole disc still leaves them two
+lines in the phone's row: with a button's 8px, beside a live period in Russian at 400px, they
+took three and the bar grew by 11px. The retry's
 focus ring is drawn inside the retry, as a period's is in its track: round it, the ring
 touched the disc at every width and stood 1.6px past the row of the words on two lines.
 Reading another space, period or filter dims what is shown until its
