@@ -474,10 +474,8 @@ class MapItemsTests(StoreCase):
         self.assertLessEqual({self.ids["WM-2"], self.ids["WM-9"]}, found("valka"))
         self.assertIn(self.ids["WM-4"], found("relay"))
         self.assertIn(self.ids["WM-4"], found("servi"))
-        post_indexes = next(
-            entry for entry in report["postconditions"] if entry["name"] == "indexes"
-        )
-        self.assertGreater(post_indexes["detail"]["searches_compared"], 1)
+        p13 = next(entry for entry in report["postconditions"] if entry["name"] == "indexes")
+        self.assertGreater(p13["detail"]["searches_compared"], 1)
 
     def test_a_label_that_is_not_a_word_of_its_project_is_refused_before_the_store_is_read(
         self,
