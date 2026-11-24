@@ -1,7 +1,7 @@
 """The record a run of checks leaves, and the check of one against a tree.
 
     python tests/run_record.py run --out DIR [--name NAME] [--cwd DIR] -- COMMAND ...
-    python tests/run_record.py check RECORD [--tree DIR] [--require NAME ...]
+    python tests/run_record.py check RECORD [RECORD ...] [--tree DIR] [--require NAME ...]
 
 A report that says which checks passed is a claim; a record is what the runner
 wrote while it ran them. Each `gates` run writes `record.json` into its result
@@ -16,7 +16,9 @@ refuses one made in another working tree, at another commit or on other
 uncommitted changes, naming each difference, and with `--require NAME` one with no
 step of that name, naming it. Its exit code tells an accepted
 record of a run that passed from one of a run that failed and from a refusal;
-`check --help` lists the codes.
+`check --help` lists the codes. Given several records, `check` takes them as a
+chain: one made at the state DIR is in now, and earlier ones whose steps still
+hold because nothing they read changed since, as `tests/record_chain.py` says.
 
 A record lives where the run's results live, so the result directory must be
 outside the tree or ignored by it, as `tmp/` is: one the tree's status sees
@@ -115,8 +117,26 @@ def _path(top: Path, name: bytes) -> Path:
     return top / name.decode("utf-8", "surrogateescape")
 
 
-def _changes(top: Path) -> str | None:
-    """One digest of every file that differs from the commit, or None when none does.
+def on_disk(top: Path, names: Collection[bytes]) -> dict[bytes, bytes]:
+    """The blob each path's content on disk would be, `gone` or `directory` where it has none.
+
+    Hashed as `git add` would store it, line-ending conversion included, and not written.
+    """
+
+    files = sorted(name for name in names if _path(top, name).is_file())
+    hashed = _git_bytes(
+        top, "hash-object", "--stdin-paths", stdin=b"".join(f + b"\n" for f in files)
+    )
+    blobs = dict(zip(files, hashed.split(), strict=True))
+    # No blob: gone from disk, or a nested repository listed as its directory.
+    return {
+        name: blobs.get(name) or (b"directory" if _path(top, name).exists() else b"gone")
+        for name in names
+    }
+
+
+def _changes(top: Path) -> tuple[str | None, dict[str, str]]:
+    """A digest of every file that differs from the commit, None when none does, and their blobs.
 
     Judged by what is on disk: each path whose content is not the commit's, with
     the blob that content would be, so staging it or not, and whether Git's status
@@ -127,26 +147,20 @@ def _changes(top: Path) -> str | None:
     proposed = _names(_git_bytes(top, "diff", "HEAD", "--name-only", "-z", "--no-renames"))
     proposed |= _names(_git_bytes(top, "ls-files", "-z", "--others", "--exclude-standard"))
     if not proposed:
-        return None
+        return None, {}
     committed = {}
     for entry in _names(_git_bytes(top, "ls-tree", "-r", "-z", "--full-tree", "HEAD")):
         meta, name = entry.split(b"\t", 1)
         committed[name] = meta.split()[2]
-    files = sorted(name for name in proposed if _path(top, name).is_file())
-    # Hashed as `git add` would store it, line-ending conversion included, and not written.
-    hashed = _git_bytes(
-        top, "hash-object", "--stdin-paths", stdin=b"".join(f + b"\n" for f in files)
-    )
-    blobs = dict(zip(files, hashed.split(), strict=True))
+    blobs = on_disk(top, proposed)
     digest = hashlib.sha256()
-    differs = False
+    differing = {}
     for name in sorted(proposed):
-        # No blob: gone from disk, or a nested repository listed as its directory.
-        now = blobs.get(name) or (b"directory" if _path(top, name).exists() else b"gone")
+        now = blobs[name]
         if now != committed.get(name):
-            differs = True
+            differing[name.decode("utf-8", "surrogateescape")] = now.decode("ascii")
             digest.update(name + b"\0" + now + b"\0")
-    return digest.hexdigest() if differs else None
+    return (digest.hexdigest() if differing else None), differing
 
 
 def tree_state(root: Path) -> dict[str, object]:
@@ -155,14 +169,18 @@ def tree_state(root: Path) -> dict[str, object]:
     found = artifacts.baseline(str(root))
     if found["quality"] != "observed":
         return {"worktree": git_worktrees.canonical(root), "head": "", "dirty": None}
-    changes = _changes(Path(found["repository"]))
-    return {
+    changes, paths = _changes(Path(found["repository"]))
+    state: dict[str, object] = {
         "worktree": found["repository"],
         "head": found["head"],
         "branch": found["branch"],
         "dirty": changes is not None,
         "changes": changes,
     }
+    if paths:
+        # Each changed file's blob, so a chain can tell whether its content is still that.
+        state["paths"] = paths
+    return state
 
 
 def _version(command: Sequence[str]) -> str | None:
@@ -309,11 +327,13 @@ CHECK_CODES = f"""exit codes:
   {PASSED}  accepted, and the run it records passed
   {FAILED}  accepted, and the run it records failed; the failed steps are named
   {REFUSED}  refused: not a readable record of this format, not of this tree as it is now,
-      or with no step of a name --require gives"""
+      or with no step of a name --require gives; of a chain, also a record at a commit
+      HEAD does not descend from, or a step a change since its record touched that no
+      record has untouched"""
 
 
-def _describing(path: Path, tree: Path) -> tuple[dict | None, str]:
-    """The record at `path` when it describes `tree` as it is now, or None and why it does not."""
+def read(path: Path) -> tuple[dict | None, str]:
+    """The record at `path` when it is a readable record of this format, or None and why not."""
 
     try:
         record = json.loads(path.read_text(encoding="utf-8"))
@@ -325,6 +345,15 @@ def _describing(path: Path, tree: Path) -> tuple[dict | None, str]:
             f"{path} is a run record of format {record.get('format')},"
             f" and this check compares a tree as format {FORMAT} records it"
         )
+    return record, ""
+
+
+def _describing(path: Path, tree: Path) -> tuple[dict | None, str]:
+    """The record at `path` when it describes `tree` as it is now, or None and why it does not."""
+
+    record, why = read(path)
+    if record is None:
+        return None, why
     found = differences(record["tree"], tree_state(tree))
     if found:
         changed = record.get("changed_by_run")
@@ -333,6 +362,19 @@ def _describing(path: Path, tree: Path) -> tuple[dict | None, str]:
         )
         return None, f"{path} does not describe {tree} as it is now: " + "; ".join(found) + left
     return record, ""
+
+
+def check_records(
+    paths: Sequence[Path], tree: Path, required: Collection[str] = ()
+) -> tuple[int, str]:
+    """`check` of one record, or of a chain of several, which `tests/record_chain.py` judges."""
+
+    if len(paths) == 1:
+        return check(paths[0], tree, required)
+    # Imported here: the chain reads the import graph, which a single record never needs.
+    from tests import record_chain
+
+    return record_chain.check(paths, tree, list(required))
 
 
 def check(path: Path, tree: Path, required: Collection[str] = ()) -> tuple[int, str]:
@@ -437,6 +479,8 @@ def run(
     entry = step(label, argv, cwd, log, code)
     if "tests" not in entry and (counted := tests_said(log)) is not None:
         entry["tests"] = counted
+    if lists := named_lists(argv, cwd):
+        entry["lists"] = lists
     steps.append(entry)
     result = 0 if all(entry["exit"] == 0 for entry in steps) else 1
     _say(f"{label:<14} exit={code}  {isolated._tail(log)}")
@@ -445,6 +489,26 @@ def run(
         _say(note)
     _say(f"record: {write(out, record, steps, result)}")
     return code
+
+
+def named_lists(argv: Sequence[str], cwd: Path) -> dict[str, list[str] | None]:
+    """The lines of each list file a `--specs=FILE` argument names, None for one it cannot read.
+
+    The file is the run's selection and lives outside the tree, so the record keeps
+    what it said: two runs of the same words over other lists are not the same step.
+    """
+
+    found: dict[str, list[str] | None] = {}
+    for word in argv:
+        if word.startswith("--specs="):
+            name = word.removeprefix("--specs=")
+            try:
+                text = (cwd / name).read_text(encoding="utf-8")
+            except (OSError, ValueError):
+                found[name] = None
+                continue
+            found[name] = sorted({line.strip() for line in text.splitlines() if line.strip()})
+    return found
 
 
 def _say(line: str) -> None:
@@ -478,7 +542,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     checking.add_argument(
-        "record", type=Path, help=f"the {NAME}, or the directory `run --out` wrote it in"
+        "record",
+        type=Path,
+        nargs="+",
+        help=f"the {NAME}, or the directory `run --out` wrote it in; several make a chain",
     )
     checking.add_argument(
         "--tree", type=Path, default=ROOT, help="the tree; by default this checkout"
@@ -502,7 +569,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             name=options.name,
             environment=environment,
         )
-    code, said = check(options.record, options.tree, options.require)
+    code, said = check_records(options.record, options.tree, options.require)
     _say(said)
     return code
 
