@@ -1,9 +1,10 @@
 /**
  * The pauses answer as the section's tables: for one wait, a table per environment — the client,
- * the role, the model and the sign-in — with a line per bucket of the answer, in its order, and a
- * line of their sum. A bucket no request fell in is a line with no figures, so every table has
- * the same lines and a cliff reads across them at the same height. The sum's shares are of the
- * sum's tokens, as each line's are of its own; a share with no tokens is null.
+ * the role, the model and the sign-in — with a line per bucket of the answer its requests fell
+ * in, in the answer's order, and a line of their sum. A bucket none of its requests fell in has no
+ * line: an environment of a few requests had most of its lines empty, and the section ran to four
+ * thousand pixels of them. The sum's shares are of the sum's tokens, as each line's are of its own; a share with no tokens
+ * is null.
  */
 import type { PauseRow, Pauses, PauseWait } from '@/shared/api/analyticsPausesApi.ts'
 
@@ -20,8 +21,7 @@ export interface PauseFigures {
 
 interface PauseLine {
   bucket: string
-  /** Null for a bucket no request fell in. */
-  figures: PauseFigures | null
+  figures: PauseFigures
 }
 
 export interface PauseTable {
@@ -91,9 +91,9 @@ export function pauseTables(pauses: Pauses, wait: PauseWait): PauseTable[] {
       model: first.model,
       auth: first.auth,
       backgroundKnown,
-      lines: pauses.buckets.map(({ key: bucket }) => {
+      lines: pauses.buckets.flatMap(({ key: bucket }) => {
         const inBucket = rows.filter((row) => row.bucket === bucket)
-        return { bucket, figures: inBucket.length ? figuresOf(inBucket, backgroundKnown) : null }
+        return inBucket.length ? [{ bucket, figures: figuresOf(inBucket, backgroundKnown) }] : []
       }),
       total: figuresOf(rows, backgroundKnown),
     }

@@ -149,6 +149,7 @@ export const CAVEATS: Record<string, { sections: readonly CaveatSection[]; minut
   'analytics.pauses.about.pause': { sections: ['pauses'] },
   'analytics.pauses.about.shares': { sections: ['pauses'] },
   'analytics.pauses.about.cold': { sections: ['pauses'] },
+  'analytics.pauses.about.background': { sections: ['pauses'] },
   'analytics.pauses.about.person': { sections: ['pauses'] },
   'analytics.pauses.about.wake': { sections: ['pauses'] },
   'analytics.pauses.about.period': { sections: ['pauses'] },

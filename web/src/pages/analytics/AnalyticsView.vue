@@ -178,10 +178,11 @@ const filterDimensions = computed<UsageDimension[]>(() =>
   USAGE_DIMENSIONS.filter((dimension) => !(props.projectId && dimension === 'project')),
 )
 
-/** The page's sections, in the rail's order, and the name of the one on show (`usePageSections`). */
-const { sections, sectionName } = usePageSections({
+/** The page's sections, the name of the one on show and the rail's tiles (`usePageSections`). */
+const { sections, sectionName, tiles } = usePageSections({
   dimensions: () => filterDimensions.value,
   shown: () => view.value.by,
+  tiles: () => ({ ...usageTiles.value, ...quota.tiles.value }),
 })
 
 const overview = computed(() => view.value.by === OVERVIEW)
@@ -272,7 +273,6 @@ const detail = useDetail({
   refuse,
   view: () => view.value,
 })
-const tiles = computed(() => ({ ...usageTiles.value, ...quota.tiles.value }))
 
 /** The bar's refresh reads the page, every tile of the rail, the quota and the pauses again. */
 function refresh() {

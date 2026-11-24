@@ -1,7 +1,9 @@
 /**
  * The pauses before model requests on the Analytics page: its section on the rail and its panel.
- * What a pause is, what the shares are of, what «cold» means, that a person's waits are the
- * control sample and that the filters do not apply are said once, in the section's «ⓘ»
+ * The section's heading is its name on the rail, and its rail entry says what it shows (`tile`)
+ * where the others show figures. What a pause is, what the shares are of, what «cold» and the
+ * background's column mean, that a person's waits are the control sample and that the filters
+ * do not apply are said once, in the section's «ⓘ»
  * (`about`), each a sentence of its own; a table says only its figures. A bucket is named by
  * its span (`buckets`), keyed by the answer's bucket key with its punctuation taken out.
  * `analyticsMessages` holds these under `analytics.pauses`.
@@ -9,7 +11,7 @@
 export const analyticsPausesMessages = {
   en: {
     section: 'Pauses',
-    title: 'Cache after a pause',
+    tile: 'Cache after a pause',
     failed: 'The pauses before model requests could not be loaded.',
     failedAgain: 'The pauses could not be loaded again, so these are from the read before.',
     none: 'No model request followed a pause in this period. Choose a longer period.',
@@ -29,6 +31,8 @@ export const analyticsPausesMessages = {
       pause: 'A pause runs from one request being sent to the next one in the same run.',
       shares: 'Read is the share of the context read from the cache; written, written again.',
       cold: 'A request is cold when it read less than half of its context from the cache.',
+      background:
+        'Cold in background: cold requests sent during background work; Codex does not tell it.',
       person: 'Waits for a person are never warmed: they are the control sample.',
       wake: 'Wakes are requests a keep-warm hook started; their cost is what warming cost.',
       period: 'The period applies, in whole hours; the filters do not.',
@@ -46,26 +50,25 @@ export const analyticsPausesMessages = {
       read: 'Read',
       written: 'Written',
       cold: 'Cold',
-      background: 'Background running',
+      background: 'Cold in background',
       cost: 'Cost',
     },
     buckets: {
-      m0: 'Under 4 min',
+      m0: '< 4 min',
       m4: '4–5 min',
       m5: '5–6 min',
       m6: '6–30 min',
       m30: '30–60 min',
       m60: '60–70 min',
-      m70: '70 min – 3 h',
+      m70: '70 min–3 h',
       h3: '3–12 h',
-      h12: '12 h and over',
+      h12: '≥ 12 h',
     },
     total: 'All pauses',
-    background: '{count} · {cold} cold',
   },
   ru: {
     section: 'Паузы',
-    title: 'Кэш после паузы',
+    tile: 'Кэш после паузы',
     failed: 'Не удалось загрузить паузы перед запросами к модели.',
     failedAgain: 'Не удалось загрузить паузы заново, поэтому показаны прежние.',
     none: 'В этом периоде ни один запрос к модели не шёл после паузы. Выберите период длиннее.',
@@ -83,8 +86,9 @@ export const analyticsPausesMessages = {
     },
     about: {
       pause: 'Пауза — время от отправки одного запроса до следующего в том же прогоне.',
-      shares: 'Прочитано — доля контекста из кэша; записано — доля, записанная заново.',
+      shares: 'Из кэша — доля контекста, прочитанная из кэша; в кэш — доля, записанная заново.',
       cold: 'Запрос холодный, если прочитал из кэша меньше половины своего контекста.',
+      background: 'Холодные при фоне — отправленные во время фоновой работы; Codex её не сообщает.',
       person: 'Ожидания человека не греются: это контрольная выборка.',
       wake: 'Разбудки — запросы, начатые хуком прогрева; их цена и есть цена прогрева.',
       period: 'Период действует, целыми часами; фильтры — нет.',
@@ -99,24 +103,23 @@ export const analyticsPausesMessages = {
     heads: {
       pause: 'Пауза',
       requests: 'Запросы',
-      read: 'Прочитано',
-      written: 'Записано',
+      read: 'Из кэша',
+      written: 'В кэш',
       cold: 'Холодные',
-      background: 'Шла фоновая работа',
+      background: 'Холодные при фоне',
       cost: 'Цена',
     },
     buckets: {
-      m0: 'Меньше 4 мин',
+      m0: '< 4 мин',
       m4: '4–5 мин',
       m5: '5–6 мин',
       m6: '6–30 мин',
       m30: '30–60 мин',
       m60: '60–70 мин',
-      m70: '70 мин – 3 ч',
+      m70: '70 мин–3 ч',
       h3: '3–12 ч',
-      h12: '12 ч и больше',
+      h12: '≥ 12 ч',
     },
     total: 'Все паузы',
-    background: '{count} · {cold} холодных',
   },
 } as const

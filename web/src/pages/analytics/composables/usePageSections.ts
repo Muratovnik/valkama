@@ -1,11 +1,15 @@
 /**
  * The sections of the Analytics page, in the rail's order: the overview, the tokens by kind, the
  * quota's five hours and its week, the pauses before model requests, then each dimension filtered
- * on, each by its name; and the name of the section on show, which names the panel.
+ * on, each by its name; the name of the section on show, which names the panel; and the rail's
+ * tiles: those the page reads (`tiles`), and the pauses', which are read only while on show, so
+ * their entry says what the section shows where the others show figures, and stands as tall.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { standing } from '@/pages/analytics/composables/useRailTiles.ts'
+import type { RailTileModel } from '@/pages/analytics/composables/useRailTiles.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 
 import {
@@ -22,6 +26,8 @@ export function usePageSections(options: {
   dimensions: () => readonly UsageDimension[]
   /** The section on show. */
   shown: () => AnalyticsSection
+  /** The tiles the page reads figures for. */
+  tiles: () => Partial<Record<AnalyticsSection, RailTileModel>>
 }) {
   const { t } = useI18n()
   const words = useSpendingWords()
@@ -38,5 +44,10 @@ export function usePageSections(options: {
     () => sections.value.find((section) => section.value === options.shown())?.label ?? '',
   )
 
-  return { sections, sectionName }
+  const tiles = computed<Partial<Record<AnalyticsSection, RailTileModel>>>(() => ({
+    ...options.tiles(),
+    [PAUSES_SECTION]: standing('ready', t('analytics.pauses.tile')),
+  }))
+
+  return { sections, sectionName, tiles }
 }

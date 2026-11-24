@@ -43,6 +43,17 @@
   }
 }
 
+/* A table of a stack laid out alike (`layout`): its columns take the widths it is given, whatever
+   its figures, so each column stands at the same edges in every table of the stack; the cells
+   keep the tighter inline air of a dense table, so seven columns fit the panel beside the rail. */
+.chart-table-fixed {
+  table-layout: fixed;
+
+  & .chart-cell {
+    padding-inline: var(--space-2);
+  }
+}
+
 .chart-heading {
   color: var(--color-text-tertiary);
   font: var(--font-column-head);

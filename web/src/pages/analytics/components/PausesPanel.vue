@@ -2,21 +2,25 @@
 /**
  * The panel of the pauses before model requests: how much of the prompt cache a request read after
  * a pause of each length, a table per environment — the client, the role, the model and the
- * sign-in — with a line per bucket of pause and a line of their sum (`pauseTables`). A bucket no
- * request fell in keeps its line, empty, so every table has the same lines and the five-minute and
- * one-hour cliffs read at the same height in each.
+ * sign-in — with a line per bucket its requests fell in and a line of their sum (`pauseTables`),
+ * so the five-minute and one-hour cliffs read as the step between two named lines. Every table
+ * has the same seven columns at the same widths
+ * (`COLUMNS`), so a column stands at the same edges down the whole section; the column of cold
+ * requests sent while background work ran says «—» where the client does not tell that work.
  *
  * What the pause waited on is chosen in the heading (`waits`), the machine first: a person's waits
  * are the control sample, never warmed, and the wakes are the requests a keep-warm hook started,
  * whose cost is what warming cost. The choice stands until the page is left, as a chart's choice of
- * its table does. A wait no request followed says so in its own words. What a pause, a share and
- * «cold» are, and that the period applies and the filters do not, the heading's «ⓘ» says once.
+ * its table does. A wait no request followed says so in its own words. What a pause, a share,
+ * «cold» and the background's column are, and that the period applies and the filters do not, the
+ * heading's «ⓘ» says once.
  *
  * It reads the pauses itself (`usePausesRead`), not the page's usage: when it opens, when the
- * period changes and each time the bar asks a refresh (`refreshes`). Its first wait, a first read
- * that failed, a period with no end and an answer with no request stand in the product's shared
- * state panel. While it is read again the answer on show stays; a read again that failed keeps it, and a
- * line under the heading says so (`data-note="failed-again"`).
+ * period changes and each time the bar asks a refresh (`refreshes`). Its heading, «ⓘ» and choice
+ * of wait stand from the first moment; its first wait, a first read that failed, a period with no
+ * end and an answer with no request stand under them in the product's shared state panel. While it
+ * is read again the answer on show stays; a read again that failed keeps it, and a line under the
+ * heading says so (`data-note="failed-again"`).
  *
  * What a reader of the page selects it by: each environment's block is `data-environment`, its key;
  * each line of a table is `data-bucket`, the answer's key of its bucket, and the sum `data-bucket`
@@ -76,11 +80,17 @@ const wait = ref<PauseWait>('machine')
 const waits = computed(() =>
   PAUSE_WAITS.map((value) => ({ value, label: t(`analytics.pauses.waits.${value}`) })),
 )
-const about = computed(() =>
-  (['pause', 'shares', 'cold', 'person', 'wake', 'period', 'cost'] as const).map((caveat) =>
-    t(`analytics.pauses.about.${caveat}`),
-  ),
-)
+const CAVEATS = [
+  'pause',
+  'shares',
+  'cold',
+  'background',
+  'person',
+  'wake',
+  'period',
+  'cost',
+] as const
+const about = computed(() => CAVEATS.map((caveat) => t(`analytics.pauses.about.${caveat}`)))
 
 /** A bucket's words by the answer's key; a key this build does not know stands as it is. */
 const BUCKET_WORDS: Readonly<Record<string, string>> = {
@@ -105,37 +115,34 @@ const environment = (table: PauseTable) =>
     auth: t(`analytics.pauses.auth.${table.auth ?? 'unknown'}`),
   })
 
+/** What a cell with no figure says: a share of no tokens, or what the client does not tell. */
+const ABSENT = '—'
 const count = (value: number) => new Intl.NumberFormat(locale.value).format(value)
-const shareOf = (ratio: number | null) => (ratio === null ? '' : words.share(ratio))
+const shareOf = (ratio: number | null) => (ratio === null ? ABSENT : words.share(ratio))
 
-/** A line's cells in the heads' order, the background's only where the client tells it. */
-function cells(figures: PauseFigures | null, backgroundKnown: boolean) {
-  if (!figures) return Array.from({ length: backgroundKnown ? 6 : 5 }, () => '')
-  const shown = [
+/**
+ * The columns every table shares — the pause, then its figures — at the same widths, which the
+ * longest heading in either language and an estimate of thousands of dollars fit beside the
+ * rail; under the least width a table scrolls in its frame.
+ */
+const COLUMNS = { columns: ['16%', '13%', '11%', '11%', '14%', '15%', '20%'], least: '34rem' }
+const HEADS = ['requests', 'read', 'written', 'cold', 'background', 'cost'] as const
+const heads = computed(() => HEADS.map((head) => t(`analytics.pauses.heads.${head}`)))
+
+/**
+ * A line's cells in the heads' order; the cold requests sent while background work ran are «—»
+ * where the client does not tell it.
+ */
+function cells(figures: PauseFigures, backgroundKnown: boolean) {
+  return [
     count(figures.requests),
     shareOf(figures.readShare),
     shareOf(figures.writeShare),
     count(figures.cold),
+    backgroundKnown ? count(figures.backgroundCold ?? 0) : ABSENT,
+    usageWords.cost(figures.cost),
   ]
-  if (backgroundKnown)
-    shown.push(
-      t('analytics.pauses.background', {
-        count: count(figures.backgroundRequests ?? 0),
-        cold: count(figures.backgroundCold ?? 0),
-      }),
-    )
-  shown.push(usageWords.cost(figures.cost))
-  return shown
 }
-
-const heads = (backgroundKnown: boolean) => [
-  t('analytics.pauses.heads.requests'),
-  t('analytics.pauses.heads.read'),
-  t('analytics.pauses.heads.written'),
-  t('analytics.pauses.heads.cold'),
-  ...(backgroundKnown ? [t('analytics.pauses.heads.background')] : []),
-  t('analytics.pauses.heads.cost'),
-]
 
 const tables = (pauses: Pauses) =>
   pauseTables(pauses, wait.value).map((table) => {
@@ -144,7 +151,6 @@ const tables = (pauses: Pauses) =>
       key: table.key,
       name,
       label: t('analytics.pauses.table', { environment: name }),
-      heads: heads(table.backgroundKnown),
       lines: table.lines.map((line) => ({
         bucket: line.bucket,
         name: bucketName(line.bucket),
@@ -156,25 +162,25 @@ const tables = (pauses: Pauses) =>
 </script>
 
 <template>
-  <PlatformStatePanel
-    :state="state"
-    @retry="refresh"
+  <PanelLevel
+    class="pauses-panel"
+    level="section"
+    :title="t('analytics.pauses.section')"
+    :about="about"
   >
-    <template #default="{ payload }">
-      <PanelLevel
-        class="pauses-panel"
-        level="section"
-        :title="t('analytics.pauses.title')"
-        :about="about"
-      >
-        <template #actions="{ size }">
-          <SegmentedControl
-            v-model="wait"
-            :size="size"
-            :label="t('analytics.pauses.waits.label')"
-            :options="waits"
-          />
-        </template>
+    <template #actions="{ size }">
+      <SegmentedControl
+        v-model="wait"
+        :size="size"
+        :label="t('analytics.pauses.waits.label')"
+        :options="waits"
+      />
+    </template>
+    <PlatformStatePanel
+      :state="state"
+      @retry="refresh"
+    >
+      <template #default="{ payload }">
         <p
           v-if="failedAgain"
           class="pauses-panel-note"
@@ -198,6 +204,7 @@ const tables = (pauses: Pauses) =>
           <ChartTable
             :label="table.label"
             :empty="false"
+            :layout="COLUMNS"
             :words="{ empty: '' }"
           >
             <thead>
@@ -209,7 +216,7 @@ const tables = (pauses: Pauses) =>
                   {{ t('analytics.pauses.heads.pause') }}
                 </th>
                 <th
-                  v-for="head in table.heads"
+                  v-for="head in heads"
                   :key="head"
                   scope="col"
                   class="chart-cell chart-heading"
@@ -262,9 +269,9 @@ const tables = (pauses: Pauses) =>
             </tbody>
           </ChartTable>
         </PanelLevel>
-      </PanelLevel>
-    </template>
-  </PlatformStatePanel>
+      </template>
+    </PlatformStatePanel>
+  </PanelLevel>
 </template>
 
 <style scoped src="@/shared/ui/chartTable.css"></style>

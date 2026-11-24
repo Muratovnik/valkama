@@ -3,10 +3,13 @@
  * oracle is the requirement of the view: «Pauses» stands on the rail after the quota and
  * before the dimensions; its read goes back to the transcripts, so it is asked only while its
  * section is on show — when it opens, when the period changes and on the bar's refresh, never for
- * the measure. Its panel shows, for the wait chosen (the machine first), a table per environment
- * with a line for every bucket of the answer, empty where no request fell, and a line of their sum
- * whose shares are of the sum's tokens; the background column stands only where the client tells
- * it. A wait with no request, an answer with none, a first read that failed and a read again that
+ * the measure; its entry says what it shows, as the others show figures. Its heading is its name
+ * on the rail and stands, with the choice of wait, from the first moment of the read. Its panel
+ * shows, for the wait chosen (the machine first), a table per environment with a line for each
+ * bucket its requests fell in, and none for another, and a line of their sum whose shares are of
+ * the sum's tokens. Every table has the same seven columns;
+ * the cold requests sent during background work are «—» where the client does not tell it. A
+ * wait with no request, an answer with none, a first read that failed and a read again that
  * failed each say so in words of their own.
  *
  * The figures come from `PAUSES`: the Claude subagent's machine waits read 990 of 1,000 and 10 of
@@ -31,7 +34,6 @@ const WORLD: TimedStretch[] = [
   },
 ]
 const usage = (query: URLSearchParams) => serveUsage(WORLD, query)
-const BUCKETS = PAUSES.buckets.map((bucket) => bucket.key)
 
 const environments = (page: VueWrapper) =>
   page.findAll('[data-environment]').map((block) => block.find('.level-heading').text())
@@ -72,6 +74,7 @@ describe('the pauses section', () => {
       'pauses',
     ])
     expect(reads.pausesAsked).toHaveLength(0)
+    expect(page.get('[data-section="pauses"]').text()).toBe('PausesCache after a pause')
 
     await page.setProps({ routeState: { by: 'pauses' } })
     await flushPromises()
@@ -95,7 +98,22 @@ describe('the pauses section', () => {
     expect(reads.pausesAsked).toHaveLength(3)
   })
 
-  it('shows a table per environment with every bucket and their sum, for the machine first', async () => {
+  it('shows its heading and choice of wait while the first read waits', async () => {
+    const reads = stubAnalyticsReads(usage, undefined, () => 'hold')
+    const page = await mountAnalytics({ routeState: { by: 'pauses' } })
+    expect(page.get('.pauses-panel .level-heading').text()).toBe('Pauses')
+    expect(page.findAll('.pauses-panel .segmented-option').map((one) => one.text())).toEqual([
+      'Machine',
+      'Person',
+      'Wakes',
+    ])
+    expect(page.find('.pauses-panel .work-dots').exists()).toBe(true)
+    reads.held[0]?.release(pausesAnswer(PAUSES))
+    await flushPromises()
+    expect(environments(page)).toHaveLength(2)
+  })
+
+  it('shows a table per environment with the buckets of the wait and their sum, for the machine first', async () => {
     stubAnalyticsReads(usage, undefined, () => pausesAnswer(PAUSES))
     const page = await mountAnalytics({ routeState: { by: 'pauses' } })
     expect(environments(page)).toEqual([
@@ -104,30 +122,22 @@ describe('the pauses section', () => {
     ])
     const claude = block(page, 'claude')
     expect(claude?.findAll('tbody tr').map((one) => one.attributes('data-bucket'))).toEqual([
-      ...BUCKETS,
+      '0-4m',
+      '5-6m',
       'total',
     ])
-    expect(heads(page, 'claude')).toEqual([
-      'Pause',
-      'Requests',
-      'Read',
-      'Written',
-      'Cold',
-      'Background running',
-      'Cost',
-    ])
-    expect(heads(page, 'codex')).not.toContain('Background running')
-    expect(line(page, 'claude', '4-5m').every((cell) => cell === '')).toBe(true)
+    const columns = ['Pause', 'Requests', 'Read', 'Written', 'Cold', 'Cold in background', 'Cost']
+    expect(heads(page, 'claude')).toEqual(columns)
+    expect(heads(page, 'codex')).toEqual(columns)
+    expect(
+      block(page, 'codex')
+        ?.findAll('tbody tr')
+        .map((one) => one.attributes('data-bucket')),
+    ).toEqual(['0-4m', 'total'])
     const [requests, read, written, cold, background, cost] = line(page, 'claude', 'total')
-    expect([requests, read, written, cold, background]).toEqual([
-      '14',
-      '50%',
-      '50%',
-      '4',
-      '3 · 1 cold',
-    ])
+    expect([requests, read, written, cold, background]).toEqual(['14', '50%', '50%', '4', '1'])
     expect(cost).toContain('1.75')
-    expect(line(page, 'codex', 'total').slice(0, 2)).toEqual(['3', '75%'])
+    expect(line(page, 'codex', 'total').slice(0, 5)).toEqual(['3', '75%', '0%', '0', '—'])
   })
 
   it('switches to a person’s waits, and says so when no wake ran', async () => {
@@ -138,6 +148,11 @@ describe('the pauses section', () => {
       'Claude Code · main session · claude-sonnet-4-5 · subscription',
     ])
     expect(line(page, 'claude', '60-70m').slice(0, 2)).toEqual(['1', '10%'])
+    expect(
+      block(page, 'claude')
+        ?.findAll('tbody tr')
+        .map((one) => one.attributes('data-bucket')),
+    ).toEqual(['60-70m', 'total'])
     await chooseWait(page, 'Wakes')
     expect(environments(page)).toEqual([])
     expect(page.get('[data-note="no-requests"]').text()).toContain(

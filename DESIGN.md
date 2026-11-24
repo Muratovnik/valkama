@@ -2797,12 +2797,16 @@ The rail holds a tile for the overview, one for the token kinds, two for the sub
 quota — «Five hours» and «Week» —, an entry for «Pauses» and one tile for each dimension of the
 read: account, organization, project, task, executor, role, launch class, model, effort and
 environment. «Pauses» shows how much of the prompt cache a model request read after a pause of
-each length, a table per client, role, model and sign-in with a line per bucket of pause, so the
-five-minute and one-hour cliffs read at the same height in every table. Its read goes back to
-the transcripts and takes seconds over a week, so its entry carries no figure and the section
-asks its read only while it is on show: when it opens, when the period changes and on the bar's
-refresh; the filters and the measure do not reach it. What the pause waited on — the machine,
-a person or a keep-warm wake — is chosen in its heading, the machine first.
+each length, a table per client, role, model and sign-in with a line per bucket of pause its
+requests fell in. The tables are stacked, and every one has the same seven columns at the same
+widths (`ChartTable`'s `layout`), so a column stands at the same edges down the section and fits
+the panel beside the rail; under that width a table scrolls in its own frame. Its read goes back
+to the transcripts — gigabytes over four weeks, parsed over several processes — so its entry says
+what the section shows instead of a figure, and the section asks its read only while it is on
+show: when it opens, when the period changes and on the bar's refresh; the filters and the
+measure do not reach it. Its heading is its name on the rail and stands, with the choice of what
+the pause waited on — the machine, a person or a keep-warm wake, the machine first — from the
+first moment of the read.
 «Account» is the subscription account the work was spent on (`seat`), «Organization» the
 organization it was billed to; an old link's `account` filter still filters by organization.
 «Executor» lists the sessions of agents that did the work; planning calls a session by the same
