@@ -149,11 +149,11 @@ function chooseCard(reference: string) {
 /* On a line the card takes what the day and the count leave, and goes under them where they do
    not fit. Its width is what the line's order of the fields is decided by. */
 .until.is-line {
-  container: until-line / inline-size;
   display: flex;
   flex: 1 1 22rem;
   flex-wrap: wrap;
   align-items: flex-end;
+  container: until-line / inline-size;
 }
 
 .until.is-stack {
