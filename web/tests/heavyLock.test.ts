@@ -1,148 +1,134 @@
 /**
- * The heavy-test lock as the web runners take it: through the one Python tool that owns it, so a
- * run of either runtime waits for a holder of the other and says whose run it waits for, and a
- * failed run that took none says who held it.
+ * The heavy-process gate as the web runners go through it: through the one Python side that owns
+ * it, so a run gets its share K and its lease, a run that finds no room never starts, and a failed
+ * run that took none names the heavy runs going. The gate is stood in for by
+ * `tests/heavy_gate_double.py`, and the earlier branches' lock is a file in a directory of its own.
  */
 
 import { spawn } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { python } from './browser/serverStore.ts'
 import { lockAvailable, lockedCommand, lockHolder } from './heavyLock.ts'
 
-/**
- * A started process: what it has written so far, and its exit code once it ends. The gate hands
- * out one CPU, so every run waits for every other and none reads this machine's load.
- */
-function started(command: readonly string[]) {
+const double = fileURLToPath(new URL('../../tests/heavy_gate_double.py', import.meta.url))
+
+/** A started process's exit code and everything it wrote, once it ends. */
+function finished(command: readonly string[]): Promise<{ code: number; said: string }> {
   const [program = '', ...args] = command
-  const env = { ...process.env, VALKAMA_HEAVY_TEST_CPUS: '1' }
-  const child = spawn(program, args, { env, stdio: ['pipe', 'pipe', 'inherit'] })
+  // Not under this run's own lease, nor in an agent's session: the stand-in decides.
+  const env = { ...process.env }
+  for (const name of ['HEAVY_GATE_LEASE', 'HEAVY_GATE_K', 'VALKAMA_HEAVY_TEST_LOCK_HELD'])
+    delete env[name]
+  const child = spawn(program, args, { env, stdio: ['ignore', 'pipe', 'pipe'] })
   const chunks: string[] = []
   child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk.toString()))
-  const exited = new Promise<number>((resolve, reject) => {
+  child.stderr.on('data', (chunk: Buffer) => chunks.push(chunk.toString()))
+  return new Promise((resolve, reject) => {
     child.on('error', reject)
-    child.on('exit', (code, signal) => resolve(signal ? 1 : Number(code)))
+    child.on('close', (code, signal) =>
+      resolve({ code: signal ? 1 : Number(code), said: chunks.join('') }),
+    )
   })
-  return { child, exited, said: () => chunks.join('') }
 }
 
-async function until(condition: () => boolean, what: string): Promise<void> {
-  const deadline = Date.now() + 15_000
-  while (!condition()) {
-    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`)
-    await new Promise((resolve) => setTimeout(resolve, 50))
-  }
-}
+describe('the heavy-process gate the web runners go through', () => {
+  let directory = ''
+  let gate = ''
+  let lockFile = ''
+  let state = ''
 
-/** Says its process id, then holds the lock at argv[1] from Python until its input closes. */
-const pythonHolder = `
-import os, sys
-sys.path.insert(0, sys.argv[2])
-from pathlib import Path
-from tests import machine_lock
-print("pid", os.getpid(), flush=True)
-with machine_lock.held("a Python holder", path=Path(sys.argv[1]), say=lambda _line: None):
-    print("held", flush=True)
-    sys.stdin.read()
-`
+  beforeEach(() => {
+    directory = mkdtempSync(join(tmpdir(), 'valkama-gate-'))
+    state = join(directory, 'gate')
+    mkdirSync(state)
+    gate = join(state, 'heavy-gate.json')
+    lockFile = join(directory, 'heavy.lock')
+    const argv = [python, double, '--state', state]
+    writeFileSync(gate, JSON.stringify({ protocol: 1, argv, state }))
+  })
 
-/** The process id the Python holder said first, or null before it has. */
-function holderPid(said: string): number | null {
-  const found = /^pid (\d+)/.exec(said)
-  return found ? Number(found[1]) : null
-}
+  afterEach(() => rmSync(directory, { recursive: true, force: true }))
 
-/** A lock in a directory of its own, held by a Python process until `release`. */
-interface PythonHold {
-  directory: string
-  exited: Promise<number>
-  lock: string
-  pid: string
-  release: () => void
-}
+  // Without a Python to run the gate's side there is nothing to go through; the runners go direct.
+  it.skipIf(!lockAvailable())(
+    'runs the command under a lease, with every {k} the share the gate gave',
+    async () => {
+      const out = join(directory, 'seen')
+      const write = `require('node:fs').writeFileSync(${JSON.stringify(out)}, [process.argv[1], process.env.HEAVY_GATE_K, process.env.HEAVY_GATE_LEASE].join(' '))`
+      const run = await finished(
+        lockedCommand('vitest-suite', [process.execPath, '-e', write, '--', '--max={k}'], {
+          gate,
+          lockFile,
+          want: 3,
+        }),
+      )
+      expect(run.code).toBe(0)
+      const [argument, k, lease] = readFileSync(out, 'utf8').split(' ')
+      expect([argument, k]).toEqual(['--max=3', '3'])
+      expect(lease).toMatch(/^double-/)
+      expect(run.said).toContain('heavy-gate: admitted valkama:vitest-suite after 0 s: K=3')
+    },
+    30_000,
+  )
 
-/** Runs `check` once Python holds the lock, and ends the hold and removes the directory after. */
-async function whilePythonHolds(check: (hold: PythonHold) => Promise<void>): Promise<void> {
-  const directory = mkdtempSync(join(tmpdir(), 'valkama-lock-'))
-  const lock = join(directory, 'heavy.lock')
-  const root = fileURLToPath(new URL('../..', import.meta.url))
-  const holder = started([python, '-c', pythonHolder, lock, root])
-  try {
-    await until(() => holder.said().includes('held'), 'the Python holder')
-    const pid = String(holderPid(holder.said()))
-    const release = () => holder.child.stdin.end()
-    await check({ directory, exited: holder.exited, lock, pid, release })
-  } finally {
-    // By its own id too: in a virtual environment the process started is a launcher, and
-    // killing it alone leaves the holder running with the directory's files open.
-    const pid = holderPid(holder.said())
-    if (pid !== null)
+  it.skipIf(!lockAvailable())(
+    'starts nothing and exits 75 when the gate has no room, saying why',
+    async () => {
+      writeFileSync(join(state, 'refuse'), '')
+      const out = join(directory, 'ran')
+      const write = `require('node:fs').writeFileSync(${JSON.stringify(out)}, '')`
+      const run = await finished(
+        lockedCommand('browser-suite', [process.execPath, '-e', write], { gate, lockFile }),
+      )
+      expect(run.code).toBe(75)
+      expect(run.said).toContain('no room for valkama:browser-suite')
+      expect(() => readFileSync(out)).toThrow()
+    },
+    30_000,
+  )
+
+  it.skipIf(!lockAvailable())(
+    "names the gate's leases for a failed run that took none, and nothing once none goes",
+    () => {
+      mkdirSync(join(state, 'leases'))
+      const lease = join(state, 'leases', 'L.json')
+      writeFileSync(
+        lease,
+        JSON.stringify({ name: 'valkama:browser-suite', holder_pid: 31, since: 1 }),
+      )
+      const env = { ...process.env }
+      delete env['HEAVY_GATE_LEASE']
+      delete env['VALKAMA_HEAVY_TEST_LOCK_HELD']
+      const saved = process.env
+      process.env = env
       try {
-        process.kill(pid)
-      } catch {
-        // It has already gone.
+        const named = lockHolder({ gate, lockFile })
+        expect(named).toContain('heavy runs were going as this run ended: valkama:browser-suite')
+        expect(named).toContain('process 31,')
+        rmSync(lease)
+        expect(lockHolder({ gate, lockFile })).toBe('')
+      } finally {
+        process.env = saved
       }
-    holder.child.kill()
-    await holder.exited
-    rmSync(directory, { recursive: true, force: true })
-  }
-}
-
-describe('the heavy-test lock the web runners take', () => {
-  // Without a Python to hold the lock there is nothing to wait for; the runners go unlocked.
-  it.skipIf(!lockAvailable())(
-    'makes a run wait, saying whose run it waits for, while Python holds the lock',
-    () =>
-      whilePythonHolds(async ({ directory, lock, pid, release }) => {
-        const marker = join(directory, 'ran')
-        const write = `require('node:fs').writeFileSync(${JSON.stringify(marker)}, '')`
-        const waiter = started(
-          lockedCommand('a node run', [process.execPath, '-e', write], { lockFile: lock }),
-        )
-        await until(() => waiter.said().includes('waiting'), 'the waiter to say so')
-        expect(existsSync(marker)).toBe(false)
-        expect(waiter.said()).toContain('it is held by a Python holder in ')
-        expect(waiter.said()).toContain(`process ${pid},`)
-
-        release()
-        expect(await waiter.exited).toBe(0)
-        expect(existsSync(marker)).toBe(true)
-        expect(waiter.said()).toContain('took the heavy-test lock after')
-      }),
+    },
     30_000,
   )
 
-  it.skipIf(!lockAvailable())(
-    'names the holder for a failed targeted run while Python holds the lock, and nothing once it is free',
-    () =>
-      whilePythonHolds(async ({ exited, lock, pid, release }) => {
-        const named = lockHolder(lock)
-        expect(named).toContain(`the heavy-test lock ${lock} was held as this run ended`)
-        expect(named).toContain('by a Python holder in ')
-        expect(named).toContain(`process ${pid},`)
-
-        release()
-        expect(await exited).toBe(0)
-        expect(lockHolder(lock)).toBe('')
-      }),
-    30_000,
-  )
-
-  it('runs the command through the lock of this checkout, for the process of the runner', () => {
-    const command = lockedCommand('a run', ['node', 'cli.js', '--workers=4'])
+  it('runs the command through the gate script of this checkout, for the process of the runner', () => {
+    const command = lockedCommand('browser-suite', ['node', 'cli.js', '--workers=4'])
     expect(command.slice(0, 2)).toEqual([
       python,
-      fileURLToPath(new URL('../../tests/machine_lock.py', import.meta.url)),
+      fileURLToPath(new URL('../../tests/heavy_gate.py', import.meta.url)),
     ])
     expect(command.slice(2)).toEqual([
       'run',
-      '--run=a run',
+      '--kind=browser-suite',
       `--pid=${process.pid}`,
       '--',
       'node',
@@ -151,14 +137,21 @@ describe('the heavy-test lock the web runners take', () => {
     ])
   })
 
-  it('declares the CPUs a run needs and the lock a test stands in, before the command', () => {
-    const command = lockedCommand('a run', ['node'], { cpus: 8, lockFile: 'L' })
+  it('gives the size, the want and the stand-ins a test names, before the command', () => {
+    const command = lockedCommand('vitest-suite', ['node'], {
+      gate: 'G',
+      lockFile: 'L',
+      size: 12,
+      want: 8,
+    })
     expect(command.slice(2)).toEqual([
       'run',
-      '--run=a run',
-      '--cpus=8',
+      '--kind=vitest-suite',
+      '--size=12',
+      '--want=8',
       `--pid=${process.pid}`,
-      '--path=L',
+      '--lock=L',
+      '--gate=G',
       '--',
       'node',
     ])

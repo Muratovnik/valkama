@@ -1,7 +1,7 @@
 /**
- * A failed browser run names who holds the heavy-test lock as it ends, as a failed targeted
+ * A failed browser run names the heavy runs going as it ends, as a failed targeted
  * unittest or Vitest run does, and the configuration adds the reporter that says it beside `line`
- * in both of its branches. Who holds the lock is stood in for; `heavyLock.test.ts` asks the real
+ * in both of its branches. What is going is stood in for; `heavyLock.test.ts` asks the real
  * Python side.
  */
 
@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { holderLine } from './browser/lockHolderReporter.ts'
 
-const named = 'the heavy-test lock L was held as this run ended, by R\n'
+const named = 'heavy runs were going as this run ended: R\n'
 const reporter = fileURLToPath(new URL('browser/lockHolderReporter.ts', import.meta.url))
 
 describe('the end of a browser run', () => {

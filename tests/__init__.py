@@ -77,19 +77,19 @@ launcher.AUTOSTART_STORE = RunKeyDouble()
 
 
 class LoadNoting(unittest.TextTestResult):
-    """The result of every unittest run: one that fails says who holds the heavy-test lock.
+    """The result of every unittest run: one that fails says which heavy runs were going.
 
-    A targeted run takes no lock, so it may fail beside another checkout's heavy run
-    for that load alone; the line after the failures names that run, or is absent
-    when the lock is free or held by this run's own holder.
+    A targeted run takes no lease at the heavy-process gate, so it may fail beside
+    another checkout's heavy run for that load alone; the line after the failures
+    names those runs, or is absent when none goes or the run is under a lease itself.
     """
 
     def printErrors(self) -> None:  # noqa: N802 -- the name unittest's runner calls
         super().printErrors()
         if not self.wasSuccessful():
-            from tests import machine_lock
+            from tests import heavy_gate
 
-            note = machine_lock.load_note()
+            note = heavy_gate.load_note()
             if note is not None:
                 self.stream.writeln(note)
 
@@ -102,34 +102,32 @@ unittest.TextTestRunner.resultclass = LoadNoting  # type: ignore[assignment]
 #: gates and CI name. A narrower one makes a targeted run.
 _WHOLE_SUITE_PATTERNS = (None, "test*.py", "test_*.py")
 
-#: The logical CPUs a run of the whole suite declares to the heavy-test gate. The suite
-#: is one Python process, with the processes some tests start; a sampler of whole runs
-#: saw it at one to two cores, short of a run from start to end, so this is a first
-#: figure to revise against a measured one. `tests/isolated.py` declares it for its step.
-WHOLE_SUITE_CPUS = 2
+#: The kind of run the whole suite is at the heavy-process gate, as `.heavy-gate.toml`
+#: declares it; `tests/isolated.py` runs its step under the same kind.
+WHOLE_SUITE_KIND = "unittest-suite"
 
 
 def load_tests(
     loader: unittest.TestLoader, standard_tests: unittest.TestSuite, pattern: str | None
 ) -> unittest.TestSuite:
-    """A run of the whole suite holds the machine's heavy-test lock until it ends.
+    """A run of the whole suite holds a lease at the heavy-process gate until it ends.
 
     unittest calls this for each run that reaches the package itself, such as
     `discover -s . -p "test_*.py"` as the gates and CI spell it, `discover -s tests -t .`
     and `-m unittest tests`, and never for a module or a subpackage named on its own,
-    so those targeted runs take no lock; nor does one narrowed by `-p` or `-k`. The
-    lock is taken while the suite loads, so a run that waited starts its clock once it
-    is in. `tests/machine_lock.py` says why the lock exists and why a run under a
-    holder goes in at once.
+    so those targeted runs take no lease; nor does one narrowed by `-p` or `-k`. The
+    lease is taken while the suite loads, so a run that waited starts its clock once it
+    is in. `tests/heavy_gate.py` says why the gate exists and why a run under a holder
+    takes no lease of its own.
 
     Discovery does not walk a package that has this hook, so the hook walks it, from
     the directory that holds the package, so that its modules keep their `tests.` names.
     """
 
-    from tests import machine_lock
+    from tests import heavy_gate
 
     if pattern in _WHOLE_SUITE_PATTERNS and not loader.testNamePatterns:
-        machine_lock.hold_until_exit("the whole unittest suite", cpus=WHOLE_SUITE_CPUS)
+        heavy_gate.hold_until_exit(WHOLE_SUITE_KIND)
     here = os.path.dirname(os.path.abspath(__file__))
     standard_tests.addTests(
         loader.discover(here, pattern or "test_*.py", top_level_dir=os.path.dirname(here))

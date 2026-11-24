@@ -18,9 +18,11 @@ import { clipboardOptIn, clipboardSpecs } from './clipboardSpecs.ts'
  * spec that `--with-clipboard=<spec name>` does not name. Playwright runs with `clipboardOptIn`
  * set when `--with-clipboard` names a spec, and without it otherwise.
  *
- * A run holds the machine's heavy-test lock, `tests/machine_lock.py`, for as long as Playwright
- * runs, asking for the whole machine, so any other heavy run of any checkout waits for it and
- * says whose run it waits for. A run under `--list` runs no test, and takes no lock.
+ * A run holds a lease at the machine's heavy-process gate, through `tests/heavy_gate.py`, for as
+ * long as Playwright runs, on the 16 workers its configuration gives. The gate counts it by what
+ * earlier runs of as many specs used, not as the whole machine; with no room it exits 75 at once
+ * in an agent's session, saying why, and waits elsewhere or with `HEAVY_GATE_WAIT=1`. A run
+ * under `--list` runs no test, and takes no lease.
  *
  *   npm run test:browser:allowed -- --list                 what would run, and the total
  *   npm run test:browser:allowed -- --specs=<file>         the specs a file names, one a line
@@ -44,10 +46,14 @@ interface Request {
 export interface RunnerIo {
   /**
    * Runs Playwright with these arguments and resolves with its exit code; `clipboard` says
-   * whether its configuration may select the clipboard specs, and `lock` names the run that
-   * holds the heavy-test lock while Playwright runs, or is null for no lock.
+   * whether its configuration may select the clipboard specs, and `lease` gives the size of the
+   * selection Playwright runs under a lease of, or is null for no lease.
    */
-  playwright: (args: readonly string[], clipboard: boolean, lock: string | null) => Promise<number>
+  playwright: (
+    args: readonly string[],
+    clipboard: boolean,
+    lease: { size: number } | null,
+  ) => Promise<number>
   /** A list file's text, or null when there is no such file. */
   readList: (file: string) => string | null
   say: (line: string) => void
@@ -129,11 +135,7 @@ export async function runAllowed(argv: readonly string[], io: RunnerIo): Promise
   const left = clipboardSpecs.filter((name) => !specs.includes(name))
   io.say(`${specs.length} spec files; clipboard specs left out: ${left.join(', ') || 'none'}`)
   const summary = fileURLToPath(new URL('runSummary.ts', import.meta.url))
-  const batch =
-    request.listFile === undefined ? 'the whole suite' : `the specs ${request.listFile} names`
-  const lock = request.playwright.includes('--list')
-    ? null
-    : `npm run test:browser:allowed, ${batch}, harness port ${harnessPort}`
+  const lease = request.playwright.includes('--list') ? null : { size: specs.length }
   return io.playwright(
     [
       'test',
@@ -142,7 +144,7 @@ export async function runAllowed(argv: readonly string[], io: RunnerIo): Promise
       ...request.playwright,
     ],
     request.withClipboard.length > 0,
-    lock,
+    lease,
   )
 }
 
@@ -160,14 +162,16 @@ export function playwrightEnvironment(
 }
 
 const web = fileURLToPath(new URL('../..', import.meta.url))
+/** The gate's kind for a run of the suite or a batch of it, as `.heavy-gate.toml` declares it. */
+const suiteKind = 'browser-suite'
 const suiteDirectory = join(web, 'tests/browser')
 
 /** The real file system and Playwright, run from `web/` with this process's Node. */
 export const realIo: RunnerIo = {
-  playwright: (args, clipboard, lock) => {
+  playwright: (args, clipboard, lease) => {
     const command = [process.execPath, join(web, 'node_modules/@playwright/test/cli.js'), ...args]
-    // It declares no CPUs, so it asks for the whole machine: the browsers take whatever it has.
-    return spawnInherited(lock === null ? command : lockedCommand(lock, command), {
+    const run = lease === null ? command : lockedCommand(suiteKind, command, { size: lease.size })
+    return spawnInherited(run, {
       cwd: web,
       env: playwrightEnvironment(process.env, clipboard),
     })
