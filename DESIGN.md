@@ -1549,8 +1549,15 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   word only when that one word is wider than its line. A model id is the exception:
   it is one name and stays whole, never broken at its hyphen, and goes to the next
   line whole instead (`vWholeWords`): an environment's heading in «Pauses» and a
-  model's side panel are drawn so, and the Model section's names keep to one line,
-  cut at their end. Broken at its hyphen, «claude-» stood above «opus-5-5» in the
+  model's side panel are drawn so. In the Model section's tables, the main one, its
+  splits by task and by executor and the panel of every value, an id is never cut
+  either: the name column keeps the room of the longest id its rows name, held
+  unseen in its heading (`SpendingTableColumnHead`), and the other value of a pair
+  takes the next line, cut at its own end, where the id leaves it too little
+  (`PairName`'s `whole`). A cost with no price at all is words, «201.3K tokens without a price»,
+  and wraps under its column as a remark does, so the room the ids take adds no
+  scroll. Cut at their end, «claude-fable-5-1» and «claude-fable-5-2» both read
+  «claude-fa…»; broken at its hyphen, «claude-» stood above «opus-5-5» in the
   Pauses headings on a phone. A browser offers no break
   after a `/`, so `loading/empty/error/unavailable` was one word to it, wider than a
   phone's line, and `overflow-wrap: anywhere` broke it where the line ran out:

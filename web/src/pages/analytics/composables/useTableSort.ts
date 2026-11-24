@@ -14,7 +14,7 @@ import type { TableModel } from '@/pages/analytics/composables/useTableModel.ts'
 export const NAME_COLUMN = 'name'
 
 /** How a sorted column's heading says so: its ARIA sort and its arrow. */
-interface SortMark {
+export interface SortMark {
   aria: 'ascending' | 'descending'
   icon: 'arrow-down' | 'arrow-up'
 }

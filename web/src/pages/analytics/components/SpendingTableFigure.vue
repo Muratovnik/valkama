@@ -8,7 +8,9 @@
  * taller instead. On one line of its own the remark still set the column, 192 pixels where its
  * figures asked about 100, and pushed the change past a frame of 686 pixels; beside the figure,
  * «≈ 1 109,00 $, 40 тыс. токенов без цены» made it 273. The cell still says the two as one, with
- * the comma between them, as the bars and a hint say them (`besides`).
+ * the comma between them, as the bars and a hint say them (`besides`). A figure that is words,
+ * a cost with no price at all, «201.3K tokens without a price», wraps the same way: on one line
+ * it held a cost column at 209 pixels where its amounts asked 85.
  *
  * The table lays the cell out (`SpendingTable`): its width, its ink when it holds the chosen
  * measure, and its place in the total row that stays at the panel's edge. The cell is marked
@@ -28,6 +30,8 @@ const props = defineProps<{ cell: TableCell }>()
  * and kept inside a count, «40 тыс.», whose space follows its digits.
  */
 const remark = computed(() => props.cell.remark.replaceAll(/(?<!\d)\u{A0}/gu, ' '))
+/** Whether the figure is words, which have no amount to sort by: a cost with no price. */
+const wordsOnly = computed(() => props.cell.sort === null)
 </script>
 
 <template>
@@ -37,7 +41,7 @@ const remark = computed(() => props.cell.remark.replaceAll(/(?<!\d)\u{A0}/gu, ' 
     :data-measure="cell.key"
     :data-chosen="cell.chosen"
   >
-    <span>{{ cell.text }}</span>
+    <span :class="{ 'figure-words': wordsOnly }">{{ cell.text }}</span>
     <template v-if="cell.remark">
       <span class="visually-hidden">{{ REMARK_JOINT }}</span>
       <span class="chart-detail figure-remark">{{ remark }}</span>
@@ -51,9 +55,15 @@ const remark = computed(() => props.cell.remark.replaceAll(/(?<!\d)\u{A0}/gu, ' 
 /* The remark asks its column for no width of its own (`contain`): it takes the width the
    figures give the column and wraps in it, between words, its last line never one short word
    alone («цены»). */
-.figure-remark {
+.figure-remark,
+.figure-words {
   text-wrap: balance;
   white-space: normal;
   contain: inline-size;
+}
+
+/* A block, as the remark is, so its width can be contained. */
+.figure-words {
+  display: block;
 }
 </style>
