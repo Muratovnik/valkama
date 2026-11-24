@@ -35,16 +35,20 @@ export type PausesRead =
 export function usePausesRead(options: { scope: () => UsageScope; view: () => AnalyticsView }) {
   const read = shallowRef<PausesRead>({ status: 'loading' })
   let reading: AbortController | null = null
+  /** What names the answer on show, so a failed read keeps it only for the same scope and period. */
+  let shownFor: string | null = null
 
   async function refresh() {
     reading?.abort()
     const bounds = periodBounds(options.view(), new Date())
     if (!bounds) {
       read.value = { status: 'no-period' }
+      shownFor = null
       return
     }
     const controller = new AbortController()
     reading = controller
+    const key = period()
     const held = read.value
     read.value = held.status === 'ready' ? { ...held, refreshing: true } : { status: 'loading' }
     try {
@@ -62,12 +66,17 @@ export function usePausesRead(options: { scope: () => UsageScope; view: () => An
         refreshing: false,
         failedAgain: false,
       }
+      shownFor = key
     } catch {
       if (controller.signal.aborted) return
-      read.value =
-        held.status === 'ready'
-          ? { ...held, refreshing: false, failedAgain: true }
-          : { status: 'failed' }
+      // A refresh that fails keeps what it would have replaced; a read of another space, project
+      // or period does not, or its tables would stand under the new scope's name.
+      if (held.status === 'ready' && shownFor === key)
+        read.value = { ...held, refreshing: false, failedAgain: true }
+      else {
+        read.value = { status: 'failed' }
+        shownFor = null
+      }
     }
   }
 

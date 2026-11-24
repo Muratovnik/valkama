@@ -3497,10 +3497,12 @@ a heading that wraps stands on the foot of the head row, by the figures it heads
 environment's heading stands nearer its own table than the table before it. Its read goes back
 to the transcripts — gigabytes over four weeks, parsed over several processes — so its entry says
 what the section shows instead of a figure, and the section asks its read only while it is on
-show: when it opens, when the period or the project changes and on the bar's refresh; the
-filters and the measure do not reach it. In a project's scope it counts the runs with work in
-that project, each run whole, as the usage read places work, and says the scope beside its
-heading as the other sections do. Its heading is its name on the rail and stands, with the choice of what
+show: when it opens, when the period, the space or the project changes and on the bar's refresh;
+the filters and the measure do not reach it. In a space's or a project's scope it counts the runs
+with work there, each run whole, as the usage read places work, and says the scope beside its
+heading as the other sections do. A refresh that fails keeps the tables and says so over them; a
+read of another space, project or period that fails shows none of the tables before, which would
+stand under the new scope's name. Its heading is its name on the rail and stands, with the choice of what
 the pause waited on — the machine, a person or a keep-warm wake, the machine first — from the
 first moment of the read. A first read can outlast the browser's wait, so the server answers how
 many runs it has parsed and the page asks again, saying how far it got in the wait's one panel,

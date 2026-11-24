@@ -13,7 +13,8 @@
  * its model id never ends a line at its hyphen. Every table has the same seven columns;
  * the cold requests sent during background work are «—» where the client does not tell it. A
  * wait with no request, an answer with none, a first read that failed and a read again that
- * failed each say so in words of their own.
+ * failed each say so in words of their own; a read of a new space that fails shows none of the
+ * last space's tables.
  *
  * The figures come from `PAUSES`: the Claude subagent's machine waits read 990 of 1,000 and 10 of
  * 1,000, so its sum reads 50%, and wrote the rest, 50%.
@@ -279,6 +280,26 @@ describe('the pauses section', () => {
     expect(environments(page)).toHaveLength(2)
     expect(page.get('[data-note="failed-again"]').text()).toBe(
       'The pauses could not be loaded again, so these are from the read before.',
+    )
+  })
+
+  it('shows no tables of the space before when the read of a new space fails', async () => {
+    stubAnalyticsReads(usage, undefined, (query) =>
+      query.get('space') === 'BETA' ? { status: 500 } : pausesAnswer(PAUSES),
+    )
+    const page = await mountAnalytics({
+      routeState: { by: 'pauses' },
+      space: 'MAIN',
+      spaceTitle: 'Main',
+    })
+    expect(environments(page)).toHaveLength(2)
+
+    await page.setProps({ space: 'BETA', spaceTitle: 'Beta' })
+    await flushPromises()
+    expect(environments(page)).toHaveLength(0)
+    expect(page.find('[data-note="failed-again"]').exists()).toBe(false)
+    expect(page.get('.platform-state-panel').text()).toContain(
+      'The pauses before model requests could not be loaded.',
     )
   })
 })
