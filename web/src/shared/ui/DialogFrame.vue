@@ -85,17 +85,25 @@ const bodyRoom = computed(() =>
   saidRoom.value ? { '--size-said-room': `${String(saidRoom.value)}px` } : undefined,
 )
 /**
- * A control the keyboard brings focus to under the words is brought clear of them by the nearest
- * way, which keeps the body's room at its edge: the browser's own scroll to a text field shows
- * only its caret, and left the rest of a description's box under a refusal.
+ * A control the keyboard brings focus to under the words, or with its ring under them, is
+ * scrolled up out from under them, as far as the words stand at that moment and a pixel more for
+ * the scroll's whole-pixel stop. The browser's own scroll to a text field shows only its caret,
+ * and left the rest of a description's box under a refusal; and the room the body keeps is
+ * measured a frame late, so a Shift+Tab from the foot pressed as a refusal appeared left a button
+ * under the refusal's line.
  */
 function keepClear(event: FocusEvent) {
   const { target } = event
   const words = said.value
-  if (!saidRoom.value || !words || !(target instanceof HTMLElement)) return
+  if (!words || !body.value || !(target instanceof HTMLElement)) return
   if (words.contains(target) || !target.matches(':focus-visible')) return
-  if (target.getBoundingClientRect().bottom > words.getBoundingClientRect().top)
-    target.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  const style = getComputedStyle(target)
+  const ring =
+    style.outlineStyle === 'none'
+      ? 0
+      : Number.parseFloat(style.outlineWidth) + Number.parseFloat(style.outlineOffset)
+  const under = target.getBoundingClientRect().bottom + ring + 1 - words.getBoundingClientRect().top
+  if (under > 0) body.value.scrollBy({ top: Math.ceil(under) })
 }
 </script>
 
