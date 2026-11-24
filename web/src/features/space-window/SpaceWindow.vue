@@ -80,8 +80,13 @@ const renamed = computed(
   () => origin.value !== null && draft.value.name.trim() !== origin.value.name,
 )
 const keyLocked = computed(() => origin.value?.keyLocked === true)
+/** A typed key other than the space's: an emptied one is no key for the projects to move to. */
 const keyMoves = computed(
-  () => origin.value !== null && !keyLocked.value && draft.value.key !== origin.value.key,
+  () =>
+    origin.value !== null &&
+    !keyLocked.value &&
+    draft.value.key !== '' &&
+    draft.value.key !== origin.value.key,
 )
 /** What the key's field says under it; nothing while its error says why, which states the form. */
 const keyHint = computed(() => {
@@ -100,7 +105,8 @@ const keyHint = computed(() => {
 const keyWords = computed(() => ({
   hints: [
     t('spaceWindow.keyHint', { key: WIDEST_KEY }),
-    t(origin.value ? 'spaceWindow.keyMoves' : 'spaceWindow.keyForm'),
+    t('spaceWindow.keyForm'),
+    ...(origin.value ? [t('spaceWindow.keyMoves')] : []),
   ],
   errors: keyReasons.value,
 }))

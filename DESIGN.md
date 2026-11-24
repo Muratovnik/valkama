@@ -882,7 +882,9 @@ says why under it, once: the reason states the key's form, and no hint says it a
 field holds the room of every hint and reason it can come to say from the start, the hint that
 names the key as wide as the widest key, so a reason appearing or another taking its place
 moves nothing under the field; given room only while it stood, a reason a line longer than the
-hint pushed the projects down at 390px. Once the space has issued a number its key stands as
+hint pushed the projects down at 390px. A key typed in place of the space's says that the
+space's projects move to it; an emptied one gives the key's form instead, since there is no key
+for them to move to. Once the space has issued a number its key stands as
 text with the reason it does not change, since it is in those numbers; a renamed space says
 that what names the space by its name will no longer find it under the form, over the foot's
 buttons, in room the edit holds for those words there from the start, so neither the form nor
