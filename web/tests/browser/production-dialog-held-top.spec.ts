@@ -203,7 +203,9 @@ for (const locale of ['ru', 'en'] as const)
       }, heading)
       await heading?.dispose()
       await day.click()
-      const seen = await page.evaluate(() => (window as unknown as { heldPress: unknown }).heldPress)
+      const seen = await page.evaluate(
+        () => (window as unknown as { heldPress: unknown }).heldPress,
+      )
       expect(seen).toEqual({ down: expect.closeTo(shown[0]?.top ?? Number.NaN, 0), up: 'input' })
       stood(await tops([title]), shown, ['title'])
     })
