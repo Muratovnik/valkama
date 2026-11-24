@@ -348,8 +348,8 @@ const headFit = (project: string) => {
   position: absolute;
   font-size: var(--font-size-dense);
   white-space: pre;
-  visibility: hidden;
   pointer-events: none;
+  visibility: hidden;
 }
 
 .root-head {
