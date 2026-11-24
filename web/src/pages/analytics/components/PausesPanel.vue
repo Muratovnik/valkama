@@ -15,7 +15,9 @@
  * «cold» and the background's column are, and that the period applies and the filters do not, the
  * heading's «ⓘ» says once. In a project's scope it counts the runs with work in that project,
  * each run whole, and says the scope beside its heading as the other sections do
- * (`SectionScope`).
+ * (`SectionScope`). An environment's heading breaks between its words and never inside one
+ * (`vWholeWords`): its model id goes to the next line whole rather than end a line at its
+ * hyphen, «claude-» above «opus-5-5».
  *
  * It reads the pauses itself (`usePausesRead`), not the page's usage: when it opens, when the
  * period changes and each time the bar asks a refresh (`refreshes`). Its heading, «ⓘ» and choice
@@ -51,6 +53,7 @@ import ChartTable from '@/shared/ui/ChartTable.vue'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
+import { vWholeWords } from '@/shared/ui/wholeWords.ts'
 
 const props = defineProps<{
   /** How many times the bar asked a refresh: each one reads the pauses again. */
@@ -226,9 +229,11 @@ const tables = (pauses: Pauses) =>
           v-for="table in tables(payload)"
           :key="table.key"
           level="block"
-          :title="table.name"
           :data-environment="table.key"
         >
+          <template #heading>
+            <span v-whole-words="table.name" />
+          </template>
           <ChartTable
             :label="table.label"
             :empty="false"

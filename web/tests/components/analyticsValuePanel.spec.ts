@@ -193,6 +193,14 @@ describe('what a value’s panel shows', () => {
     )
     expect(panelOf(host).find('[data-part="figures"]').exists()).toBe(false)
   })
+
+  it('heads a model by its id as one word, which a line never breaks at its hyphen', async () => {
+    stubAnalyticsReads((query) => serveUsage(WORLD, query))
+    const host = await mountPage({ by: 'model', detail: detailOf('model', 'model-99') })
+    const heading = panelOf(host).get('.drawer-frame-name')
+    expect(heading.findAll('.whole-word').map((one) => one.text())).toEqual(['model-99'])
+    expect(heading.text()).toBe('model-99')
+  })
 })
 
 describe('adding the value to the page’s filter', () => {

@@ -85,6 +85,7 @@ import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
 import RankedBars from '@/shared/ui/RankedBars.vue'
 import { vTextRuns } from '@/shared/ui/textRuns.ts'
 import VButton from '@/shared/ui/VButton.vue'
+import { vWholeWords } from '@/shared/ui/wholeWords.ts'
 
 const props = defineProps<{
   by: UsageDimension
@@ -302,6 +303,13 @@ const lists = computed(() =>
       #title
     >
       <span v-text-runs="nameRuns" />
+    </template>
+    <!-- A model id is one name: its heading breaks between words, never at its hyphen. -->
+    <template
+      v-else-if="by === 'model'"
+      #title
+    >
+      <span v-whole-words="name" />
     </template>
     <template #facts>
       <div

@@ -8,7 +8,8 @@
  * shows, for the wait chosen (the machine first), a table per environment with a line for each
  * bucket its requests fell in, and none for another, and a line of their sum whose shares are of
  * the sum's tokens. In a project's scope it reads that project's runs and says so beside its
- * heading; on the global page every run. Every table has the same seven columns;
+ * heading; on the global page every run. An environment's heading breaks between its words, so
+ * its model id never ends a line at its hyphen. Every table has the same seven columns;
  * the cold requests sent during background work are «—» where the client does not tell it. A
  * wait with no request, an answer with none, a first read that failed and a read again that
  * failed each say so in words of their own.
@@ -165,6 +166,9 @@ describe('the pauses section', () => {
       'Claude Code · subagent · claude-sonnet-4-5 · subscription',
       'Codex · main session · gpt-5-codex · sign-in not known',
     ])
+    // Each word of a heading is a box of its own, so a model id goes to the next line whole.
+    const words = block(page, 'claude')?.findAll('.level-heading .whole-word') ?? []
+    expect(words.map((one) => one.text())).toContain('claude-sonnet-4-5')
     const claude = block(page, 'claude')
     expect(claude?.findAll('tbody tr').map((one) => one.attributes('data-bucket'))).toEqual([
       '0-4m',

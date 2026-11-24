@@ -1546,7 +1546,12 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   outside the primitive, and lets a checkbox, a radio and the search box
   through as the different controls they are.
 - **Long titles** break at a space, after a hyphen and after each `/`, and inside a
-  word only when that one word is wider than its line. A browser offers no break
+  word only when that one word is wider than its line. A model id is the exception:
+  it is one name and stays whole, never broken at its hyphen, and goes to the next
+  line whole instead (`vWholeWords`): an environment's heading in «Pauses» and a
+  model's side panel are drawn so, and the Model section's names keep to one line,
+  cut at their end. Broken at its hyphen, «claude-» stood above «opus-5-5» in the
+  Pauses headings on a phone. A browser offers no break
   after a `/`, so `loading/empty/error/unavailable` was one word to it, wider than a
   phone's line, and `overflow-wrap: anywhere` broke it where the line ran out:
   «un» above «available». The `v-slash-breaks` directive (`slashBreaks.ts`) draws
