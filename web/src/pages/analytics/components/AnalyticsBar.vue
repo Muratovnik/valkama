@@ -33,12 +33,15 @@
  * nothing: neither the bar's height nor its controls.
  *
  * On a phone the periods take the first row whole; under it the filter, a failure, the freshness
- * and the read again, by its icon; with a filter set, the chips' row right under them; and, once
- * chosen, the reader's own days. On the narrowest phone the freshness stands in the periods' row,
- * leaving a failure its room: in the cell their short last line leaves, past «Custom», or at the
- * row's end where they leave no such cell. It stays the freshness there, never a period: words in
- * the muted detail ink on the track's ground, with no ground, edge or press of their own, and
- * outside the choice for assistive technology.
+ * and the read again, by its icon; with a filter set, the chips' row right under them, where one
+ * chip yields its room to «Clear filters» and the two keep one line whatever name comes; and,
+ * once chosen, the reader's own days. On the narrowest phone the freshness stands in the
+ * periods' row, leaving a failure its room: in the cell their short last line leaves, past
+ * «Custom», or at the row's end where they leave no such cell. It stays the freshness there,
+ * never a period: words a size under the periods' names, in the muted ink, on the track's
+ * ground, against the end of their column on the read again's edge where a period's name is
+ * centred, with no ground, edge or press of their own, and outside the choice for assistive
+ * technology.
  */
 import { computed, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -115,6 +118,8 @@ const filter = useAnalyticsFilter({
 })
 /** Whether a filter is set, its chips then taking a row of their own. */
 const filtered = computed(() => filter.chips.value.length > 0)
+/** Whether one chip stands alone, which on a phone yields its room to «Clear filters». */
+const oneChip = computed(() => filter.chips.value.length === 1)
 
 function choosePeriod(period: PeriodPreset) {
   emit('amend', period === 'custom' ? { period, ...customDays(new Date()) } : { period })
@@ -253,6 +258,7 @@ const freshHint = computed(() =>
       <AnalyticsChipRow
         ref="filterChips"
         class="analytics-bar-chips"
+        :class="{ 'analytics-bar-chips-one': oneChip }"
         :filter="filter"
       />
     </template>
@@ -324,14 +330,31 @@ const freshHint = computed(() =>
   .analytics-bar-chips {
     grid-area: 3 / 1 / 4 / -1;
   }
+
+  /* One chip yields its room to «Clear filters» rather than send it to a line of its own: the
+     two keep one line whatever name comes, a name with no room cut at its end with its hint
+     (`FacetFilterChips`), so the bar keeps its height when the name comes. The widest chip's
+     room, held until the first answer, sent «Снять фильтры» to a second line at 380 to 401px in
+     Russian, and a short name brought it back: the bar shrank by 32px on the first answer.
+     Several chips keep their words and wrap. The row asks the bar's columns for no width of its
+     own (`contain`): the first of them is at least as wide as what it spans needs, and the
+     chip's whole name widened the bar past the window instead of being cut. */
+  .analytics-bar .analytics-bar-chips-one {
+    --filter-chip-shrink: 1;
+
+    flex-wrap: nowrap;
+    contain: inline-size;
+  }
 }
 
 /* The narrowest phone (`PeriodBar`'s `beside`): the freshness in the periods' row, so a failure
    has the row under them beside the filter and the read again. At the row's end, on their first
    line, where the periods leave it the third and fourth columns; in the cell their short last
-   line leaves where they keep the whole row (`cell`), on that line's height and as far from the
-   track's end as a period's words from its column's edge. It is not drawn as a segment: the
-   track's ground under it is the periods', and it takes none of its own.
+   line leaves where they keep the whole row (`cell`), on that line's height. It is not drawn as a
+   segment: the track's ground under it is the periods', and it takes none of its own; it is set a
+   size under the periods' names, in the caption size, and stands against its column's end, on
+   the read again's right edge under it, where a period's name is centred. In the periods' size
+   and 12px short of that edge, «1 мин» read as a sixth period.
 
    In the cell it spans the whole row and stands at its end, so it sizes none of the columns the
    row under the periods shares out: on the third and fourth it held the third as wide as itself
@@ -351,7 +374,7 @@ const freshHint = computed(() =>
   .analytics-bar-fresh-cell {
     grid-column: 1 / -1;
     place-self: end;
-    padding-inline-end: var(--space-3);
+    font-size: var(--font-size-meta);
   }
 }
 

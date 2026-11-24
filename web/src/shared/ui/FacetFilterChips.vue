@@ -16,6 +16,11 @@
  * (`join`), which also describes it, so the filter reads whole without its
  * menu open. Each chip's item carries `data-filter-chip`, the hook a host
  * measures the chips by and a test selects them by.
+ *
+ * A chip keeps its words and the row wraps. A host that would rather a chip
+ * yield its room, as the Analytics bar's one chip on a phone does beside its
+ * «Clear filters», declares `--filter-chip-shrink: 1`: the chip then narrows to
+ * what its row leaves, its name cut as a one-line label is, with its hint.
  */
 import { computed, useId, useTemplateRef, watch } from 'vue'
 
@@ -225,12 +230,14 @@ defineExpose({ focusLast })
 }
 
 /* A chip keeps its word; a row of them that runs out of room wraps rather than
-   squeezing every chip to its cross or leaving one where nothing reaches it. */
+   squeezing every chip to its cross or leaving one where nothing reaches it. A host may
+   let it yield instead (`--filter-chip-shrink`), its name then cut at its end. */
 .filter-chip-item {
   display: flex;
-  flex: 0 0 auto;
+  flex: 0 var(--filter-chip-shrink, 0) auto;
   gap: var(--space-1);
   align-items: center;
+  min-width: 0;
 }
 
 .filter-chip-join {
@@ -323,10 +330,11 @@ defineExpose({ focusLast })
   }
 }
 
-/* A chip whose value is not named yet takes the widest chip's room, its cross at its end. */
+/* A chip whose value is not named yet takes the widest chip's room, its cross at its end, or
+   what its row leaves of it where the chip yields (`--filter-chip-shrink`). */
 .filter-chip-pending {
   justify-content: space-between;
-  min-width: 22ch;
+  width: 22ch;
 }
 
 .filter-chip-remove {

@@ -3367,9 +3367,13 @@ two over two over one; only where their count leaves no such cell does it take t
 periods wrapping in what it leaves. Standing at that end whatever their count, it left them 182 to
 206px, one column of five lines. In that cell the freshness never reads as a period: it is words,
 not a button; it takes no ground, edge or pressed state of its own, the track's ground under it
-being the periods'; it is in the muted detail ink, never a segment's; it sits on the last line's
-height, as far from the track's end as a period's words from its column's edge; and assistive
-technology reads it as the freshness, outside the choice, which holds the periods alone. A refresh
+being the periods'; it is set a size under the periods' names, in the caption size, 12px against
+their 13, in the muted ink it has elsewhere and never a lighter one; it sits on the last line's
+height against its column's end, its right edge on the right edge of the refresh under it, where
+a period's name stands in the middle of its column; and assistive technology reads it as the
+freshness, outside the choice, which holds the periods alone. In a period's size and ink and 12px
+short of the refresh's edge, «1 мин» read as a sixth period, lined up with nothing, and at 399px
+in Russian the six cells stood as a grid of three over two. A refresh
 that fails keeps what is shown and says so in words before the age at every width, «Could not
 refresh» with a retry: given up on a short line, its words had left a red disc with no hint. A
 refresh whose period before could not be read, where what is shown has it, fails so too: shown,
@@ -3414,6 +3418,16 @@ names a task, a project or a session, its chip says its dimension and «…» in
 widest chip, never the value's id, which said «Task: 00000000-0…»; any other value is named
 from its id alone, «Role: Main agent». Read again for another period, a chip keeps the name
 it had, where it said the id until the answer and put «Clear filters» on a line of its own.
+On a phone a chip that stands alone yields its room to «Clear filters» rather than wrap: the
+two keep one line whatever name comes, a name the line has no room for is cut at its end with
+its hint saying it whole, as every one-line label is (Shared component grammar), and a name
+that fits has no hint; the widest chip's room, held until the first answer, is held only as far
+as the line leaves it. Wrapped beside that room, «Clear filters» stood on a line of its own
+until a short name came and brought it back, and the bar shrank by 32px on the page's first
+answer at 380 to 401px in Russian and 340 to 370px in English; a narrower room only moved that
+jump to 320 to 370px. That one height costs the name its end at 320 to 370px in Russian, where
+«Задача: MAIN-1 One» keeps 98px at 320px and 148px at 370px of the 157px it needs. Two chips or
+more keep their words and wrap, and their row may still change its height as their names come.
 The field is never narrower than its words need, 176px, or on a short bar and on a phone its
 short «Filter», 62px with less air at
 its ends: the line gives up its other parts only once the field has given up the room past
