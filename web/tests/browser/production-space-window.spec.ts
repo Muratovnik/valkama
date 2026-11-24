@@ -228,6 +228,8 @@ for (const size of SIZES) {
       const held = page.getByRole('option', { name: /nw-app/u })
       await expect(held).toContainText(words.held)
       await expect(held).toHaveAttribute('data-disabled', '')
+      // A screen reader announces it as unavailable, which `data-disabled` does not say.
+      await expect(held).toHaveAttribute('aria-disabled', 'true')
       await search.fill('nw-app')
       await expect(page.getByRole('option')).toHaveCount(1)
       await search.press('Enter')
