@@ -68,6 +68,12 @@ const HOUR_SECONDS = 3600
  */
 const NO_VALUE: ReadonlySet<UsageDimension> = new Set(['work_item', 'launch_class', 'project'])
 
+/**
+ * The dimensions whose value a read names, from what it says beside the id: a task by its code and
+ * title, a project by its name, a session by its title. Any other is named from its id alone.
+ */
+const NAMED_BY_READ: ReadonlySet<UsageDimension> = new Set(['work_item', 'project', 'executor'])
+
 /** The space no line breaks at. */
 const NO_BREAK = '\u{A0}'
 
@@ -319,6 +325,10 @@ export function useSpendingWords() {
     }
     return value.id
   }
+
+  /** A value's name from its id alone, where no read is in hand; null where a read names it. */
+  const idLabel = (name: UsageDimension, id: string) =>
+    NAMED_BY_READ.has(name) ? null : categoryLabel(name, { id, unknown: false })
 
   function valueLabel(name: UsageDimension, value: UsageGroupValue) {
     const kind = valueKind(value)
@@ -635,6 +645,7 @@ export function useSpendingWords() {
     trend,
     dimension,
     figure,
+    idLabel,
     lineChange,
     lineChangeWords,
     lineFigure,

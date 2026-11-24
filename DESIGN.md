@@ -3367,7 +3367,14 @@ failure moved what stands under it, and room held for the note stood empty under
 rest. The retry is reached at every width too: where the line has no room for «· Retry», the words themselves
 are the retry, named «Could not refresh · Retry» with «Retry» as their hint, and take no room the
 words did not. Dropped there, a phone and a span of days in Russian offered no retry of its own,
-only the refresh beside it. Reading another space, period or filter dims what is shown until its
+only the refresh beside it. The failure's disc keeps its 8px whatever lines its words take:
+beside the words on two lines of a phone it was squeezed to an oval 4 to 8px wide. The words
+that are the retry keep the narrow gap at their ends, so the whole disc still leaves them two
+lines in the phone's row: with a button's 8px, beside a live period in Russian at 400px, they
+took three and the bar grew by 11px. The retry's
+focus ring is drawn inside the retry, as a period's is in its track: round it, the ring
+touched the disc at every width and stood 1.6px past the row of the words on two lines.
+Reading another space, period or filter dims what is shown until its
 answer comes, after a moment so that a quick answer does not flicker;
 a refresh of the same view dims nothing. Records reach the store in batches, so the age is in
 seconds and the minutes after the newest record are hatched, as every figure not final yet is,
@@ -3388,8 +3395,13 @@ and a filter set has its dimension's read to name its chip; the page used to rea
 once to open its list. Several values of one dimension admit any of them, and the dimensions'
 filters all apply. «Add to filter» in a value's panel adds to the same filter, and an old link
 reads as it did. A chip says its dimension and its value, «Model: model-a»; every chip set is
-shown, and more than one row holds wrap onto the next. The field is never narrower than its
-words need, 176px, or on a short bar and on a phone its short «Filter», 62px with less air at
+shown, and more than one row holds wrap onto the next. Until the first read of its dimension
+names a task, a project or a session, its chip says its dimension and «…» in the room of the
+widest chip, never the value's id, which said «Task: 00000000-0…»; any other value is named
+from its id alone, «Role: Main agent». Read again for another period, a chip keeps the name
+it had, where it said the id until the answer and put «Clear filters» on a line of its own.
+The field is never narrower than its words need, 176px, or on a short bar and on a phone its
+short «Filter», 62px with less air at
 its ends: the line gives up its other parts only once the field has given up the room past
 that, so the line's give-ups and its two rows come where they came before. The row of chips
 comes with the first filter set and goes with the last, and it is the one thing the filters

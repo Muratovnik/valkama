@@ -1,0 +1,24 @@
+/*
+ * A disc that marks a state beside words in the Analytics bar: a live period's (`AnalyticsBar`) and
+ * a refresh that failed (`RefreshFailed`). Read by each as its own scoped style, after the host's
+ * own block, so each writes `disc-mark` in its own template and fills it in its own rule with the
+ * meaning colour it has (`FILL_BUDGET`); a forced palette's ink here comes after that rule and
+ * takes its place.
+ *
+ * It is the size it is drawn at wherever it stands. In a row short of room a flex item gives way,
+ * and a disc has no words to hold its width: beside a failure's words wrapped onto two lines on a
+ * phone the failure's disc was squeezed to an oval 4.4 to 7.7px wide of its 8. So the rule that it
+ * never gives way is here once, with its shape, and a row cannot forget it.
+ */
+.disc-mark {
+  flex: none;
+  inline-size: var(--space-2);
+  block-size: var(--space-2);
+  border-radius: 50%;
+
+  /* A forced palette clears every ground, and the disc with it. */
+  @media (forced-colors: active) {
+    background: CanvasText;
+    forced-color-adjust: none;
+  }
+}

@@ -219,7 +219,7 @@ const freshHint = computed(() =>
         <span class="analytics-bar-fresh-shown">
           <span
             v-if="liveShown"
-            class="analytics-bar-fresh-mark"
+            class="analytics-bar-fresh-mark disc-mark"
             aria-hidden="true"
           />
           <template v-if="fresh">
@@ -368,17 +368,11 @@ const freshHint = computed(() =>
   clip-path: inset(50%);
 }
 
-/* That the period reads itself again: the sign of the hint's words, not their meaning. */
+/* That the period reads itself again: the sign of the hint's words, not their meaning, a disc
+   (`discMark.css`). */
 .analytics-bar-fresh-mark {
-  flex: none;
-  inline-size: var(--space-2);
-  block-size: var(--space-2);
   background: var(--color-success);
-  border-radius: 50%;
-
-  @media (forced-colors: active) {
-    background: CanvasText;
-    forced-color-adjust: none;
-  }
 }
 </style>
+
+<style scoped src="@/pages/analytics/components/discMark.css"></style>

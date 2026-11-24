@@ -43,6 +43,9 @@ type ValueRow = OptionRow & { runs?: readonly TextRun[] }
 /** What holds the value's place in a chip's sentence while its runs are laid in it. */
 const VALUE_MARK = '\u{E000}'
 
+/** What a chip says in its value's place until the value's name is read. */
+const PENDING = '…'
+
 /** A row of the menu and a chip name a value by its dimension and its key, as one text. */
 const rowKey = (dimension: UsageDimension, key: string) => `${dimension}:${key}`
 
@@ -150,22 +153,47 @@ export function useAnalyticsFilter(input: {
   // The chips.
   // -------------------------------------------------------------------------
 
-  /** Each value a filter is set to, named as the menu names it, in the dimensions' order. */
-  const chips = computed<FacetChip[]>(() =>
+  /** A value's chip, saying its dimension and the name given; its runs, where the name has them. */
+  function chipOf(
+    dimension: UsageDimension,
+    key: string,
+    value: string,
+    runs?: readonly TextRun[],
+  ) {
+    const said = (name: string) =>
+      t('analytics.frame.filter', { dimension: words.dimension(dimension), value: name })
+    const name = said(value)
+    return {
+      key: rowKey(dimension, key),
+      name,
+      removeName: t('analytics.filters.remove', { label: name }),
+      ...(runs ? { runs: runsWithin(said(VALUE_MARK), VALUE_MARK, runs) } : {}),
+    }
+  }
+
+  /**
+   * Each value a filter is set to, named as the menu names it, in the dimensions' order. While its
+   * dimension is read, a chip keeps the name it last had, the period before's; before the first
+   * answer it says the name its id gives (`idLabel`), a model's or a role's, or, where only a read
+   * names the value, its dimension and «…» (`pending`), never the value's id, which named it
+   * «Task: 00000000-0…» until the answer came. A read that failed leaves the name it had, or the
+   * id where a read alone names it.
+   */
+  const chips = computed<FacetChip[]>((previous) =>
     input.dimensions().flatMap((dimension) => {
       const keys = chosen(dimension)
-      const named = options(dimension, input.values()[dimension], keys)
-      return keys.map((key) => {
-        const option = named.find((one) => one.value === key)
-        const said = (name: string | null) =>
-          t('analytics.frame.filter', { dimension: words.dimension(dimension), value: name })
-        const name = said(option?.label ?? filterValue(key))
-        return {
-          key: rowKey(dimension, key),
-          name,
-          removeName: t('analytics.filters.remove', { label: name }),
-          ...(option?.runs ? { runs: runsWithin(said(VALUE_MARK), VALUE_MARK, option.runs) } : {}),
+      const read = input.values()[dimension]
+      const named = options(dimension, read, keys)
+      return keys.map((key): FacetChip => {
+        if (!Array.isArray(read) && key !== filterKey(null)) {
+          const kept = previous?.find((one) => one.key === rowKey(dimension, key) && !one.pending)
+          if (kept) return kept
+          const label = words.idLabel(dimension, filterValue(key) ?? key)
+          if (label !== null) return chipOf(dimension, key, label)
+          if (read !== 'failed') return { ...chipOf(dimension, key, PENDING), pending: true }
         }
+        const option = named.find((one) => one.value === key)
+        return chipOf(dimension, key, option?.label ?? key, option?.runs)
       })
     }),
   )

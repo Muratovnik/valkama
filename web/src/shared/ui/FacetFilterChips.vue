@@ -38,6 +38,11 @@ export interface FacetChip {
   join?: string
   /** The «is» / «is not» toggle, for a value that can be negated; named for what it would switch. */
   operator?: { name: string; pressed: boolean }
+  /**
+   * The value's name is not read yet: the chip stands in the room of the widest chip, so the name
+   * that comes in its place can only narrow it, as a cut name did.
+   */
+  pending?: boolean
   /** The name as runs, where it holds a title: a task's code drawn as code. */
   runs?: readonly TextRun[]
 }
@@ -179,6 +184,7 @@ defineExpose({ focusLast })
           v-tooltip.clipped="chip.name"
           class="filter-chip"
           type="button"
+          :class="{ 'filter-chip-pending': chip.pending }"
           :aria-describedby="chip.describedBy"
           :aria-label="chip.removeName"
           @click="remove(index)"
@@ -315,6 +321,12 @@ defineExpose({ focusLast })
     outline: var(--size-focus-ring) solid var(--color-focus-ring);
     outline-offset: 1px;
   }
+}
+
+/* A chip whose value is not named yet takes the widest chip's room, its cross at its end. */
+.filter-chip-pending {
+  justify-content: space-between;
+  min-width: 22ch;
 }
 
 .filter-chip-remove {
