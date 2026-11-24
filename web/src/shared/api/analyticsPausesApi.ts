@@ -99,7 +99,7 @@ export interface PausesQuery {
 }
 
 /** How long the read waits before it asks again a server that is still reading. */
-export const PAUSES_ASK_AGAIN_MS = 300
+const PAUSES_ASK_AGAIN_MS = 300
 
 const pause = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {

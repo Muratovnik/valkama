@@ -79,7 +79,7 @@ describe('the pauses read', () => {
     const pauses = await fetchPauses(QUERY, undefined, (progress) => told.push(progress))
     expect(told).toEqual([{ runs_read: 3, runs_left: 9 }])
     expect(pauses.rows).toHaveLength(4)
-    const asked = fetchMock.mock.calls.map(([input]) => requestUrl(input ?? ''))
+    const asked = fetchMock.mock.calls.map((call) => requestUrl(call[0]))
     expect(asked.filter((url) => url.includes('/api/analytics/pauses'))).toHaveLength(2)
   })
 

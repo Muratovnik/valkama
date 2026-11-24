@@ -19,13 +19,16 @@ interface HeldRead {
   release: (answer: unknown) => void
 }
 
-const respond = (given: unknown) =>
-  given && typeof given === 'object' && 'status' in given && typeof given.status === 'number'
-    ? new Response(JSON.stringify('body' in given ? given.body : {}), { status: given.status })
-    : new Response(JSON.stringify(given), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
+function respond(given: unknown) {
+  if (given && typeof given === 'object' && 'status' in given && typeof given.status === 'number') {
+    const body = 'body' in given ? given.body : {}
+    return new Response(JSON.stringify(body), { status: given.status })
+  }
+  return new Response(JSON.stringify(given), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
 
 /**
  * `answer` gives a body, `{ status }` for a refusal, `{ status, body }` for an answer of
