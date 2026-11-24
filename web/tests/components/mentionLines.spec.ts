@@ -37,7 +37,7 @@ const record = (change: Partial<MentionRecord> = {}): MentionRecord => ({
   from: 'MAIN-265',
   at: at(10),
   by_person: false,
-  author: 'kolo (session 019a2b3c-4d5e)',
+  author: 'worker-b (session 019a2b3c-4d5e)',
   quote: 'MAIN-264 decides what the **export** keeps.',
   ...change,
 })
@@ -94,7 +94,7 @@ describe('mentionLines', () => {
     ])
     expect(agent).toMatchObject({
       quote: 'MAIN-264 decides what the export keeps.',
-      author: 'kolo (session 019a2b3c-4d5e)',
+      author: 'worker-b (session 019a2b3c-4d5e)',
       byPerson: false,
       at: at(10),
     })
@@ -139,7 +139,7 @@ describe('amongThreads', () => {
   const root = (id: number, hour: number) =>
     ({
       id,
-      author: 'elko',
+      author: 'worker-a',
       at: at(hour),
       kind: 'comment',
       ...asRoot,

@@ -242,7 +242,7 @@ class LaunchClassTests(Case):
         labelled = self.subagent("sess-1", "aaa1", label="rex: review the diff")
         described = self.subagent("sess-1", "bbb2", label="Something else")
         described.path.with_name("agent-bbb2.meta.json").write_text(
-            json.dumps({"agentType": "general-purpose", "description": "ovi: build it"}),
+            json.dumps({"agentType": "general-purpose", "description": "code: build it"}),
             encoding="utf-8",
         )
         plain = self.subagent("sess-1", "ccc3", label="Review the diff, then report")
@@ -251,7 +251,7 @@ class LaunchClassTests(Case):
             run.end_turn(20)
         self.read()
         self.assertEqual(
-            {"": None, "aaa1": "rex", "bbb2": "ovi", "ccc3": None},
+            {"": None, "aaa1": "rex", "bbb2": "code", "ccc3": None},
             {
                 agent: self.run_row("sess-1", agent)["launch_class"]
                 for agent in ("", "aaa1", "bbb2", "ccc3")
@@ -266,20 +266,20 @@ class LaunchClassTests(Case):
         main.end_turn(5)
         worker = self.subagent("sess-1", "bbb2", label="rex: review the diff")
         meta = worker.path.with_name("agent-bbb2.meta.json")
-        meta.write_text(json.dumps({"description": "ovi: build it"}), encoding="utf-8")
+        meta.write_text(json.dumps({"description": "code: build it"}), encoding="utf-8")
         worker.prompt(10)
         worker.end_turn(20)
         self.read()
-        self.assertEqual("ovi", self.run_row("sess-1", "bbb2")["launch_class"])
+        self.assertEqual("code", self.run_row("sess-1", "bbb2")["launch_class"])
         meta.unlink()
         worker.prompt(30)
         worker.end_turn(40)
         self.read()
-        self.assertEqual("ovi", self.run_row("sess-1", "bbb2")["launch_class"])
+        self.assertEqual("code", self.run_row("sess-1", "bbb2")["launch_class"])
 
     def test_a_class_is_a_word_in_front_of_a_colon(self) -> None:
         cases = (
-            ("ovi: implement", "ovi"),
+            ("code: implement", "code"),
             ("  code-review: diff", "code-review"),
             ("Fix the bug: now", None),
             (":nothing", None),

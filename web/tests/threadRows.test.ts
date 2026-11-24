@@ -25,7 +25,7 @@ const at = (day: number) => `2026-01-${String(day).padStart(2, '0')}T00:00:00Z`
 const root = (id: number, day: number, change: Record<string, unknown> = {}) =>
   ({
     id,
-    author: 'kolo',
+    author: 'worker-b',
     at: at(day),
     kind: 'comment',
     ...asRoot,

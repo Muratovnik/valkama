@@ -50,7 +50,7 @@ class ItemPartsTests(UsageStore):
             50,
             250,
             agent="w1",
-            launch_class="bero",
+            launch_class="build",
             seconds=200 + TICK,
             item=item,
             cost=0.0234567891,
@@ -185,7 +185,7 @@ class ItemPartsTests(UsageStore):
         self.assertEqual(
             [
                 ("main", (None, False), ("high", False)),
-                ("subagent", ("bero", False), ("medium", False)),
+                ("subagent", ("build", False), ("medium", False)),
                 ("subagent", ("rev", False), (None, True)),
                 ("subagent", (None, True), ("low", False)),
                 # An adviser keeps its run's class and the effort its segment holds.

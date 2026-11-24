@@ -193,7 +193,7 @@ class EquivalenceTests(RebuildCase):
         run.end_turn(HOUR + 20, effort="high")
         worker = self.subagent("sess-1", "worker", "rex: review")
         worker.path.with_name("agent-worker.meta.json").write_text(
-            '{"description": "ovi: build it"}', encoding="utf-8"
+            '{"description": "code: build it"}', encoding="utf-8"
         )
         worker.prompt(12, "build it", origin=None)
         worker.end_turn(18, effort="medium")
@@ -206,7 +206,7 @@ class EquivalenceTests(RebuildCase):
                 for column in ("organization", "effort", "advisor", "environment")
             ),
         )
-        self.assertEqual("ovi", self.run_row("sess-1", "worker")["launch_class"])
+        self.assertEqual("code", self.run_row("sess-1", "worker")["launch_class"])
         self.assert_rebuilds_to_the_same()
         self.assert_rebuilds_to_the_same("sess-1", "worker")
 

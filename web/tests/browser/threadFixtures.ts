@@ -17,7 +17,7 @@ export const reply = (id: number, parent: number, body: string, change: Partial<
     ...row,
     id,
     reply_to: parent,
-    author: 'kolo (session 019a2b3c-4d5e)',
+    author: 'worker-b (session 019a2b3c-4d5e)',
     by_person: false,
     at: `2026-08-13T10:${String(id).padStart(2, '0')}:00Z`,
     body,
@@ -28,7 +28,7 @@ export const root = (id: number, body: string, change: Partial<Row> = {}): Row =
   ({
     ...row,
     id,
-    author: 'elko (session 019a2b3c-4d5e)',
+    author: 'worker-a (session 019a2b3c-4d5e)',
     by_person: false,
     at: `2026-08-13T09:${String(id).padStart(2, '0')}:00Z`,
     body,
