@@ -331,7 +331,13 @@ const freshHint = computed(() =>
    line, where the periods leave it the third and fourth columns; in the cell their short last
    line leaves where they keep the whole row (`cell`), on that line's height and as far from the
    track's end as a period's words from its column's edge. It is not drawn as a segment: the
-   track's ground under it is the periods', and it takes none of its own. */
+   track's ground under it is the periods', and it takes none of its own.
+
+   In the cell it spans the whole row and stands at its end, so it sizes none of the columns the
+   row under the periods shares out: on the third and fourth it held the third as wide as itself
+   past the read again, an empty column in the row under them that the field and a failure lost,
+   58px for a live period, and at 360px in Russian the failure's words took three lines and the
+   bar grew by 11px. */
 @container (width < 18rem) {
   .analytics-bar-fresh {
     grid-area: 1 / 3 / 2 / 5;
@@ -341,7 +347,8 @@ const freshHint = computed(() =>
   }
 
   .analytics-bar-fresh-cell {
-    align-self: end;
+    grid-column: 1 / -1;
+    place-self: end;
     padding-inline-end: var(--space-3);
   }
 }

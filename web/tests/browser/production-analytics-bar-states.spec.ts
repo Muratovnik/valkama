@@ -25,7 +25,8 @@
  * «Свой» and inside the track, overlapping no period; wider, in the row under them. It reads as the
  * freshness and not as a period: no button, no ground of its own, the muted detail ink, outside the
  * choice. Standing beside the periods instead, the freshness left them one column of five lines.
- * A refresh that fails there keeps the row under the periods, inside the bar's line.
+ * A refresh that fails there keeps the row under the periods, inside the bar's line, and the
+ * freshness in the cell takes none of that row's room, which the field and a failure share.
  *
  * The bar and the panel end on one right edge whether the panel scrolls or not.
  */
@@ -300,6 +301,11 @@ const phoneBar = (page: Page, label: string) =>
         },
       failure: rect(document.querySelector('.refresh-failed')),
       line: rect(document.querySelector('.period-bar-line')),
+      field: rect(document.querySelector('.analytics-filter-add')),
+      refresh: rect(document.querySelector('.analytics-refresh')),
+      gap: Number.parseFloat(
+        getComputedStyle(document.querySelector('.period-bar-line') ?? document.body).columnGap,
+      ),
     }
   }, label)
 
@@ -350,6 +356,22 @@ function expectPhone(name: string, state: PhoneBar, tallest: number) {
   })
 }
 
+/**
+ * Under 18rem, with no failure said, the freshness standing in the periods' row leaves the row
+ * under them to the field and the read again: between them stand only the row's gaps around the
+ * failure's column and the freshness's, both empty (`PeriodBar`'s four columns). Standing on the
+ * third and fourth columns, the freshness held the third as wide as itself past the read again,
+ * 46 to 58px of the row the field and a failure lost.
+ */
+function expectRowShared(name: string, state: PhoneBar) {
+  if (state.ems >= 18 || state.failure !== null) return
+  const field = state.field ?? { right: Number.NaN }
+  const refresh = state.refresh ?? { left: Number.NaN }
+  expect
+    .soft(refresh.left - field.right, `${name}: the room the freshness left under the periods`)
+    .toBeLessThanOrEqual(3 * state.gap + 0.5)
+}
+
 for (const locale of ['ru', 'en'] as const)
   test(`the periods stand in columns and the freshness by them on a phone in ${locale}`, async ({
     page,
@@ -367,6 +389,7 @@ for (const locale of ['ru', 'en'] as const)
       const state = await phoneBar(page, label)
       seen[width] = state
       expectPhone(`${width}px`, state, tallest)
+      expectRowShared(`${width}px`, state)
     }
     // A refresh that fails on the narrowest phone keeps the row under the periods.
     await page.setViewportSize({ width: 360, height: 900 })
