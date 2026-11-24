@@ -11,17 +11,38 @@
  *
  * Each number carries `data-number` (`triage`, `ready`, `active`, `waiting_owner`), its name
  * and figure `data-part` `label` and `figure`; the reason for no numbers is `data-part="absent"`.
+ *
+ * Above the cards «New space» opens the space window empty, and each card of the main store
+ * has its sign «Configure space» beside its way in, which opens the window on that space; a
+ * card of an attached store has none, as that store is opened read-only. Under the cards the
+ * projects in no space are named (`UnplacedProjects`). The ways in are `data-part`
+ * `new-space` and `configure`.
  */
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+
+import { useSpaceWindow } from '@/features/space-window/spaceWindowHost.ts'
+import UnplacedProjects from '@/features/space-window/UnplacedProjects.vue'
 
 import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import type { PlatformPlanningReady } from '@/shared/api/platformPlanningTypes.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 defineProps<{ spaces: PlatformPlanningReady['spaces'] }>()
 const emit = defineEmits<{ 'open-space': [space: PlanningSpaceRef] }>()
 const { t } = useI18n()
+const spaceWindow = useSpaceWindow()
+/** Whether a space can be created here, which only the main store's writer can. */
+const creatable = computed(() => spaceWindow?.creatable() ?? false)
+const newSpace = () => spaceWindow?.create()
+/** A card of the main store's has «Configure space»; an attached store's is read-only. */
+const configurable = (space: PortfolioSpace) => spaceWindow?.editable(space.space_ref) ?? false
+const configure = (space: PortfolioSpace) => spaceWindow?.edit(space.space_ref)
+/** The sign's accessible name, which says which space it configures. */
+const configureName = (space: PortfolioSpace) =>
+  t('spaceWindow.configureNamed', { key: space.space_ref.space_key })
 
 type PortfolioSpace = PlatformPlanningReady['spaces'][number]
 
@@ -50,6 +71,19 @@ function projectsLine(space: PortfolioSpace): string {
 </script>
 
 <template>
+  <div
+    v-if="creatable"
+    class="portfolio-head"
+  >
+    <VButton
+      data-part="new-space"
+      @click="newSpace"
+      ><VIcon
+        name="plus"
+        :size="15"
+      />{{ t('spaceWindow.create') }}</VButton
+    >
+  </div>
   <section class="portfolio-grid">
     <article
       v-for="space in spaces"
@@ -101,18 +135,32 @@ function projectsLine(space: PortfolioSpace): string {
         <span class="projects-label">{{ t('platform.planning.projects') }}</span>
         <span class="projects-names">{{ projectsLine(space) }}</span>
       </div>
-      <VButton
-        class="open-space"
-        @click="emit('open-space', space.space_ref)"
-      >
-        {{ t('platform.planning.openSpace')
-        }}<VIcon
-          name="chevron-right"
-          :size="15"
-        />
-      </VButton>
+      <div class="space-foot">
+        <VButton
+          v-if="configurable(space)"
+          v-tooltip.name="t('spaceWindow.configure')"
+          variant="ghost"
+          data-part="configure"
+          :aria-label="configureName(space)"
+          icon
+          @click="configure(space)"
+        >
+          <VIcon name="settings" />
+        </VButton>
+        <VButton
+          class="open-space"
+          @click="emit('open-space', space.space_ref)"
+        >
+          {{ t('platform.planning.openSpace')
+          }}<VIcon
+            name="chevron-right"
+            :size="15"
+          />
+        </VButton>
+      </div>
     </article>
   </section>
+  <UnplacedProjects />
 </template>
 
 <style scoped>
@@ -197,9 +245,18 @@ function projectsLine(space: PortfolioSpace): string {
   font-size: var(--font-size-meta);
 }
 
-/* The action stands at the foot of the card rather than filling it. */
-.open-space {
-  align-self: start;
+/* «New space» stands over the cards at their end edge, where a page's own action stands. */
+.portfolio-head {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* The ways in stand at the foot of the card rather than filling it: the sign that configures
+   the space, then the way into it, so both stay on one line at every width. */
+.space-foot {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
   margin-block-start: auto;
 }
 </style>

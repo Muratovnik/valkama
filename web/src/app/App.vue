@@ -15,6 +15,7 @@ import { useDocumentOpening } from '@/app/composables/useDocumentOpening.ts'
 import { useGlobalWorkActions } from '@/app/composables/useGlobalWorkActions.ts'
 import { useLiveWorkFeed } from '@/app/composables/useLiveWorkFeed.ts'
 import { useLiveWorkNav } from '@/app/composables/useLiveWorkNav.ts'
+import { useLocaleChoice } from '@/app/composables/useLocaleChoice.ts'
 import { cardInPlace, useModuleRouteAuthority } from '@/app/composables/useModuleRouteAuthority.ts'
 import { usePlatformEntryRestore } from '@/app/composables/usePlatformEntryRestore.ts'
 import { usePlatformLiveFeed } from '@/app/composables/usePlatformLiveFeed.ts'
@@ -22,6 +23,7 @@ import { DEFAULT_ROUTE, usePlatformNavigation } from '@/app/composables/usePlatf
 import { usePlatformReadModels } from '@/app/composables/usePlatformReadModels.ts'
 import { useSessionOpening } from '@/app/composables/useSessionOpening.ts'
 import { useShellNotice } from '@/app/composables/useShellNotice.ts'
+import { useShellSpaceWindow } from '@/app/composables/useShellSpaceWindow.ts'
 import { prefetchModule } from '@/app/moduleViews.ts'
 
 import AppNav from '@/widgets/app-nav/components/AppNav.vue'
@@ -30,6 +32,7 @@ import DocumentDrawer from '@/widgets/document-viewer/components/DocumentDrawer.
 import GlobalWorkFinder from '@/features/global-find/GlobalWorkFinder.vue'
 import { provideOpenNotice } from '@/features/session-open/openNotice.ts'
 import SessionContext from '@/features/session-open/SessionContext.vue'
+import SpaceWindow from '@/features/space-window/SpaceWindow.vue'
 import WorkItemLinkPanel from '@/features/work-item-link/WorkItemLinkPanel.vue'
 
 import type { PlanningConnectionState } from '@/shared/api/planningApi.ts'
@@ -97,9 +100,7 @@ const {
   cardInPlace(activeManifest.value, route.value, target),
 )
 const mainContent = ref<HTMLElement | null>(null)
-function focusMainContent() {
-  placeFocus(mainContent.value)
-}
+const focusMainContent = () => placeFocus(mainContent.value)
 
 const contextReady = computed(() =>
   contextState.value.status === 'ready' || contextState.value.status === 'degraded'
@@ -225,11 +226,14 @@ watch(liveRouteFailure, (failure) => {
   updateModuleState({})
   say(t('platform.route.stateDropped'), 'done')
 })
-const primaryWriteScopeId = computed(() =>
-  contextReady.value?.primary.is_writable === true
-    ? contextReady.value.primary.data_scope_id
-    : null,
-)
+// The main store while it is writable, and the space window: see the composable.
+const { primaryWriteScopeId } = useShellSpaceWindow({
+  contextReady,
+  scope: operatingScope,
+  loadContext,
+  refresh: () => moduleStage.value?.refresh(),
+  switchScope,
+})
 
 function openEntity(entity?: EntityRef) {
   writeRoute({
@@ -266,12 +270,7 @@ useAppReferenceLinks({
   openSession: (id) => void openSession(id),
   say,
 })
-function selectLocale(requested: string) {
-  const value = requested === 'ru' ? 'ru' : 'en'
-  locale.value = value
-  localStorage.setItem('valkama-locale', value)
-  document.documentElement.lang = value
-}
+const selectLocale = useLocaleChoice()
 
 usePlatformEntryRestore({
   route,
@@ -415,6 +414,7 @@ usePlatformEntryRestore({
     @act="actOnNotice"
     @dismiss="dismissNotice"
   />
+  <SpaceWindow v-if="documentPage === null" />
   <ReferencePreview />
   <TooltipHost />
 </template>

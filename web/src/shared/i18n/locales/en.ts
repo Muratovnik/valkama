@@ -30,6 +30,7 @@ import { platformIntegrationMessages } from '@/shared/i18n/platformIntegrationMe
 import { richTextMessages } from '@/shared/i18n/richTextMessages.ts'
 import { settingsMessages } from '@/shared/i18n/settingsMessages.ts'
 import { shellScopeMessages } from '@/shared/i18n/shellScopeMessages.ts'
+import { spaceWindowMessages } from '@/shared/i18n/spaceWindowMessages.ts'
 import { timeMessages } from '@/shared/i18n/timeMessages.ts'
 import { treeRowMessages } from '@/shared/i18n/treeRowMessages.ts'
 import { viewMenuMessages } from '@/shared/i18n/viewMenuMessages.ts'
@@ -61,6 +62,7 @@ export const en = {
   mentions: mentionMessages.en.mentions,
   commentSteps: commentStepsMessages.en.commentSteps,
   finder: globalFinderMessages.en.finder,
+  spaceWindow: spaceWindowMessages.en.spaceWindow,
   requests: inputRequestMessages.en.requests,
   editor: richTextMessages.en.editor,
   textLinks: richTextMessages.en.textLinks,
