@@ -49,9 +49,11 @@ export function untilProblem(value: string, today: string): string | null {
  * counts. A question's «Later…» and a card's «Put off» both ask it here.
  *
  * With a day and a count both chosen, a line (`data-until="either"`) says the work comes back on
- * whichever comes first. It follows the day and the count it qualifies, before the card: stacked,
- * it stands right under them; on a line, where the card may stand beside them, it ends the line's
- * fields across their whole width. Under the card, stacked, it read as a word about the card.
+ * whichever comes first. It stands right under the day and the count it qualifies, before the
+ * card, wherever the card does not stand beside them: stacked always, and on a line too narrow
+ * for the three fields. On a line wide enough for the card beside them, it ends the fields across
+ * their whole width, so the card does not move when it appears. Under a card that stands under
+ * the day and the count, it read as a word about the card.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -145,12 +147,13 @@ function chooseCard(reference: string) {
 }
 
 /* On a line the card takes what the day and the count leave, and goes under them where they do
-   not fit. */
+   not fit. Its width is what the line's order of the fields is decided by. */
 .until.is-line {
   display: flex;
   flex: 1 1 22rem;
   flex-wrap: wrap;
   align-items: flex-end;
+  container: until-line / inline-size;
 }
 
 .until.is-stack {
@@ -174,15 +177,19 @@ function chooseCard(reference: string) {
   min-width: 0;
 }
 
-/* Under the day and the count. On a line it ends the fields across the whole line, after the
-   card that may stand beside them. */
+/* Right under the day and the count, before the card, across the fields' width. */
 .until-either {
   flex: 1 0 100%;
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
+}
 
-  .is-line > & {
+/* A line as wide as the day (8.25rem), the count (9.5rem), the card's least (14rem) and the two
+   gaps between them (--space-3) holds the card beside them: there the line ends the fields, after
+   the card, which it would otherwise push under itself. */
+@container until-line (width >= calc(8.25rem + 9.5rem + 14rem + 2 * 12px)) {
+  .until-either {
     order: 1;
   }
 }
