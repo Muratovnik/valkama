@@ -12,6 +12,11 @@
  * stand together; a pair takes a line a part, each cut at its own end (`PairName`'s `stacked`),
  * and a detail a line of its own under the name, since a press is one box the line cannot break.
  *
+ * A model's id is never cut (`modelId`): the table keeps its column as wide as the longest id
+ * (`SpendingTable`, by the room its heading holds), the id stands on one line, and a pair's
+ * other value follows it while the line has room and takes the next line otherwise, cut at its
+ * own end (`PairName`'s `whole`).
+ *
  * It acts as its value does in the bars (`useLineActions`): a press opens the value's side panel,
  * sent out as `inspect`, and a task's name is a link to its card as well, which a press with a
  * modifier or the middle button opens elsewhere. Either is named by the value, since it heads its
@@ -52,9 +57,12 @@ const lineHint = computed(() => (pressHints.value ? '' : whole.value))
 const pressHint = computed(() => (pressHints.value ? whole.value : ''))
 /** On two lines a name breaks between its words, and a pair stacks its parts instead. */
 const wraps = computed(() => props.lines === 2)
+/** Whether the name is a model's id, kept whole: cut, «claude-fa…» named two models. */
+const modelId = computed(() => props.by === 'model')
 const stacked = computed(() => wraps.value && Boolean(props.line.nameEnd))
 /** How the name's words keep to their lines: one, cut; two, clamped; stacked, a part a line. */
 const wordsRule = computed(() => {
+  if (modelId.value) return 'whole-words'
   if (!wraps.value) return 'one-line'
   return stacked.value ? '' : 'two-lines'
 })
@@ -82,7 +90,7 @@ function inspect() {
     <span
       v-tooltip.clipped="lineHint"
       class="table-name"
-      :class="{ 'one-line': !wraps, 'table-wraps': wraps }"
+      :class="{ 'one-line': !wraps && !modelId, 'table-wraps': wraps }"
     >
       <!-- The link's words are the name `PairName` writes as text, which the rule cannot see. -->
       <!-- eslint-disable-next-line vuejs-accessibility/anchor-has-content -->
@@ -103,6 +111,7 @@ function inspect() {
             :end="line.nameEnd"
             :runs="line.nameRuns"
             :stacked="stacked"
+            :whole="modelId"
         /></span>
       </a>
       <button
@@ -121,6 +130,7 @@ function inspect() {
             :end="line.nameEnd"
             :runs="line.nameRuns"
             :stacked="stacked"
+            :whole="modelId"
         /></span>
       </button>
       <span
@@ -132,6 +142,7 @@ function inspect() {
           :end="line.nameEnd"
           :runs="line.nameRuns"
           :stacked="stacked"
+          :whole="modelId"
       /></span>
       <span
         v-if="line.detail"
@@ -182,6 +193,11 @@ function inspect() {
     margin-inline-start: var(--space-2);
     line-height: var(--line-height-tight);
   }
+}
+
+/* A name never cut: the id on one line, its column as wide as it (`SpendingTable`). */
+.whole-words {
+  white-space: nowrap;
 }
 
 /* On two lines the name's words take the press's whole width and break between words, an

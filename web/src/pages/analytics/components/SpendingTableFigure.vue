@@ -10,6 +10,12 @@
  * «≈ 1 109,00 $, 40 тыс. токенов без цены» made it 273. The cell still says the two as one, with
  * the comma between them, as the bars and a hint say them (`besides`).
  *
+ * In the Model section's table (`data-figures`, at the steps `SectionTable` names in `data-fit`)
+ * the remark and a figure that is its sentence alone, «201.3K tokens without a price», stand on
+ * one line while the table holds them so in its frame, and wrap between their words only once it
+ * would not: there the room the ids keep whole comes first. A figure of words with no count, «No tokens», is a label and keeps
+ * its line; wrapped, «Нет токенов» took three.
+ *
  * The table lays the cell out (`SpendingTable`): its width, its ink when it holds the chosen
  * measure, and its place in the total row that stays at the panel's edge. The cell is marked
  * with its column's key (`data-measure`: a measure, `before`, `change` or a kind of tokens), for
@@ -28,6 +34,11 @@ const props = defineProps<{ cell: TableCell }>()
  * and kept inside a count, «40 тыс.», whose space follows its digits.
  */
 const remark = computed(() => props.cell.remark.replaceAll(/(?<!\d)\u{A0}/gu, ' '))
+/**
+ * Whether the figure is words with a count in them, the remark's sentence alone, «201.3K tokens
+ * without a price», which wraps as the remark does; a label with none, «No tokens», keeps its line.
+ */
+const countWords = computed(() => props.cell.sort === null && /\d/u.test(props.cell.text))
 </script>
 
 <template>
@@ -37,7 +48,7 @@ const remark = computed(() => props.cell.remark.replaceAll(/(?<!\d)\u{A0}/gu, ' 
     :data-measure="cell.key"
     :data-chosen="cell.chosen"
   >
-    <span>{{ cell.text }}</span>
+    <span :class="{ 'figure-words': countWords }">{{ cell.text }}</span>
     <template v-if="cell.remark">
       <span class="visually-hidden">{{ REMARK_JOINT }}</span>
       <span class="chart-detail figure-remark">{{ remark }}</span>
@@ -55,5 +66,20 @@ const remark = computed(() => props.cell.remark.replaceAll(/(?<!\d)\u{A0}/gu, ' 
   text-wrap: balance;
   white-space: normal;
   contain: inline-size;
+}
+
+/* In the Model section's table: on one line while the table holds it so, at every step before
+   its last (`wrap`). */
+[data-figures]:not([data-fit='wrap']) .figure-remark {
+  white-space: nowrap;
+  contain: none;
+}
+
+/* And past that, the words as the remark: between words, as narrow as the column's
+   figures leave them, a block so the line breaks under the figure. */
+[data-figures][data-fit='wrap'] .figure-words {
+  display: block;
+  text-wrap: balance;
+  white-space: normal;
 }
 </style>

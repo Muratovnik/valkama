@@ -389,6 +389,20 @@ def _stamp(micro: int, *, up: bool) -> str:
     return moment.isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
+def project_runs(conn: sqlite3.Connection, project: str, *, start: float, end: float) -> set:
+    """The runs, as `(session, agent)`, with work between `start` and `end` (seconds since the
+    epoch) that this read places in `project`: each stretch a filter by the project admits
+    (`_ProjectReads.admits`), on an item that names it or on no item in a place of it."""
+
+    rows = conn.execute(
+        SEGMENTS,
+        (_stamp(round(end * _SECOND), up=True), _stamp(round(start * _SECOND), up=False)),
+    ).fetchall()
+    reads = _ProjectReads(conn, rows, project_registry.read_registry())
+    admitted = frozenset({project})
+    return {(str(row[_SESSION]), str(row[_AGENT])) for row in rows if reads.admits(row, admitted)}
+
+
 @dataclass
 class _Window:
     """What one period adds up to, in total and by group."""
@@ -856,6 +870,7 @@ __all__ = [
     "STEPS",
     "UsageQuery",
     "UsageQueryError",
+    "project_runs",
     "query",
     "read",
 ]

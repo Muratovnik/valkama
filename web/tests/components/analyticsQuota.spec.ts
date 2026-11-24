@@ -86,8 +86,9 @@ describe('the quota tiles', () => {
       'token_kind',
       'quota_five_hour',
       'quota_week',
-      'seat',
+      'pauses',
     ])
+    expect(sections[5]).toBe('seat')
     expect(reads.quotaAsked).toHaveLength(1)
     expect(reads.quotaAsked[0]?.get('utc_offset')).toBe(String(-NOW.getTimezoneOffset()))
   })

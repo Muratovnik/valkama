@@ -47,7 +47,7 @@ function changeWords(locale: keyof typeof messages, measure: Measure): string[] 
 
 /**
  * Sets every change cell of the section's table to `words`, lets the table lay itself out again
- * — its headings may take a second line (`useHeadingLines`) — and answers how far the change's
+ * — its headings may take a second line (`useTableFit`) — and answers how far the change's
  * heading ends past the frame's visible end, and how many cells were set.
  */
 const changeWith = (page: Page, words: string) =>

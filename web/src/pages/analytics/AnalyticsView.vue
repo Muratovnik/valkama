@@ -4,11 +4,12 @@
  *
  * A monitor screen that fills the module's frame: a bar of the period, the filters, how fresh the
  * figures are and a read of them again over the whole of it; under that a rail of the page's
- * sections — the overview, the tokens by kind, the subscription quota's five hours and week, then
- * a dimension each — and the panel of the section on show. The quota's two sections read where
- * each account's quota stands now (`QuotaPanel`), which no filter changes; the period reaches only
- * each window's step line, which draws every window of its kind the period overlaps. The rail
- * and the panel scroll on their own, so the bar and the rail stay in sight while the panel is
+ * sections — the overview, the tokens by kind, the subscription quota's five hours and week, the
+ * pauses before model requests, then a dimension each — and the panel of the section on show.
+ * The quota's two sections read where each account's quota stands now (`QuotaPanel`), which no
+ * filter changes; the period reaches only each window's step line, which draws every window of
+ * its kind the period overlaps. The pauses read the period alone, and only while their section is
+ * on show (`PausesPanel`). The rail and the panel scroll on their own, so the bar and the rail stay in sight while the panel is
  * read. Where the page leaves the panel beside the rail too narrow for its charts (`usePanelRoom`)
  * the rail is the screen, a list, and a section chosen there takes its place as a new place in the
  * history, so Back returns to the list. Beside the rail a section chosen on it or from a card of
@@ -53,12 +54,14 @@ import AnalyticsRail from '@/pages/analytics/components/AnalyticsRail.vue'
 import DetailPanel from '@/pages/analytics/components/DetailPanel.vue'
 import DimensionPanel from '@/pages/analytics/components/DimensionPanel.vue'
 import OverviewPanel from '@/pages/analytics/components/OverviewPanel.vue'
+import PausesPanel from '@/pages/analytics/components/PausesPanel.vue'
 import QuotaPanel from '@/pages/analytics/components/QuotaPanel.vue'
 import TokenKindsPanel from '@/pages/analytics/components/TokenKindsPanel.vue'
 import { provideColourPlaces } from '@/pages/analytics/composables/useColourPlaces.ts'
 import { useDetail } from '@/pages/analytics/composables/useDetail.ts'
 import { useLiveRefresh } from '@/pages/analytics/composables/useLiveRefresh.ts'
 import { providePageFilter } from '@/pages/analytics/composables/usePageFilter.ts'
+import { usePageSections } from '@/pages/analytics/composables/usePageSections.ts'
 import { usePanelRoom } from '@/pages/analytics/composables/usePanelRoom.ts'
 import { useQuota } from '@/pages/analytics/composables/useQuota.ts'
 import { useRailTiles } from '@/pages/analytics/composables/useRailTiles.ts'
@@ -77,7 +80,7 @@ import {
   isQuotaSection,
   localDay,
   OVERVIEW,
-  QUOTA_SECTIONS,
+  PAUSES_SECTION,
   readAddress,
   TOKEN_KINDS_SECTION,
   writeAddress,
@@ -177,22 +180,14 @@ const filterDimensions = computed<UsageDimension[]>(() =>
   USAGE_DIMENSIONS.filter((dimension) => !(props.projectId && dimension === 'project')),
 )
 
-/**
- * The page's sections, in the rail's order: the overview, the tokens by kind, the quota's five
- * hours and its week, then each dimension filtered on.
- */
-const sections = computed<{ label: string; value: AnalyticsSection }[]>(() => [
-  { value: OVERVIEW, label: t('analytics.frame.overview') },
-  { value: TOKEN_KINDS_SECTION, label: t('analytics.kinds.section') },
-  ...QUOTA_SECTIONS.map((value) => ({ value, label: t(`analytics.quota.sections.${value}`) })),
-  ...filterDimensions.value.map((value) => ({ value, label: words.dimension(value) })),
-])
+/** The page's sections, the name of the one on show and the rail's tiles (`usePageSections`). */
+const { sections, sectionName, tiles } = usePageSections({
+  dimensions: () => filterDimensions.value,
+  shown: () => view.value.by,
+  tiles: () => ({ ...usageTiles.value, ...quota.tiles.value }),
+})
 
 const overview = computed(() => view.value.by === OVERVIEW)
-
-const sectionName = computed(
-  () => sections.value.find((section) => section.value === view.value.by)?.label ?? '',
-)
 
 /**
  * Whether the page is too narrow for the panel beside the rail, which then take turns; the rail's
@@ -205,6 +200,9 @@ const showsRail = computed(() => !narrowScreen.value || !view.value.open)
 const showsPanel = computed(() => !narrowScreen.value || view.value.open)
 
 const quotaSection = computed(() => (isQuotaSection(view.value.by) ? view.value.by : null))
+
+/** How many times the bar asked a refresh, which the pauses' panel reads again on. */
+const refreshes = ref(0)
 
 /**
  * A section chosen on the rail or from a card's heading, as a new place in the history, so Back
@@ -277,15 +275,15 @@ const detail = useDetail({
   refuse,
   view: () => view.value,
 })
-const tiles = computed(() => ({ ...usageTiles.value, ...quota.tiles.value }))
 
-/** The bar's refresh reads the page, every tile of the rail and the quota again, as of now. */
+/** The bar's refresh reads the page, every tile of the rail, the quota and the pauses again. */
 function refresh() {
   shared.renew()
   places.renew()
   void read.retry()
   void refreshTiles()
   void quota.refresh()
+  refreshes.value += 1
 }
 
 /**
@@ -379,6 +377,12 @@ const emptyDescription = computed(() => {
           :section="quotaSection"
           :now="quota.now.value"
           @retry="quota.refresh"
+        />
+        <PausesPanel
+          v-else-if="view.by === PAUSES_SECTION"
+          :view="view"
+          :refreshes="refreshes"
+          :project-id="projectId"
         />
         <PlatformStatePanel
           v-else
