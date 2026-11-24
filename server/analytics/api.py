@@ -141,8 +141,10 @@ def _quota(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dic
 
 
 #: How long one read of the pauses parses transcripts before it answers how far it got: well
-#: inside the browser's wait for an answer, which is 15 seconds.
-PAUSES_BUDGET_SECONDS = 8.0
+#: inside the browser's wait for an answer, which is 15 seconds and starts when the page asks. On
+#: a page opened cold the ask waited up to 7 seconds behind the page's other reads before it
+#: reached this server, and 8 seconds here then ran past the browser's wait.
+PAUSES_BUDGET_SECONDS = 4.0
 
 
 def _pauses(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> tuple[int, dict]:
