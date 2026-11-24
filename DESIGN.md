@@ -3376,10 +3376,12 @@ once to open its list. Several values of one dimension admit any of them, and th
 filters all apply. «Add to filter» in a value's panel adds to the same filter, and an old link
 reads as it did. A chip says its dimension and its value, «Model: model-a»; every chip set is
 shown, and more than one row holds wrap onto the next. Until the first read of its dimension
-names the value, a chip says its dimension and «…» in the room of the widest chip, never the
-value's id, which said «Task: 00000000-0…»; read again for another period, it keeps the name
+names a task, a project or a session, its chip says its dimension and «…» in the room of the
+widest chip, never the value's id, which said «Task: 00000000-0…»; any other value is named
+from its id alone, «Role: Main agent». Read again for another period, a chip keeps the name
 it had, where it said the id until the answer and put «Clear filters» on a line of its own.
-The field is never narrower than its words need, 176px, or on a short bar and on a phone its short «Filter», 62px with less air at
+The field is never narrower than its words need, 176px, or on a short bar and on a phone its
+short «Filter», 62px with less air at
 its ends: the line gives up its other parts only once the field has given up the room past
 that, so the line's give-ups and its two rows come where they came before. The row of chips
 comes with the first filter set and goes with the last, and it is the one thing the filters

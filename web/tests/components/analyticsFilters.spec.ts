@@ -273,6 +273,14 @@ describe('a chip while its value’s name is read', () => {
     expect(chipWords(chips)).toEqual(['Task: MAIN-1 One'])
   })
 
+  it('says the name its id gives before the first answer, where no read is needed', () => {
+    // A role's is its words, never its id «main»; a model's id is its name, as it was.
+    expect(chipWords(mountChips({}, { role: ['main'], model: ['model-a'] }))).toEqual([
+      'Role: Main agent',
+      'Model: model-a',
+    ])
+  })
+
   it('says «none» by its words, and the id after a read that failed with no name before', () => {
     // Its controls: a value named without a read, and the one place an id still stands.
     expect(chipWords(mountChips({}, { work_item: [null] }))).toEqual(['Task: No task'])

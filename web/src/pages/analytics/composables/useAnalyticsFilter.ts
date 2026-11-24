@@ -174,8 +174,10 @@ export function useAnalyticsFilter(input: {
   /**
    * Each value a filter is set to, named as the menu names it, in the dimensions' order. While its
    * dimension is read, a chip keeps the name it last had, the period before's; before the first
-   * answer it says its dimension and «…» (`pending`), never the value's id, which named it «Task:
-   * 00000000-0…» until the answer came. A read that failed leaves the name it had, or the id.
+   * answer it says the name its id gives (`idLabel`), a model's or a role's, or, where only a read
+   * names the value, its dimension and «…» (`pending`), never the value's id, which named it
+   * «Task: 00000000-0…» until the answer came. A read that failed leaves the name it had, or the
+   * id where a read alone names it.
    */
   const chips = computed<FacetChip[]>((previous) =>
     input.dimensions().flatMap((dimension) => {
@@ -186,6 +188,8 @@ export function useAnalyticsFilter(input: {
         if (!Array.isArray(read) && key !== filterKey(null)) {
           const kept = previous?.find((one) => one.key === rowKey(dimension, key) && !one.pending)
           if (kept) return kept
+          const label = words.idLabel(dimension, filterValue(key) ?? key)
+          if (label !== null) return chipOf(dimension, key, label)
           if (read !== 'failed') return { ...chipOf(dimension, key, PENDING), pending: true }
         }
         const option = named.find((one) => one.value === key)
