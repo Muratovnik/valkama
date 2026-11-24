@@ -879,9 +879,12 @@ and does not change, and keeps its scrollbar's room from the start, so a list th
 past the window narrows nothing. A new space's key is the server's for the name until the
 reader types one; a name the server derives none from, such as a Cyrillic one, leaves the
 field empty and says why under it, once: the reason states the key's form, and no hint says
-it again. Once the space has issued a number its key stands as text with the reason it does
-not change, since it is in those numbers; a renamed space says under its name that what
-names the space by its name will no longer find it, in room the edit holds for those words
+it again. The key's field holds the room of every hint and reason it can come to say from the
+start, the hint that names the key as wide as the widest key, so a reason appearing or another
+taking its place moves nothing under the field; given room only while it stood, a reason a line
+longer than the hint pushed the projects down at 390px. Once the space has issued a number its
+key stands as text with the reason it does not change, since it is in those numbers; a renamed
+space says under its name that what names the space by its name will no longer find it, in room the edit holds for those words
 from the start, so the fields under the name do not move at the first letter typed. The
 projects stand one a row, by name: a radio that makes it the default, on the name's first
 line however the name wraps; its name, which takes at most two fifths of the row and wraps
@@ -1728,7 +1731,10 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   the native control is already localized and keyboard-complete. A label passes
   the pointer to its control, so its box reaches down to the control and the
   pointer crossing from one to the other never leaves them: across a gap the
-  control's hover went out and came back. Six screens
+  control's hover went out and came back. A field whose words under it change as
+  it is typed in names every hint and reason it can come to say, and holds the
+  room of the tallest from the start, so a reason appearing, or one taking a
+  hint's place on more lines, moves nothing under the field. Six screens
   had written their own text field and no two agreed on the fill, the hairline
   or the radius; `check:ui-system` rejects a new `<input>` or `<textarea>`
   outside the primitive, and lets a checkbox, a radio and the search box

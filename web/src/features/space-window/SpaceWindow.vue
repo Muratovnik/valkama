@@ -6,8 +6,10 @@
  * The key is the server's for the name until the reader types one, and can be typed until the
  * space has issued a number: from then on it is in those numbers, and the window shows it as
  * text with that reason; while the key's error says why it cannot be sent, which states the
- * key's form, no hint says the form again. A renamed space says under its name what a new name
- * changes, in a room the edit holds for it, so the fields under the name stay where they stood.
+ * key's form, no hint says the form again; the field holds the room of every hint and reason it
+ * can come to say, so neither moves what stands under it. A renamed space says under its name
+ * what a new name changes, in a room the edit holds for it, so the fields under the name stay
+ * where they stood.
  *
  * A space with no work items can be removed, after a question asked in the window; one with
  * work has no Remove, and where the foot cannot hold all three the way out and the save change
@@ -32,6 +34,9 @@ import DialogFrame from '@/shared/ui/DialogFrame.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VTextInput from '@/shared/ui/VTextInput.vue'
 
+/** Eight of the widest letter, the most room a key of 2 to 8 letters and digits takes. */
+const WIDEST_KEY = 'W'.repeat(8)
+
 const { t } = useI18n()
 const host = useSpaceWindowState()
 const target = computed(() => host?.target.value ?? null)
@@ -42,6 +47,7 @@ const {
   error,
   gap,
   keyError,
+  keyReasons,
   notice,
   origin,
   phase,
@@ -84,6 +90,19 @@ const keyHint = computed(() => {
     ? t('spaceWindow.keyHint', { key: draft.value.key })
     : t('spaceWindow.keyForm')
 })
+/**
+ * Every hint and reason the key's field can come to say, whose room it holds from the start, so
+ * a reason appearing or another taking its place moves nothing under the field: given room only
+ * while it stood, a reason a line longer than the hint pushed the projects down. The hint that
+ * names the key holds the room of the widest key there can be.
+ */
+const keyWords = computed(() => ({
+  hints: [
+    t('spaceWindow.keyHint', { key: WIDEST_KEY }),
+    t(origin.value ? 'spaceWindow.keyMoves' : 'spaceWindow.keyForm'),
+  ],
+  errors: keyReasons.value,
+}))
 const choices = computed(() =>
   projectChoices(draft.value, registered.value, origin.value?.ref ?? null),
 )
@@ -219,6 +238,7 @@ const submitLabel = computed(() => {
         :spellcheck="false"
         :hint="keyHint"
         :error="keyError"
+        :held-words="keyWords"
         @update:model-value="typeKey"
       />
       <SpaceProjects

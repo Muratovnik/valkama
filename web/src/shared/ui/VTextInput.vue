@@ -59,6 +59,8 @@ const props = withDefaults(
     disabled?: boolean
     /** Why the value was refused; shown under the control and named by it. */
     error?: string
+    /** Every hint and error the field can come to say, whose room it holds (`VField`). */
+    heldWords?: { errors?: readonly string[]; hints?: readonly string[] }
     /** The label reaches assistive technology only; see `VField`. */
     hideLabel?: boolean
     hint?: string
@@ -85,6 +87,7 @@ const props = withDefaults(
   {
     hint: '',
     error: '',
+    heldWords: undefined,
     placeholder: '',
     shortPlaceholder: '',
     type: 'text',
@@ -182,6 +185,7 @@ defineExpose({
     :label="label"
     :hint="hint"
     :error="error"
+    :held-words="heldWords"
     :hide-label="hideLabel"
   >
     <textarea
