@@ -39,17 +39,21 @@ it ran. A wake row's requests and cost are what the wakes cost.
 
 A request counts in the hour it was sent in: a period is read in whole hours of UTC, `from`
 rounded down to its hour and `to` up. A run's hours are kept here for each state of its file
-(its size and change time), so a period read again reads only the files that changed.
+(its size and change time), so a period read again reads only the files that changed; many
+runs to read at once are parsed over a pool of processes (`Reader.read`), each of which only
+reads transcripts and returns their bins.
 """
 
 from __future__ import annotations
 
 import datetime as dt
 import math
+import multiprocessing
 import os
 import sqlite3
 import threading
 from collections.abc import Iterable, Mapping, Sequence
+from concurrent import futures
 from dataclasses import dataclass
 
 from .. import transcripts
@@ -144,6 +148,40 @@ class _Kept:
     bins: dict[_Bin, list[float]]
 
 
+#: From this many runs to read on, they are read over a pool of processes: a run's file is
+#: parsed whole, which is the read's whole cost, and one process parsed four weeks of runs in
+#: about 23 seconds where eight did it in under 5. Fewer runs are read here, with no process
+#: to start.
+POOL_FROM = 24
+#: The pool's processes, at most: past eight the largest file alone set the time.
+POOL_WORKERS = 8
+
+
+def bins_of(target: Target) -> dict[_Bin, list[float]] | None:
+    """A run's bins from its transcript, or None when there is none to read."""
+
+    try:
+        requests = usage_pauses.read_requests(target)
+    except OSError:
+        return None
+    return None if requests is None else _bins(requests)
+
+
+def _pooled(targets: Sequence[Target]) -> list[dict[_Bin, list[float]] | None]:
+    """`bins_of` of each target over a pool of processes, or here when no pool can run."""
+
+    workers = min(POOL_WORKERS, os.cpu_count() or 1, len(targets))
+    if workers < 2:
+        return [bins_of(target) for target in targets]
+    try:
+        with futures.ProcessPoolExecutor(
+            workers, mp_context=multiprocessing.get_context("spawn")
+        ) as pool:
+            return list(pool.map(bins_of, targets, chunksize=4))
+    except (OSError, futures.process.BrokenProcessPool):
+        return [bins_of(target) for target in targets]
+
+
 class Reader:
     """The bins of each run, read again only when its file changed. One per process."""
 
@@ -151,34 +189,40 @@ class Reader:
         self._lock = threading.Lock()
         self._kept: dict[tuple[str, str], _Kept] = {}
 
-    def bins(self, target: Target) -> dict[_Bin, list[float]] | None:
-        """A run's bins, or None when its transcript is nowhere to read."""
+    def read(self, targets: Sequence[Target]) -> list[dict[_Bin, list[float]] | None]:
+        """Each run's bins, in the order given; None for one whose transcript is nowhere to read.
 
-        path = usage_collect.source(target)
-        if path is None:
-            return None
-        try:
-            status = os.stat(path)
-        except OSError:
-            return None
-        key = (target.session, target.agent)
+        A run whose file changed since it was read, or was never read, is read again; once
+        `POOL_FROM` of them are, over a pool of processes (`POOL_WORKERS`).
+        """
+
+        found: list[dict[_Bin, list[float]] | None] = [None] * len(targets)
         with self._lock:
-            kept = self._kept.get(key)
-            if kept and (kept.path, kept.size, kept.changed) == (
-                path,
-                status.st_size,
-                status.st_mtime_ns,
-            ):
-                return kept.bins
-            try:
-                requests = usage_pauses.read_requests(target)
-            except OSError:
-                return None
-            if requests is None:
-                return None
-            bins = _bins(requests)
-            self._kept[key] = _Kept(path, status.st_size, status.st_mtime_ns, bins)
-            return bins
+            stale: list[tuple[int, Target, tuple[str, int, int]]] = []
+            for index, target in enumerate(targets):
+                path = usage_collect.source(target)
+                if path is None:
+                    continue
+                try:
+                    status = os.stat(path)
+                except OSError:
+                    continue
+                state = (path, status.st_size, status.st_mtime_ns)
+                kept = self._kept.get((target.session, target.agent))
+                if kept and (kept.path, kept.size, kept.changed) == state:
+                    found[index] = kept.bins
+                else:
+                    stale.append((index, target, state))
+            chosen = [target for _index, target, _state in stale]
+            if len(chosen) >= POOL_FROM:
+                read = _pooled(chosen)
+            else:
+                read = [bins_of(target) for target in chosen]
+            for (index, target, (path, size, changed)), bins in zip(stale, read, strict=True):
+                found[index] = bins
+                if bins is not None:
+                    self._kept[(target.session, target.agent)] = _Kept(path, size, changed, bins)
+        return found
 
 
 #: The process's one reader, which the HTTP surface's reads share.
@@ -279,11 +323,9 @@ def read(
     known: dict[tuple, bool] = {}
     read_runs = missing = 0
     finder = Finder(conn, transcripts.directory(_store_path(conn)))
-    for target in finder.targets(set()):
-        run = runs.get((target.session, target.agent))
-        if run is None:
-            continue
-        bins = reader.bins(target)
+    targets = [target for target in finder.targets(set()) if (target.session, target.agent) in runs]
+    for target, bins in zip(targets, reader.read(targets), strict=True):
+        run = runs[(target.session, target.agent)]
         if bins is None:
             missing += 1
             continue

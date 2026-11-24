@@ -409,6 +409,46 @@ class ReaderTests(PausesCase):
         self.assertEqual(first["rows"], again["rows"])
         self.assertEqual([2], [row["requests"] for row in later["rows"]])
 
+    def three_sessions(self) -> None:
+        for number in range(3):
+            run = self.session(f"{SESSION}-{number}")
+            run.prompt(0)
+            run.end_turn(2)
+            run.prompt((number + 1) * MINUTE)
+            run.end_turn((number + 1) * MINUTE + 2)
+
+    def test_many_runs_read_over_processes_report_what_one_process_reads(self) -> None:
+        # Three runs to read with the pool's threshold at two go to a pool of two processes;
+        # the oracle is the same store read with the pool out of reach. This process cannot
+        # read a transcript while the pool reads, so a read that fell back here would fail.
+        self.three_sessions()
+        with mock.patch.object(pauses, "POOL_FROM", 10**6):
+            alone = self.report(end=HOUR)
+        here = AssertionError("read in this process, not the pool's")
+        with (
+            mock.patch.object(pauses, "POOL_FROM", 2),
+            mock.patch.object(pauses, "POOL_WORKERS", 2),
+            mock.patch.object(pauses, "_pooled", side_effect=pauses._pooled) as pooled,
+            mock.patch.object(usage_pauses, "read_requests", side_effect=here),
+        ):
+            spread = self.report(end=HOUR)
+        self.assertEqual(1, pooled.call_count)
+        self.assertEqual(3, len(pooled.call_args.args[0]))
+        self.assertEqual(alone, spread)
+        self.assertEqual({"read": 3, "missing": 0}, spread["runs"])
+        self.assertEqual([3], [row["requests"] for row in spread["rows"]])
+
+    def test_a_pool_that_cannot_start_reads_here(self) -> None:
+        self.three_sessions()
+        with (
+            mock.patch.object(pauses, "POOL_FROM", 2),
+            mock.patch.object(
+                pauses.futures, "ProcessPoolExecutor", side_effect=OSError("no process")
+            ),
+        ):
+            report = self.report(end=HOUR)
+        self.assertEqual([3], [row["requests"] for row in report["rows"]])
+
 
 #: The fields the CLI's JSON promises (`docs/guides/commands.md`), each row's and the whole's.
 REPORT_FIELDS = {
