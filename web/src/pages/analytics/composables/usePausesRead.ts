@@ -25,7 +25,7 @@ import type { Pauses, PausesReading } from '@/shared/api/analyticsPausesApi.ts'
  */
 export type PausesRead =
   | { status: 'failed' }
-  | { status: 'loading'; progress?: PausesReading; }
+  | { status: 'loading'; progress?: PausesReading }
   | { status: 'no-period' }
   | { failedAgain: boolean; pauses: Pauses; readAt: string; refreshing: boolean; status: 'ready' }
 
