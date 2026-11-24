@@ -3395,8 +3395,8 @@ as the line leaves it. Wrapped beside that room, «Clear filters» stood on a li
 until a short name came and brought it back, and the bar shrank by 32px on the page's first
 answer at 380 to 401px in Russian and 340 to 370px in English; a narrower room only moved that
 jump to 320 to 370px. That one height costs the name its end at 320 to 370px in Russian, where
-«Задача: MAIN-1 One» keeps about 98px. Two chips or more keep their words and wrap, and their
-row may still change its height as their names come.
+«Задача: MAIN-1 One» keeps 98px at 320px and 148px at 370px of the 157px it needs. Two chips or
+more keep their words and wrap, and their row may still change its height as their names come.
 The field is never narrower than its words need, 176px, or on a short bar and on a phone its
 short «Filter», 62px with less air at
 its ends: the line gives up its other parts only once the field has given up the room past
