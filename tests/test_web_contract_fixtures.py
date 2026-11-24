@@ -1168,7 +1168,7 @@ class _Scenario:
                 "/api/planning/work-item/commit",
                 {"reference": fresh, "repository": PROJECT, "hash": "d" * 40},
             ),
-            "transition-returned": self.http(
+            "transition-brought-back": self.http(
                 "/api/planning/work-item/transition",
                 {"author": "user", "id": closed, "state": "done"},
             ),

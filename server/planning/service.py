@@ -1873,7 +1873,7 @@ def delete_work_item(conn: sqlite3.Connection, reference: str) -> dict:
     # confirmation goes with it.
     closing.note(conn, row["parent_id"])
     # Work put off until it comes back as if it closed, while it can still be named.
-    returned = _return_waiting(conn, [identity], deferral.DELETED)
+    brought_back = _return_waiting(conn, [identity], deferral.DELETED)
     conn.execute("DELETE FROM work_items WHERE work_item_id = ?", (identity,))
     # The rows went with the item; a file no other item holds goes once this commits.
     images.release(conn, pictures)
@@ -1883,8 +1883,8 @@ def delete_work_item(conn: sqlite3.Connection, reference: str) -> dict:
         "reference": read_model.reference(conn, row),
         "deleted": True,
     }
-    if returned:
-        answer["returned"] = returned
+    if brought_back:
+        answer["brought_back"] = brought_back
     return answer
 
 
@@ -2272,9 +2272,9 @@ def _transition(
     closing.note(conn, row["parent_id"], author)
     if row["kind"] == model.CONTAINER_KIND:
         closing.note(conn, identity, author)
-    returned: list[str] = []
+    brought_back: list[str] = []
     if cancelling is not None:
-        warnings += _cancel_under(conn, cancelling, note, author, returned)
+        warnings += _cancel_under(conn, cancelling, note, author, brought_back)
     _write(conn, row, updates, parameters)
     if gives is not None:
         _accepted(
@@ -2329,7 +2329,7 @@ def _transition(
     if target["is_terminal"] and not current["is_terminal"]:
         # What was put off until this item comes back in the same transaction.
         how = "cancelled" if target["category"] == "cancelled" else "completed"
-        returned += _return_waiting(conn, [identity], how)
+        brought_back += _return_waiting(conn, [identity], how)
     asked = None
     if into_review:
         asked = questions.ask(
@@ -2363,8 +2363,8 @@ def _transition(
         closed += [str(found["work_item_id"]) for found in cancelling.listing.rows]
     if target["is_terminal"] and not current["is_terminal"]:
         answer["freed"] = closing.freed(conn, closed)
-        answer["returned"] = returned
-    for name in ("released", "freed", "returned"):
+        answer["brought_back"] = brought_back
+    for name in ("released", "freed", "brought_back"):
         if name in answer and not answer[name]:
             del answer[name]
     return answer
@@ -3213,14 +3213,14 @@ def _cancel_under(
     cancelling: _Cancelling,
     why: str,
     author: str | None,
-    returned: list[str],
+    brought_back: list[str],
 ) -> list[str]:
     """Cancel every open item under a goal or stage, deepest first, each with its summary.
 
     Each moves to the first cancelled state its workflow reaches, with the reason
     `cancelled with MAIN-3`, through the one transition path: its claims end, its
     questions end as cancelled, and what was put off until it comes back, named in
-    `returned`. An item without a summary gets one that says so; one with a summary
+    `brought_back`. An item without a summary gets one that says so; one with a summary
     keeps what it did and says nothing comes next. The new summary is a new report,
     and the one before stays in the comments. `why`, the reason the goal or stage was
     cancelled for, is each summary's `why` when there is one.
@@ -3241,7 +3241,7 @@ def _cancel_under(
             spared=_CASCADE_SPARES,
         )
         warnings += moved["warnings"]
-        returned += moved.get("returned", [])
+        brought_back += moved.get("brought_back", [])
     return warnings
 
 

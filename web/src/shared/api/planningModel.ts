@@ -467,11 +467,11 @@ const workItemShape = {
 const workItemSchema = recordObject(workItemShape)
 /**
  * The record a move answers with. A close that brought back work put off until it names those
- * references in `returned`; any other answer carries the record's own `returned`, if any.
+ * references in `brought_back`; `returned` stays the record's own, why the item came back.
  */
 const movedItemSchema = recordObject({
   ...workItemShape,
-  returned: z.union([returnedField(), z.array(boundedText(WORK_ITEM_REFERENCE, 20))]).optional(),
+  brought_back: z.array(boundedText(WORK_ITEM_REFERENCE, 20)).optional(),
 })
 
 const workflowSchema = strictObject({

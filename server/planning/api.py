@@ -1706,7 +1706,7 @@ def _apply_step(
     # What the move closed and let go: the work a cancel took with it, the claims it
     # ended, the work it left with nothing open blocking it and the put-off work it
     # brought back.
-    for name in ("cancelled", "released", "freed", "returned", "review_request_id"):
+    for name in ("cancelled", "released", "freed", "brought_back", "review_request_id"):
         if answer.get(name):
             moved[name] = answer[name]
     # Entering review or completing names the steps that are no longer as they were:

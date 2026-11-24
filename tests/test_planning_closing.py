@@ -647,7 +647,7 @@ class CancelListTests(Tree):
         self.assertEqual([self.s1, self.s2, self.a, self.b, self.c], moved["cancelled"])
         self.assertEqual([{"reference": self.a, "holder": self.holder}], moved["released"])
         self.assertEqual([self.x], moved["freed"])
-        self.assertEqual([self.y], moved["returned"])
+        self.assertEqual([self.y], moved["brought_back"])
         for reference in (self.goal, self.s1, self.s2, self.a, self.b, self.c):
             with self.subTest(item=reference):
                 self.assertEqual("cancelled", self.state(reference))

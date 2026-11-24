@@ -78,9 +78,9 @@ describe("the server's answers to a card's writes", () => {
   })
 
   it('read a close on the board that brings back what was put off until it', async () => {
-    answer('transition-returned.json', 200)
+    answer('transition-brought-back.json', 200)
     const closed = await transitionWorkItem({ id: 'MAIN-36', state: 'done' })
     expect(closed.state?.key).toBe('done')
-    expect(closed.returned).toEqual(['MAIN-37'])
+    expect([closed.brought_back, closed.returned]).toEqual([['MAIN-37'], undefined])
   })
 })
