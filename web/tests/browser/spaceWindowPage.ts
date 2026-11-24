@@ -29,6 +29,10 @@ export const WORDS = {
     editTitle: (key: string) => `Space ${key}`,
     name: 'Name',
     key: 'Key',
+    keyHint: (key: string) => `Part of every work item’s number: ${key}‑1, ${key}‑2 …`,
+    keyInvalid: 'a key is 2 to 8 Latin letters and digits, a letter first',
+    keyMoves: 'The space’s projects move to the new key with it.',
+    projects: 'Projects',
     add: 'Add project',
     create: 'Create',
     save: 'Save',
@@ -58,6 +62,10 @@ export const WORDS = {
     editTitle: (key: string) => `Пространство ${key}`,
     name: 'Название',
     key: 'Ключ',
+    keyHint: (key: string) => `Входит в номер каждой задачи: ${key}‑1, ${key}‑2 …`,
+    keyInvalid: 'ключ — это 2–8 латинских букв и цифр, первая — буква',
+    keyMoves: 'Проекты пространства перейдут на новый ключ вместе с ним.',
+    projects: 'Проекты',
     add: 'Добавить проект',
     create: 'Создать',
     save: 'Сохранить',
@@ -80,7 +88,7 @@ export const WORDS = {
 } as const
 
 /** «All spaces» at the size's width and height, once its cards are drawn. */
-export async function openPortfolio(page: Page, size: (typeof SIZES)[number]) {
+export async function openPortfolio(page: Page, size: { height: number; width: number }) {
   await page.setViewportSize({ width: size.width, height: size.height })
   await page.goto(serializePlatformRoute({ module_id: 'planning', scope: globalScope }))
   await expect(page.locator('[data-part="configure"]').first()).toBeVisible()

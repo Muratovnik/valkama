@@ -5,6 +5,12 @@
  * words end in an ellipsis where they are cut, whole in the field's hint. Beside the day and the
  * count, from 620px, the field has some 210px, and the words stood cut at its edge with nothing to
  * say there were more. At every width the layout changes at, in both languages.
+ *
+ * The chosen words are drawn over the field, on the line the field draws its own on: the press
+ * that empties the field, which then shows the same words as its placeholder, and the first
+ * letter typed after it move no row of ink. Read off pictures at four pixels to the page's one,
+ * since no box says where an input draws its words: the middle of the input's box, which a review
+ * once measured them against, is not the middle of the line its words stand on.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -14,6 +20,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { hint } from './hintFramesPage.ts'
+import { inkRows, lightOf } from './pictureInk.ts'
 import { spaceRef, spaceScope, workItem, workItemRef } from './planningFixtures.ts'
 import { WORDS } from './questionGroupsPage.ts'
 import { ofPurpose, openKinds } from './questionKindsPage.ts'
@@ -92,6 +99,54 @@ async function cutByTheRule(
   await expect(hint(page)).toHaveText(LABEL)
 }
 
+/** Pixels a page's one is drawn in, so a row of ink is a quarter of the page's pixel. */
+const SCALE = 4
+
+/**
+ * The chosen words, the field's placeholder after a press and the first letter typed after it
+ * stand their ink on the same rows: read over the first letter, the «M» all three begin with.
+ */
+async function onTheFieldsLine(page: Page, scope: Locator, label: string) {
+  const words = scope.locator('[data-chosen-words]')
+  await page.mouse.move(0, 0)
+  const letter = await words.evaluate((node) => {
+    const first = document.createRange()
+    if (node.firstChild) first.setStart(node.firstChild, 0)
+    if (node.firstChild) first.setEnd(node.firstChild, 1)
+    const box = first.getBoundingClientRect()
+    const line = node.getBoundingClientRect()
+    return { x: box.left, y: line.top - 6, width: box.width, height: line.height + 12 }
+  })
+  const clip = {
+    x: Math.floor(letter.x),
+    y: Math.floor(letter.y),
+    width: Math.ceil(letter.width) + 1,
+    height: Math.ceil(letter.height),
+  }
+  const drawn = await page.screenshot({ clip })
+  const combo = scope.getByRole('combobox', { name: label })
+  await combo.click()
+  await expect(words).toHaveCount(0)
+  await expect(combo).toHaveAttribute('placeholder', LABEL)
+  const pressed = await page.screenshot({ clip })
+  await page.keyboard.type('M')
+  await expect(combo).toHaveValue('M')
+  const typed = await page.screenshot({ clip })
+  const pictures = await lightOf(page, [drawn, pressed, typed])
+  const [chosen, placeholder, letterTyped] = pictures.map((picture) => inkRows(picture))
+  expect(chosen?.first, JSON.stringify(chosen)).toBeGreaterThanOrEqual(0)
+  for (const [state, rows] of [
+    ['the placeholder after a press', placeholder],
+    ['the first letter typed', letterTyped],
+  ] as const) {
+    expect
+      .soft(rows, `${state} against the chosen words, in rows of 1/${String(SCALE)} px`)
+      .toEqual(chosen)
+  }
+}
+
+test.use({ deviceScaleFactor: SCALE })
+
 for (const locale of ['ru', 'en'] as const)
   for (const width of WIDTHS) {
     const words = WORDS[locale]
@@ -116,6 +171,7 @@ for (const locale of ['ru', 'en'] as const)
       await expect(putOff).toBeEnabled()
       stayedPut(await places(), before)
       await cutByTheRule(page, one, words.card, () => page.clock.runFor(1000))
+      await onTheFieldsLine(page, one, words.card)
     })
 
     test(`at ${width}px in ${locale} a long card chosen in the card's «Put off» moves nothing and is cut with its hint`, async ({
@@ -145,5 +201,6 @@ for (const locale of ['ru', 'en'] as const)
       stayedPut(await places(), before)
       // The hint comes after half a second's rest on the page's own clock.
       await cutByTheRule(page, dialog, words.card, () => Promise.resolve())
+      await onTheFieldsLine(page, dialog, words.card)
     })
   }

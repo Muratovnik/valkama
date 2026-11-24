@@ -21,6 +21,12 @@
  * An error is part of the field too: it stands under the control. A form that only
  * says "fill in the required fields" at its foot leaves the reader to find which field
  * it meant. It carries a mark the hint has not (`FieldError`).
+ *
+ * What stands under the control is given room only while it stands, so a reason appearing, or
+ * one taking a hint's place on more lines than the hint took, moves everything under the field.
+ * A field whose words change as it is typed in names every hint and every error it can come to
+ * say (`heldWords`), each as it would stand alone, and holds the room of the tallest from the
+ * start (`heldRoom.css`); the copies that hold it are neither seen nor heard.
  */
 import { computed, useId } from 'vue'
 
@@ -33,6 +39,8 @@ const props = withDefaults(
     /** The control's id, for a host that names it itself. */
     controlId?: string
     error?: string
+    /** Every hint and error the field can come to say, whose room it holds; see above. */
+    heldWords?: { errors?: readonly string[]; hints?: readonly string[] }
     /**
      * Keep the label for assistive technology only, for a field in a toolbar
      * whose placeholder and neighbours already say what it is for.
@@ -40,7 +48,14 @@ const props = withDefaults(
     hideLabel?: boolean
     hint?: string
   }>(),
-  { hint: '', as: 'label', controlId: undefined, error: '', hideLabel: false },
+  {
+    hint: '',
+    as: 'label',
+    controlId: undefined,
+    error: '',
+    heldWords: undefined,
+    hideLabel: false,
+  },
 )
 const ownId = useId()
 const errorId = useId()
@@ -69,19 +84,42 @@ const describedBy = computed(
       :control-id="control"
       :described-by="describedBy"
     />
-    <FieldError
-      v-if="error"
-      :id="errorId"
-      >{{ error }}</FieldError
+    <div
+      v-if="error || hint || heldWords"
+      class="held-room"
     >
-    <small
-      v-if="hint"
-      :id="hintId"
-      class="field-hint"
-      >{{ hint }}</small
-    >
+      <div class="field-said">
+        <FieldError
+          v-if="error"
+          :id="errorId"
+          >{{ error }}</FieldError
+        >
+        <small
+          v-if="hint"
+          :id="hintId"
+          class="field-hint"
+          >{{ hint }}</small
+        >
+      </div>
+      <FieldError
+        v-for="words in heldWords?.errors ?? []"
+        :key="`error ${words}`"
+        class="held-room-unseen"
+        aria-hidden="true"
+        >{{ words }}</FieldError
+      >
+      <small
+        v-for="words in heldWords?.hints ?? []"
+        :key="`hint ${words}`"
+        class="held-room-unseen field-hint"
+        aria-hidden="true"
+        >{{ words }}</small
+      >
+    </div>
   </div>
 </template>
+
+<style scoped src="@/shared/ui/heldRoom.css"></style>
 
 <style scoped>
 /* Its rows stand at the top. Beside a field whose hint takes two lines the cell is taller, and
@@ -103,6 +141,14 @@ const describedBy = computed(
   margin-block-end: calc(-1 * var(--space-label-value));
   color: var(--color-text-muted);
   font: var(--font-field-label);
+}
+
+/* The error over the hint, as two rows of the field stand. */
+.field-said {
+  display: grid;
+  gap: var(--space-label-value);
+  align-content: start;
+  min-width: 0;
 }
 
 .field-hint {

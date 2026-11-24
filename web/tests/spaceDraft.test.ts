@@ -149,7 +149,7 @@ describe('a new space', () => {
 describe('the list «Add project»', () => {
   test('offers projects in no space first, then others’, and holds another space’s default', () => {
     const { draft } = draftOf(ATL, FORM, REGISTERED)
-    const choices = projectChoices(draft, REGISTERED, ATL)
+    const choices = projectChoices(draft, REGISTERED, ATL, 'en')
     assert.deepEqual(
       choices.map((one) => [one.project.project_id, one.from?.space_key ?? null, one.held]),
       [
@@ -164,7 +164,7 @@ describe('the list «Add project»', () => {
     const registered = [project('atlas-web', ATL, true), project('solo', NW, true)]
     const { draft } = draftOf(ATL, FORM, registered)
     const dropped = withoutProject(draft, 'atlas-web')
-    const choices = projectChoices(dropped, registered, ATL)
+    const choices = projectChoices(dropped, registered, ATL, 'en')
     assert.deepEqual(
       choices.map((one) => [one.project.project_id, one.from?.space_key ?? null, one.held]),
       [
@@ -190,7 +190,7 @@ describe('a search in «Add project»', () => {
   ]
 
   test('lists the projects a name matches first, those in no space first among them', () => {
-    const choices = projectChoices(emptyDraft(), registered, null)
+    const choices = projectChoices(emptyDraft(), registered, null, 'en')
     assert.deepEqual(
       namesFirst(choices, ' BEACON ').map((one) => one.project.project_id),
       ['beacon-app', 'beacon', 'docs', 'tools'],
@@ -198,7 +198,7 @@ describe('a search in «Add project»', () => {
   })
 
   test('with nothing typed keeps the projects in no space first, each by name', () => {
-    const choices = projectChoices(emptyDraft(), registered, null)
+    const choices = projectChoices(emptyDraft(), registered, null, 'en')
     assert.deepEqual(
       namesFirst(choices, '').map((one) => one.project.project_id),
       ['beacon-app', 'docs', 'tools', 'beacon'],
@@ -211,7 +211,7 @@ describe('the window’s rows', () => {
     let draft = emptyDraft()
     for (const name of ['Zeta', 'alpha', 'Mid']) draft = withProject(draft, row(name))
     assert.deepEqual(
-      byName(draft.projects).map((one) => one.display_name),
+      byName(draft.projects, 'en').map((one) => one.display_name),
       ['alpha', 'Mid', 'Zeta'],
     )
     assert.deepEqual(
@@ -219,6 +219,40 @@ describe('the window’s rows', () => {
       ['Zeta', 'alpha', 'Mid'],
     )
   })
+})
+
+/**
+ * Names in both scripts, in the order neither language gives them. The interface's language
+ * orders them, whatever the browser's is: Russian puts its own letters before the Latin ones,
+ * English the Latin ones first, each A to Z within a script and Ё beside Е.
+ */
+const MIXED = ['Zeta', 'Ёлка', 'alpha', 'Яблоко', 'Beta', 'Архив', 'Ель']
+const ORDERED = {
+  ru: ['Архив', 'Ёлка', 'Ель', 'Яблоко', 'alpha', 'Beta', 'Zeta'],
+  en: ['alpha', 'Beta', 'Zeta', 'Архив', 'Ёлка', 'Ель', 'Яблоко'],
+} as const
+
+describe('names in two scripts', () => {
+  for (const locale of ['ru', 'en'] as const) {
+    test(`stand as the ${locale} interface orders them, in the rows and in «Add project»`, () => {
+      let draft = emptyDraft()
+      for (const name of MIXED) draft = withProject(draft, row(name))
+      assert.deepEqual(
+        byName(draft.projects, locale).map((one) => one.display_name),
+        ORDERED[locale],
+      )
+      const registered = MIXED.map((name, index) => ({
+        ...project(`p${String(index)}`, null),
+        display_name: name,
+      }))
+      assert.deepEqual(
+        projectChoices(emptyDraft(), registered, null, locale).map(
+          (one) => one.project.display_name,
+        ),
+        ORDERED[locale],
+      )
+    })
+  }
 })
 
 describe('a folder’s path', () => {

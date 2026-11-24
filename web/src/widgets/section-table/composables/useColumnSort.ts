@@ -7,6 +7,8 @@
  */
 import { computed, ref } from 'vue'
 
+import { collatorOf } from '@/shared/lib/collator.ts'
+
 /** How a sorted column's heading says so: its ARIA sort and its arrow. */
 export interface SortMark {
   aria: 'ascending' | 'descending'
@@ -50,7 +52,7 @@ export function useColumnSort<L>(options: {
         : { column, descending: firstWay(column) }
   }
 
-  const collator = computed(() => new Intl.Collator(options.locale()))
+  const collator = computed(() => collatorOf(options.locale()))
 
   const lines = computed(() => {
     const { column, descending } = sort.value

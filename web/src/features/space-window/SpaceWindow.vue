@@ -6,8 +6,11 @@
  * The key is the server's for the name until the reader types one, and can be typed until the
  * space has issued a number: from then on it is in those numbers, and the window shows it as
  * text with that reason; while the key's error says why it cannot be sent, which states the
- * key's form, no hint says the form again. A renamed space says under its name what a new name
- * changes, in a room the edit holds for it, so the fields under the name stay where they stood.
+ * key's form, no hint says the form again; the field holds the room of every hint and reason it
+ * can come to say, so neither moves what stands under it. A renamed space says what a new name
+ * changes under the form, over the foot's buttons and over a refusal there (`DialogFrame`'s
+ * note), in room the edit holds for it from the start, so neither the form nor the foot moves;
+ * held under the name, that room stood empty between the name and the key.
  *
  * A space with no work items can be removed, after a question asked in the window; one with
  * work has no Remove, and where the foot cannot hold all three the way out and the save change
@@ -32,7 +35,10 @@ import DialogFrame from '@/shared/ui/DialogFrame.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VTextInput from '@/shared/ui/VTextInput.vue'
 
-const { t } = useI18n()
+/** Eight of the widest letter, the most room a key of 2 to 8 letters and digits takes. */
+const WIDEST_KEY = 'W'.repeat(8)
+
+const { locale, t } = useI18n()
 const host = useSpaceWindowState()
 const target = computed(() => host?.target.value ?? null)
 const opened = computed(() => target.value !== null)
@@ -42,6 +48,7 @@ const {
   error,
   gap,
   keyError,
+  keyReasons,
   notice,
   origin,
   phase,
@@ -84,8 +91,21 @@ const keyHint = computed(() => {
     ? t('spaceWindow.keyHint', { key: draft.value.key })
     : t('spaceWindow.keyForm')
 })
+/**
+ * Every hint and reason the key's field can come to say, whose room it holds from the start, so
+ * a reason appearing or another taking its place moves nothing under the field: given room only
+ * while it stood, a reason a line longer than the hint pushed the projects down. The hint that
+ * names the key holds the room of the widest key there can be.
+ */
+const keyWords = computed(() => ({
+  hints: [
+    t('spaceWindow.keyHint', { key: WIDEST_KEY }),
+    t(origin.value ? 'spaceWindow.keyMoves' : 'spaceWindow.keyForm'),
+  ],
+  errors: keyReasons.value,
+}))
 const choices = computed(() =>
-  projectChoices(draft.value, registered.value, origin.value?.ref ?? null),
+  projectChoices(draft.value, registered.value, origin.value?.ref ?? null, locale.value),
 )
 const takenIds = computed(() => registered.value.map((project) => project.project_id))
 const removable = computed(() => origin.value !== null && origin.value.workItems === 0)
@@ -111,13 +131,15 @@ const registryLine = computed(() =>
 const closeLabel = computed(() => (notice.value ? t('spaceWindow.close') : t('spaceWindow.cancel')))
 const busy = computed(() => saving.value || phase.value === 'reading')
 /**
- * What a new name changes, said under the name once it differs from the space's, in a room the
- * edit holds for it from the start: given room only as it came, it pushed the whole form down
- * under the caret at the first letter typed.
+ * What a new name changes, said over the foot once the name differs from the space's, in a room
+ * the edit holds for it from the start: given room only as it came, it pushed the whole form
+ * down under the caret at the first letter typed.
  */
 const renameWords = computed(() =>
   origin.value ? t('spaceWindow.renamed', { key: origin.value.key }) : '',
 )
+/** The words while the name differs from the space's, and none before. */
+const renameNote = computed(() => (renamed.value ? renameWords.value : ''))
 const renameHintId = useId()
 /** The name is described by what a new name changes while it stands, and by nothing before. */
 const nameDescribedBy = computed(() => (renamed.value ? renameHintId : undefined))
@@ -146,6 +168,9 @@ const submitLabel = computed(() => {
     :close-label="closeLabel"
     :busy="busy"
     :error="error"
+    :note="renameNote"
+    :note-id="renameHintId"
+    :held-note="renameWords"
     steady-scroll
     @close="close"
     @submit="save"
@@ -173,32 +198,14 @@ const submitLabel = computed(() => {
       <VButton @click="retry">{{ t('spaceWindow.retry') }}</VButton>
     </div>
     <template v-else>
-      <div class="space-name">
-        <VTextInput
-          ref="nameField"
-          v-model="draft.name"
-          autocomplete="off"
-          :label="t('spaceWindow.name')"
-          :maxlength="200"
-          :describedby="nameDescribedBy"
-        />
-        <div
-          v-if="origin"
-          class="held-room"
-        >
-          <small
-            v-if="renamed"
-            :id="renameHintId"
-            class="space-name-hint"
-            >{{ renameWords }}</small
-          >
-          <small
-            class="held-room-unseen space-name-hint"
-            aria-hidden="true"
-            >{{ renameWords }}</small
-          >
-        </div>
-      </div>
+      <VTextInput
+        ref="nameField"
+        v-model="draft.name"
+        autocomplete="off"
+        :label="t('spaceWindow.name')"
+        :maxlength="200"
+        :describedby="nameDescribedBy"
+      />
       <div
         v-if="keyLocked && origin"
         class="space-key-locked"
@@ -219,6 +226,7 @@ const submitLabel = computed(() => {
         :spellcheck="false"
         :hint="keyHint"
         :error="keyError"
+        :held-words="keyWords"
         @update:model-value="typeKey"
       />
       <SpaceProjects
@@ -279,21 +287,7 @@ const submitLabel = computed(() => {
   </DialogFrame>
 </template>
 
-<style scoped src="@/shared/ui/heldRoom.css"></style>
-
 <style scoped>
-/* The name's field and what a new name changes, as a field and its hint stand. */
-.space-name {
-  display: grid;
-  gap: var(--space-label-value);
-  min-width: 0;
-}
-
-.space-name-hint {
-  color: var(--color-text-muted);
-  font: var(--font-detail);
-}
-
 /* The way out and the save change lines together: where the foot cannot hold all three, Remove
    stands alone on the first line and the two on the next, rather than the save alone. */
 .space-foot-pair {

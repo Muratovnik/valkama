@@ -3,14 +3,20 @@
  * The space's projects in its window: one row each, the default chosen among them, a way to
  * add a registered project and a way to register one from a folder.
  *
- * Each row is a radio of one group, which picks the default, then the project's name, its
- * folder and its remove; the rows stand in the order of their names. The default has no remove
- * while the space has other projects: the row repeats the server's rule rather than meeting its
- * refusal. The rows share their columns, so every folder starts at one edge; a long name wraps
- * within its share of the row rather than taking the folder's room, and the radio stands on the
- * name's first line. A folder too long for its row is cut in its middle, so its last folder,
- * which tells one project from the next, stays whole while the row has room for it; it is shown
- * whole in its hint. On a narrow window the folder goes under the name.
+ * Each row is a radio of one group, which picks the default, then the project's name, its folder
+ * and its remove; the rows stand in the order of their names, as the interface's language orders
+ * them. The default has no remove while the space has other projects: the row repeats the
+ * server's rule rather than meeting its refusal. The rows share their columns, so every folder
+ * starts at one edge; a long name wraps within its share of the row rather than taking the
+ * folder's room, and the radio stands on the name's first line. A folder too long for its row is
+ * cut in its middle, so its last folder, which tells one project from the next, stays whole while
+ * the row has room for it; it is shown whole in its hint. On a narrow window the folder goes
+ * under the name.
+ *
+ * The start of a cut folder is as wide as what it shows of itself and its «…», worked out from
+ * the room its row leaves it (`ellipsisFit`), so the «…» stands against the last folder in every
+ * row: given all that room, the start hid whole letters and left what remained of one empty
+ * after its «…», from none to some 8px a row.
  *
  * «Add project» is a search over the registered projects the space does not have: those in
  * no space first, then those of other spaces, which say what moving one means. What is typed
@@ -19,10 +25,13 @@
  * opens `SpaceFolderProject`.
  *
  * Every row carries `data-project` with its id; its parts are `data-part` `default`, `name`,
- * `root` (its last folder `root-tail`), `fresh`, `remove`.
+ * `root` (what comes before its last folder `root-head`, its last folder `root-tail`), `fresh`,
+ * `remove`.
  */
-import { computed, ref, useId } from 'vue'
+import { computed, ref, shallowRef, useId, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
+
+import { useResizeObserver } from '@vueuse/core'
 
 import {
   byName,
@@ -36,6 +45,7 @@ import {
 import type { ProjectChoice, SpaceDraft } from '@/features/space-window/spaceDraft.ts'
 import SpaceFolderProject from '@/features/space-window/SpaceFolderProject.vue'
 
+import { ellipsisFit } from '@/shared/lib/ellipsisFit.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import SearchCombobox from '@/shared/ui/SearchCombobox.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
@@ -49,13 +59,16 @@ const props = defineProps<{
   takenIds: readonly string[]
 }>()
 const draft = defineModel<SpaceDraft>({ required: true })
-const { t } = useI18n()
+const { locale, t } = useI18n()
 const group = useId()
 
 /** What is typed in «Add project», which puts the projects it names first. */
 const query = ref('')
 const rows = computed(() =>
-  byName(draft.value.projects).map((project) => ({ ...project, path: pathParts(project.root) })),
+  byName(draft.value.projects, locale.value).map((project) => ({
+    ...project,
+    path: pathParts(project.root),
+  })),
 )
 
 const options = computed<ChoiceOption[]>(() =>
@@ -91,6 +104,35 @@ function add(id: string) {
 }
 
 const folderOpen = ref(false)
+
+/**
+ * How wide each cut folder's start stands, by its project: what it shows of itself and its «…»
+ * in the room the row leaves it beside the last folder, the «…» measured on one drawn in the
+ * folders' type (`dots`). Read again whenever a folder's box or its last folder's changes, which
+ * covers another width, another row and the fonts arriving.
+ */
+const dots = useTemplateRef<HTMLElement>('dots')
+const roots = useTemplateRef<HTMLElement[]>('roots')
+const tails = useTemplateRef<HTMLElement[]>('tails')
+const headFits = shallowRef<Partial<Record<string, number>>>({})
+function fitHeads() {
+  const fits: Partial<Record<string, number>> = {}
+  for (const root of roots.value ?? []) {
+    const words = root.querySelector('[data-part="root-head"]')?.firstChild
+    const tail = root.querySelector<HTMLElement>('[data-part="root-tail"]')
+    const project = root.closest<HTMLElement>('[data-project]')?.dataset.project
+    if (!(words instanceof Text) || !tail || !dots.value || project === undefined) continue
+    const room = root.getBoundingClientRect().width - tail.getBoundingClientRect().width
+    const fit = ellipsisFit(words, room, dots.value.getBoundingClientRect().width)
+    if (fit !== null) fits[project] = fit
+  }
+  headFits.value = fits
+}
+useResizeObserver(() => [...(roots.value ?? []), ...(tails.value ?? [])], fitHeads)
+const headFit = (project: string) => {
+  const fit = headFits.value[project]
+  return fit === undefined ? undefined : { '--root-head-fit': `${String(fit)}px` }
+}
 </script>
 
 <template>
@@ -99,6 +141,12 @@ const folderOpen = ref(false)
     :aria-label="t('spaceWindow.projects')"
   >
     <h3 class="projects-head">{{ t('spaceWindow.projects') }}</h3>
+    <span
+      ref="dots"
+      class="root-dots"
+      aria-hidden="true"
+      >…</span
+    >
     <p
       v-if="!draft.projects.length"
       class="projects-none"
@@ -135,14 +183,18 @@ const folderOpen = ref(false)
           >{{ project.display_name }}</label
         >
         <span
+          ref="roots"
           v-tooltip.clipped="project.root"
           class="project-root"
           data-part="root"
           ><span
             v-if="project.path.head"
             class="root-head one-line"
+            data-part="root-head"
+            :style="headFit(project.project_id)"
             >{{ project.path.head }}</span
           ><span
+            ref="tails"
             class="root-tail one-line"
             data-part="root-tail"
             :class="{ 'is-whole': !project.path.head }"
@@ -281,7 +333,8 @@ const folderOpen = ref(false)
 /* Cut in its middle: what comes before its last folder gives way first, ending in «…», and
    the last folder, with the separator before it, stays whole while the row has room for it,
    then is cut at its end too. A little of the start is always left, so the «…» says a part is
-   missing. */
+   missing. A cut start is as wide as what it shows (`--root-head-fit`), so its «…» stands
+   against the last folder. */
 .project-root {
   display: flex;
   min-width: 0;
@@ -290,9 +343,21 @@ const folderOpen = ref(false)
   white-space: nowrap;
 }
 
+/* A «…» in the folders' type, never seen, that a cut start is measured with. */
+.root-dots {
+  position: absolute;
+  font-size: var(--font-size-dense);
+  white-space: pre;
+  pointer-events: none;
+  visibility: hidden;
+}
+
 .root-head {
+  --root-head-fit: none;
+
   flex: 0 1 auto;
   min-width: 0;
+  max-width: var(--root-head-fit);
 }
 
 .root-tail {

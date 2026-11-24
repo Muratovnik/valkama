@@ -18,6 +18,7 @@ import type {
   SpaceEdit,
   SpaceForm,
 } from '@/shared/api/spaceWindowApi.ts'
+import { collatorOf } from '@/shared/lib/collator.ts'
 
 export const SPACE_KEY_FORM = /^[A-Z][A-Z0-9]{1,7}$/u
 const PROJECT_ID_FORM = /^[a-z][a-z0-9-]{0,159}$/u
@@ -144,13 +145,15 @@ export interface ProjectChoice {
 
 /**
  * The registered projects that can be offered: those in no space first, then those of
- * other spaces, each by name. A project the draft has is not offered; one the edited space
- * had and the draft dropped is offered again as in no space, since it has not left yet.
+ * other spaces, each by name in the order of the interface's language (`locale`). A project
+ * the draft has is not offered; one the edited space had and the draft dropped is offered
+ * again as in no space, since it has not left yet.
  */
 export function projectChoices(
   draft: SpaceDraft,
   registered: readonly RegisteredProject[],
   own: PlanningSpaceRef | null,
+  locale: string,
 ): ProjectChoice[] {
   const inDraft = new Set(draft.projects.map((one) => one.project_id))
   const others = (space: PlanningSpaceRef, id: string) =>
@@ -171,9 +174,11 @@ export function projectChoices(
       }
     })
   const order = (choice: ProjectChoice) => (choice.from === null ? 0 : 1)
+  const collator = collatorOf(locale)
   return choices.sort(
     (one, two) =>
-      order(one) - order(two) || one.project.display_name.localeCompare(two.project.display_name),
+      order(one) - order(two) ||
+      collator.compare(one.project.display_name, two.project.display_name),
   )
 }
 
@@ -191,9 +196,14 @@ export function namesFirst(choices: readonly ProjectChoice[], query: string): Pr
   return [...choices].sort((one, two) => named(one) - named(two))
 }
 
-/** The space's projects as its window lists them: by name, whatever order they joined in. */
-export const byName = (projects: readonly DraftProject[]): DraftProject[] =>
-  [...projects].sort((one, two) => one.display_name.localeCompare(two.display_name))
+/**
+ * The space's projects as its window lists them: by name in the order of the interface's
+ * language (`locale`), whatever order they joined in.
+ */
+export function byName(projects: readonly DraftProject[], locale: string): DraftProject[] {
+  const collator = collatorOf(locale)
+  return [...projects].sort((one, two) => collator.compare(one.display_name, two.display_name))
+}
 
 /** Where a path ends once a closing separator is left off. */
 const pathEnd = (root: string) => root.replace(/[\\/]+$/u, '').length

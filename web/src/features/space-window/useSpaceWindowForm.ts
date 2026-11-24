@@ -157,6 +157,18 @@ export function useSpaceWindowForm(
     return key && !SPACE_KEY_FORM.test(key) ? t('spaceWindow.reasons.key_invalid') : ''
   })
 
+  /**
+   * Every reason `keyError` can come to say, for the room the key's field holds for them: a
+   * typed key's form, and for a new space why the server gives its name no key, or the form
+   * where a reason has no words of its own.
+   */
+  const keyReasons = computed(() => [
+    t('spaceWindow.reasons.key_invalid'),
+    ...(origin.value === null
+      ? [t('spaceWindow.reasons.key_underivable'), t('spaceWindow.keyForm')]
+      : []),
+  ])
+
   const gap = computed(() => draftGap(draft.value))
 
   async function send(save: Parameters<typeof saveSpace>[0], before: PlanningSpaceRef | null) {
@@ -219,6 +231,7 @@ export function useSpaceWindowForm(
     error,
     gap,
     keyError,
+    keyReasons,
     notice,
     origin,
     phase,
