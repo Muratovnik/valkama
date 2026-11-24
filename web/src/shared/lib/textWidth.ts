@@ -51,3 +51,22 @@ export function drawnWidth(text: string, font: string, figures: Figures = 'propo
   const one = figureWidth(font)
   return digits.reduce((sum, digit) => sum + one - drawn.measureText(digit).width, width)
 }
+
+/** The font a canvas draws an element's words in: its own, or in another `weight`. */
+export const canvasFont = (style: CSSStyleDeclaration, weight = style.fontWeight) =>
+  `${style.fontStyle} ${weight} ${style.fontSize} ${style.fontFamily}`
+
+/** How an element's figures are drawn, as its style sets them. */
+export const figuresOf = (style: CSSStyleDeclaration): Figures =>
+  style.fontVariantNumeric.includes('tabular-nums') ? 'tabular' : 'proportional'
+
+/**
+ * Layout places a box on a grid of 1/64 px and rounds a run of text up to it, so the canvas's
+ * exact advance is a hair narrower than the box the words get; rounded the same way, words
+ * counted as fitting a box are never cut there.
+ */
+const LAYOUT_UNIT = 64
+
+/** The width a run of words is laid out at: `drawnWidth` rounded up to the layout's grid. */
+export const laidOutWidth = (text: string, font: string, figures: Figures = 'proportional') =>
+  Math.ceil(drawnWidth(text, font, figures) * LAYOUT_UNIT) / LAYOUT_UNIT

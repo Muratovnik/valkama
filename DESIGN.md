@@ -891,8 +891,10 @@ whatever the browser's language is, so a Russian interface puts Cyrillic names b
 ones: a radio that makes it the default, on the name's first line however the name wraps; its
 name, which takes at most two fifths of the row and wraps there rather than take its folder's
 room; its folder, cut in its middle so that its last folder, which tells one project from the
-next, stays whole while the row has room for it, and shown whole in its hint; and its remove.
-The default has no remove while the space has other projects, so the window repeats the
+next, stays whole while the row has room for it, and shown whole in its hint, its «…» against
+that last folder in every row: given the whole room before the last folder, the cut start hid
+whole letters and left what was left of one empty after its «…», from none to some 8px; and its
+remove. The default has no remove while the space has other projects, so the window repeats the
 server's rule rather than meeting its refusal, and the first project added becomes the default
 by itself. «Add project» searches the registered projects the space does not have, those in no
 space first, then those of other spaces with what moving one means, each part by name as the

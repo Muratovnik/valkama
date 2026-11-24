@@ -21,18 +21,14 @@ import type { Ref } from 'vue'
 
 import { useEventListener, useResizeObserver } from '@vueuse/core'
 
-import { drawnWidth } from '@/shared/lib/textWidth.ts'
+import { canvasFont, laidOutWidth } from '@/shared/lib/textWidth.ts'
 import { segmentColumns } from '@/shared/ui/segmentColumns.ts'
-
-/** Layout rounds a run of words up to 1/64 px, so a measure rounded the same way is never short. */
-const LAYOUT_UNIT = 64
 
 const px = (value: string) => Number.parseFloat(value) || 0
 
 /** A segment's words drawn in `weight`, or in its own. */
 function wordsWidth(segment: HTMLElement, style: CSSStyleDeclaration, weight?: string): number {
-  const font = `${style.fontStyle} ${weight ?? style.fontWeight} ${style.fontSize} ${style.fontFamily}`
-  return Math.ceil(drawnWidth(segment.textContent.trim(), font) * LAYOUT_UNIT) / LAYOUT_UNIT
+  return laidOutWidth(segment.textContent.trim(), canvasFont(style, weight))
 }
 
 /** What a wrapped row is laid out by, read while it stands on its one line. */

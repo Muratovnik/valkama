@@ -28,7 +28,7 @@ import { facetMarks } from '@/entities/work-item/utils/facets.ts'
 import type { FacetContext, FacetSubject, FacetSurface } from '@/entities/work-item/utils/facets.ts'
 import { chipsThatFit } from '@/entities/work-item/utils/labelRoom.ts'
 
-import { drawnWidth } from '@/shared/lib/textWidth.ts'
+import { canvasFont, figuresOf, laidOutWidth } from '@/shared/lib/textWidth.ts'
 import type { Figures } from '@/shared/lib/textWidth.ts'
 
 /** What every line measures with, read from the first drawn chip and kept for the page. */
@@ -46,18 +46,11 @@ interface ChipMetrics {
 const metrics = shallowRef<ChipMetrics | null>(null)
 const textWidths = new Map<string, number>()
 
-/**
- * Layout places a box on a grid of 1/64 px and rounds a run of text up to it,
- * so the canvas's exact advance is a hair narrower than the box the words
- * get; rounded the same way, a chip counted as fitting is never cut.
- */
-const LAYOUT_UNIT = 64
-
 /** The drawn width of some words in the chips' font, cached for the page. */
 function textWidth(text: string, font: string, figures: Figures): number {
   const known = textWidths.get(text)
   if (known !== undefined) return known
-  const width = Math.ceil(drawnWidth(text, font, figures) * LAYOUT_UNIT) / LAYOUT_UNIT
+  const width = laidOutWidth(text, font, figures)
   textWidths.set(text, width)
   return width
 }
@@ -78,8 +71,8 @@ function readMetrics(line: Element, chip: Element): ChipMetrics {
   const chrome = [chip, ...chip.children].reduce((sum, part) => sum + inlineChrome(part), 0)
   return {
     chrome,
-    figures: style.fontVariantNumeric.includes('tabular-nums') ? 'tabular' : 'proportional',
-    font: `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`,
+    figures: figuresOf(style),
+    font: canvasFont(style),
     gap: Number.parseFloat(getComputedStyle(line).columnGap) || 0,
   }
 }

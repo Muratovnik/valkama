@@ -3,14 +3,22 @@
  * in English and in Russian, by the window's contract in DESIGN.md («The space window»): the
  * key's field holds the room of every hint and reason it can come to say, so a reason appearing
  * or another taking its place moves nothing under the field. At 390px a reason a line longer than
- * the hint pushed the projects down by a line.
+ * the hint pushed the projects down by a line. Each folder cut in its middle ends its start in a
+ * «…» that stands as far from its last folder as every other row's: the start's box gave way
+ * by the pixel while its words gave way by the letter, so the space after the «…» was what was
+ * left of a letter, from none to some 8px.
  *
  * The server is `spaceWindowBackend.ts`'s double.
  */
 import { expect } from '@playwright/test'
 import type { Locator } from '@playwright/test'
 
-import { installSpaceWindowBackend, longSpaceWorld } from './spaceWindowBackend.ts'
+import {
+  installSpaceWindowBackend,
+  LONG_SPACE_NAMES,
+  longSpaceWorld,
+} from './spaceWindowBackend.ts'
+import { ellipsisGaps } from './spaceWindowMeasures.ts'
 import { openPortfolio, WORDS } from './spaceWindowPage.ts'
 import { test } from './test.ts'
 
@@ -59,6 +67,31 @@ for (const lang of ['en', 'ru'] as const)
             .soft(await headingTop(heading), `the key «${typed}»: ${said}`)
             .toBeCloseTo(start, 1)
         }
+      })
+
+      test.describe('drawn at twice the pixels', () => {
+        test.use({ deviceScaleFactor: 2 })
+
+        test('every folder cut in its middle stands its «…» as far from its last folder', async ({
+          page,
+        }) => {
+          await installSpaceWindowBackend(page, longSpaceWorld())
+          await openPortfolio(page, { width, height })
+          await page.getByRole('button', { name: words.configure('LNG') }).click()
+          const dialog = page.getByRole('dialog', { name: words.editTitle('LNG') })
+          await expect(dialog.locator('[data-project]').first()).toBeVisible()
+          await expect(dialog).toHaveCSS('transform', 'none')
+          await page.mouse.move(0, 0)
+          const gaps = await ellipsisGaps(page, dialog, 2)
+          // Every row's folder starts with the same long path, which no row holds whole.
+          expect(gaps).toHaveLength(LONG_SPACE_NAMES.length)
+          const each = gaps.map(({ gap }) => gap)
+          expect(
+            each.every((gap) => Number.isFinite(gap)),
+            JSON.stringify(gaps),
+          ).toBe(true)
+          expect(Math.max(...each) - Math.min(...each), JSON.stringify(gaps)).toBeLessThanOrEqual(1)
+        })
       })
 
       test('a name that gives no key and a key typed after it move nothing under the key', async ({

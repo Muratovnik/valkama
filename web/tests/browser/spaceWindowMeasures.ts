@@ -8,6 +8,7 @@ import { expect } from '@playwright/test'
 import type { Locator, Page, TestInfo } from '@playwright/test'
 
 import { record } from './analyticsPage.ts'
+import { inkGap, lightOf } from './pictureInk.ts'
 
 /** How far apart the farthest of these edges are. */
 const spread = (edges: number[]) => (edges.length ? Math.max(...edges) - Math.min(...edges) : 0)
@@ -148,3 +149,27 @@ export const inView = (element: Locator) =>
     const hit = y < innerHeight && y > 0 ? document.elementFromPoint(x, y) : null
     return { top: box.top, bottom: box.bottom, height: innerHeight, seen: node.contains(hit) }
   })
+
+/**
+ * How far each folder cut in its middle stands its «…» from its last folder, in CSS pixels at
+ * the page's `scale`: from the last column of ink before the last folder's box to the first
+ * column of ink in it, read off a picture of the folder, since no box ends where the «…» does.
+ * Only the folders whose start is cut (`root-head`) are measured.
+ */
+export async function ellipsisGaps(page: Page, dialog: Locator, scale: number) {
+  const gaps: { gap: number; project: string }[] = []
+  for (const row of await dialog.locator('[data-project]').all()) {
+    const root = row.locator('[data-part="root"]')
+    const split = await root.evaluate((node) => {
+      const head = node.querySelector<HTMLElement>('[data-part="root-head"]')
+      const tail = node.querySelector('[data-part="root-tail"]')
+      const cut = head && tail && head.scrollWidth > head.clientWidth
+      return cut ? tail.getBoundingClientRect().left - node.getBoundingClientRect().left : null
+    })
+    if (split === null) continue
+    const [picture] = await lightOf(page, [await root.screenshot({ animations: 'disabled' })])
+    const gap = picture ? inkGap(picture, Math.round(split * scale)) : Number.NaN
+    gaps.push({ gap: gap / scale, project: (await row.getAttribute('data-project')) ?? '' })
+  }
+  return gaps
+}
