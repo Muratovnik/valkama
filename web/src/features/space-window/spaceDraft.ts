@@ -178,16 +178,50 @@ export function projectChoices(
 }
 
 /**
+ * The choices as a search lists them: those whose name holds what was typed first, then those
+ * only their note matches, such as their folder; each part keeps the order it was given in, so
+ * the projects in no space still come first among the names. Listed in that order alone, a
+ * search for a name found it last, behind every project whose folder held the same word.
+ */
+export function namesFirst(choices: readonly ProjectChoice[], query: string): ProjectChoice[] {
+  const needle = query.trim().toLocaleLowerCase()
+  if (!needle) return [...choices]
+  const named = (choice: ProjectChoice) =>
+    choice.project.display_name.toLocaleLowerCase().includes(needle) ? 0 : 1
+  return [...choices].sort((one, two) => named(one) - named(two))
+}
+
+/** The space's projects as its window lists them: by name, whatever order they joined in. */
+export const byName = (projects: readonly DraftProject[]): DraftProject[] =>
+  [...projects].sort((one, two) => one.display_name.localeCompare(two.display_name))
+
+/** Where a path ends once a closing separator is left off. */
+const pathEnd = (root: string) => root.replace(/[\\/]+$/u, '').length
+
+/** The folder's own name: the last part of its path, without a closing separator. */
+export function folderNameOf(root: string): string {
+  const path = root.trim()
+  return path.slice(0, pathEnd(path)).split(/[\\/]/u).pop() ?? ''
+}
+
+/**
+ * A folder's path in the two parts a row cuts it between: all but its last folder, which a row
+ * too narrow for the whole path cuts at its end, and the last folder with the separator before
+ * it, which stays whole while the row has room for it. Together they are the path as written;
+ * one with no separator is its last folder alone.
+ */
+export function pathParts(root: string): { head: string; tail: string } {
+  const end = pathEnd(root)
+  const at = Math.max(root.lastIndexOf('/', end - 1), root.lastIndexOf('\\', end - 1))
+  return at > 0 ? { head: root.slice(0, at), tail: root.slice(at) } : { head: '', tail: root }
+}
+
+/**
  * The id a folder's project is offered under: the folder's own name in the form a project
  * id takes, lower case with hyphens. Empty when the name leaves nothing that form takes.
  */
 export function projectIdOf(root: string): string {
-  const folder =
-    root
-      .replace(/[\\/]+$/u, '')
-      .split(/[\\/]/u)
-      .pop() ?? ''
-  const id = folder
+  const id = folderNameOf(root)
     .toLowerCase()
     .replaceAll(/[^a-z0-9-]+/gu, '-')
     .replace(/^[^a-z]+/u, '')

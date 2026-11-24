@@ -469,10 +469,13 @@ defineExpose({ show })
   overflow-wrap: anywhere;
 }
 
+/* A note may be a folder's path, one word to a browser: it breaks where the line runs out
+   rather than running past the list's edge. */
 .combo-note {
   display: block;
   color: var(--color-text-muted);
   font: var(--font-detail);
+  overflow-wrap: anywhere;
 }
 
 .combo-empty {
