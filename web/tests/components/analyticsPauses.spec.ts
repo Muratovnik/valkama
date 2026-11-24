@@ -23,6 +23,8 @@ import type { VueWrapper } from '@vue/test-utils'
 import { flushPromises } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { LOADING_DELAY_MS } from '@/shared/ui/loadingPresence.ts'
+
 import { serveUsage, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { PAUSES, pausesAnswer, pausesOf } from '../fixtures/pauses.ts'
@@ -301,5 +303,48 @@ describe('the pauses section', () => {
     expect(page.get('.platform-state-panel').text()).toContain(
       'The pauses before model requests could not be loaded.',
     )
+  })
+
+  it('dims the tables of the last period while the new one is read; a read again of the same period dims nothing', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'], now: NOW })
+    let holding = false
+    const reads = stubAnalyticsReads(usage, undefined, () =>
+      holding ? 'hold' : pausesAnswer(PAUSES),
+    )
+    const page = await mountAnalytics({ routeState: { by: 'pauses' } })
+    const dimmed = () => page.get('.pauses-panel').classes('read-pending')
+    const wait = async (ms: number) => {
+      vi.advanceTimersByTime(ms)
+      await flushPromises()
+    }
+    const releaseAll = async () => {
+      for (const held of reads.held.splice(0)) held.release(pausesAnswer(PAUSES))
+      await flushPromises()
+    }
+    expect(environments(page)).toHaveLength(2)
+    expect(dimmed()).toBe(false)
+
+    // The same period read again, for longer than a wait takes to be shown: nothing dims.
+    holding = true
+    await page.get('.analytics-refresh').trigger('click')
+    await flushPromises()
+    await wait(1000)
+    expect(dimmed()).toBe(false)
+    await releaseAll()
+
+    // A new period: the last tables stay, dimmed once the wait is long enough to be seen, and
+    // drawn plainly again once the new read is in.
+    await page.setProps({ routeState: { by: 'pauses', period: 'weeks4' } })
+    await flushPromises()
+    expect(reads.held).toHaveLength(1)
+    expect(environments(page)).toHaveLength(2)
+    expect(dimmed()).toBe(false)
+    await wait(LOADING_DELAY_MS)
+    expect(dimmed()).toBe(true)
+    expect(environments(page)).toHaveLength(2)
+    await releaseAll()
+    await wait(400)
+    expect(environments(page)).toHaveLength(2)
+    expect(dimmed()).toBe(false)
   })
 })

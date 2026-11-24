@@ -34,6 +34,12 @@ export type PausesRead =
 
 export function usePausesRead(options: { scope: () => UsageScope; view: () => AnalyticsView }) {
   const read = shallowRef<PausesRead>({ status: 'loading' })
+  /**
+   * Whether a read of another scope or period is under way while the answer on show stays drawn:
+   * the section dims it then (`useAnewDimmed`), as the other sections dim a new view. A refresh of
+   * the same key dims nothing.
+   */
+  const anew = shallowRef(false)
   let reading: AbortController | null = null
   /** What names the answer on show, so a failed read keeps it only for the same scope and period. */
   let shownFor: string | null = null
@@ -44,12 +50,14 @@ export function usePausesRead(options: { scope: () => UsageScope; view: () => An
     if (!bounds) {
       read.value = { status: 'no-period' }
       shownFor = null
+      anew.value = false
       return
     }
     const controller = new AbortController()
     reading = controller
     const key = period()
     const held = read.value
+    anew.value = held.status === 'ready' && shownFor !== key
     read.value = held.status === 'ready' ? { ...held, refreshing: true } : { status: 'loading' }
     try {
       const { space, projectId } = options.scope()
@@ -59,6 +67,7 @@ export function usePausesRead(options: { scope: () => UsageScope; view: () => An
           read.value = { status: 'loading', progress }
       })
       if (controller.signal.aborted) return
+      anew.value = false
       read.value = {
         status: 'ready',
         pauses,
@@ -69,6 +78,7 @@ export function usePausesRead(options: { scope: () => UsageScope; view: () => An
       shownFor = key
     } catch {
       if (controller.signal.aborted) return
+      anew.value = false
       // A refresh that fails keeps what it would have replaced; a read of another space, project
       // or period does not, or its tables would stand under the new scope's name.
       if (held.status === 'ready' && shownFor === key)
@@ -89,5 +99,5 @@ export function usePausesRead(options: { scope: () => UsageScope; view: () => An
   watch(period, () => void refresh(), { immediate: true })
   onScopeDispose(() => reading?.abort())
 
-  return { read, refresh }
+  return { anew, read, refresh }
 }
