@@ -30,6 +30,12 @@ vi.mock('@/shared/api/planningChainApi.ts', async () => {
   return noChainModule()
 })
 
+// «All spaces» and its empty state read the project registry; this spec is about something else.
+vi.mock('@/shared/api/spaceWindowApi.ts', async () => {
+  const { noRegistryModule } = await import('../support/noRegistry.ts')
+  return noRegistryModule()
+})
+
 vi.mock('@/shared/api/planningApi.ts', async (load) => ({
   ...(await load<typeof import('@/shared/api/planningApi.ts')>()),
   fetchPlanning: vi.fn(),

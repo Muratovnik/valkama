@@ -1,12 +1,18 @@
 import { createI18n } from 'vue-i18n'
 
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import PlanningPortfolio from '@/pages/planning/PlanningPortfolio.vue'
 
 import type { PlatformPlanningReady } from '@/shared/api/platformPlanningTypes.ts'
 import { messages } from '@/shared/i18n/index.ts'
+
+// The line of projects in no space reads the project registry; this spec is about the cards.
+vi.mock('@/shared/api/spaceWindowApi.ts', async () => {
+  const { noRegistryModule } = await import('../support/noRegistry.ts')
+  return noRegistryModule()
+})
 
 const STORE = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 
