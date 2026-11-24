@@ -79,6 +79,9 @@ const WORDS = {
   },
 } as const
 
+/** How far apart the farthest of these edges are. */
+const spread = (edges: number[]) => (edges.length ? Math.max(...edges) - Math.min(...edges) : 0)
+
 /** The open dialog stays inside the window, and nothing in it runs past its own width. */
 async function measureDialog(page: Page, info: TestInfo, tag: string, width: number) {
   const box = await page.getByRole('dialog').evaluate((dialog) => {
@@ -94,7 +97,8 @@ async function measureDialog(page: Page, info: TestInfo, tag: string, width: num
       sideways: body ? body.scrollWidth - body.clientWidth : Number.NaN,
       names,
       rows: [...dialog.querySelectorAll('[data-project]')].map((row) => {
-        const edge = (part: string) => row.querySelector(`[data-part="${part}"]`)?.getBoundingClientRect()
+        const edge = (part: string) =>
+          row.querySelector(`[data-part="${part}"]`)?.getBoundingClientRect()
         const name = row.querySelector('[data-part="name"]')
         const line = document.createRange()
         if (name?.firstChild) line.setStart(name.firstChild, 0)
@@ -104,7 +108,9 @@ async function measureDialog(page: Page, info: TestInfo, tag: string, width: num
         return {
           name: edge('name')?.left ?? Number.NaN,
           root: edge('root')?.left ?? Number.NaN,
-          radioOffLine: radio ? Math.abs(radio.top + radio.height / 2 - (first.top + first.height / 2)) : 0,
+          radioOffLine: radio
+            ? Math.abs(radio.top + radio.height / 2 - (first.top + first.height / 2))
+            : 0,
           removeOver: (edge('remove')?.height ?? 0) - row.getBoundingClientRect().height,
         }
       }),
@@ -116,7 +122,6 @@ async function measureDialog(page: Page, info: TestInfo, tag: string, width: num
   expect(box.names.filter((name) => name.cut > 0.5)).toEqual([])
   // The rows' names and folders each start at one edge, the radio sits on the name's first
   // line and the remove is no taller than its row.
-  const spread = (edges: number[]) => (edges.length ? Math.max(...edges) - Math.min(...edges) : 0)
   expect(spread(box.rows.map((row) => row.name)), JSON.stringify(box.rows)).toBeLessThanOrEqual(1)
   expect(spread(box.rows.map((row) => row.root)), JSON.stringify(box.rows)).toBeLessThanOrEqual(1)
   for (const row of box.rows) {
