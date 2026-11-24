@@ -81,6 +81,9 @@ export function usePageStanding(): ReadStanding {
  * is read, as the product shows every wait (`useLoadingPresence`) — not for a read quicker than a
  * wait takes to be shown, and once shown, long enough not to flash.
  */
-export function useAnewDimmed(standing: ReadStanding, waiting: () => boolean = () => true) {
+export function useAnewDimmed(
+  standing: Pick<ReadStanding, 'anew'>,
+  waiting: () => boolean = () => true,
+) {
   return useLoadingPresence(() => standing.anew.value && waiting()).shown
 }

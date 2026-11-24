@@ -19,10 +19,11 @@ from unittest import mock
 
 from server import cli
 from server.analytics import api, pauses
+from server.planning import service as planning
 from server.projects import project_registry
 from server.telemetry import usage_pauses
 from server.telemetry.usage_steps import NOTICE, NOTIFIED, SERVICE, claude_step, codex_step, is_wake
-from tests.registry_fixtures import project_entry
+from tests.registry_fixtures import project_entry, registry_bytes, space_entry
 from tests.usage_fixtures import HOUR, MINUTE, ORG_A, ORG_B, Case, CodexRun, epoch, stamp, usage
 
 SESSION = "sess-p"
@@ -734,6 +735,86 @@ class ProjectTests(PausesCase):
         self.assertEqual((200, "beta"), (status, body["pauses"]["project"]))
         self.assertEqual({"read": 1, "missing": 0}, body["pauses"]["runs"])
         self.assertEqual({"read": 2, "missing": 0}, json.loads(stream.getvalue())["runs"])
+
+
+class SpaceTests(PausesCase):
+    """A space's report holds the runs with work its board holds, as the usage read narrows to
+    the space: here work on no task, the space's where its session stands in one of its
+    projects. The registry binds alpha to MAIN and beta to BETA."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        planning.create_planning_space(self.conn, name="Beta", key="BETA")
+        self.conn.commit()
+        registry = registry_bytes(
+            [
+                space_entry(self.conn, "alpha", self.root / "alpha", "MAIN"),
+                space_entry(self.conn, "beta", self.root / "beta", "BETA"),
+            ]
+        )
+        patch = mock.patch.object(project_registry, "_read_registry_bytes", lambda: registry)
+        patch.start()
+        self.addCleanup(patch.stop)
+        # Sessions 0 and 2 work under alpha's root, session 1 under beta's, none on a task.
+        for number, folder in {0: "alpha/web", 1: "beta", 2: "alpha"}.items():
+            run = self.session(f"{SESSION}-{number}")
+            run.prompt(0)
+            run.end_turn(2)
+            run.prompt((number + 1) * MINUTE)
+            run.end_turn((number + 1) * MINUTE + 2)
+            self.conn.execute(
+                "UPDATE sessions SET cwd = ? WHERE id = ?",
+                (str(self.root / folder), f"{SESSION}-{number}"),
+            )
+        self.conn.commit()
+
+    def test_a_space_counts_only_the_runs_on_its_work_and_no_space_counts_every_run(
+        self,
+    ) -> None:
+        main = self.report(end=HOUR, space="MAIN")
+        beta = self.report(end=HOUR, space="BETA")
+        every = self.report(end=HOUR)
+        self.assertEqual({"read": 2, "missing": 0}, main["runs"])
+        self.assertEqual([2], [row["requests"] for row in main["rows"]])
+        self.assertEqual({"read": 1, "missing": 0}, beta["runs"])
+        self.assertEqual([1], [row["requests"] for row in beta["rows"]])
+        self.assertEqual({"read": 3, "missing": 0}, every["runs"])
+        self.assertEqual([3], [row["requests"] for row in every["rows"]])
+
+    def test_a_project_of_another_space_brings_none_of_its_places(self) -> None:
+        # MAIN with beta holds MAIN's own items naming beta, and no place in beta's root.
+        report = self.report(end=HOUR, space="MAIN", project="beta")
+        self.assertEqual(([], {"read": 0, "missing": 0}), (report["rows"], report["runs"]))
+
+    def answer(self, path: str = api.PAUSES_PATH, **parameters: str) -> tuple[int, dict]:
+        self.ticks((0, 30 * MINUTE))
+        self.read()
+        self.reader.row_factory = sqlite3.Row
+        period = {"from": "2030-03-04", "to": "2030-03-05", "utc_offset": "0"}
+        query = {name: [value] for name, value in {**period, **parameters}.items()}
+        try:
+            return api.handle_get(self.reader, path, query) or (404, {})
+        except Exception as error:  # noqa: BLE001 -- the envelope is what is checked
+            return api.error_response(error)
+
+    def test_the_read_takes_the_space(self) -> None:
+        status, body = self.answer(space="BETA")
+        self.assertEqual((200, {"read": 1, "missing": 0}), (status, body["pauses"]["runs"]))
+        # Named as the usage read names it: by its key, its id or its name.
+        beta = str(planning.get_planning_space(self.conn, "BETA")["planning_space_id"])
+        for named in (beta, "Beta"):
+            with self.subTest(named):
+                status, body = self.answer(space=named)
+                self.assertEqual((200, {"read": 1, "missing": 0}), (status, body["pauses"]["runs"]))
+
+    def test_a_space_the_store_does_not_hold_is_refused_as_the_usage_read_refuses_it(
+        self,
+    ) -> None:
+        for named in ("NOPE", "x" * 201):
+            with self.subTest(named):
+                refusal = self.answer(space=named)
+                self.assertEqual(400, refusal[0])
+                self.assertEqual(self.answer(api.USAGE_PATH, space=named), refusal)
 
 
 class CommandTests(PausesCase):

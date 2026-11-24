@@ -1,7 +1,7 @@
 /**
  * The pauses read of the Analytics page, against the contract `docs/guides/commands.md` states for
- * `valkama usage pauses --json`: it asks for its period and the caller's offset and nothing else,
- * takes an answer with a wait no request followed and a client whose background work is not
+ * `valkama usage pauses --json`: it asks for its period and the caller's offset, the space and the
+ * project it is scoped to when it is, and nothing else, takes an answer with a wait no request followed and a client whose background work is not
  * known, and refuses what no answer holds — a field nobody declared, another interface, a share
  * past the whole, a wait or a role the contract does not name, and a refusal of the read itself.
  */
@@ -38,6 +38,19 @@ describe('the pauses read', () => {
       utc_offset: '180',
     })
     expect(pauses.rows.map((one) => one.client)).toEqual(['claude', 'claude', 'codex', 'claude'])
+  })
+
+  it('carries the space and the project the page is scoped to, each when it has one', async () => {
+    const fetchMock = answer(pausesAnswer(PAUSES))
+    const asked = async (scope: { project?: string | null; space?: string | null }) => {
+      await fetchPauses({ ...QUERY, ...scope })
+      const url = requestUrl(fetchMock.mock.calls.at(-1)?.[0] ?? '')
+      const { searchParams } = new URL(url, 'https://example.test')
+      return [searchParams.get('space'), searchParams.get('project')]
+    }
+    expect(await asked({ space: 'MAIN', project: 'rover' })).toEqual(['MAIN', 'rover'])
+    expect(await asked({ space: 'MAIN' })).toEqual(['MAIN', null])
+    expect(await asked({ space: null, project: null })).toEqual([null, null])
   })
 
   it('takes a client whose background work is not known and an answer with no row', () => {

@@ -16,10 +16,8 @@ from unittest import mock
 from server.analytics import usage
 from server.planning import service as planning
 from server.projects import project_registry
-from server.store_identity.metadata import read_store_metadata
-from server.store_identity.refs import planning_space_entity
 from tests.analytics_fixtures import DAY, START, UsageStore, day
-from tests.registry_fixtures import project_entry, registry_bytes
+from tests.registry_fixtures import registry_bytes, space_entry
 
 #: The seconds of each stretch, by what it was spent on.
 SPENT = {
@@ -43,18 +41,10 @@ def seconds(*names: str) -> float:
 class SpaceCase(UsageStore):
     def setUp(self) -> None:
         super().setUp()
-        scope = str(read_store_metadata(self.conn)["data_scope_id"])
-
-        def bound(project: str, root: object, board: str, space: str) -> dict:
-            entry = project_entry(project, str(root), board=board)
-            entity = planning_space_entity({"data_scope_id": scope, "space_key": space})
-            entry["planning_binding"] = {**entity, "default": True}
-            return entry
-
         registry = registry_bytes(
             [
-                bound("alpha", self.alpha_root, "Alpha project", "MAIN"),
-                bound("beta", self.beta_root, "Beta project", "BETA"),
+                space_entry(self.conn, "alpha", self.alpha_root, "MAIN", board="Alpha project"),
+                space_entry(self.conn, "beta", self.beta_root, "BETA", board="Beta project"),
             ]
         )
         patch = mock.patch.object(project_registry, "_read_registry_bytes", lambda: registry)
@@ -211,13 +201,15 @@ class SpaceAndProjectTests(SpaceCase):
         )
 
 
-class ProjectRunsTests(SpaceCase):
-    """The runs a project narrows the pauses read to (`usage.project_runs`): those with a
-    stretch the usage read's project filter admits."""
+class ScopedRunsTests(SpaceCase):
+    """The runs a project or a space narrows the pauses read to (`usage.scoped_runs`): those
+    with a stretch the usage read's project filter admits and its space holds."""
 
-    def placed(self, project: str) -> set:
+    def placed(self, project: str | None = None, space: str | None = None) -> set:
         start = START.timestamp()
-        return usage.project_runs(self.conn, project, start=start, end=start + DAY)
+        return usage.scoped_runs(
+            self.conn, start=start, end=start + DAY, project=project, space=space
+        )
 
     def test_a_run_on_an_item_is_the_projects_it_names_and_one_on_none_its_places(self) -> None:
         # MAIN's item naming beta, worked from a session standing in alpha's root: the projects
@@ -228,6 +220,29 @@ class ProjectRunsTests(SpaceCase):
         self.assertEqual((False, True), (("s-task", "") in alpha, ("s-task", "") in beta))
         self.assertEqual((True, False), (("s-in-alpha", "") in alpha, ("s-in-alpha", "") in beta))
         self.assertEqual(set(), self.placed("gamma"))
+
+    def test_a_space_holds_the_runs_on_its_boards_items_and_in_its_places(self) -> None:
+        # BETA's item naming beta alone, worked from a session standing in alpha's root: the
+        # item is BETA's board's, so the run is BETA's and not MAIN's, whatever the place.
+        self.session("s-beta-task", self.alpha_root)
+        self.segment("s-beta-task", 2000, 2001, item=self.items["beta-beta"])
+        self.assertEqual({("s-items", ""), ("s-in-alpha", "")}, self.placed(space="MAIN"))
+        self.assertEqual(
+            {("s-items", ""), ("s-in-beta", ""), ("s-beta-task", "")}, self.placed(space="BETA")
+        )
+
+    def test_a_project_narrows_the_space_as_the_space_read_narrows(self) -> None:
+        # MAIN with beta, a project of another space, holds MAIN's own items naming it alone:
+        # the run on BETA's item naming beta stays out, as does the place in beta's root.
+        self.session("s-main-beta", self.beta_root)
+        self.segment("s-main-beta", 2000, 2001, item=self.items["main-beta"])
+        self.session("s-beta-beta", self.beta_root)
+        self.segment("s-beta-beta", 2002, 2003, item=self.items["beta-beta"])
+        self.assertEqual({("s-items", ""), ("s-main-beta", "")}, self.placed("beta", space="MAIN"))
+
+    def test_a_space_the_store_does_not_hold_is_refused(self) -> None:
+        with self.assertRaises(usage.UsageQueryError):
+            self.placed(space="NOPE")
 
 
 class SpaceRefusalTests(SpaceCase):

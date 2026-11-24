@@ -93,14 +93,16 @@ export function validatePausesAnswer(payload: unknown): Pauses {
 }
 
 /**
- * The period the read is asked for, as the usage read takes one, and the project whose runs it
- * counts; none or null counts every run.
+ * The period the read is asked for, as the usage read takes one, the project whose runs it
+ * counts and the space, by its key, whose board holds the work of the runs it counts; none or
+ * null for either narrows nothing.
  */
 export interface PausesQuery {
   from: string
   to: string
   utcOffset: number
   project?: string | null
+  space?: string | null
 }
 
 /** How long the read waits before it asks again a server that is still reading. */
@@ -131,6 +133,7 @@ export async function fetchPauses(
     utc_offset: String(query.utcOffset),
   })
   if (query.project) parameters.set('project', query.project)
+  if (query.space) parameters.set('space', query.space)
   for (;;) {
     const { response, payload } = await readJsonResponse(`${path}?${parameters}`, { signal })
     if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`)

@@ -13,20 +13,21 @@
  * whose cost is what warming cost. The choice stands until the page is left, as a chart's choice of
  * its table does. A wait no request followed says so in its own words. What a pause, a share,
  * «cold» and the background's column are, and that the period applies and the filters do not, the
- * heading's «ⓘ» says once. In a project's scope it counts the runs with work in that project,
- * each run whole, and says the scope beside its heading as the other sections do
- * (`SectionScope`). An environment's heading breaks between its words and never inside one
+ * heading's «ⓘ» says once. In a space's scope it counts the runs with work its board holds, in a
+ * project's the runs with work in that project, each run whole, and says the scope beside its
+ * heading as the other sections do (`SectionScope`). An environment's heading breaks between its words and never inside one
  * (`vWholeWords`): its model id goes to the next line whole rather than end a line at its
  * hyphen, «claude-» above «opus-5-5».
  *
  * It reads the pauses itself (`usePausesRead`), not the page's usage: when it opens, when the
- * period changes and each time the bar asks a refresh (`refreshes`). Its heading, «ⓘ» and choice
+ * period or the scope changes and each time the bar asks a refresh (`refreshes`). Its heading, «ⓘ» and choice
  * of wait stand from the first moment; its first wait, a first read that failed, a period with no
  * end and an answer with no request stand under them in the product's shared state panel; while a
  * first read waits on a server still parsing transcripts, the wait's own line in that panel says
  * how many runs it has read (`waitDetail`), a line held from the wait's first moment. While it
  * is read again the answer on show stays; a read again that failed keeps it, and a line under the
- * heading says so (`data-note="failed-again"`).
+ * heading says so (`data-note="failed-again"`). A read of another space, project or period dims
+ * the answer on show while it is read, as the other sections dim a new view.
  *
  * What a reader of the page selects it by: each environment's block is `data-environment`, its key;
  * each line of a table is `data-bucket`, the answer's key of its bucket, and the sum `data-bucket`
@@ -38,6 +39,8 @@ import { useI18n } from 'vue-i18n'
 import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
 import SectionScope from '@/pages/analytics/components/SectionScope.vue'
 import { usePausesRead } from '@/pages/analytics/composables/usePausesRead.ts'
+import { useAnewDimmed } from '@/pages/analytics/composables/useReadStanding.ts'
+import type { UsageScope } from '@/pages/analytics/composables/useSharedUsage.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { pauseTables } from '@/pages/analytics/utils/pauseTables.ts'
 import type { PauseFigures, PauseTable } from '@/pages/analytics/utils/pauseTables.ts'
@@ -58,23 +61,29 @@ import { vWholeWords } from '@/shared/ui/wholeWords.ts'
 const props = defineProps<{
   /** How many times the bar asked a refresh: each one reads the pauses again. */
   refreshes: number
+  /** The space and the project the page is scoped to, which the read is narrowed to. */
+  scope: UsageScope
   view: AnalyticsView
-  /** The project the page is scoped to; null on the global page. */
-  projectId?: string | null
 }>()
 
 const { t, locale } = useI18n()
 const words = useSpendingWords()
 const usageWords = useUsageWords()
 
-const { read: pausesRead, refresh } = usePausesRead({
+const {
+  anew,
+  read: pausesRead,
+  refresh,
+} = usePausesRead({
   view: () => props.view,
-  projectId: () => props.projectId ?? null,
+  scope: () => props.scope,
 })
 watch(
   () => props.refreshes,
   () => void refresh(),
 )
+/** Dimmed while another space's or period's read is under way (`readPending.css`). */
+const pending = useAnewDimmed({ anew })
 
 const state = computed<PlatformUiState<Pauses>>(() => {
   const read = pausesRead.value
@@ -192,6 +201,7 @@ const tables = (pauses: Pauses) =>
   <PanelLevel
     class="pauses-panel"
     level="section"
+    :class="{ 'read-pending': pending }"
     :title="t('analytics.pauses.section')"
     :about="about"
   >
@@ -308,6 +318,7 @@ const tables = (pauses: Pauses) =>
 </template>
 
 <style scoped src="@/shared/ui/chartTable.css"></style>
+<style scoped src="@/pages/analytics/components/readPending.css"></style>
 
 <style scoped>
 .pauses-panel {
