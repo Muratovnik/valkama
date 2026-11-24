@@ -9,7 +9,7 @@ import { present } from '../support/present.ts'
 
 // What moves the words over a dialog's foot against a focus that stays where it is, and what
 // `DialogFrame` does then, by the rule in DESIGN.md («Dialogs and drawers»): the focused control
-// and its ring stand clear of the words. happy-dom lays nothing out,
+// and its ring stand clear of the words and whole inside the body. happy-dom lays nothing out,
 // so each box states where it stands and the observer reports a resize when the test says so.
 // A ring is 2px wide and 2px out (`base.css`), and the scroll goes a pixel further, since it
 // stops at a whole one.
@@ -121,4 +121,12 @@ it('words that grow, and a body that gets shorter, under a focus that stays scro
   place(words, 280, 360)
   resized(body, 260)
   expect(scrolled).toHaveBeenLastCalledWith({ top: 40 })
+})
+
+it('a focus that comes over the body’s top edge scrolls down until its ring stands whole', async () => {
+  const { tab, scrolled } = await focusedDialog()
+  place(tab, 98, 122)
+  tab.focus()
+  // From the top edge at 100, down past its ring's top side at 94, and a pixel.
+  expect(scrolled).toHaveBeenCalledWith({ top: -7 })
 })

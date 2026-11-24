@@ -3,9 +3,9 @@
  * The frame of every command dialog: its head, a body that scrolls what it holds, and a foot of
  * buttons. What the form says of a change (`note`) and why a submit was refused (`error`) stand
  * at the end of the body, and while the form is longer than the dialog at its lower edge over
- * what scrolls under it; a control focused from the keyboard is kept clear of those words, as the
- * focus comes to it and while it stays there as the words come, change or grow and as the body
- * gets shorter, so no focus stands under them.
+ * what scrolls under it; a control focused from the keyboard is kept clear of those words, and
+ * its ring whole inside the body, as the focus comes to it and while it stays there as the words
+ * come, change or grow and as the body gets shorter, so no focus stands under them.
  *
  * Its parts are `data-part` `dialog-body` and `said`, the box of those words.
  */
@@ -89,7 +89,7 @@ const saidRoom = computed(() => (saying.value ? saidHeight.value : 0))
 const bodyRoom = computed(() =>
   saidRoom.value ? { '--size-said-room': `${String(saidRoom.value)}px` } : undefined,
 )
-/** A pixel past the ring: a scroll stops at a whole pixel, and left a fraction under the words. */
+/** A pixel past the ring: a scroll stops at a whole pixel, and left a fraction under an edge. */
 const HAIR = 1
 
 /**
@@ -104,25 +104,33 @@ function ringOf(control: HTMLElement) {
 }
 
 /**
- * The control focused from the keyboard in the body, when the words or its ring stand over it,
- * is scrolled up out from under them by as far as they stand at that moment. It runs on every
- * change of where the words stand against that control: as the focus comes to it, and while the
- * focus stays, as the words come, change or grow (their observer) and as the body gets shorter
- * (its own). The browser's own scroll to a text field shows only its caret, and left the rest of
- * a description's box under a refusal; the room the body keeps is measured a frame late; and,
- * answered as the focus came alone, a refusal that arrived after a Shift+Tab back into the form
- * stood over all of the focused tab.
+ * The control focused from the keyboard in the body is scrolled until it stands whole with its
+ * ring in what the body shows: under the body's top edge, and over the words while they stand at
+ * its lower edge, else over that edge itself. A control too tall for that keeps its lower end in
+ * sight. It runs on every change of where those edges stand against that control: as the focus
+ * comes to it, and while the focus stays, as the words come, change or grow (their observer) and
+ * as the body gets shorter (its own). The browser's own scroll to a text field shows only its
+ * caret, and left the rest of a description's box under a refusal; it brought a control flush
+ * with an edge, and cut off the side of the ring there; the room the body keeps is measured a
+ * frame late; and, answered as the focus came alone, a refusal that arrived after a Shift+Tab
+ * back into the form stood over all of the focused tab.
  */
 function keepClear() {
   const scroller = body.value
   const words = said.value
   const focused = document.activeElement
-  if (!scroller || !words || !(focused instanceof HTMLElement)) return
-  if (!scroller.contains(focused) || words.contains(focused)) return
+  if (!scroller || !(focused instanceof HTMLElement)) return
+  if (!scroller.contains(focused) || words?.contains(focused)) return
   if (!focused.matches(':focus-visible')) return
-  const lower = words.getBoundingClientRect().top
-  const under = focused.getBoundingClientRect().bottom + ringOf(focused) + HAIR - lower
+  const top = scroller.getBoundingClientRect().top + scroller.clientTop
+  const edge = top + scroller.clientHeight
+  const lower = words ? Math.min(edge, words.getBoundingClientRect().top) : edge
+  const box = focused.getBoundingClientRect()
+  const ring = ringOf(focused) + HAIR
+  const under = box.bottom + ring - lower
+  const over = top - (box.top - ring)
   if (under > 0) scroller.scrollBy({ top: Math.ceil(under) })
+  else if (over > 0) scroller.scrollBy({ top: -Math.min(Math.ceil(over), Math.floor(-under)) })
 }
 </script>
 
@@ -169,7 +177,7 @@ function keepClear() {
         ref="body"
         class="dialog-frame-body"
         data-part="dialog-body"
-        :class="{ 'is-steady': steadyScroll, 'is-said-over': Boolean(bodyRoom) }"
+        :class="{ 'is-steady': steadyScroll }"
         :style="bodyRoom"
         @focusin="keepClear"
       >
@@ -242,14 +250,17 @@ function keepClear() {
    keeps a stuck box clear of the scroller's padding, so the inset passes over the top of it
    with what scrolls showing through: it is told to stand that much further out
    (`--size-stuck-top`, `--size-stuck-bottom`), at the very edge.
-   While words are stuck over the foot, what the keyboard reaches scrolls clear of them with its
-   focus ring (WCAG 2.4.11, Focus Not Obscured): the body keeps free at its lower edge as much as
-   they stand tall (`--size-said-room`, measured), the ring's offset and width (`base.css`), and
-   a hair, since the scroll stops at a whole pixel and left a fraction of a pixel under them. */
+   What the keyboard reaches scrolls in whole with its focus ring (WCAG 2.4.11, Focus Not
+   Obscured): the body keeps free at its top and lower edges the ring's offset and width
+   (`base.css`) and a hair, since the scroll stops at a whole pixel and left a fraction of a pixel
+   cut (`--size-ring-room`); flush with an edge, the edge cut off that side of the ring. While
+   words are stuck over the foot, the lower edge keeps as much more as they stand tall
+   (`--size-said-room`, measured). */
 .dialog-frame-body {
   --size-stuck-top: calc(-1 * var(--space-dialog-inset));
   --size-stuck-bottom: calc(-1 * var(--space-dialog-inset));
   --size-said-room: 0px;
+  --size-ring-room: calc(var(--space-half) + var(--size-focus-ring) + var(--space-hair));
 
   display: grid;
   gap: var(--space-6);
@@ -257,12 +268,7 @@ function keepClear() {
   min-height: 0;
   padding: var(--space-dialog-inset);
   overflow-y: auto;
-
-  &.is-said-over {
-    scroll-padding-block-end: calc(
-      var(--size-said-room) + var(--space-half) + var(--size-focus-ring) + var(--space-hair)
-    );
-  }
+  scroll-padding-block: var(--size-ring-room) calc(var(--size-said-room) + var(--size-ring-room));
 }
 
 /* Paid for out of the end inset, so the words end where they would with no scrollbar. One that

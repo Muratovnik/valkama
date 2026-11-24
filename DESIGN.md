@@ -1086,7 +1086,8 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   words come, change or grow over it and as the body gets shorter. Without that a
   Tab stopped on remove buttons and fields hidden whole under a rename's words, and
   a refusal that came after a Shift+Tab back into the form stood over the whole of
-  the focused tab.
+  the focused tab. The ring stands whole at the body's top and lower edges too:
+  scrolled flush with an edge, a control lost the side of its ring there.
 - **Inspectors:** persistent right-side detail uses the shared resizable
   inspector. Width is bounded by the actual workspace, not the viewport. The
   panel lives while any item is open and only its content changes with the item:
