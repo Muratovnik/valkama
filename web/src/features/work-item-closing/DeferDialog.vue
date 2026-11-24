@@ -6,13 +6,15 @@
  *
  * «Put off» is not available until both are said, and not for a day already gone or a count that
  * is no whole number from 1 to 999; the reason stands under the fields, where the press would have
- * been read. A refused write keeps the
- * window open with all that was chosen, its reason at the foot.
+ * been read, in the room of every reason it can come to say (`UntilReason`), so the value that
+ * makes it available does not shrink the window and move the fields under the hand. A refused
+ * write keeps the window open with all that was chosen, its reason at the foot.
  */
 import { computed, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import UntilChoice, { untilProblem } from '@/entities/work-item/components/UntilChoice.vue'
+import UntilReason from '@/entities/work-item/components/UntilReason.vue'
 import type { CardSearchScope } from '@/entities/work-item/composables/useCardSearch.ts'
 import { writeFailure } from '@/entities/work-item/utils/writeFailure.ts'
 
@@ -60,6 +62,8 @@ const blocked = computed(() => {
 })
 /** The press names the hint that says why it is unavailable, and nothing while it is not. */
 const describedBy = computed(() => (blocked.value ? hintId : undefined))
+/** The reason of its own it can come to say, besides the choice's. */
+const ownReasons = computed(() => [t('workItem.closeActions.defer.reasonMissing')])
 
 async function submit() {
   if (busy.value || blocked.value) return
@@ -106,13 +110,11 @@ async function submit() {
         :maxlength="400"
         :disabled="busy"
       />
-      <p
-        v-if="blocked"
+      <UntilReason
         :id="hintId"
-        class="defer-blocked"
-      >
-        {{ blocked }}
-      </p>
+        :reason="blocked"
+        :also="ownReasons"
+      />
     </div>
     <template #footer>
       <VButton @click="emit('close')">{{ t('workItem.closeActions.defer.keep') }}</VButton>
@@ -132,11 +134,5 @@ async function submit() {
   display: grid;
   gap: var(--space-3);
   min-width: 0;
-}
-
-.defer-blocked {
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-detail);
 }
 </style>

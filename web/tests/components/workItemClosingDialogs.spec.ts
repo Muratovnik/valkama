@@ -102,7 +102,7 @@ describe('putting work off', () => {
     expect(submitButton(wrapper).attributes('disabled')).toBeDefined()
     await wrapper.get('input[type="date"]').setValue('2099-01-02')
     expect(submitButton(wrapper).attributes('disabled')).toBeDefined()
-    expect(wrapper.text()).toContain('Say why it waits')
+    expect(wrapper.get('.until-reason').text()).toContain('Say why it waits')
     await press(wrapper)
     expect(deferWorkItem).not.toHaveBeenCalled()
   })
