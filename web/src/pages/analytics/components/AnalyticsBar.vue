@@ -336,11 +336,14 @@ const freshHint = computed(() =>
      (`FacetFilterChips`), so the bar keeps its height when the name comes. The widest chip's
      room, held until the first answer, sent «Снять фильтры» to a second line at 380 to 401px in
      Russian, and a short name brought it back: the bar shrank by 32px on the first answer.
-     Several chips keep their words and wrap. */
+     Several chips keep their words and wrap. The row asks the bar's columns for no width of its
+     own (`contain`): the first of them is at least as wide as what it spans needs, and the
+     chip's whole name widened the bar past the window instead of being cut. */
   .analytics-bar .analytics-bar-chips-one {
     --filter-chip-shrink: 1;
 
     flex-wrap: nowrap;
+    contain: inline-size;
   }
 }
 
