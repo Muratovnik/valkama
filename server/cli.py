@@ -57,12 +57,10 @@ from .planning import model as planning_model
 from .planning import views as planning_views
 from .planning.display_links import HOOK_PATH
 from .platform import installed
-from .projects import project_registry, registry_owner, scopes
+from .projects import project_registry, registry_owner, scopes, space_binding
 from .quota import history as quota_history
 from .static_assets import DIST_DIR, SOURCE_ROOT
 from .store import connect, data_root, db_path
-from .store_identity import metadata as store_metadata
-from .store_identity.refs import planning_space_entity
 from .telemetry import journal, usage_rebuild
 
 # --- session-probe summary and routa import ---------------------------------
@@ -563,6 +561,16 @@ def _map_items(options: argparse.Namespace) -> dict[str, Any]:
     return {"output": output, "store": source, "seconds": seconds, **summary}
 
 
+def _binding_of(inventory: Path, options: argparse.Namespace) -> dict[str, Any] | None:
+    """The binding the inventory now holds for the project the command named."""
+
+    return next(
+        entry["planning_binding"]
+        for entry in registry_owner.read_inventory(inventory)
+        if entry["project_id"] == options.project_id
+    )
+
+
 def _projects_main(options: argparse.Namespace) -> None:
     inventory = registry_owner.inventory_path()
     target = registry_owner.projection_path()
@@ -592,12 +600,16 @@ def _projects_main(options: argparse.Namespace) -> None:
                 "changed": registry_owner.update(
                     inventory,
                     target,
-                    add={
-                        "project_id": options.project_id,
-                        "display_name": options.name,
-                        "canonical_root": options.root,
-                        "planning_binding": None,
-                    },
+                    [
+                        registry_owner.Add(
+                            {
+                                "project_id": options.project_id,
+                                "display_name": options.name,
+                                "canonical_root": options.root,
+                                "planning_binding": None,
+                            }
+                        )
+                    ],
                 )
             }
         elif command == "update":
@@ -605,49 +617,49 @@ def _projects_main(options: argparse.Namespace) -> None:
                 "changed": registry_owner.update(
                     inventory,
                     target,
-                    edit=(options.project_id, options.name, options.root),
+                    [registry_owner.Edit(options.project_id, options.name, options.root)],
                 )
             }
         elif command == "remove":
             payload = {
-                "changed": registry_owner.update(inventory, target, remove=options.project_id)
+                "changed": registry_owner.update(
+                    inventory, target, [registry_owner.Remove(options.project_id)]
+                )
             }
         elif command == "bind":
-            selected = next(
-                (entry for entry in scopes.load(db_path()) if entry["name"] == options.scope),
+            with store.read_only(space_binding.store_path(db_path(), options.scope)) as conn:
+                try:
+                    binding = space_binding.of_space(conn, options.space)
+                except registry_owner.RegistryOwnerError as error:
+                    raise registry_owner.RegistryOwnerError(
+                        f"{error} in data scope {options.scope}"
+                    ) from error
+            changed = registry_owner.update(
+                inventory,
+                target,
+                [registry_owner.Bind(options.project_id, binding, options.default)],
+            )
+            payload = {"changed": changed, "planning_binding": _binding_of(inventory, options)}
+        elif command == "unbind":
+            entry = next(
+                (
+                    entry
+                    for entry in registry_owner.read_inventory(inventory)
+                    if entry["project_id"] == options.project_id
+                ),
                 None,
             )
-            if selected is None or (
-                not selected["primary"] and not os.path.isfile(selected["path"])
-            ):
+            if entry is None:
                 raise registry_owner.RegistryOwnerError(
-                    f"data scope is unavailable: {options.scope}"
+                    f"project is not registered: {options.project_id}"
                 )
-            # Only the space's identity and the store's are read, never the rest of
-            # the space's row: a binding is made before the store is migrated too.
-            with store.read_only(selected["path"]) as conn:
-                space = conn.execute(
-                    "SELECT planning_space_id, key, name FROM planning_spaces"
-                    " WHERE planning_space_id = ? OR key = ? OR name = ?",
-                    (options.space, options.space, options.space),
-                ).fetchone()
-                if space is None:
-                    raise registry_owner.RegistryOwnerError(
-                        f"no planning space named {options.space} in data scope {options.scope}"
-                    )
-                metadata = store_metadata.read_store_metadata(conn)
-            binding = planning_space_entity(
-                {"data_scope_id": metadata["data_scope_id"], "space_key": space[1]}
+            bound = entry["planning_binding"]
+            changed = bound is not None and registry_owner.update(
+                inventory,
+                target,
+                [registry_owner.Unbind(options.project_id, bound["resource_id"])],
             )
-            changed = registry_owner.update(
-                inventory, target, bind=(options.project_id, binding, options.default)
-            )
-            written = next(
-                entry
-                for entry in registry_owner.read_inventory(inventory)
-                if entry["project_id"] == options.project_id
-            )
-            payload = {"changed": changed, "planning_binding": written["planning_binding"]}
+            payload = {"changed": changed, "planning_binding": None}
         else:
             payload = {"changed": registry_owner.update(inventory, target)}
         print(json.dumps(payload, ensure_ascii=False, indent=1, sort_keys=True))
@@ -772,6 +784,10 @@ def main(argv: list[str] | None = None) -> None:
     bind_cmd.add_argument(
         "--default", action="store_true", help="make it the space's default project"
     )
+    unbind_cmd = projects_sub.add_parser(
+        "unbind", help="take a project out of its Planning space; it stays registered"
+    )
+    unbind_cmd.add_argument("project_id")
     projects_sub.add_parser("check", help="compare inventory and projection")
     projects_sub.add_parser("apply", help="project the current inventory")
     projects_sub.add_parser("doctor", help="report inventory and projection health")

@@ -25,10 +25,10 @@ import os
 import re
 import stat
 import tomllib
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 from .. import atomic_files
 from ..store_identity.primitives import ContractError
@@ -42,7 +42,17 @@ PROJECT_ID = re.compile(r"^[a-z][a-z0-9-]{0,159}$")
 
 
 class RegistryOwnerError(ValueError):
-    """The requested change cannot safely update the project registry."""
+    """The requested change cannot safely update the project registry.
+
+    `code` names the refusal for a caller that words it for a person, such as the
+    interface's space window: `busy` while another writer holds the lock,
+    `root_missing`, `root_taken`, `project_taken`, `project_id_invalid`,
+    `default_leaving`, `not_registered`, `not_bound`, and `refused` for the rest.
+    """
+
+    def __init__(self, message: str, *, code: str = "refused") -> None:
+        super().__init__(message)
+        self.code = code
 
 
 def inventory_path() -> Path:
@@ -116,7 +126,7 @@ def _lock(target: Path) -> Iterator[None]:
 
                 fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)  # type: ignore[attr-defined]
         except OSError as error:
-            raise RegistryOwnerError(f"another writer holds {lock_path}") from error
+            raise RegistryOwnerError(f"another writer holds {lock_path}", code="busy") from error
         try:
             yield
         finally:
@@ -178,9 +188,11 @@ def _root(value: Any, *, resolve: bool) -> str:
     try:
         resolved = candidate.resolve(strict=True)
     except OSError as error:
-        raise RegistryOwnerError(f"canonical_root cannot be resolved: {error}") from error
+        raise RegistryOwnerError(
+            f"canonical_root cannot be resolved: {error}", code="root_missing"
+        ) from error
     if not resolved.is_dir():
-        raise RegistryOwnerError("canonical_root must be a directory")
+        raise RegistryOwnerError("canonical_root must be a directory", code="root_missing")
     return str(resolved)
 
 
@@ -213,7 +225,9 @@ def _entry(value: Any, *, resolve_root: bool, former: bool = False) -> dict[str,
         raise RegistryOwnerError("project entry has missing or unknown fields")
     project_id = _text(value["project_id"], "project_id", 160)
     if PROJECT_ID.fullmatch(project_id) is None:
-        raise RegistryOwnerError("project_id must be a lowercase project slug")
+        raise RegistryOwnerError(
+            "project_id must be a lowercase project slug", code="project_id_invalid"
+        )
     return {
         "project_id": project_id,
         "display_name": _text(value["display_name"], "display_name", 160),
@@ -237,7 +251,9 @@ def _projects(values: Any, *, resolve_root: bool, former: bool = False) -> list[
         )
     for label, identities in unique:
         if len(identities) != len(set(identities)):
-            raise RegistryOwnerError(f"duplicate {label}")
+            raise RegistryOwnerError(
+                f"duplicate {label}", code=_DUPLICATE_CODES.get(label, "refused")
+            )
     defaults: dict[str, int] = {}
     for binding in bound:
         defaults[binding["resource_id"]] = defaults.get(binding["resource_id"], 0) + int(
@@ -250,6 +266,10 @@ def _projects(values: Any, *, resolve_root: bool, former: bool = False) -> list[
                 f" project, not {count}"
             )
     return sorted(projects, key=lambda entry: entry["project_id"])
+
+
+#: The refusal code of a duplicate identity, by the field it repeats.
+_DUPLICATE_CODES = {"project_id": "project_taken", "canonical_root": "root_taken"}
 
 
 def _space_key(resource_id: str) -> str:
@@ -684,17 +704,78 @@ def _leaving_default(projects: list[dict[str, Any]], entry: dict[str, Any]) -> N
         raise RegistryOwnerError(
             f"{entry['project_id']} is the default project of planning space {key}, which keeps"
             f" {', '.join(others)}; first make another one its default:"
-            f" valkama projects bind {others[0]} --space {key} --default"
+            f" valkama projects bind {others[0]} --space {key} --default",
+            code="default_leaving",
         )
 
 
-def _bind(
-    projects: list[dict[str, Any]], project_id: str, reference: dict[str, str], make_default: bool
-) -> None:
+class Add(NamedTuple):
+    """Register a project: its id, name and an existing root; a binding, if any, as is."""
+
+    entry: Mapping[str, Any]
+
+
+class Edit(NamedTuple):
+    """Change a registered project's name, its root, or both."""
+
+    project_id: str
+    name: str | None = None
+    root: str | None = None
+
+
+class Bind(NamedTuple):
+    """Bind a project to a space; `default` makes it the space's default project."""
+
+    project_id: str
+    reference: Mapping[str, str]
+    default: bool = False
+
+
+class Unbind(NamedTuple):
+    """Take a project out of the space `resource_id` names; it stays registered.
+
+    The space is named so that a project another writer has moved since the
+    caller read the registry is refused rather than taken out of its new space.
+    """
+
+    project_id: str
+    resource_id: str
+
+
+class Rekey(NamedTuple):
+    """Carry every binding of one space identity to another, each default where it was.
+
+    A space whose key changes keeps its projects: one step moves them all, where
+    single binds would take the default away from a space still keeping others.
+    """
+
+    resource_id: str
+    to_resource_id: str
+
+
+class Remove(NamedTuple):
+    """Remove a project's registration, never its directory."""
+
+    project_id: str
+
+
+Change = Add | Edit | Bind | Unbind | Rekey | Remove
+
+
+def _registered(projects: list[dict[str, Any]], project_id: str) -> dict[str, Any]:
     matches = [entry for entry in projects if entry["project_id"] == project_id]
     if len(matches) != 1:
-        raise RegistryOwnerError(f"project is not registered: {project_id}")
-    entry = matches[0]
+        raise RegistryOwnerError(f"project is not registered: {project_id}", code="not_registered")
+    return matches[0]
+
+
+def _bind(
+    projects: list[dict[str, Any]],
+    project_id: str,
+    reference: Mapping[str, str],
+    make_default: bool,
+) -> None:
+    entry = _registered(projects, project_id)
     resource_id = _text(reference.get("resource_id"), "planning_binding.resource_id", 512)
     current = entry["planning_binding"]
     staying = current is not None and current["resource_id"] == resource_id
@@ -718,61 +799,98 @@ def _bind(
     }
 
 
-def update(
+def _apply(projects: list[dict[str, Any]], change: Change) -> list[dict[str, Any]]:
+    """`projects` after one change, held to the registry's rules as it stands after it."""
+
+    if isinstance(change, Add):
+        return _projects(
+            [*projects, _entry(dict(change.entry), resolve_root=True)], resolve_root=False
+        )
+    if isinstance(change, Edit):
+        if change.name is None and change.root is None:
+            raise RegistryOwnerError("project update requires --name or --root")
+        entry = _registered(projects, change.project_id)
+        if change.name is not None:
+            entry["display_name"] = change.name
+        if change.root is not None:
+            entry["canonical_root"] = _root(change.root, resolve=True)
+    elif isinstance(change, Bind):
+        _bind(projects, change.project_id, change.reference, change.default)
+    elif isinstance(change, Unbind):
+        entry = _registered(projects, change.project_id)
+        binding = entry["planning_binding"]
+        if binding is None or binding["resource_id"] != change.resource_id:
+            raise RegistryOwnerError(
+                f"{change.project_id} is not in planning space {_space_key(change.resource_id)}",
+                code="not_bound",
+            )
+        _leaving_default(projects, entry)
+        entry["planning_binding"] = None
+    elif isinstance(change, Rekey):
+        target = _text(change.to_resource_id, "planning_binding.resource_id", 512)
+        for entry in projects:
+            binding = entry["planning_binding"]
+            if binding is not None and binding["resource_id"] == change.resource_id:
+                entry["planning_binding"] = dict(binding, resource_id=target)
+    else:
+        entry = _registered(projects, change.project_id)
+        _leaving_default(projects, entry)
+        projects = [other for other in projects if other is not entry]
+    return _projects(projects, resolve_root=False)
+
+
+def _planned(
+    before_inventory: bytes | None,
+    before_target: bytes | None,
     inventory: Path,
-    target: Path,
-    *,
-    add: dict[str, Any] | None = None,
-    bind: tuple[str, dict[str, str], bool] | None = None,
-    edit: tuple[str, str | None, str | None] | None = None,
-    remove: str | None = None,
-) -> bool:
-    """One write of the inventory and its projection; with no change named, republish them."""
+    changes: Sequence[Change],
+) -> tuple[list[dict[str, Any]], bool]:
+    """The projects after `changes`, and whether the registry had none before them."""
+
+    existing = _existing_projection(before_target)
+    if before_inventory is None:
+        if existing is not None:
+            raise RegistryOwnerError(
+                "projection exists without inventory; import it before updating"
+            )
+        if not any(isinstance(change, Add) for change in changes):
+            raise RegistryOwnerError(f"project inventory is missing: {inventory}")
+        projects: list[dict[str, Any]] = []
+    else:
+        projects = parse_inventory(before_inventory)
+    first = not projects and not existing
+    if changes and existing is not None and existing != projects:
+        raise RegistryOwnerError("inventory and projection differ; run projects check")
+    for change in changes:
+        projects = _apply(projects, change)
+    return projects, first
+
+
+def preview(inventory: Path, target: Path, changes: Sequence[Change]) -> list[dict[str, Any]]:
+    """The projects `changes` would leave, refused as `update` would refuse them; writes nothing.
+
+    It takes no lock, so a writer in between can still make `update` refuse: it tells a
+    caller about to commit something of its own whether the registry step can succeed.
+    """
+
+    _safe_state(inventory, target)
+    projects, _first = _planned(_read(inventory), _read(target), inventory, changes)
+    return projects
+
+
+def update(inventory: Path, target: Path, changes: Sequence[Change] = ()) -> bool:
+    """One write of the inventory and its projection, whatever the number of changes.
+
+    The changes apply in order, each held to the registry's rules as it leaves it, under
+    one lock and with one snapshot for `rollback`; any refusal writes nothing. With no
+    change named, republish the inventory.
+    """
 
     _safe_state(inventory, target)
     with _lock(target):
         before_inventory = _read(inventory)
         before_target = _read(target)
-        existing = _existing_projection(before_target)
-        if before_inventory is None:
-            if existing is not None:
-                raise RegistryOwnerError(
-                    "projection exists without inventory; import it before updating"
-                )
-            if add is None:
-                raise RegistryOwnerError(f"project inventory is missing: {inventory}")
-            projects = []
-        else:
-            projects = parse_inventory(before_inventory)
-        first = not projects and not existing
-        if any(value is not None for value in (add, bind, edit, remove)):
-            if existing is not None and existing != projects:
-                raise RegistryOwnerError("inventory and projection differ; run projects check")
-            if add is not None:
-                projects = _projects(
-                    [*projects, _entry(add, resolve_root=True)], resolve_root=False
-                )
-            if edit is not None:
-                project_id, name, root = edit
-                if name is None and root is None:
-                    raise RegistryOwnerError("project update requires --name or --root")
-                matches = [entry for entry in projects if entry["project_id"] == project_id]
-                if len(matches) != 1:
-                    raise RegistryOwnerError(f"project is not registered: {project_id}")
-                if name is not None:
-                    matches[0]["display_name"] = name
-                if root is not None:
-                    matches[0]["canonical_root"] = _root(root, resolve=True)
-                projects = _projects(projects, resolve_root=False)
-            if bind is not None:
-                _bind(projects, *bind)
-                projects = _projects(projects, resolve_root=False)
-            if remove is not None:
-                removed = [entry for entry in projects if entry["project_id"] == remove]
-                if not removed:
-                    raise RegistryOwnerError(f"project is not registered: {remove}")
-                _leaving_default(projects, removed[0])
-                projects = [entry for entry in projects if entry["project_id"] != remove]
+        projects, first = _planned(before_inventory, before_target, inventory, changes)
         return _publish(
             inventory,
             target,
