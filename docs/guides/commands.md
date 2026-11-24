@@ -171,8 +171,11 @@ Each row:
 (`buckets` is cut to its first entry here; the answer lists all nine.)
 
 `GET /api/analytics/pauses` answers the same report under `pauses`, with the
-period given as the usage read takes it (`from`, `to`, `utc_offset`). The
-Analytics page's «Pauses» section draws it.
+period given as the usage read takes it (`from`, `to`, `utc_offset`), `project`
+as `--project` takes it, and `space`, which narrows it to the runs with work a
+planning space holds; the command has no option for a space. The Analytics
+page's «Pauses» section draws it, narrowed to the space and project the page is
+scoped to.
 
 ## `usage rebuild`
 

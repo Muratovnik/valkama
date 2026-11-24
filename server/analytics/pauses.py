@@ -459,14 +459,17 @@ def read(
     end: float,
     clients: Sequence[str] = (),
     project: str | None = None,
+    space: str | None = None,
     reader: Reader | None = None,
     until: float | None = None,
 ) -> dict:
     """The report over the hours from `start` to `end`, seconds since the epoch (see the module).
 
     `clients` narrows it to those clients; none is every one. `project` narrows it to the runs
-    with work in the period that the usage read places in that project
-    (`usage.project_runs`), each run whole. `conn` is only read, and must
+    with work in the period that the usage read places in that project, and `space`, a space
+    by its key, id or name, to those with work the space holds as the usage read narrows to
+    it (`usage.scoped_runs`), each run whole; a space the store does not hold is refused
+    (`usage.UsageQueryError`). `conn` is only read, and must
     give rows by name. With `until`, a `time.monotonic()` moment, runs not read by then raise
     `UnfinishedError`, and a read asked again goes on from the runs this one read.
     """
@@ -485,8 +488,8 @@ def read(
         )
         if not clients or row["client"] in clients
     }
-    if project is not None:
-        held = usage.project_runs(conn, project, start=first, end=last)
+    if project is not None or space is not None:
+        held = usage.scoped_runs(conn, start=first, end=last, project=project, space=space)
         runs = {key: row for key, row in runs.items() if key in held}
     subscriptions = _subscriptions(conn)
     totals: dict[tuple, list[float]] = {}

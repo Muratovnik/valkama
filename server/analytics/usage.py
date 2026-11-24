@@ -389,18 +389,37 @@ def _stamp(micro: int, *, up: bool) -> str:
     return moment.isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
-def project_runs(conn: sqlite3.Connection, project: str, *, start: float, end: float) -> set:
+def scoped_runs(
+    conn: sqlite3.Connection,
+    *,
+    start: float,
+    end: float,
+    project: str | None = None,
+    space: str | None = None,
+) -> set:
     """The runs, as `(session, agent)`, with work between `start` and `end` (seconds since the
-    epoch) that this read places in `project`: each stretch a filter by the project admits
-    (`_ProjectReads.admits`), on an item that names it or on no item in a place of it."""
+    epoch) that this read narrows to `project` and to `space`: each stretch a filter by the
+    project admits (`_ProjectReads.admits`), on an item that names it or on no item in a place
+    of it, and that the space holds (`_in_space`). With neither, every run with work in the
+    period; a space the store does not hold is refused (`UsageQueryError`)."""
 
     rows = conn.execute(
         SEGMENTS,
         (_stamp(round(end * _SECOND), up=True), _stamp(round(start * _SECOND), up=False)),
     ).fetchall()
-    reads = _ProjectReads(conn, rows, project_registry.read_registry())
-    admitted = frozenset({project})
-    return {(str(row[_SESSION]), str(row[_AGENT])) for row in rows if reads.admits(row, admitted)}
+    listing = project_registry.read_registry()
+    reads = _ProjectReads(conn, rows, listing)
+    admitted = None if project is None else frozenset({project})
+    tests: list[Callable[[Sequence], bool]] = []
+    if admitted is not None:
+        tests.append(lambda row: reads.admits(row, admitted))
+    if space is not None:
+        tests.append(_in_space(conn, space, admitted, listing, reads))
+    return {
+        (str(row[_SESSION]), str(row[_AGENT]))
+        for row in rows
+        if all(admits(row) for admits in tests)
+    }
 
 
 @dataclass
@@ -544,15 +563,16 @@ def _filters(
 
 
 def _in_space(
-    request: UsageQuery,
+    conn: sqlite3.Connection,
+    space: str,
+    projects: Iterable[Value] | None,
     listing: project_registry.RegistryResult,
     project_reads: _ProjectReads,
-    conn: sqlite3.Connection,
 ) -> Callable[[Sequence], bool]:
-    """The test of the space a request names: work on an item it holds, or on no item in a
-    place of one of its projects."""
+    """The test of a space, narrowed by the projects a filter admits: work on an item it
+    holds, or on no item in a place of one of its projects."""
 
-    held = space_scope.holding(conn, str(request.space), request.filters.get(PROJECT), listing)
+    held = space_scope.holding(conn, space, projects, listing)
 
     def admits(row: Sequence) -> bool:
         if row[_ITEM] is None:
@@ -756,7 +776,11 @@ def _read(conn: sqlite3.Connection, request: UsageQuery) -> dict:
         },
     )
     if request.space is not None and listing is not None and project_reads is not None:
-        filters.append(_in_space(request, listing, project_reads, conn))
+        filters.append(
+            _in_space(
+                conn, str(request.space), request.filters.get(PROJECT), listing, project_reads
+            )
+        )
     seat_admits = request.filters.get(SEAT)
     loose_seats = _unplaced_seats(seat_admits)
     several = (
@@ -870,7 +894,7 @@ __all__ = [
     "STEPS",
     "UsageQuery",
     "UsageQueryError",
-    "project_runs",
     "query",
     "read",
+    "scoped_runs",
 ]

@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from collections.abc import Callable
 from copy import deepcopy
 from pathlib import Path
+
+from server.store_identity.metadata import read_store_metadata
+from server.store_identity.refs import planning_space_entity
 
 SOURCE_HASH = "a" * 64
 
@@ -53,6 +57,25 @@ def project_entry(
         "canonical_root": canonical_root,
         "planning_binding": planning,
     }
+
+
+def space_entry(
+    conn: sqlite3.Connection,
+    project_id: str,
+    root: str | Path,
+    space_key: str,
+    *,
+    board: str | None = None,
+) -> dict:
+    """One complete entry whose project the registry binds to `space_key`, a space of the
+    store `conn` reads."""
+
+    scope = str(read_store_metadata(conn)["data_scope_id"])
+    entry = project_entry(project_id, root, board=board)
+    entry["planning_binding"] = planning_space_entity(
+        {"data_scope_id": scope, "space_key": space_key}
+    )
+    return entry
 
 
 def registry_bytes(projects: list[dict]) -> bytes:
