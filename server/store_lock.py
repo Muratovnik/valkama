@@ -9,8 +9,8 @@ itself could hold.
 
 The lock is the operating system's on the file's first byte, so it goes with
 the process that held it however that process ends. `try_lock` and `unlock`
-are that primitive on its own, and `tests/machine_lock.py` takes the same one
-for the heavy test runs of a machine.
+are that primitive on its own, and `tests/legacy_lock.py` takes the same one
+at the heavy-test lock that earlier branches' runs still share a machine through.
 
 `msvcrt` and `fcntl` are both in the standard library and neither is importable
 on the other platform, so each is imported at the point it is used.

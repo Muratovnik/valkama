@@ -1,0 +1,49 @@
+# Valkama's heavy runs, for the machine's heavy-process gate that Host Runtime installs.
+#
+# The gate reads this file from the repository a command runs in: its refusal hook
+# turns away a heavy command an agent starts outside the gate, and its `run` and
+# `hold` count each kind by what that kind's earlier runs used. `tests/heavy_gate.py`
+# takes the leases; a `self_gated` command takes its own, so the hook lets it through.
+# A `seed` is the kind's first profile, until the gate has a run of it to learn from:
+# cores at the `want` workers, as measured on the development machine.
+
+schema = 1
+project = "valkama"
+
+# `npm run test:browser:allowed`: the whole browser suite or a batch of it, on the
+# 16 Playwright workers its configuration gives. Seed: 13.3 cores with the browsers
+# at its peak; 3.1 GB, the job's peak for one spec on 4 workers.
+[[kind]]
+name = "browser-suite"
+commands = ["node web/tests/browser/allowedRun.ts"]
+except = ["--list"]
+self_gated = true
+seed = { cores = 13.3, memory_gb = 3.1 }
+
+# `npm run test:unit`, the last step of `npm test`: the whole Vitest suite, with K
+# workers. Seed: 7.4 cores, the suite's p95 on 8 workers.
+[[kind]]
+name = "vitest-suite"
+commands = ["node web/tests/unitRun.ts"]
+self_gated = true
+workers = { min = 2, want = 8, max = 16 }
+seed = { cores = 7.4 }
+
+# The whole unittest suite, one process, which takes its lease while it loads.
+# Seed: 1.0 core and 0.23 GB, the job's p90 and peak over a whole run.
+[[kind]]
+name = "unittest-suite"
+commands = ["python -m unittest discover", "python -m coverage run -m unittest discover"]
+self_gated = true
+seed = { cores = 1.0, memory_gb = 0.23 }
+
+# Playwright started by hand: one spec, a few, or a probe spec outside the suite.
+# The hook refuses it outside the gate and gives the command through it, with
+# `--workers={k}`. Seed: 3.8 cores, a short list's p95; 3.1 GB, one spec on 4 workers.
+[[kind]]
+name = "browser-targeted"
+commands = ["npx playwright test", "playwright test"]
+except = ["--list"]
+workers = { min = 1, want = 4, max = 16 }
+suggest = "--workers={k}"
+seed = { cores = 3.8, memory_gb = 3.1 }

@@ -42,7 +42,7 @@ const store = serverStore()
 // is `1`: not by a bare run, not by naming one, not by `--list`. Every project inherits this.
 const testIgnore = clipboardIgnore(process.env)
 
-// A failed run names who holds the heavy-test lock as it ends; a `--reporter` given on the
+// A failed run names the heavy runs going as it ends; a `--reporter` given on the
 // command line replaces both, as the suite runner's does.
 const reporter: ReporterDescription[] = [['line'], [join(specs, 'lockHolderReporter.ts')]]
 
