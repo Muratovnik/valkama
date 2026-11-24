@@ -8,7 +8,7 @@ export const PLAN_PATH = 'docs/plans/platform.md'
 const PLAN = `# The platform plan
 
 ${'Why this plan exists, in a paragraph long enough to wrap at any width.\n\n'.repeat(40)}
-## The architecture <!-- kb:arch-plan -->
+## The architecture <!-- kb:architecture -->
 
 The block an anchor lands on.
 
