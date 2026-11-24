@@ -145,6 +145,8 @@ const shownLabel = computed(() => (several.value ? '' : display(internal.value))
 const covered = computed(
   () => !several.value && !open.value && shownLabel.value !== '' && text.value === shownLabel.value,
 )
+/** Those words whole, for the field's hint while they stand drawn over it. */
+const coveredWords = computed(() => (covered.value ? shownLabel.value : ''))
 const chips = computed(() =>
   several.value
     ? chosen.value.map((value) => ({ value, label: labelOf(value), runs: runsOf(value) }))
@@ -285,7 +287,7 @@ defineExpose({ show })
           @remove="remove"
         />
         <span
-          v-tooltip.clipped="covered ? shownLabel : ''"
+          v-tooltip.clipped="coveredWords"
           class="combo-field"
         >
           <ComboboxInput
@@ -307,8 +309,8 @@ defineExpose({ show })
           <span
             v-if="covered"
             class="combo-shown one-line"
-            data-chosen-words
             aria-hidden="true"
+            data-chosen-words
             >{{ shownLabel }}</span
           >
         </span>
