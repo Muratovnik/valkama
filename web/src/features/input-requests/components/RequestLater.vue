@@ -40,6 +40,8 @@ const props = defineProps<{
   value: string
   /** Why the answer that opened it cannot be sent now, which keeps the press unavailable too. */
   blocked?: string
+  /** The id that reason stands under, for the answers it blocks to name it here too. */
+  blockedId?: string
 }>()
 const emit = defineEmits<{ 'put-off': []; 'update:value': [value: string] }>()
 const { t } = useI18n()
@@ -61,7 +63,9 @@ const reason = computed(() => {
 const blockedRoom = computed(() => (props.blocked ? [props.blocked] : []))
 const busyMark = computed(() => props.busy || undefined)
 const pressDisabled = computed(() => props.disabled || reason.value !== '')
-const reasonRef = computed(() => (reason.value ? reasonId : undefined))
+/** The reason's id: the answer's own where that is the reason given, so its answers name it. */
+const shownId = computed(() => (props.blocked && props.blockedId) || reasonId)
+const reasonRef = computed(() => (reason.value ? shownId.value : undefined))
 const fieldsDisabled = computed(() => props.disabled || props.busy)
 
 defineExpose({
@@ -95,7 +99,7 @@ defineExpose({
         >{{ t('requests.record.putOff') }}</VButton
       >
       <UntilReason
-        :id="reasonId"
+        :id="shownId"
         :reason="reason"
         :also="blockedRoom"
       />

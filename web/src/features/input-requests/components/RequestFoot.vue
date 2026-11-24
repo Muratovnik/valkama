@@ -15,7 +15,7 @@
  * refused with the open work it would cancel has that list over the row (`RequestCancelList`),
  * where its asking stands again, and focus goes to the list's first line as it goes to an error.
  */
-import { computed, ref } from 'vue'
+import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import RequestActions from '@/features/input-requests/components/RequestActions.vue'
@@ -95,6 +95,8 @@ const emit = defineEmits<{
 const { t } = useI18n()
 /** Why the answer that puts off cannot be sent now, which its choice of a day says too. */
 const laterBlocked = computed(() => props.answers.find((answer) => answer.later)?.blocked)
+/** Where that reason stands, under the answers or under the open choice, which they name. */
+const blockedId = useId()
 /** Which edge of the scrolling panel it keeps to, for what moves focus clear of it. */
 const edge = computed(() => (props.stuck ? 'end' : undefined))
 const actions = ref<InstanceType<typeof RequestActions> | null>(null)
@@ -138,6 +140,7 @@ defineExpose({
       :busy="busy"
       :disabled="disabled"
       :blocked="laterBlocked"
+      :blocked-id="blockedId"
       :entry="later.entry"
       :panel-id="later.controls"
       :value="later.value"
@@ -154,6 +157,7 @@ defineExpose({
       ref="actions"
       :answers="answers"
       :asking="asking"
+      :blocked-id="blockedId"
       :busy="busy"
       :changing="changing"
       :declinable="declinable"

@@ -46,6 +46,11 @@ export interface KindAnswer {
   answer: InputAnswers
   label: string
   /**
+   * Why it can come to be blocked, set over what the form holds whether it is blocked now or not,
+   * so the room of that reason stands under the answers while it can come (`answersOver`).
+   */
+  blockable?: string
+  /**
    * Why it cannot be sent now, which stands under the answers; absent while it can. It is set over
    * what the form holds (`answersOver`).
    */
@@ -124,7 +129,7 @@ export function kindAnswerDraft(
  * The answers as their buttons say them over what the form holds: one that counts its ticks says
  * how many go once fewer than all of them are ticked, in the words `counted` gives, and one that
  * needs a tick is blocked while none is, for the reason `unticked` gives, so no press sends what
- * the server refuses.
+ * the server refuses; it names that reason as `blockable` while any is ticked too.
  */
 export function answersOver(
   answers: readonly KindAnswer[],
@@ -137,7 +142,8 @@ export function answersOver(
     const { length } = ticked(answer.ticks, draft)
     const label =
       answer.counts && length < answer.ticks.total ? counted(answer.label, length) : answer.label
-    return { ...answer, label, ...(answer.needsTicked && !length ? { blocked: unticked } : {}) }
+    if (!answer.needsTicked) return { ...answer, label }
+    return { ...answer, label, blockable: unticked, ...(length ? {} : { blocked: unticked }) }
   })
 }
 
