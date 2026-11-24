@@ -138,6 +138,21 @@ test('the window and the index page draw the skeleton with the same rules and co
   assert.deepEqual(browser, desktop)
 })
 
+/** What the bar holds, its tags alone: the space between them is each page's own layout. */
+function barMarkup(html: string): string {
+  const bar = /<div class="sk-bar"[^>]*>([\s\S]*?)<\/div>\s*<div class="sk-panel"/.exec(html)
+  assert.ok(bar, 'the page draws no bar before its panel')
+  return bar[1].replaceAll(/>\s+</g, '><').trim()
+}
+
+test('the window and the index page draw the same parts in the bar', () => {
+  // The rules above style a class whichever element carries it; a part one page draws and
+  // the other does not would differ only on screen.
+  const windowBar = barMarkup(startupPage.renderStartupPage({ phase: 'starting', locale: 'en' }))
+  assert.match(windowBar, /class="sk-choice"[\s\S]*class="sk-menu"/)
+  assert.equal(barMarkup(index), windowBar)
+})
+
 test('the skeleton’s rail obeys the shell’s width rule and its icons-only form', () => {
   for (const [name, css] of [
     [

@@ -83,17 +83,21 @@ class RegistryOwnerTests(unittest.TestCase):
         registry_owner.update(
             self.inventory,
             self.target,
-            add={
-                "project_id": project_id,
-                "display_name": project_id.title(),
-                "canonical_root": str(root),
-                "planning_binding": None,
-            },
+            [
+                registry_owner.Add(
+                    {
+                        "project_id": project_id,
+                        "display_name": project_id.title(),
+                        "canonical_root": str(root),
+                        "planning_binding": None,
+                    }
+                )
+            ],
         )
 
     def _bind(self, project_id: str, key: str, *, default: bool = False) -> bool:
         return registry_owner.update(
-            self.inventory, self.target, bind=(project_id, _space(key), default)
+            self.inventory, self.target, [registry_owner.Bind(project_id, _space(key), default)]
         )
 
     def _check(self) -> dict:
@@ -134,7 +138,9 @@ class RegistryOwnerTests(unittest.TestCase):
     # Format 4: the writer's rules, the same as the reader's.
 
     def test_first_project_then_rollback_restores_absence_exactly(self) -> None:
-        self.assertTrue(registry_owner.update(self.inventory, self.target, add=self.entry))
+        self.assertTrue(
+            registry_owner.update(self.inventory, self.target, [registry_owner.Add(self.entry)])
+        )
         written = json.loads(self.target.read_bytes())
         self.assertEqual(4, written["schema_version"])
         self.assertEqual([self.entry], written["projects"])
@@ -145,7 +151,9 @@ class RegistryOwnerTests(unittest.TestCase):
         self.assertFalse(self.target.exists())
 
     def test_first_project_on_a_machine_with_no_registry_downgrades_to_no_registry(self) -> None:
-        self.assertTrue(registry_owner.update(self.inventory, self.target, add=self.entry))
+        self.assertTrue(
+            registry_owner.update(self.inventory, self.target, [registry_owner.Add(self.entry)])
+        )
         kept = json.loads(registry_owner.upgrade_path(self.target).read_bytes())
         self.assertEqual(
             {"inventory": None, "projection": None, "rollback": None},
@@ -196,7 +204,9 @@ class RegistryOwnerTests(unittest.TestCase):
         self._former([self.entry])
         for call in (
             lambda: self._check(),
-            lambda: registry_owner.update(self.inventory, self.target, remove="example"),
+            lambda: registry_owner.update(
+                self.inventory, self.target, [registry_owner.Remove("example")]
+            ),
         ):
             with self.assertRaisesRegex(registry_owner.RegistryOwnerError, "projects upgrade"):
                 call()
@@ -205,7 +215,7 @@ class RegistryOwnerTests(unittest.TestCase):
         original = b'{"schema_version":4,"projects":[],"projects":[]}'
         self.target.write_bytes(original)
         with self.assertRaisesRegex(registry_owner.RegistryOwnerError, "duplicate key"):
-            registry_owner.update(self.inventory, self.target, add=self.entry)
+            registry_owner.update(self.inventory, self.target, [registry_owner.Add(self.entry)])
         self.assertEqual(original, self.target.read_bytes())
         self.assertFalse(self.inventory.exists())
 
@@ -244,7 +254,7 @@ class RegistryOwnerTests(unittest.TestCase):
         with self.assertRaisesRegex(registry_owner.RegistryOwnerError, expected):
             self._bind("alpha", "ROVER")
         with self.assertRaisesRegex(registry_owner.RegistryOwnerError, expected):
-            registry_owner.update(self.inventory, self.target, remove="alpha")
+            registry_owner.update(self.inventory, self.target, [registry_owner.Remove("alpha")])
         self.assertEqual(before, self._state())
 
         # A project that is not the default changes its home space freely.
@@ -266,6 +276,151 @@ class RegistryOwnerTests(unittest.TestCase):
         self._bind("alpha", "ALPHA")
         self.assertTrue(self._bind("alpha", "ROVER"))
         self.assertEqual({"alpha": ("ROVER", True)}, self._bindings())
+
+    # Several changes: one write, one snapshot, refused whole.
+
+    def _update(self, *changes: registry_owner.Change) -> bool:
+        return registry_owner.update(self.inventory, self.target, list(changes))
+
+    def test_several_changes_are_one_write_that_rollback_undoes_whole(self) -> None:
+        for project_id in ("alpha", "beta", "gamma"):
+            self._add(project_id)
+        self._bind("alpha", "MAIN")
+        before = self._state()
+        self.assertTrue(
+            self._update(
+                registry_owner.Bind("beta", _space("MAIN"), True),
+                registry_owner.Bind("gamma", _space("MAIN")),
+                registry_owner.Unbind("alpha", _space("MAIN")["resource_id"]),
+            )
+        )
+        self.assertEqual(
+            {"alpha": None, "beta": ("MAIN", True), "gamma": ("MAIN", False)}, self._bindings()
+        )
+        self.assertTrue(registry_owner.rollback(self.inventory, self.target))
+        after = self._state()
+        for name in (self.inventory.name, self.target.name):
+            self.assertEqual(before[name], after[name])
+
+    def test_a_refused_change_among_several_writes_none_of_them(self) -> None:
+        for project_id in ("alpha", "beta"):
+            self._add(project_id)
+        before = self._state()
+        with self.assertRaises(registry_owner.RegistryOwnerError) as refused:
+            self._update(
+                registry_owner.Bind("alpha", _space("MAIN")),
+                registry_owner.Bind("nobody", _space("MAIN")),
+            )
+        self.assertEqual("not_registered", refused.exception.code)
+        self.assertEqual(before, self._state())
+
+    def test_unbind_keeps_the_registration_and_the_default_rule(self) -> None:
+        for project_id in ("alpha", "beta"):
+            self._add(project_id)
+            self._bind(project_id, "MAIN")
+        main = _space("MAIN")["resource_id"]
+        before = self._state()
+        with self.assertRaises(registry_owner.RegistryOwnerError) as refused:
+            self._update(registry_owner.Unbind("alpha", main))
+        self.assertEqual("default_leaving", refused.exception.code)
+        self.assertEqual(before, self._state())
+
+        self.assertTrue(self._update(registry_owner.Unbind("beta", main)))
+        self.assertEqual({"alpha": ("MAIN", True), "beta": None}, self._bindings())
+        # The last project leaves its space freely, and stays registered.
+        self.assertTrue(self._update(registry_owner.Unbind("alpha", main)))
+        self.assertEqual({"alpha": None, "beta": None}, self._bindings())
+
+    def test_unbind_refuses_a_project_another_writer_moved_meanwhile(self) -> None:
+        self._add("alpha")
+        self._bind("alpha", "ALPHA")
+        before = self._state()
+        with self.assertRaises(registry_owner.RegistryOwnerError) as refused:
+            self._update(registry_owner.Unbind("alpha", _space("MAIN")["resource_id"]))
+        self.assertEqual("not_bound", refused.exception.code)
+        self.assertEqual(before, self._state())
+
+    def test_rekey_carries_every_binding_with_its_default(self) -> None:
+        for project_id in ("alpha", "beta", "gamma"):
+            self._add(project_id)
+        self._bind("alpha", "MAIN")
+        self._bind("beta", "MAIN")
+        self._bind("gamma", "BETA")
+        self.assertTrue(
+            self._update(
+                registry_owner.Rekey(_space("MAIN")["resource_id"], _space("ALPHA")["resource_id"])
+            )
+        )
+        self.assertEqual(
+            {"alpha": ("ALPHA", True), "beta": ("ALPHA", False), "gamma": ("BETA", True)},
+            self._bindings(),
+        )
+
+    def test_restore_undoes_one_write_and_refuses_after_another(self) -> None:
+        for project_id in ("alpha", "beta"):
+            self._add(project_id)
+        self._bind("alpha", "MAIN")
+        before = registry_owner.read_inventory(self.inventory)
+        self._update(
+            registry_owner.Bind("beta", _space("MAIN"), True),
+            registry_owner.Unbind("alpha", _space("MAIN")["resource_id"]),
+        )
+        after = registry_owner.read_inventory(self.inventory)
+        undo = registry_owner.Restore(after=after, before=before)
+        self._bind("alpha", "BETA")
+        held = self._state()
+        with self.assertRaises(registry_owner.RegistryOwnerError) as refused:
+            self._update(undo)
+        self.assertEqual("changed_meanwhile", refused.exception.code)
+        self.assertEqual(held, self._state())
+        self.assertTrue(registry_owner.rollback(self.inventory, self.target))
+        self.assertTrue(self._update(undo))
+        self.assertEqual({"alpha": ("MAIN", True), "beta": None}, self._bindings())
+
+    def test_preview_refuses_as_update_would_and_writes_nothing(self) -> None:
+        self._add("alpha")
+        before = self._state()
+        projects = registry_owner.preview(
+            self.inventory, self.target, [registry_owner.Bind("alpha", _space("MAIN"))]
+        )
+        self.assertEqual(
+            _space("MAIN")["resource_id"], projects[0]["planning_binding"]["resource_id"]
+        )
+        taken = dict(self.entry, project_id="other", canonical_root=str(self.directory / "alpha"))
+        with self.assertRaises(registry_owner.RegistryOwnerError) as refused:
+            registry_owner.preview(self.inventory, self.target, [registry_owner.Add(taken)])
+        self.assertEqual("root_taken", refused.exception.code)
+        missing = dict(self.entry, canonical_root=str(self.directory / "gone"))
+        with self.assertRaises(registry_owner.RegistryOwnerError) as refused:
+            registry_owner.preview(self.inventory, self.target, [registry_owner.Add(missing)])
+        self.assertEqual("root_missing", refused.exception.code)
+        self.assertEqual(before, self._state())
+
+    def test_a_held_lock_is_refused_as_busy(self) -> None:
+        self._add("alpha")
+        before = self._state()
+        with registry_owner._lock(self.target):
+            with self.assertRaises(registry_owner.RegistryOwnerError) as refused:
+                self._bind("alpha", "MAIN")
+        self.assertEqual("busy", refused.exception.code)
+        self.assertEqual(before, self._state())
+
+    def test_cli_unbind_takes_the_project_out_and_keeps_it_registered(self) -> None:
+        self._add("alpha")
+        self._bind("alpha", "MAIN")
+
+        def unbind(project_id: str) -> dict:
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                cli.main(["projects", "unbind", project_id])
+            return json.loads(output.getvalue())
+
+        with mock.patch.object(project_registry, "registry_path", return_value=str(self.target)):
+            self.assertEqual({"changed": True, "planning_binding": None}, unbind("alpha"))
+            self.assertEqual({"changed": False, "planning_binding": None}, unbind("alpha"))
+            with self.assertRaisesRegex(SystemExit, "not registered: nobody"):
+                unbind("nobody")
+        self.assertEqual({"alpha": None}, self._bindings())
 
     def test_list_on_a_clean_profile_is_empty_and_writes_nothing(self) -> None:
         profile = self.directory / "clean-profile"
@@ -372,11 +527,13 @@ class RegistryOwnerTests(unittest.TestCase):
             registry_owner.update(
                 self.inventory,
                 self.target,
-                bind=(
-                    project_id,
-                    planning_space_entity({"data_scope_id": scope, "space_key": key}),
-                    True,
-                ),
+                [
+                    registry_owner.Bind(
+                        project_id,
+                        planning_space_entity({"data_scope_id": scope, "space_key": key}),
+                        True,
+                    )
+                ],
             )
 
         check = self._check()
@@ -654,16 +811,18 @@ class RegistryOwnerTests(unittest.TestCase):
         original = registry_owner.render_projection([self.entry])
         self.target.write_bytes(original)
         with self.assertRaisesRegex(registry_owner.RegistryOwnerError, "import it"):
-            registry_owner.update(self.inventory, self.target, add=self.entry)
+            registry_owner.update(self.inventory, self.target, [registry_owner.Add(self.entry)])
         self.assertEqual(original, self.target.read_bytes())
         self.assertFalse(self.inventory.exists())
 
     def test_update_and_rollback_restore_both_previous_files_byte_for_byte(self) -> None:
-        registry_owner.update(self.inventory, self.target, add=self.entry)
+        registry_owner.update(self.inventory, self.target, [registry_owner.Add(self.entry)])
         prior_inventory = self.inventory.read_bytes()
         prior_projection = self.target.read_bytes()
         self.assertTrue(
-            registry_owner.update(self.inventory, self.target, edit=("example", "Renamed", None))
+            registry_owner.update(
+                self.inventory, self.target, [registry_owner.Edit("example", "Renamed", None)]
+            )
         )
         self.assertNotEqual(prior_inventory, self.inventory.read_bytes())
         self.assertNotEqual(prior_projection, self.target.read_bytes())
@@ -672,7 +831,7 @@ class RegistryOwnerTests(unittest.TestCase):
         self.assertEqual(prior_projection, self.target.read_bytes())
 
     def test_moved_root_can_be_updated_and_last_project_removed(self) -> None:
-        registry_owner.update(self.inventory, self.target, add=self.entry)
+        registry_owner.update(self.inventory, self.target, [registry_owner.Add(self.entry)])
         self.project.rmdir()
         replacement = self.directory / "replacement"
         replacement.mkdir()
@@ -680,7 +839,7 @@ class RegistryOwnerTests(unittest.TestCase):
             registry_owner.update(
                 self.inventory,
                 self.target,
-                edit=("example", None, str(replacement)),
+                [registry_owner.Edit("example", None, str(replacement))],
             )
         )
         self.assertEqual(
@@ -688,7 +847,9 @@ class RegistryOwnerTests(unittest.TestCase):
             json.loads(self.target.read_bytes())["projects"][0]["canonical_root"],
         )
         replacement.rmdir()
-        self.assertTrue(registry_owner.update(self.inventory, self.target, remove="example"))
+        self.assertTrue(
+            registry_owner.update(self.inventory, self.target, [registry_owner.Remove("example")])
+        )
         self.assertEqual([], json.loads(self.target.read_bytes())["projects"])
         self.assertEqual([], registry_owner.parse_inventory(self.inventory.read_bytes()))
         self.assertTrue(self._check()["ok"])
@@ -696,13 +857,15 @@ class RegistryOwnerTests(unittest.TestCase):
     def test_new_root_must_exist_without_creating_inventory(self) -> None:
         invalid = dict(self.entry, canonical_root=str(self.directory / "missing"))
         with self.assertRaisesRegex(registry_owner.RegistryOwnerError, "cannot be resolved"):
-            registry_owner.update(self.inventory, self.target, add=invalid)
+            registry_owner.update(self.inventory, self.target, [registry_owner.Add(invalid)])
         self.assertFalse(self.inventory.exists())
         self.assertFalse(self.target.exists())
 
     def test_failed_second_rollback_write_compensates_first_write(self) -> None:
-        registry_owner.update(self.inventory, self.target, add=self.entry)
-        registry_owner.update(self.inventory, self.target, edit=("example", "Renamed", None))
+        registry_owner.update(self.inventory, self.target, [registry_owner.Add(self.entry)])
+        registry_owner.update(
+            self.inventory, self.target, [registry_owner.Edit("example", "Renamed", None)]
+        )
         before_inventory = self.inventory.read_bytes()
         before_target = self.target.read_bytes()
         original_replace = registry_owner._replace
@@ -742,7 +905,7 @@ class RegistryOwnerTests(unittest.TestCase):
             registry_owner, "_is_reparse", side_effect=lambda path: path == lock_path
         ):
             with self.assertRaisesRegex(registry_owner.RegistryOwnerError, "regular file"):
-                registry_owner.update(self.inventory, self.target, add=self.entry)
+                registry_owner.update(self.inventory, self.target, [registry_owner.Add(self.entry)])
         self.assertFalse(self.inventory.exists())
         self.assertFalse(self.target.exists())
         with self.assertRaisesRegex(registry_owner.RegistryOwnerError, "invalid rollback"):

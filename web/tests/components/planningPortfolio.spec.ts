@@ -48,7 +48,12 @@ const absent = (key: string, reason: 'old_store' | 'unreadable') => ({
 function portfolio(locale: 'en' | 'ru' = 'en', shown = spaces) {
   return mount(PlanningPortfolio, {
     props: { spaces: shown },
-    global: { plugins: [createI18n({ legacy: false, locale, messages })] },
+    global: {
+      plugins: [createI18n({ legacy: false, locale, messages })],
+      // The line of projects in no space reads the registry; the space window's browser spec
+      // drives it against its double, and the cards here need no registry.
+      stubs: { UnplacedProjects: true },
+    },
   })
 }
 

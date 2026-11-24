@@ -797,6 +797,56 @@ there are any, before anything is written:
 - no parent, projects, space or session space: `name the space, or the projects
   the item changes`.
 
+### The owner's space window
+
+The interface creates, edits and removes a space of the main store with one write,
+`POST /api/planning/space/save`. No tool makes it: an agent's call is refused with
+`owner_only`. The space is the store's and its projects are the registry's, which
+only `registry_owner` writes, here as for `valkama projects`:
+
+```json
+{"space": {"data_scope_id": "6f1c2a8e-0000-4000-8000-000000000001", "space_key": "MAIN"},
+ "name": "Main work", "key": "MAIN",
+ "projects": [{"project_id": "app", "default": true}, {"project_id": "docs", "default": false}],
+ "new_projects": [{"project_id": "docs", "display_name": "Docs", "canonical_root": "D:/code/docs"}]}
+```
+
+`space` is `null` or absent for a creation. `projects` is the whole set the space is
+to hold, exactly one of them its default when there is any; a project in
+`new_projects` is registered first, from an existing folder, and is one of them.
+`key` is optional on a creation, which then derives it from the name, and on an
+edit changes the key only while the space has issued no number. `{"space": …,
+"remove": true}` removes a space that holds no work item; its projects stay
+registered, with no space.
+
+The two writes are ordered by what a failure may leave. A creation or an edit of
+the name and the projects commits the store, then writes the registry once; when
+the registry refuses, the space stands as saved and the answer's `registry` says
+`refused` with its `reason`, so the same save naming the space writes the projects
+again. A change of key, or a removal, writes the registry first and commits the store
+after it, putting back what that write changed if the commit fails. Before either
+commits, the registry's changes are tried, so a missing folder refuses the whole
+save. The answer is `operation` (`created`, `edited` or `removed`), the space's
+record as `GET /api/planning/spaces` lists it with its `space_ref` (both `null` once
+removed), and `registry`, whose `status` is `written`, `unchanged` or `refused`.
+
+A refusal changes nothing and carries a `code`: `name_taken`, `key_taken`,
+`key_invalid`, `key_underivable` (a name with no Latin letter), `key_issued`,
+`space_not_empty`, `space_missing`, `not_main_store` (an attached store is
+read-only), `invalid_request`, and `registry` with the registry's own `reason`:
+`busy` while another command writes it, `root_missing`, `root_taken`,
+`project_taken`, `project_id_invalid`, `default_leaving` (the default project of a
+space that keeps others), `not_registered`, `not_bound`.
+
+The window reads `GET /api/planning/projects`, every registered project with its
+`root`, the `space` it is in (`{data_scope_id, space_key}`, or `null`) and whether
+it is its space's `default`, beside the registry's `status`; `GET
+/api/planning/space/key?name=…`, the key a creation of that name would get, or
+`null` with the `refusal`; and `GET /api/planning/space/form?space=KEY`, the space's
+`name` and `key`, `key_locked` once a number is issued, its `work_items` and its
+`workflow` (`name` and the number of `states`), which without `space` is the
+workflow a new space starts with.
+
 ### Naming a state
 
 A workflow's states are rows, so their keys belong to the space: the default

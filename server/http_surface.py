@@ -57,6 +57,7 @@ from .planning import interactions as planning_interactions
 from .planning import item_projects as planning_item_projects
 from .planning import model as planning_model
 from .planning import service as planning_service
+from .planning import space_window as planning_space_window
 from .planning import views as planning_views
 from .planning.routing import PlanningRouting
 from .projects import scopes
@@ -571,6 +572,10 @@ def _planning_write(call: _Call) -> _Answer | None:
     return planning_api.handle_post(call.store(), call.path, call.payload)
 
 
+def _space_window_write(call: _Call) -> _Answer | None:
+    return 200, planning_space_window.save(call.store(), call.payload)
+
+
 def _planning_exact_write(call: _Call) -> _Answer | None:
     return planning_exact_api.handle_post(call.store(), db_path(), call.path, call.payload)
 
@@ -677,6 +682,14 @@ def _kernel_answer(error: Exception, render: Callable[[Exception], tuple[int, di
     response = render(error)
     # A Kernel 500 says only that; whatever produced it stays in the process.
     return _generic_failure(500) if response[0] == 500 else response
+
+
+def _space_window_error(error: Exception) -> _Answer:
+    """The space window's own refusals, and Planning's for whatever else its write raises."""
+
+    if isinstance(error, planning_space_window.REFUSALS):
+        return planning_space_window.error_response(error)
+    return planning_api.error_response(error)
 
 
 def _exact_error(error: Exception) -> _Answer:
@@ -792,6 +805,15 @@ _GET_BOUNDARIES: tuple[_Boundary, ...] = (
 )
 
 _POST_BOUNDARIES: tuple[_Boundary, ...] = (
+    # Before the Planning prefix below: the space window commits the store itself, before
+    # or after the registry's write as each operation needs (`planning.space_window`).
+    _Boundary(
+        exact=frozenset(planning_space_window.WRITE_PATHS),
+        handler=_space_window_write,
+        errors=_space_window_error,
+        commit=_Commit.DOMAIN,
+        notify=_Notify(),
+    ),
     _Boundary(
         exact=frozenset(execution_api.WRITE_PATHS),
         handler=_execution_write,

@@ -299,6 +299,20 @@ class PlanningError(ValueError):
     """A refusal a caller can act on, worded once."""
 
 
+class SpaceRefusedError(PlanningError):
+    """A refused write of a space's own record, its `code` naming the reason.
+
+    The owner's space window words each reason itself, and an agent's tool reads
+    the message as it reads any other refusal: `name_taken`, `key_taken`,
+    `key_invalid`, `key_underivable`, `key_issued` (a number of the space is out),
+    `space_not_empty`.
+    """
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+
+
 class WorkItemNotFoundError(PlanningError):
     """The caller named a work item, by reference or id, and no item answers to it.
 
@@ -480,7 +494,9 @@ def space_key(value: object) -> str:
 
     text = text_field(value, "planning_space.key", limit=MAX_SPACE_KEY)
     if not _SPACE_KEY.match(text):
-        raise PlanningError("planning_space.key must be 2 to 8 uppercase letters or digits")
+        raise SpaceRefusedError(
+            "key_invalid", "planning_space.key must be 2 to 8 uppercase letters or digits"
+        )
     return text
 
 
@@ -496,7 +512,9 @@ def derive_space_key(name: str, taken: frozenset[str]) -> str:
 
     words = [word for word in re.split(r"[^A-Za-z0-9]+", name) if word]
     if not words:
-        raise PlanningError("planning space name has no letters to build a key from")
+        raise SpaceRefusedError(
+            "key_underivable", "planning space name has no letters to build a key from"
+        )
     if len(words) == 1:
         base = words[0][:3].upper()
     else:
@@ -510,7 +528,7 @@ def derive_space_key(name: str, taken: frozenset[str]) -> str:
         candidate = f"{base[: 8 - len(str(suffix))]}{suffix}"
         if candidate not in taken:
             return candidate
-    raise PlanningError("no free planning space key remains for this name")
+    raise SpaceRefusedError("key_underivable", "no free planning space key remains for this name")
 
 
 def refuse_retired(field: str, value: object, unknown: Callable[[], str] | None = None) -> None:

@@ -35,6 +35,7 @@ import {
   otherSpaceSchema,
   spaceBriefSchema,
   spaceIdentitySchema,
+  spaceIdentityShape,
   TITLE,
 } from '@/shared/api/planningSpaceModel.ts'
 import { actor, callField, holderField, serverText } from '@/shared/api/planningText.ts'
@@ -473,7 +474,7 @@ const movedItemSchema = recordObject({
   returned: z.union([returnedField(), z.array(boundedText(WORK_ITEM_REFERENCE, 20))]).optional(),
 })
 
-export const workflowSchema = strictObject({
+const workflowSchema = strictObject({
   workflow_id: boundedText(UUID, 36),
   name: boundedText(TITLE, 200),
   initial_state_id: boundedText(UUID, 36),
@@ -481,6 +482,9 @@ export const workflowSchema = strictObject({
   states: z.array(workflowStateSchema).min(1),
   transitions: z.array(strictObject({ from: boundedText(UUID, 36), to: boundedText(UUID, 36) })),
 })
+
+/** A space's record as a write of the space answers with it: its identity and its workflow. */
+export const spaceRecordSchema = strictObject({ ...spaceIdentityShape, workflow: workflowSchema })
 
 //: A parent edge is derived from the item's own `parent_id` rather than stored
 //: as a link, so the graph's edge kinds are the link kinds plus that one.

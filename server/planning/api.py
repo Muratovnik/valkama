@@ -39,6 +39,7 @@ from . import (
     requests,
     sections,
     service,
+    space_window,
     split,
     states,
     subscriptions,
@@ -685,6 +686,9 @@ _READS: dict[str, Callable[[sqlite3.Connection, Mapping[str, list[str]]], dict]]
     "/api/planning/commits/unattached": _unattached,
     "/api/planning/volumes": _volumes,
     "/api/planning/goal-volumes": _goal_volumes,
+    # What the owner's space window reads; its one write has a boundary of its own,
+    # since it commits the store and writes the registry in an order it chooses.
+    **space_window.READS,
 }
 
 

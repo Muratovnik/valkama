@@ -6,17 +6,23 @@
  * names a space this workstation does not have: that address can never load,
  * so instead of a panel offering «Retry», the page says which space is
  * missing and lays out the ones that exist, each a click away.
+ *
+ * With no space at all its empty state offers to create the first one, where the main store
+ * can be written (`data-part="create-first"`).
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import PlanningPortfolio from '@/pages/planning/PlanningPortfolio.vue'
 
+import { useSpaceWindow } from '@/features/space-window/spaceWindowHost.ts'
+
 import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import type { PlatformPlanningReady } from '@/shared/api/platformPlanningTypes.ts'
 import { uiUnavailable } from '@/shared/api/platformUiState.ts'
 import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
+import VButton from '@/shared/ui/VButton.vue'
 
 const props = defineProps<{
   portfolio: PlatformUiState<PlatformPlanningReady>
@@ -25,6 +31,12 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ 'open-space': [space: PlanningSpaceRef]; 'retry': [] }>()
 const { t } = useI18n()
+const spaceWindow = useSpaceWindow()
+/** With no space at all, the empty state offers the first one where the main store is writable. */
+const createFirst = computed(
+  () => props.portfolio.status === 'empty' && (spaceWindow?.creatable() ?? false),
+)
+const newSpace = () => spaceWindow?.create()
 
 const missingState = computed(() =>
   props.missingSpace
@@ -55,6 +67,17 @@ const missingState = computed(() =>
         :empty-description="t('platform.planning.noSpacesDetail')"
         @retry="emit('retry')"
       >
+        <template
+          v-if="createFirst"
+          #action
+        >
+          <VButton
+            variant="primary"
+            data-part="create-first"
+            @click="newSpace"
+            >{{ t('spaceWindow.createFirst') }}</VButton
+          >
+        </template>
         <template #default="{ payload }">
           <PlanningPortfolio
             :spaces="payload.spaces"

@@ -152,6 +152,12 @@ const standIn = computed(() => {
 })
 const unavailable = (option: ChoiceOption) =>
   Boolean(option.disabled) || (full.value && !chosen.value.includes(option.value))
+/**
+ * An option that cannot be chosen says so to a screen reader. Reka's listbox item marks it
+ * with `disabled` and `data-disabled` alone, which an element with a role does not announce;
+ * absent rather than false, as `aria-invalid` is.
+ */
+const unavailableMark = (option: ChoiceOption) => (unavailable(option) ? 'true' : undefined)
 
 // The words in the field follow the value whenever nobody is typing there.
 watch(
@@ -311,6 +317,7 @@ defineExpose({ show })
               :key="option.value"
               :value="choiceToken(option.value)"
               :disabled="unavailable(option)"
+              :aria-disabled="unavailableMark(option)"
               :text-value="option.label"
               as-child
             >

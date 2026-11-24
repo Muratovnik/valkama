@@ -168,7 +168,10 @@ python valkama.py git-hook install
    bound to a space becomes its default project; see
    [Project registry](docs/guides/configuration.md#project-registry) for several
    projects in one space. Run `python valkama.py projects list` to inspect the
-   result.
+   result. The interface does the same from «All spaces»: «New space» creates a
+   space with its projects, registering a project from its folder if needed, and
+   each space's «Configure space» renames it, changes its projects and its default
+   project, and removes it while it has no work items.
 
 From here your agents file and work the items of that space, and the skill
 tells them how. If something is missing later, `python valkama.py setup` says

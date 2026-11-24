@@ -14,7 +14,7 @@ export const shellScopeMessages = {
     },
     planning: {
       noSpaces: 'No spaces yet.',
-      noSpacesDetail: 'Run the Host Runtime project setup, bind a planning space, then refresh.',
+      noSpacesDetail: 'A space holds the work of one or more project folders.',
       registryUnavailable:
         'The project list could not be read. Open Settings to check the installation.',
       spaceMissing: 'Space {space} was not found. Choose a space below.',
@@ -43,8 +43,7 @@ export const shellScopeMessages = {
     },
     planning: {
       noSpaces: 'Пространств пока нет.',
-      noSpacesDetail:
-        'Запустите настройку проекта в Host Runtime, привяжите пространство и обновите экран.',
+      noSpacesDetail: 'Пространство держит работу одной или нескольких папок проектов.',
       registryUnavailable:
         'Список проектов не прочитан. Откройте «Настройки», чтобы проверить установку.',
       spaceMissing: 'Пространство {space} не найдено. Выберите пространство ниже.',

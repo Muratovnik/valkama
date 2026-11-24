@@ -141,12 +141,23 @@
         background: var(--color-navigation-raised);
       }
       .sk-scope {
-        display: block;
+        display: flex;
         flex: none;
-        width: 220px;
+        gap: 12px;
         height: 40px;
+      }
+      .sk-choice {
+        display: block;
+        flex: 1 1 auto;
+        width: 220px;
         border-radius: 8px;
         background: var(--color-navigation-raised);
+      }
+      /* The space menu's sign, which draws no fill of its own. */
+      .sk-menu {
+        display: block;
+        flex: none;
+        width: 40px;
       }
       .sk-panel {
         display: grid;
@@ -186,6 +197,7 @@
           padding: 8px 12px;
         }
         .sk-scope {
+          gap: 8px;
           width: 100%;
         }
       }
@@ -227,7 +239,7 @@
         <div class="sk-main">
           <div class="sk-bar">
             <div class="sk-title-row"><i class="sk-title"></i></div>
-            <i class="sk-scope"></i>
+            <span class="sk-scope"><i class="sk-choice"></i><i class="sk-menu"></i></span>
           </div>
           <div class="sk-panel"></div>
         </div>

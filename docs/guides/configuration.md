@@ -76,9 +76,11 @@ Use `projects add` to register an existing directory and
 existing Planning space. The first project bound to a space becomes its
 default; `--default` makes the project the default and takes the flag from the
 previous one in the same change. Binding a project to another space moves its
-home space; its work items stay where they are. The default project of a space
-that keeps other projects cannot leave it, by `bind` or by `remove`: first make
-another project the default with `projects bind OTHER --space KEY --default`.
+home space; its work items stay where they are. `projects unbind ID` takes a
+project out of its space and keeps it registered, with no space; the work items
+that name it keep naming it. The default project of a space that keeps other
+projects cannot leave it, by `bind`, `unbind` or `remove`: first make another
+project the default with `projects bind OTHER --space KEY --default`.
 `bind` reads only the space's identity from the store, so it also works on a
 store that has not been migrated yet.
 

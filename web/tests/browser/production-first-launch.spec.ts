@@ -61,6 +61,19 @@ const PARTS = [
     shell: '.context-controls',
     edges: ['x', 'y', 'w', 'h'],
   },
+  // The space's choice and the menu after it, each where it will stay once the spaces are read.
+  {
+    part: 'choice',
+    skeleton: '.sk-choice',
+    shell: '[data-scope-choice="space"]',
+    edges: ['x', 'y', 'w', 'h'],
+  },
+  {
+    part: 'menu',
+    skeleton: '.sk-menu',
+    shell: '[data-scope-choice="space-menu"]',
+    edges: ['x', 'y', 'w', 'h'],
+  },
   { part: 'panel', skeleton: '.sk-panel', shell: '#main-content', edges: ['x', 'y', 'w', 'h'] },
 ] as const
 

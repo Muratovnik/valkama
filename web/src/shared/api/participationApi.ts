@@ -11,9 +11,9 @@
  */
 
 import { boundedText, parseContract, positiveInt, strictObject, z } from '@/shared/api/contract.ts'
-import { workflowSchema } from '@/shared/api/planningModel.ts'
+import { spaceRecordSchema } from '@/shared/api/planningModel.ts'
 import { readRefusal } from '@/shared/api/planningRefusal.ts'
-import { LAUNCH_PLACES, SPACE_KEY, spaceIdentityShape } from '@/shared/api/planningSpaceModel.ts'
+import { LAUNCH_PLACES, SPACE_KEY } from '@/shared/api/planningSpaceModel.ts'
 import { serverText } from '@/shared/api/planningText.ts'
 import { enumField } from '@/shared/api/platformApiGuards.ts'
 import { readJsonResponse } from '@/shared/api/readJsonResponse.ts'
@@ -96,9 +96,6 @@ const participationSchema = strictObject({
     }),
   ),
 })
-
-/** A space's record as its settings write answers with it. */
-const spaceRecordSchema = strictObject({ ...spaceIdentityShape, workflow: workflowSchema })
 
 /** One key of a scope; the schema holds each kind of key to its kind of value. */
 export interface ParticipationValue {
