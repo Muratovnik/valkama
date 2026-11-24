@@ -15,7 +15,7 @@ export const analyticsPausesMessages = {
     failed: 'The pauses before model requests could not be loaded.',
     failedAgain: 'The pauses could not be loaded again, so these are from the read before.',
     reading: 'Runs read: {read} of {total}.',
-    none: 'No model request followed a pause in this period. Choose a longer period.',
+    none: 'No model request followed a pause in this period.',
     noPeriod: 'The period has no end yet. Choose its last day.',
     waits: {
       label: 'What the pause waited on',
@@ -74,7 +74,7 @@ export const analyticsPausesMessages = {
     failed: 'Не удалось загрузить паузы перед запросами к модели.',
     failedAgain: 'Не удалось загрузить паузы заново, поэтому показаны прежние.',
     reading: 'Прочитано прогонов: {read} из {total}.',
-    none: 'В этом периоде ни один запрос к модели не шёл после паузы. Выберите период длиннее.',
+    none: 'В этом периоде ни один запрос к модели не шёл после паузы.',
     noPeriod: 'У периода ещё нет конца. Выберите его последний день.',
     waits: {
       label: 'Чего ждала пауза',

@@ -212,12 +212,18 @@ describe('the pauses section', () => {
     )
   })
 
-  it('says when no request followed a pause in the period', async () => {
+  it('says when no request followed a pause in the period, and nothing the period does not bear out', async () => {
+    // Four weeks is the longest period the bar offers: «Choose a longer period» was no way out.
     stubAnalyticsReads(usage, undefined, () => pausesAnswer(pausesOf([])))
-    const page = await mountAnalytics({ routeState: { by: 'pauses' } })
-    expect(page.get('.analytics-panel').text()).toContain(
-      'No model request followed a pause in this period.',
-    )
+    for (const [locale, words] of [
+      ['en', 'No model request followed a pause in this period.'],
+      ['ru', 'В этом периоде ни один запрос к модели не шёл после паузы.'],
+    ] as const) {
+      const page = await mountAnalytics({ routeState: { by: 'pauses', period: 'weeks4' } }, locale)
+      expect(page.get('.pauses-panel .empty-title').text()).toBe(words)
+      expect(page.get('.pauses-panel').text()).not.toMatch(/longer|длиннее/u)
+      page.unmount()
+    }
   })
 
   it('says a first read failed and reads again on retry', async () => {
