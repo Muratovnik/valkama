@@ -7,7 +7,8 @@
  * on the rail and stands, with the choice of wait, from the first moment of the read. Its panel
  * shows, for the wait chosen (the machine first), a table per environment with a line for each
  * bucket its requests fell in, and none for another, and a line of their sum whose shares are of
- * the sum's tokens. Every table has the same seven columns;
+ * the sum's tokens. In a project's scope it reads that project's runs and says so beside its
+ * heading; on the global page every run. Every table has the same seven columns;
  * the cold requests sent during background work are «—» where the client does not tell it. A
  * wait with no request, an answer with none, a first read that failed and a read again that
  * failed each say so in words of their own.
@@ -96,6 +97,25 @@ describe('the pauses section', () => {
     await page.get('.analytics-refresh').trigger('click')
     await flushPromises()
     expect(reads.pausesAsked).toHaveLength(3)
+  })
+
+  it('counts the runs of the page’s project in a project scope, and every run on the global page', async () => {
+    const reads = stubAnalyticsReads(usage, undefined, (query) =>
+      pausesAnswer({ ...PAUSES, project: query.get('project') }),
+    )
+    const page = await mountAnalytics({
+      routeState: { by: 'pauses' },
+      projectId: 'rover',
+      projectTitle: 'Rover',
+    })
+    expect(reads.pausesAsked.map((query) => query.get('project'))).toEqual(['rover'])
+    expect(page.get('.pauses-panel [data-part="scope"]').text()).toBe('project Rover')
+    expect(environments(page)).toHaveLength(2)
+
+    await page.setProps({ projectId: null, projectTitle: null })
+    await flushPromises()
+    expect(reads.pausesAsked.map((query) => query.has('project'))).toEqual([true, false])
+    expect(page.get('.pauses-panel [data-part="scope"]').text()).toBe('all projects')
   })
 
   it('shows its heading and choice of wait while the first read waits', async () => {

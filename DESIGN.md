@@ -2803,8 +2803,10 @@ widths (`ChartTable`'s `layout`), so a column stands at the same edges down the 
 the panel beside the rail; under that width a table scrolls in its own frame. Its read goes back
 to the transcripts — gigabytes over four weeks, parsed over several processes — so its entry says
 what the section shows instead of a figure, and the section asks its read only while it is on
-show: when it opens, when the period changes and on the bar's refresh; the filters and the
-measure do not reach it. Its heading is its name on the rail and stands, with the choice of what
+show: when it opens, when the period or the project changes and on the bar's refresh; the
+filters and the measure do not reach it. In a project's scope it counts the runs with work in
+that project, each run whole, as the usage read places work, and says the scope beside its
+heading as the other sections do. Its heading is its name on the rail and stands, with the choice of what
 the pause waited on — the machine, a person or a keep-warm wake, the machine first — from the
 first moment of the read. A first read can outlast the browser's wait, so the server answers how
 many runs it has parsed and the page asks again, saying under the heading how far it got.

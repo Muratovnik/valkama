@@ -37,7 +37,7 @@ python valkama.py <command> [options]
 | `export [--section planning] [--space KEY]... [--output PATH]` | write every Planning space, every one of its work items and their questions as one JSON export; see [`export`](#export) |
 | `transcripts purge [--session ID]... [--before DATE] [--dry-run]` | delete archived transcripts now, on request, whatever retention says; prints counts only; see [The transcript archive](client-hooks.md#the-transcript-archive) |
 | `usage rebuild --session ID [--agent ID] \| --all [--dry-run] [--json]` | read a session's usage run again from its transcript; see [`usage rebuild`](#usage-rebuild) |
-| `usage pauses [--since WHEN] [--until WHEN] [--client NAME]... [--json]` | how much of the prompt cache model requests read after pauses of each length, per client, role, model and sign-in; reads only; see [`usage pauses`](#usage-pauses) |
+| `usage pauses [--since WHEN] [--until WHEN] [--client NAME]... [--project ID] [--json]` | how much of the prompt cache model requests read after pauses of each length, per client, role, model and sign-in; reads only; see [`usage pauses`](#usage-pauses) |
 | `quota import --source FILE` | import subscription quota samples from a JSON-lines file, one window a line; importing again keeps nothing twice. The format is in [the connection contract](../connection-contract.md#subscription-quota-samples-and-accounts) |
 | `migrate planning-model [--dry-run]` | explicitly convert a Board-era store to Planning once; dry run converts a copy; see [Converting a Board-era store](store-upgrades.md#converting-a-board-era-store) |
 | `attach NAME PATH [--label TEXT]` | attach another database file as a scope |
@@ -68,7 +68,7 @@ up to its count stops the export.
 
 ## `usage pauses`
 
-`usage pauses [--since WHEN] [--until WHEN] [--client NAME]... [--json]` reports,
+`usage pauses [--since WHEN] [--until WHEN] [--client NAME]... [--project ID] [--json]` reports,
 for the model requests sent in a period, how much of each one's context was read
 from the prompt cache and how much was written to it again, by the length of the
 pause before it. It reads the runs the background usage reader knows and their
@@ -80,7 +80,12 @@ takes a while; `--client` and a shorter period read less.
 (`2030-03-04T10:00+02:00`). `--until` defaults to now and `--since` to 30 days
 before `--until`. The period is read in whole hours of UTC, `--since` rounded
 down to its hour and `--until` up. `--client` (`claude`, `codex`, repeatable)
-reads only that client's runs.
+reads only that client's runs. `--project` (a project id, as `projects list` shows
+it) reads only the runs with work in that project in the period, placed as the
+Analytics usage read places work: by the planning space of the task the work was
+on, or, for work on no task, by the project whose root holds the session's
+working directory. A run is counted whole, its requests outside that project's
+work included.
 
 What is measured:
 
@@ -113,6 +118,7 @@ Fields are only ever added to it:
 | Field | Meaning |
 | --- | --- |
 | `from`, `to` | the hours read, UTC, `to` not included |
+| `project` | the project id `--project` named, or `null` for every run |
 | `buckets` | each bucket's `key`, `from_seconds` and `to_seconds` (`null` for the last), in order |
 | `waits` | `machine`, `person`, `wake` |
 | `cold_share` | a request that read less than this share of its context from the cache counts as cold (0.5) |
@@ -139,6 +145,7 @@ Each row:
  "interface_version": "valkama-usage-pauses",
  "from": "2030-03-01T00:00:00+00:00",
  "to": "2030-03-08T00:00:00+00:00",
+ "project": null,
  "buckets": [{"key": "0-4m", "from_seconds": 0, "to_seconds": 240}],
  "waits": ["machine", "person", "wake"],
  "cold_share": 0.5,

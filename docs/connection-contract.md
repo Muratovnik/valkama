@@ -1198,10 +1198,11 @@ with a count, oldest first, with every kind. No MCP tool counts or reads uses.
 
 ### Pauses before model requests
 
-`GET /api/analytics/pauses?from=…&to=…&utc_offset=…` answers how much of the prompt
+`GET /api/analytics/pauses?from=…&to=…&utc_offset=…[&project=…]` answers how much of the prompt
 cache model requests read after pauses of each length, per client, role, model and
 sign-in. The period is given as the usage read takes it: a date at `utc_offset`, or a
-time with its offset. It is read in whole hours of UTC. Any other parameter is refused
+time with its offset. It is read in whole hours of UTC. `project` narrows it to the
+runs with work in that project, as `--project` does. Any other parameter is refused
 (`invalid_request`, 400). The answer is `{"interface_version": "valkama-analytics-api",
 "pauses": {...}}`. The object under `pauses` is the report that `valkama usage pauses
 --json` prints, with the same fields and meaning

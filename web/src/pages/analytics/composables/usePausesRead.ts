@@ -1,10 +1,11 @@
 /**
  * The pauses before model requests over the page's period, as the pauses section reads them: one
- * read of `GET /api/analytics/pauses` at the browser's own offset.
+ * read of `GET /api/analytics/pauses` at the browser's own offset, of the page's project's runs
+ * in a project scope (`projectId`) and of every run on the global page.
  *
  * The read goes back to the transcripts, which takes seconds over a long period, so it is asked
  * only while the section is on show — its panel owns it: when the panel opens, when the period
- * changes, and on the bar's refresh (`refresh`). Nothing else reaches it: not the filters, the
+ * or the project changes, and on the bar's refresh (`refresh`). Nothing else reaches it: not the filters, the
  * measure or the live interval. While it is read again the answer on show stays; a read again
  * that fails keeps it and says so, and a first read that fails says the pauses could not be read.
  * A later read always replaces an earlier one, so a slow answer never draws over a newer one.
@@ -29,7 +30,10 @@ export type PausesRead =
   | { status: 'no-period' }
   | { failedAgain: boolean; pauses: Pauses; readAt: string; refreshing: boolean; status: 'ready' }
 
-export function usePausesRead(options: { view: () => AnalyticsView }) {
+export function usePausesRead(options: {
+  projectId: () => string | null
+  view: () => AnalyticsView
+}) {
   const read = shallowRef<PausesRead>({ status: 'loading' })
   let reading: AbortController | null = null
 
@@ -45,7 +49,8 @@ export function usePausesRead(options: { view: () => AnalyticsView }) {
     const held = read.value
     read.value = held.status === 'ready' ? { ...held, refreshing: true } : { status: 'loading' }
     try {
-      const pauses = await fetchPauses(bounds, controller.signal, (progress) => {
+      const query = { ...bounds, project: options.projectId() }
+      const pauses = await fetchPauses(query, controller.signal, (progress) => {
         if (!controller.signal.aborted && read.value.status === 'loading')
           read.value = { status: 'loading', progress }
       })
@@ -66,10 +71,11 @@ export function usePausesRead(options: { view: () => AnalyticsView }) {
     }
   }
 
-  /** What names the period: a preset, or its own ends. The moment moving changes nothing. */
+  /** What names the read: the project and the period, a preset or its own ends. The moment
+   * moving changes nothing. */
   const period = () => {
     const { period: preset, from, to } = options.view()
-    return `${preset}|${from}|${to}`
+    return `${options.projectId() ?? ''}|${preset}|${from}|${to}`
   }
   watch(period, () => void refresh(), { immediate: true })
   onScopeDispose(() => reading?.abort())

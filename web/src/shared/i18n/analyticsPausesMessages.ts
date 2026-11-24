@@ -36,7 +36,8 @@ export const analyticsPausesMessages = {
         'Cold in background: cold requests sent during background work; Codex does not tell it.',
       person: 'Waits for a person are never warmed: they are the control sample.',
       wake: 'Wakes are requests a keep-warm hook started; their cost is what warming cost.',
-      period: 'The period applies, in whole hours; the filters do not.',
+      period:
+        'The period applies, in whole hours, and a project’s scope counts the runs with work in that project, each run whole; the filters do not apply.',
       cost: 'A cost is an estimate at API prices, not a bill.',
     },
     environment: '{client} · {role} · {model} · {auth}',
@@ -93,7 +94,8 @@ export const analyticsPausesMessages = {
       background: 'Холодные при фоне — отправленные во время фоновой работы; Codex её не сообщает.',
       person: 'Ожидания человека не греются: это контрольная выборка.',
       wake: 'Разбудки — запросы, начатые хуком прогрева; их цена и есть цена прогрева.',
-      period: 'Период действует, целыми часами; фильтры — нет.',
+      period:
+        'Период действует, целыми часами, а в области проекта учтены прогоны с работой в этом проекте, каждый целиком; фильтры не действуют.',
       cost: 'Цена — оценка по ценам API, а не счёт.',
     },
     environment: '{client} · {role} · {model} · {auth}',

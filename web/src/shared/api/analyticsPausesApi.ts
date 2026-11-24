@@ -54,6 +54,7 @@ const pausesSchema = strictObject({
   }),
   from: boundedText(UTC_MOMENT, 32),
   to: boundedText(UTC_MOMENT, 32),
+  project: boundedText(NAME, 200).nullable(),
   buckets: z.array(
     strictObject({
       key: boundedText(BUCKET, 16),
@@ -91,11 +92,15 @@ export function validatePausesAnswer(payload: unknown): Pauses {
   return parseContract(answerSchema, payload, 'analytics.pauses', invalid).pauses
 }
 
-/** The period the read is asked for, as the usage read takes one. */
+/**
+ * The period the read is asked for, as the usage read takes one, and the project whose runs it
+ * counts; none or null counts every run.
+ */
 export interface PausesQuery {
   from: string
   to: string
   utcOffset: number
+  project?: string | null
 }
 
 /** How long the read waits before it asks again a server that is still reading. */
@@ -125,6 +130,7 @@ export async function fetchPauses(
     to: query.to,
     utc_offset: String(query.utcOffset),
   })
+  if (query.project) parameters.set('project', query.project)
   for (;;) {
     const { response, payload } = await readJsonResponse(`${path}?${parameters}`, { signal })
     if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`)

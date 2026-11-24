@@ -62,6 +62,7 @@ from dataclasses import dataclass
 from .. import transcripts
 from ..telemetry import usage_collect, usage_ledger, usage_pauses
 from ..telemetry.usage_targets import CODEX, Finder, Target
+from . import usage
 
 INTERFACE = "valkama-usage-pauses"
 MAIN = "main"
@@ -367,12 +368,15 @@ def read(
     start: float,
     end: float,
     clients: Sequence[str] = (),
+    project: str | None = None,
     reader: Reader | None = None,
     until: float | None = None,
 ) -> dict:
     """The report over the hours from `start` to `end`, seconds since the epoch (see the module).
 
-    `clients` narrows it to those clients; none is every one. `conn` is only read, and must
+    `clients` narrows it to those clients; none is every one. `project` narrows it to the runs
+    with work in the period that the usage read places in that project
+    (`usage.project_runs`), each run whole. `conn` is only read, and must
     give rows by name. With `until`, a `time.monotonic()` moment, runs not read by then raise
     `UnfinishedError`, and a read asked again goes on from the runs this one read.
     """
@@ -391,6 +395,9 @@ def read(
         )
         if not clients or row["client"] in clients
     }
+    if project is not None:
+        held = usage.project_runs(conn, project, start=first, end=last)
+        runs = {key: row for key, row in runs.items() if key in held}
     subscriptions = _subscriptions(conn)
     totals: dict[tuple, list[float]] = {}
     known: dict[tuple, bool] = {}
@@ -419,6 +426,7 @@ def read(
         "interface_version": INTERFACE,
         "from": _stamp(first),
         "to": _stamp(last),
+        "project": project,
         "buckets": [
             {
                 "key": key,
@@ -438,6 +446,8 @@ def render(report: Mapping) -> str:
     """The report as text: a block per environment and wait, a line per bucket."""
 
     lines = [f"Pauses before model requests, {report['from']} to {report['to']}"]
+    if report["project"]:
+        lines.append(f"Runs with work in project {report['project']}")
     runs = report["runs"]
     lines.append(f"{runs['read']} runs read, {runs['missing']} with no transcript to read")
     if not report["rows"]:

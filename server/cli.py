@@ -612,7 +612,9 @@ def _usage_pauses_main(options: argparse.Namespace) -> None:
     try:
         with contextlib.closing(open_read_only()) as conn:
             conn.row_factory = sqlite3.Row
-            report = usage_pauses.read(conn, start=since, end=until, clients=options.client)
+            report = usage_pauses.read(
+                conn, start=since, end=until, clients=options.client, project=options.project
+            )
     except (OSError, ValueError, sqlite3.Error) as error:
         raise SystemExit(f"usage pauses: {error}") from error
     print(
@@ -896,6 +898,11 @@ def main(argv: list[str] | None = None) -> None:
         default=[],
         choices=("claude", "codex"),
         help="only this client's runs; repeat for more",
+    )
+    pauses_cmd.add_argument(
+        "--project",
+        metavar="ID",
+        help="only the runs with work in this project, as the usage read places work",
     )
     pauses_cmd.add_argument("--json", action="store_true")
     quota_cmd = commands.add_parser("quota", help="act on the subscription quota samples")

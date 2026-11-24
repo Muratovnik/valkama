@@ -149,22 +149,15 @@ function narrowToPeriod(span: OwnPeriod, label: string, framed = false) {
   refuse('days', t('analytics.drill.full', { value: label }))
 }
 
+/** What every read of the page is of: the view and the project the page is scoped to. */
+const viewed = { view: () => view.value, projectId: () => props.projectId }
 /** The page's reads, asked once however many of its parts ask them (`useSharedUsage`). */
-const shared = provideSharedUsage({ view: () => view.value, projectId: () => props.projectId })
+const shared = provideSharedUsage(viewed)
 /** What the page's colours are ranked over: the period without its filters (`useColourPlaces`). */
-const places = provideColourPlaces({
-  shared,
-  view: () => view.value,
-  projectId: () => props.projectId,
-})
+const places = provideColourPlaces({ shared, ...viewed })
 /** The page's one status region for its read waits: it says the word while any of them shows. */
 const { shown: readWaitShown } = provideReadWaits()
-const read = useUsageRead({
-  places,
-  shared,
-  view: () => view.value,
-  projectId: () => props.projectId,
-})
+const read = useUsageRead({ places, shared, ...viewed })
 
 const today = computed(() => localDay(read.askedAt.value))
 
@@ -254,9 +247,8 @@ const { tiles: usageTiles, refresh: refreshTiles } = useRailTiles({
   overview: () => read.state.value,
   overviewAt: () => read.askedAt.value,
   places,
-  projectId: () => props.projectId,
   shared,
-  view: () => view.value,
+  ...viewed,
 })
 
 /**
@@ -380,6 +372,7 @@ const emptyDescription = computed(() => {
           v-else-if="view.by === PAUSES_SECTION"
           :view="view"
           :refreshes="refreshes"
+          :project-id="projectId"
         />
         <PlatformStatePanel
           v-else

@@ -66,6 +66,7 @@ export function pausesOf(rows: PauseRow[]): Pauses {
     interface_version: 'valkama-usage-pauses',
     from: '2026-11-04T00:00:00+00:00',
     to: '2026-11-11T15:00:00+00:00',
+    project: null,
     buckets: EDGES.map(([key, from, to]) => ({ key, from_seconds: from, to_seconds: to })),
     waits: ['machine', 'person', 'wake'],
     cold_share: 0.5,

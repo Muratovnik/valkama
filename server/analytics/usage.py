@@ -440,6 +440,35 @@ def _stamp(micro: int, *, up: bool) -> str:
     return moment.isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
+def project_runs(conn: sqlite3.Connection, project: str, *, start: float, end: float) -> set:
+    """The runs, as `(session, agent)`, with work between `start` and `end` (seconds since the
+    epoch) that this read places in `project`: a stretch with a task is its planning space's
+    project's, one with none the project whose root holds its session's working directory."""
+
+    rows = conn.execute(
+        "SELECT DISTINCT s.session_id, s.agent_id, s.work_item_id IS NULL, p.project_id"
+        " FROM usage_segments s"
+        " LEFT JOIN work_items i ON i.work_item_id = s.work_item_id"
+        " LEFT JOIN planning_spaces p ON p.planning_space_id = i.planning_space_id"
+        " WHERE s.started_at < ? AND s.ended_at >= ?",
+        (
+            _stamp(round(end * _SECOND), up=True),
+            _stamp(round(start * _SECOND), up=False),
+        ),
+    ).fetchall()
+    loose = {str(row[0]) for row in rows if row[2]}
+    held = (
+        _session_projects(conn, loose, project_registry.read_registry()["projects"])
+        if loose
+        else {}
+    )
+    return {
+        (str(row[0]), str(row[1]))
+        for row in rows
+        if (held.get(str(row[0])) if row[2] else row[3]) == project
+    }
+
+
 @dataclass
 class _Window:
     """What one period adds up to, in total and by group."""
@@ -800,6 +829,7 @@ __all__ = [
     "UsageQuery",
     "UsageQueryError",
     "caller_zone",
+    "project_runs",
     "query",
     "read",
 ]

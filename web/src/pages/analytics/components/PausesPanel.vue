@@ -13,7 +13,9 @@
  * whose cost is what warming cost. The choice stands until the page is left, as a chart's choice of
  * its table does. A wait no request followed says so in its own words. What a pause, a share,
  * «cold» and the background's column are, and that the period applies and the filters do not, the
- * heading's «ⓘ» says once.
+ * heading's «ⓘ» says once. In a project's scope it counts the runs with work in that project,
+ * each run whole, and says the scope beside its heading as the other sections do
+ * (`SectionScope`).
  *
  * It reads the pauses itself (`usePausesRead`), not the page's usage: when it opens, when the
  * period changes and each time the bar asks a refresh (`refreshes`). Its heading, «ⓘ» and choice
@@ -32,6 +34,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
+import SectionScope from '@/pages/analytics/components/SectionScope.vue'
 import { usePausesRead } from '@/pages/analytics/composables/usePausesRead.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { pauseTables } from '@/pages/analytics/utils/pauseTables.ts'
@@ -53,13 +56,18 @@ const props = defineProps<{
   /** How many times the bar asked a refresh: each one reads the pauses again. */
   refreshes: number
   view: AnalyticsView
+  /** The project the page is scoped to; null on the global page. */
+  projectId?: string | null
 }>()
 
 const { t, locale } = useI18n()
 const words = useSpendingWords()
 const usageWords = useUsageWords()
 
-const { read: pausesRead, refresh } = usePausesRead({ view: () => props.view })
+const { read: pausesRead, refresh } = usePausesRead({
+  view: () => props.view,
+  projectId: () => props.projectId ?? null,
+})
 watch(
   () => props.refreshes,
   () => void refresh(),
@@ -178,6 +186,9 @@ const tables = (pauses: Pauses) =>
     :title="t('analytics.pauses.section')"
     :about="about"
   >
+    <template #beside>
+      <SectionScope />
+    </template>
     <template #actions="{ size }">
       <SegmentedControl
         v-model="wait"

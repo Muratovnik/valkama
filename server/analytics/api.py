@@ -147,22 +147,26 @@ PAUSES_BUDGET_SECONDS = 8.0
 
 def _pauses(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> tuple[int, dict]:
     """The pauses before model requests over `from` to `to`, a date at `utc_offset` or a time
-    with its offset as the usage read takes them, read in whole hours (`pauses`).
+    with its offset as the usage read takes them, read in whole hours (`pauses`); `project`
+    narrows it to the runs with work in that project, as the usage read places work.
 
     A read that has not parsed every run's transcript within `PAUSES_BUDGET_SECONDS` answers 202
     with how many runs it read and how many are left (`reading`); what it read is kept, so the
     same read asked again goes on from there and in the end answers 200 with the report.
     """
 
-    _refuse_unknown(parameters, frozenset({"from", "to", "utc_offset"}))
+    _refuse_unknown(parameters, frozenset({"from", "to", "utc_offset", "project"}))
     period = usage.query(
         start=query_params.required(parameters, "from", error=AnalyticsHttpError),
         end=query_params.required(parameters, "to", error=AnalyticsHttpError),
         utc_offset=_offset(parameters),
     )
+    project = _first(parameters, "project")
     until = time.monotonic() + PAUSES_BUDGET_SECONDS
     try:
-        report = pauses.read(conn, start=period.start / 1e6, end=period.end / 1e6, until=until)
+        report = pauses.read(
+            conn, start=period.start / 1e6, end=period.end / 1e6, project=project, until=until
+        )
     except pauses.UnfinishedError as unfinished:
         reading = {"runs_read": unfinished.read, "runs_left": unfinished.left}
         return 202, {"interface_version": ANALYTICS_API_INTERFACE, "reading": reading}

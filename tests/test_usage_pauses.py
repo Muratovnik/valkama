@@ -18,6 +18,7 @@ from unittest import mock
 
 from server import cli
 from server.analytics import api, pauses
+from server.projects import project_registry
 from server.telemetry import usage_pauses
 from server.telemetry.usage_steps import NOTICE, NOTIFIED, SERVICE, claude_step, codex_step, is_wake
 from tests.usage_fixtures import HOUR, MINUTE, ORG_A, ORG_B, Case, CodexRun, epoch, stamp, usage
@@ -499,6 +500,7 @@ REPORT_FIELDS = {
     "interface_version",
     "from",
     "to",
+    "project",
     "buckets",
     "waits",
     "cold_share",
@@ -594,6 +596,76 @@ class HttpReadTests(PausesCase):
                     self.fail("the read was answered")
                 self.assertEqual(400, status)
                 self.assertEqual("invalid_request", body["error"]["code"])
+
+
+class ProjectTests(PausesCase):
+    """A project's report holds the runs whose work the usage read places in that project."""
+
+    def three_in_two_projects(self) -> dict:
+        # Sessions 0 and 2 work under alpha's root, session 1 under beta's; none has a task, so
+        # each run's project is the one whose root holds its session's working directory.
+        folders = {0: "alpha/web", 1: "beta", 2: "alpha"}
+        for number, folder in folders.items():
+            run = self.session(f"{SESSION}-{number}")
+            run.prompt(0)
+            run.end_turn(2)
+            run.prompt((number + 1) * MINUTE)
+            run.end_turn((number + 1) * MINUTE + 2)
+            self.conn.execute(
+                "UPDATE sessions SET cwd = ? WHERE id = ?",
+                (str(self.root / folder), f"{SESSION}-{number}"),
+            )
+        self.conn.commit()
+        return {
+            "projects": [
+                {"project_id": name, "canonical_root": str(self.root / name)}
+                for name in ("alpha", "beta")
+            ]
+        }
+
+    def test_a_project_counts_only_its_runs_and_no_project_counts_every_run(self) -> None:
+        registry = self.three_in_two_projects()
+        with mock.patch.object(project_registry, "read_registry", return_value=registry):
+            alpha = self.report(end=HOUR, project="alpha")
+            beta = self.report(end=HOUR, project="beta")
+            every = self.report(end=HOUR)
+            none = self.report(end=HOUR, project="gamma")
+        self.assertEqual(("alpha", {"read": 2, "missing": 0}), (alpha["project"], alpha["runs"]))
+        self.assertEqual([2], [row["requests"] for row in alpha["rows"]])
+        self.assertEqual([1], [row["requests"] for row in beta["rows"]])
+        self.assertEqual(
+            (None, [3]), (every["project"], [row["requests"] for row in every["rows"]])
+        )
+        self.assertEqual(([], {"read": 0, "missing": 0}), (none["rows"], none["runs"]))
+
+    def test_the_read_and_the_command_take_the_project(self) -> None:
+        registry = self.three_in_two_projects()
+        self.ticks((0, 30 * MINUTE))
+        self.read()
+        self.reader.row_factory = sqlite3.Row
+        period = {"from": ["2030-03-04"], "to": ["2030-03-05"], "utc_offset": ["0"]}
+        with mock.patch.object(project_registry, "read_registry", return_value=registry):
+            status, body = api.handle_get(
+                self.reader, api.PAUSES_PATH, {**period, "project": ["beta"]}
+            )
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                cli.main(
+                    [
+                        "usage",
+                        "pauses",
+                        "--json",
+                        "--project",
+                        "alpha",
+                        "--since",
+                        "2030-03-04",
+                        "--until",
+                        "2030-03-05",
+                    ]
+                )
+        self.assertEqual((200, "beta"), (status, body["pauses"]["project"]))
+        self.assertEqual({"read": 1, "missing": 0}, body["pauses"]["runs"])
+        self.assertEqual({"read": 2, "missing": 0}, json.loads(stream.getvalue())["runs"])
 
 
 class CommandTests(PausesCase):
