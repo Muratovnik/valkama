@@ -134,16 +134,27 @@ When the work is split across parallel worktrees of this repository, the checks
 split with it:
 
 - The worker of one worktree runs, right after each commit and each through
-  `python tests/run_record.py run`, whose record its report cites: the targeted
+  `python tests/run_record.py run` into a result directory of that commit's
+  own, whose records its report cites: the targeted
   tests of what the commit changed, `python tests/commit_subjects.py` and
   `typos`, the last as `python tests/run_record.py run --out DIR -- typos` so
   the record holds a step named `typos`; when the commit touches `web/`, also `npm run lint`, `npm run typecheck`,
   `npm run check:ui-system` and `npm run lint:dead` there; an export a commit
-  leaves unused fails nothing else short of the whole `npm test`. The worker
-  does not run the whole browser suite or the history audit.
-- The integrator accepts a worker's branch only on the record its report cites,
-  checked in that worktree with `python tests/run_record.py check DIR --tree
-  <the worktree> --require typos`, which refuses a record with no `typos` step.
+  leaves unused fails nothing else short of the whole `npm test`. A step of an
+  earlier record whose inputs the commit did not touch is not run again:
+  `python tests/run_record.py check NEW OLD ... --require typos` takes the
+  records as a chain, the newest made at the tree as it is now, and names each
+  step of an earlier one a change since touched, with the path; that step goes
+  into the new record. The worker does not run the whole browser suite or the
+  history audit.
+- The integrator accepts a worker's branch only on the records its report
+  cites, checked in that worktree with that worktree's `python tests/run_record.py
+  check DIR [DIR ...] --tree <the worktree> --require typos`, which refuses a record
+  with no `typos` step and a chain that leaves a touched step without a record
+  where it is untouched. After a merge, the branch's records count on the merged
+  head the same way, beside a record made there: a step whose inputs the other
+  side of the merge did not change is not run again, and the check names each
+  one it did change, which the integrator reruns.
   The integrator runs the full list above and the whole browser suite once, on
   the integrated head, through `npm run test:browser:allowed` in `web/`. Only one
   such run goes on a machine at a time: two at once fail tests that pass alone.

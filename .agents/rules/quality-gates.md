@@ -148,11 +148,35 @@ A report cites its `DIR/record.json`, which `python tests/run_record.py check`
 refuses for another tree or state, and, given `--require NAME`, for having no
 step of that name; a step that `run` records takes the name of its command's
 words, so `run --out DIR -- typos` is the step `typos` the integrator requires
-of a worker's record. Use it instead of a wrapper of your own, and
+of a worker's record. `run` replaces the record in DIR once the tree has
+changed, so each commit's checks go into a directory of their own. Use `gates`
+instead of a wrapper of your own, and
 `serve --out DIR` with `stop --out DIR` for a live check; a test compares its
 steps with `AGENTS.md`.
 It does not move `TEMP`, which is what keeps the suite's renames from failing
 with `PermissionError`.
+
+Given several records, `check` takes them as a chain, which
+`tests/record_chain.py` states in full. One record is made at the tree as it is
+now; the others at commits HEAD descends from, in any worktree of the
+repository, since what a step ran on is its commit and the uncommitted paths
+its record names. A step of an earlier record counts only when no path that
+differs between its state and the tree touches what it reads: `typos`, the
+subjects and the release audit count only from the newest; a unittest run reads,
+module by module, what `tests/affected.py` reaches, so a whole suite is carried
+by a rerun of the modules a change reaches; a command in `web/` reads `web/` but
+`web/dist` and every file a source there names, as `DESIGN.md` is by the token
+check `npm test` runs; the browser suite reads `web/` but `web/dist`, `server/`
+and `valkama.py`; a path outside `web/`, `server/`, `tests/`, `docs/`, `.agents/`,
+`valkama.py` and the Markdown files at the top touches every step. A touched step
+counts from a record where it is untouched, and is refused, naming it and the
+path, when none is. The same step is the same words in the same directory, and
+for the browser runner the specs its list file named, which `run` keeps. A
+document no check names therefore needs `typos` and the subjects alone. After a
+merge the branch's records count on the merged head the same way, so only the
+steps the other side's changes touch run again. The chain's Python reach is this
+checkout's import graph, so a worktree's chain is checked with that worktree's
+own `tests/run_record.py`.
 
 Heavy runs wanting more CPUs than there are fail tests that pass alone, so each
 goes through one gate, `tests/machine_lock.py`, at a file in the system's
