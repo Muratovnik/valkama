@@ -20,8 +20,10 @@
  * 2026-11-24): its column keeps the room of the longest id and of the start of the other value
  * after it, so an effort's pair stands whole there at every size, where it was cut at 1200 in
  * English. Its cut case is the Model section split by task: the id stands whole and the task's
- * title, longer than any line beside it, is cut at its own end, with an ellipsis and a hint that
- * says the pair whole, while the short task's pair stands whole with no hint.
+ * title, longer than any line beside it, stays on the id's line and is cut at its own end, with an
+ * ellipsis and a hint that says the pair whole, while the short task's pair stands whole with no
+ * hint. That the second part of a pair, a task or a session, keeps the id's line and is cut there
+ * rather than taking a line of its own is the owner's decision of 2026-11-24.
  *
  * A control of a bar, a small chart or the legend is named by what pressing it does, which for a
  * pair names its model alone: «Details of claude-opus-5-5» names the high and the medium row
@@ -302,11 +304,14 @@ const pairParts = (page: Page) =>
         range.selectNodeContents(part)
         return range.getBoundingClientRect().width > part.getBoundingClientRect().width + 0.5
       }
+      // eslint-disable-next-line unicorn/consistent-function-scoping -- runs in the page, as `cut`
+      const top = (part: Element) => Math.round(part.getBoundingClientRect().top)
       return {
         id: start.textContent?.trim() ?? '',
         idCut: cut(start),
         restCut: cut(end),
         ellipsis: getComputedStyle(end).textOverflow === 'ellipsis',
+        oneLine: top(start) === top(end),
       }
     }),
   )
@@ -377,10 +382,11 @@ for (const locale of ['en', 'ru'] as const)
       // The long task's pair is cut, the short one's whole; the hint comes only for the cut one.
       expect(found.map((one) => one.cut)).toEqual([true, false])
       expect(hints).toEqual([true, false])
-      // The cut is the task's, at its own end with an ellipsis; the id stands whole in both.
+      // The cut is the task's, on the id's line and at its own end with an ellipsis (the owner's
+      // decision of 2026-11-24); the id stands whole in both.
       expect(parts).toEqual([
-        { id: 'claude-opus-5-5', idCut: false, restCut: true, ellipsis: true },
-        { id: 'claude-5', idCut: false, restCut: false, ellipsis: true },
+        { id: 'claude-opus-5-5', idCut: false, restCut: true, ellipsis: true, oneLine: true },
+        { id: 'claude-5', idCut: false, restCut: false, ellipsis: true, oneLine: true },
       ])
       // Each name is its row's control, named by its whole pair, cut or not.
       const presses = page.locator('.spending-table tbody th .chart-press')
