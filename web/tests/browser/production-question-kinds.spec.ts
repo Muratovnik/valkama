@@ -2,7 +2,8 @@
  * The kinds of question in «Needs my answer», at the widths its layout changes at: each purpose
  * the owner answers is drawn as its kind, with the content and the answers of the kinds table, and
  * one press writes the option it names; «Later…» puts a question off to a day, to new comments,
- * to whichever of the two comes first, or to a card's close; a question its card's close took
+ * to whichever of the two comes first, said by a line right under the day and the count, or
+ * to a card's close; a question its card's close took
  * away says so; and the tabs over the list show one kind's questions, drop a kind with none, give
  * way to «All» when the open kind empties, and are what «Question N of M» counts. A task in a goal shows its goal and the goal's conditions, the goal
  * read by the reference the task's card names it by, at a phone's width in both languages too.
@@ -13,11 +14,13 @@ import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { spaceScope, workItem, workItemRef } from './planningFixtures.ts'
+import { WORDS } from './questionGroupsPage.ts'
 import { everyKind, ofPurpose, openKinds } from './questionKindsPage.ts'
 import { expectInside } from './requestRow.ts'
 import { held } from './served/preview.ts'
 import { briefAnswer, itemAnswer } from './servedAnswers.ts'
 import { test } from './test.ts'
+import { eitherUnderTheCount, untilFields } from './untilChoice.ts'
 
 const WIDTHS = [1280, 620, 390] as const
 const POLL = 30_000
@@ -218,6 +221,48 @@ for (const width of WIDTHS) {
     await expect(place).toHaveText('Question 1 of 2')
   })
 }
+
+for (const locale of ['ru', 'en'] as const)
+  for (const width of WIDTHS)
+    test(`at ${width}px in ${locale} «whichever comes first» of «Later…» stands under the day and the count`, async ({
+      page,
+    }) => {
+      await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
+      const words = WORDS[locale]
+      const { record, requests } = await openKinds(
+        page,
+        [ofPurpose('return', { prompt: 'Put off by both' })],
+        width,
+      )
+      const both = record('Put off by both')
+      await both.getByRole('button', { name: words.later, exact: true }).click()
+      const day = both.getByLabel(words.day)
+      const count = both.getByLabel(words.count)
+      const either = both.locator('[data-until="either"]')
+
+      // A count the server does not take keeps its reason under «Put off», which leaves the
+      // fields the whole width of the row: from 620px it holds the card beside the day and the
+      // count, and the line, appearing, ends the fields without moving the card.
+      await count.fill('1000')
+      let before = await untilFields(both, words)
+      expect(before.card.top < before.count.bottom).toBe(width >= 620)
+      await day.fill('2099-03-01')
+      await eitherUnderTheCount(both, words, before)
+
+      // A count it takes gives «Put off» the room beside the fields, and the card goes under them.
+      await day.fill('')
+      await expect(either).toHaveCount(0)
+      await count.fill('3')
+      before = await untilFields(both, words)
+      expect(before.card.top).toBeGreaterThanOrEqual(before.count.bottom)
+      await day.fill('2099-03-01')
+      await eitherUnderTheCount(both, words, before)
+
+      await both.getByRole('button', { name: words.putOff, exact: true }).click()
+      await expect
+        .poll(() => requests.writes.map((write) => write.body.answers))
+        .toEqual([{ answer: 'later', until: '2099-03-01 or 3 comments' }])
+    })
 
 /** A task an agent moves into a goal: its four answers are the widest row a kind has. */
 const movedIn = () =>

@@ -7,6 +7,7 @@ import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 import { ofPurpose, openKinds } from './questionKindsPage.ts'
+import { UNTIL_WORDS } from './untilChoice.ts'
 
 export const EVERY = ['main-311', 'main-312', 'main-313']
 /** What the server lists when a drop meets accepted work under the goal, and its own token. */
@@ -51,8 +52,7 @@ export const WORDS = {
     later: 'Later…',
     drop: 'Don’t do',
     putOff: 'Put off',
-    day: 'Until a day',
-    card: 'Until a card closes',
+    ...UNTIL_WORDS.en,
     findings: 'Findings',
     asked: '«Don’t do» — are you sure?',
     answered: 'You answered',
@@ -64,8 +64,7 @@ export const WORDS = {
     later: 'Позже…',
     drop: 'Не делать',
     putOff: 'Отложить',
-    day: 'До даты',
-    card: 'До закрытия карточки',
+    ...UNTIL_WORDS.ru,
     findings: 'Находки',
     asked: '«Не делать» — точно?',
     answered: 'Вы ответили',
