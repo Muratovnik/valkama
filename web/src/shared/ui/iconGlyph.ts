@@ -38,6 +38,7 @@ import {
   CirclePause,
   CircleQuestionMark,
   CircleSlash,
+  Clock,
   Code,
   CodeXml,
   Copy,
@@ -181,6 +182,8 @@ const ICONS: Record<string, Component> = {
   'chevron-up': ChevronUp,
   'close': X,
   'client': Monitor,
+  // The time it is: how fresh the figures are, where its age alone might read as something else.
+  'clock': Clock,
   'copy': Copy,
   // Cursor's cube, from Simple Icons 16.37.0 (path data CC0-1.0), which traces the 2D cube
   // of cursor.com/brand; that page gives the cube in one light and one dark colour.

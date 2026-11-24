@@ -3388,9 +3388,12 @@ being the periods'; it is set a size under the periods' names, in the caption si
 their 13, in the muted ink it has elsewhere and never a lighter one; it sits on the last line's
 height against its column's end, its right edge on the right edge of the refresh under it, where
 a period's name stands in the middle of its column; and assistive technology reads it as the
-freshness, outside the choice, which holds the periods alone. In a period's size and ink and 12px
-short of the refresh's edge, «1 мин» read as a sixth period, lined up with nothing, and at 399px
-in Russian the six cells stood as a grid of three over two. A refresh
+freshness, outside the choice, which holds the periods alone. A small clock of the type's size
+stands before it there in every state, before a live period's mark, so the age reads as a time;
+its room is held with the widest age's, so nothing moves when it comes, and at 320px it cuts
+none of the periods' names. In a period's size and ink and 12px short of the refresh's edge,
+«1 мин» read as a sixth period, lined up with nothing, and at 399px in Russian the six cells
+stood as a grid of three over two. A refresh
 that fails keeps what is shown and says so in words before the age at every width, «Could not
 refresh» with a retry: given up on a short line, its words had left a red disc with no hint. A
 refresh whose period before could not be read, where what is shown has it, fails so too: shown,
@@ -3442,9 +3445,17 @@ that fits has no hint; the widest chip's room, held until the first answer, is h
 as the line leaves it. Wrapped beside that room, «Clear filters» stood on a line of its own
 until a short name came and brought it back, and the bar shrank by 32px on the page's first
 answer at 380 to 401px in Russian and 340 to 370px in English; a narrower room only moved that
-jump to 320 to 370px. That one height costs the name its end at 320 to 370px in Russian, where
-«Задача: MAIN-1 One» keeps 98px at 320px and 148px at 370px of the 157px it needs. Two chips or
-more keep their words and wrap, and their row may still change its height as their names come.
+jump to 320 to 370px. That one height costs a name its dimension's words in Russian, at 320 to
+370px for «Задача: MAIN-1 One» and to 384px for «Исполнитель: Review»: a name with no room whole
+shows its value's start without them, «MAIN-1 One», the dimension staying in its hint and in the
+name assistive technology reads, and at 320px the task's value keeps 68px of the 74px it needs.
+At 320px «Задача:», «Проект:» and «Исполнитель:» had taken all of the chip's room and the value
+showed as its ellipsis alone. The whole name's width against the chip's room decides, never what
+is cut at the moment, so the words stand or go the same before and after another period's
+answer; the chip before the first answer keeps its dimension and «…». «Clear filters» stands
+against the bar's end, so the name coming moves it not at all: after the chip, it moved by up to
+63px at 430px. Two chips or more keep their words and wrap, and their row may still change its
+height as their names come.
 The field is never narrower than its words need, 176px, or on a short bar and on a phone its
 short «Filter», 62px with less air at
 its ends: the line gives up its other parts only once the field has given up the room past

@@ -8,9 +8,11 @@
  * stands in the middle of its column. Its ink is the muted ink it had, never a lighter one. Its
  * coming, its age counting up and a failure move nothing in the bar. Set in the periods' size and
  * ink 12px short of the read again's edge, «1 мин» read as a sixth period, and at 399px in Russian
- * the six cells stood as a grid of three over two.
+ * the six cells stood as a grid of three over two. A small clock stands before it there in every
+ * state, before a live period's mark, past «Custom» and cutting no period's name, so the age reads
+ * as the time it is rather than one more period.
  *
- * Wider, under the periods, it keeps the detail type it has everywhere else.
+ * Wider, under the periods, it keeps the detail type it has everywhere else, and no clock.
  */
 import { expect } from '@playwright/test'
 import type { Page, Route } from '@playwright/test'
@@ -38,9 +40,10 @@ const PERIODS = { week: {}, today: { period: 'today' } } as const
 test.use({ locale: 'ru-RU', launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'] } })
 
 /**
- * How the freshness stands: its age's box and the read again's, its live mark's, the sizes of its
- * type and of a period's, whether its ink is the muted token's, and whether it is in the cell
- * (its age on the periods' last line).
+ * How the freshness stands: its age's box and the read again's, its live mark's, its clock's (the
+ * glyph in it), the sizes of its type and of a period's, whether its ink is the muted token's,
+ * whether it is in the cell (its age on the periods' last line), the last period's right edge,
+ * and whether a period's name is cut.
  */
 const freshState = (page: Page, label: string) =>
   page.evaluate((name) => {
@@ -63,10 +66,19 @@ const freshState = (page: Page, label: string) =>
     const last = periods.at(-1)?.getBoundingClientRect()
     const age = fresh?.querySelector('time')?.getBoundingClientRect()
     const mark = document.querySelector('.analytics-bar-fresh-mark')
+    const clock = fresh?.querySelector('svg')
+    const cut = periods.some((period) =>
+      [period, ...period.querySelectorAll('*')].some(
+        (box) => getComputedStyle(box).overflowX !== 'visible' && box.scrollWidth > box.clientWidth,
+      ),
+    )
     return {
       age: rect(fresh?.querySelector('time')),
       refresh: rect(document.querySelector('.analytics-refresh')),
       mark: rect(mark?.checkVisibility({ visibilityProperty: true }) ? mark : null),
+      clock: rect(clock?.checkVisibility({ visibilityProperty: true }) ? clock : null),
+      lastRight: last?.right ?? Number.NaN,
+      periodsCut: cut,
       size: fresh ? Number.parseFloat(getComputedStyle(fresh).fontSize) : Number.NaN,
       periodSize: periods[0]
         ? Number.parseFloat(getComputedStyle(periods[0]).fontSize)
@@ -114,6 +126,22 @@ function expectInCell(name: string, state: FreshState, live: boolean) {
   expect.soft(state.ink, `${name}: the muted ink`).toBe(true)
   if (live && state.mark)
     expect.soft(state.mark.right, `${name}: the live mark before the age`).toBeLessThan(age.left)
+  expectClock(name, state, live)
+}
+
+/** The clock before the age and a live period's mark, past the last period, no period cut. */
+function expectClock(name: string, state: FreshState, live: boolean) {
+  expect.soft(state.clock, `${name}: the clock`).not.toBeNull()
+  const clock = state.clock ?? { left: Number.NaN, top: Number.NaN, right: Number.NaN, bottom: 0 }
+  const next = live && state.mark ? state.mark : (state.age ?? { left: Number.NaN })
+  expect.soft(clock.right, `${name}: the clock before the age`).toBeLessThan(next.left)
+  expect
+    .soft(clock.bottom - clock.top, `${name}: the clock's height`)
+    .toBeLessThanOrEqual(state.size)
+  expect
+    .soft(clock.left, `${name}: the clock over the last period`)
+    .toBeGreaterThanOrEqual(state.lastRight)
+  expect.soft(state.periodsCut, `${name}: a period's name cut`).toBe(false)
 }
 
 type BarState = Awaited<ReturnType<typeof barState>>
@@ -141,6 +169,7 @@ function expectState(
     // The control: under the periods it keeps the detail type, a period's size.
     expect.soft(now.inCell, `${name}: in the cell`).toBe(false)
     expect.soft(now.size, `${name}: its type`).toBe(now.periodSize)
+    expect.soft(now.clock, `${name}: the clock`).toBeNull()
   }
   if (measured.live) expect.soft(now.mark, `${name}: the live mark`).not.toBeNull()
   // Nothing in the bar moves as it comes, counts up or a failure is said.

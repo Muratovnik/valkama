@@ -153,7 +153,11 @@ export function useAnalyticsFilter(input: {
   // The chips.
   // -------------------------------------------------------------------------
 
-  /** A value's chip, saying its dimension and the name given; its runs, where the name has them. */
+  /**
+   * A value's chip, saying its dimension and the name given; its runs, where the name has them;
+   * and the two apart where the words end on the value, so a chip with no room for both can show
+   * the value (`parts`).
+   */
   function chipOf(
     dimension: UsageDimension,
     key: string,
@@ -163,11 +167,16 @@ export function useAnalyticsFilter(input: {
     const said = (name: string) =>
       t('analytics.frame.filter', { dimension: words.dimension(dimension), value: name })
     const name = said(value)
+    const lead = said(VALUE_MARK)
+    const parted = lead.endsWith(VALUE_MARK) && lead.length > VALUE_MARK.length
     return {
       key: rowKey(dimension, key),
       name,
       removeName: t('analytics.filters.remove', { label: name }),
-      ...(runs ? { runs: runsWithin(said(VALUE_MARK), VALUE_MARK, runs) } : {}),
+      ...(runs ? { runs: runsWithin(lead, VALUE_MARK, runs) } : {}),
+      ...(parted
+        ? { parts: { lead: lead.slice(0, -VALUE_MARK.length), value, ...(runs ? { runs } : {}) } }
+        : {}),
     }
   }
 

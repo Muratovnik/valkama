@@ -222,6 +222,12 @@ const freshHint = computed(() =>
         :data-widest="freshRoom"
       >
         <span class="analytics-bar-fresh-shown">
+          <VIcon
+            v-if="fresh"
+            class="analytics-bar-fresh-clock"
+            name="clock"
+            :size="12"
+          />
           <span
             v-if="liveShown"
             class="analytics-bar-fresh-mark disc-mark"
@@ -297,6 +303,11 @@ const freshHint = computed(() =>
   padding-inline-start: calc(var(--space-2) + var(--space-1));
 }
 
+/* The clock the freshness has in the periods' cell alone (below). */
+.analytics-bar-fresh-clock {
+  display: none;
+}
+
 .analytics-bar-fresh-shown {
   display: flex;
   grid-area: 1 / 1;
@@ -338,11 +349,14 @@ const freshHint = computed(() =>
      Russian, and a short name brought it back: the bar shrank by 32px on the first answer.
      Several chips keep their words and wrap. The row asks the bar's columns for no width of its
      own (`contain`): the first of them is at least as wide as what it spans needs, and the
-     chip's whole name widened the bar past the window instead of being cut. */
+     chip's whole name widened the bar past the window instead of being cut. «Clear filters»
+     stands against the bar's end, so the name coming moves it not at all: after the chip, it
+     moved up to 63px at 430px when a short name came. */
   .analytics-bar .analytics-bar-chips-one {
     --filter-chip-shrink: 1;
 
     flex-wrap: nowrap;
+    justify-content: space-between;
     contain: inline-size;
   }
 }
@@ -375,6 +389,21 @@ const freshHint = computed(() =>
     grid-column: 1 / -1;
     place-self: end;
     font-size: var(--font-size-meta);
+  }
+
+  /* A small clock before it in every state, before a live period's mark, so the age beside the
+     periods reads as a time and not as one of them. It is the type's size, and its room is in
+     the widest's, so nothing moves when it comes with the age. */
+  .analytics-bar-fresh-cell .analytics-bar-fresh-clock {
+    display: block;
+  }
+
+  .analytics-bar-fresh-cell::before {
+    padding-inline-start: calc(1em + var(--space-1));
+  }
+
+  .analytics-bar-fresh-cell.analytics-bar-fresh-live::before {
+    padding-inline-start: calc(1em + var(--space-2) + 2 * var(--space-1));
   }
 }
 
