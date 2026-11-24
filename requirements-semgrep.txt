@@ -7,4 +7,4 @@
 # on the newest Python its dependencies install on, and the gate runs it from
 # there and checks this pin there. The day it installs into `.venv` again, this
 # line can move back into requirements-dev.txt.
-semgrep==1.186.0
+semgrep==1.187.0

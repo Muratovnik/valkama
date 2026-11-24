@@ -17,5 +17,5 @@ import-linter==2.17
 # Not linters: coverage runs the suite below and holds it to a floor, and the
 # property tests import hypothesis. The server itself still imports nothing
 # outside the standard library.
-coverage==7.17.3
+coverage==7.17.5
 hypothesis==6.170.17
