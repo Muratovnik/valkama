@@ -8,6 +8,7 @@ import {
   DRAWER_NARROW_BREAKPOINT,
   INSPECTOR_DRAWER_STORAGE_KEY,
 } from '@/shared/lib/shellLayout.ts'
+import { useHeldTop } from '@/shared/ui/dialogHeldTop.ts'
 import OverlayPane from '@/shared/ui/OverlayPane.vue'
 import { usePaneFit, usePaneWalk, useSurfaceGlide } from '@/shared/ui/overlayPanes.ts'
 import type { OverlayPaneNames, PaneFit } from '@/shared/ui/overlayPanes.ts'
@@ -54,6 +55,9 @@ const props = withDefaults(
      * window with every result that arrived or left. One that keeps its inset, and
      * whose height follows what is opened in it, stands at the top of the room a
      * centred one has (`start`): centred, opening a line moved all that stood above it.
+     * A centred one is centred as it opens and, from the reader's first act in it, keeps
+     * the top it stood at then (`useHeldTop`), so what appears in it after, a line under
+     * a field or a refusal, moves only what stands under it.
      */
     placement?: 'center' | 'start' | 'top'
     resizable?: boolean
@@ -136,11 +140,17 @@ provideContentReplaced(() => void focusSurface())
 // whatever the window leaves of it.
 const TOP_EDGE = 'calc(4px - var(--space-dialog-gutter))'
 const TOP_PLACEMENT = { alignSelf: 'start', marginBlockStart: TOP_EDGE, maxHeight: '86dvh' }
+// A dialog beside a pane is as tall as the room, so it has no top to hold.
+const heldTop = useHeldTop(
+  () => surface.value,
+  () => props.variant === 'dialog' && (props.placement ?? 'center') === 'center' && !props.pane,
+)
 const surfaceStyle = computed(() => {
   if (props.placement === 'top') return TOP_PLACEMENT
   if (props.placement === 'start') return { alignSelf: 'start' }
   // Two panes are as wide as they are together; the first holds this surface's own width.
   if (props.pane) return null
+  if (heldTop.value !== null) return { alignSelf: 'start', marginBlockStart: `${heldTop.value}px` }
   const width = viewportWidth.value <= DRAWER_NARROW_BREAKPOINT ? '100vw' : `${drawerWidth.value}px`
   return isResizableDrawer.value ? { width } : null
 })
