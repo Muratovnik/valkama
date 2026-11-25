@@ -8,11 +8,13 @@
  * its column cuts them they end in an ellipsis and are whole in its hint and its name, and a
  * short key's words are never cut.
  *
- * Whether the longest key's words fit is read off the room the segment gives them at each width,
- * not off the width: a scrollbar the panel draws takes room the window would give them, and with
- * one drawn, as a desktop's screen draws it, «Пространство WWWWWWWW» is cut at 390px too. Words
- * that fit stand whole, with no ellipsis and no hint; words that do not end in an ellipsis, whole
- * in the hint. The spec draws the scrollbars; with Playwright's hidden ones the same checks hold.
+ * The longest key's words fit their room at 1440, 1024 and 620px, and not at 320px, where one
+ * column is narrower than them, scrollbar or none. At 390px alone whether they fit is read off the
+ * room the segment gives them: a scrollbar the panel draws takes room the window would give them,
+ * and with one drawn, as a desktop's screen draws it, «Пространство WWWWWWWW» is cut there too.
+ * Words that fit stand whole, with no ellipsis and no hint; words that do not end in an ellipsis,
+ * whole in the hint. The spec draws the scrollbars; with Playwright's hidden ones the same checks
+ * hold.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -33,6 +35,29 @@ const SPACE_WORD = { en: 'Space', ru: 'Пространство' } as const
 const LONG_KEY = 'WWWWWWWW'
 const SHORT_KEY = 'MAIN'
 const WIDE = [1440, 1024, 620, 390] as const
+
+/**
+ * Whether the longest key's words fit their segment at each width: the rule's answer where the
+ * room is the window's to give, and the room's own at 390px, where a drawn scrollbar decides.
+ */
+const LONG_FITS: Record<number, boolean | 'by the room'> = {
+  1440: true,
+  1024: true,
+  620: true,
+  390: 'by the room',
+  320: false,
+}
+
+/**
+ * Whether the longest key's words fit at `width`: where the rule says, the segment's room is held
+ * to it, and at 390px the room's own answer stands.
+ */
+function fitsAt(width: number, roomHolds: boolean) {
+  const pinned = LONG_FITS[width] ?? 'by the room'
+  if (pinned === 'by the room') return roomHolds
+  expect(roomHolds, `${width}px: the segment's room holds the words whole`).toBe(pinned)
+  return pinned
+}
 
 /** Settings → Participation in a space of this key, listed by the shell's context, at `width`. */
 async function openIn(page: Page, locale: 'en' | 'ru', key: string, width: number) {
@@ -179,15 +204,14 @@ for (const locale of ['en', 'ru'] as const) {
     page,
   }) => {
     const { words, segment } = await openIn(page, locale, LONG_KEY, 1440)
-    const fitted: boolean[] = []
     for (const width of [...WIDE, 320]) {
       await page.setViewportSize({ width, height: 1000 })
       await drawn(page)
       await expect
         .poll(() => wordMisses(page), { message: `${width}px`, timeout: 10_000 })
         .toEqual([])
-      const { cut, fits } = await segmentOf(page, words)
-      fitted.push(fits)
+      const { cut, fits: roomHolds } = await segmentOf(page, words)
+      const fits = fitsAt(width, roomHolds)
       // Cut where the segment's room is narrower than the words, and only there.
       expect(cut, `${width}px: cut, the words fitting their room: ${fits}`).toBe(!fits)
       await expect(segment, `${width}px`).toHaveAccessibleName(words, { timeout: 10_000 })
@@ -197,9 +221,5 @@ for (const locale of ['en', 'ru'] as const) {
         timeout: 10_000,
       })
     }
-    // At 1440px the row holds them, and at 320px one column is narrower than them, scrollbar or
-    // none: the case this is about, and each the other's control.
-    expect(fitted.at(0), '1440px').toBe(true)
-    expect(fitted.at(-1), '320px').toBe(false)
   })
 }
