@@ -315,7 +315,8 @@ const levelStyle = computed(() => ({
    shrank it to the row's own columns and measured that as its room, and a chart's three views
    stood in one column, 82px wide in a row of 224 at 320px. A row measuring its own width as a
    container instead stood 0px wide where what holds it is as wide as its content, and the table
-   under it ran past the window. */
+   under it ran past the window. Beside a section's scope words, which grow far faster
+   (`SectionScope`), the box takes none of the line: the words keep all of it. */
 .level-actions {
   display: flex;
   flex: 1 1 auto;
