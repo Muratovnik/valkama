@@ -20,10 +20,11 @@ import suite from '../../playwright.config.ts'
  * module the run has already loaded as an ES module fails.
  *
  * A probe runs under a lease at the heavy-process gate, as every browser run does
- * (`.agents/rules/quality-gates.md`):
+ * (`.agents/rules/quality-gates.md`). `--wait` queues it for room; without it a busy machine
+ * refuses the run at once with exit 75:
  *
  *   VALKAMA_BROWSER_PORT=9530 VALKAMA_BROWSER_PROBES=../tmp/probe \
- *     python ../tests/heavy_gate.py run --kind browser-targeted --want 4 -- \
+ *     python ../tests/heavy_gate.py run --kind browser-targeted --want 4 --wait -- \
  *     npx playwright test --config tests/browser/probe.config.ts '--workers={k}'
  */
 const named = process.env.VALKAMA_BROWSER_PROBES
