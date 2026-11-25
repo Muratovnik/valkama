@@ -35,9 +35,9 @@ const pixels = (value: string) => Number.parseFloat(value) || 0
 
 /**
  * The caret's line in `field`, top and bottom in the window, as it is drawn now; where the
- * field's scroll has taken it out of the field's view, the line the field shows nearest to it.
- * Kept in sight in its place, the line drew the body toward a spot no scroll of the body brings
- * into view, and took the field out of view on the way.
+ * field's scroll has taken it wholly out of the field's view, the line the field shows nearest
+ * to it. Kept in sight in its place, that line drew the body toward a spot no scroll of the body
+ * brings into view, and took the field out of view on the way.
  */
 export function caretLine(field: HTMLTextAreaElement): { bottom: number; top: number } {
   const style = getComputedStyle(field)
@@ -73,8 +73,12 @@ export function caretLine(field: HTMLTextAreaElement): { bottom: number; top: nu
   copy.remove()
   const shown = field.getBoundingClientRect().top + field.clientTop
   const drawn = shown + pixels(style.paddingTop) + line * height - field.scrollTop
-  // Scrolled out of the field's own view, by a wheel or a shorter field, the line is drawn
-  // nowhere: the line the field shows nearest to it stands for it.
-  const top = Math.max(shown, Math.min(drawn, shown + field.clientHeight - height))
+  const lower = shown + field.clientHeight
+  // Scrolled wholly out of the field's own view, by a wheel or a shorter field, the line is
+  // drawn nowhere: the line the field shows nearest to it stands for it. A line the field cuts
+  // at its edge, as its scroll to the caret leaves the last one, is still the caret's own.
+  let top = drawn
+  if (drawn + height <= shown) top = shown
+  else if (drawn >= lower) top = Math.max(shown, lower - height)
   return { top, bottom: top + height }
 }
