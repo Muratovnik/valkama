@@ -13,8 +13,11 @@
   overscroll-behavior: contain;
 }
 
+/* One column as wide as the content box, never as wide as the widest word in it: an implicit
+   column grew to a card's ways in at their own width, 285px in a frame of 256 at 320px. */
 .planning-frame-content {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
   align-content: start;
   width: min(var(--size-module-column), 100%);

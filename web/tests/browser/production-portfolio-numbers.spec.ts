@@ -1,11 +1,13 @@
 /**
- * The four numbers of each space's card at «All spaces» in the real app, at 1280px and at 390px,
- * in English and in Russian. The oracle is the portfolio's contract in DESIGN.md
- * («Work», the context bar's «All spaces») and the directory's in the connection contract («A
- * space's card in the portfolio»): each card shows the cards in triage, the tasks ready and in
- * progress and the questions waiting for the owner; a space without numbers shows each as «—»
- * and says why; no word of a number is cut and nothing runs past the page's width. Each run
- * prints what it measured and keeps a picture.
+ * The four numbers of each space's card at «All spaces» in the real app, at 1440, 1280 and
+ * 1024px and at a phone's 390 and 320px, in English and in Russian. The oracle is the
+ * portfolio's contract in DESIGN.md («Work», the context bar's «All spaces») and the
+ * directory's in the connection contract («A space's card in the portfolio»): each card shows
+ * the cards in triage, the tasks ready and in progress and the questions waiting for the owner;
+ * a space without numbers shows each as «—» and says why; no word of a number is cut and nothing
+ * runs past the page's width. The rows the cards stand in at 1440 and 1024px are the ones they
+ * stood in before the cards were held to a phone's frame. Each run prints what it measured and
+ * keeps a picture.
  */
 import { expect } from '@playwright/test'
 
@@ -17,10 +19,16 @@ import { dataScopeId, globalScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 const SIZES = [
+  { lang: 'en', width: 1440, height: 900, rows: 1 },
   { lang: 'en', width: 1280, height: 800, rows: 1 },
+  { lang: 'en', width: 1024, height: 768, rows: 2 },
   { lang: 'en', width: 390, height: 844, rows: 3 },
+  { lang: 'en', width: 320, height: 640, rows: 3 },
+  { lang: 'ru', width: 1440, height: 900, rows: 1 },
   { lang: 'ru', width: 1280, height: 800, rows: 1 },
+  { lang: 'ru', width: 1024, height: 768, rows: 2 },
   { lang: 'ru', width: 390, height: 844, rows: 3 },
+  { lang: 'ru', width: 320, height: 640, rows: 3 },
 ] as const
 
 const WORDS = {
@@ -130,6 +138,8 @@ for (const size of SIZES) {
           const box = card.getBoundingClientRect()
           const button = card.querySelector('.open-space')?.getBoundingClientRect()
           return {
+            left: box.left,
+            width: box.width,
             row: Math.round(box.top),
             top: button?.top ?? Number.NaN,
             below: button ? box.bottom - button.bottom : Number.NaN,
@@ -144,7 +154,9 @@ for (const size of SIZES) {
       }
       const below = feet.map((foot) => foot.below)
       expect(Math.max(...below) - Math.min(...below), JSON.stringify(feet)).toBeLessThanOrEqual(0.5)
-      // Three cards stand in one row at 1280px, one to a row on a phone.
+      // Three cards stand in one row at 1440 and 1280px, two over one at 1024px, one to a row on
+      // a phone: at 320px a card never narrower than 280px stood in a frame of 256 and scrolled
+      // it 44px sideways.
       expect(rows.size, JSON.stringify(feet)).toBe(size.rows)
       await page.screenshot({
         path: info.outputPath(`portfolio-${tag}.png`),

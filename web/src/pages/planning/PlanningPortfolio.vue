@@ -152,11 +152,11 @@ function projectsLine(space: PortfolioSpace): string {
           />
         </VButton>
         <VButton
+          v-tooltip.clipped="t('platform.planning.openSpace')"
           class="open-space"
           @click="emit('open-space', space.space_ref)"
         >
-          {{ t('platform.planning.openSpace')
-          }}<VIcon
+          <span class="one-line">{{ t('platform.planning.openSpace') }}</span><VIcon
             name="chevron-right"
             :size="15"
           />
@@ -168,9 +168,11 @@ function projectsLine(space: PortfolioSpace): string {
 </template>
 
 <style scoped>
+/* Cards of 280px at least, as many to a row as fit; never wider than the frame, where a phone's
+   is narrower: at 320px a card of 280 stood in a frame of 256 and scrolled it 44px sideways. */
 .portfolio-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
   gap: var(--space-3);
 }
 
@@ -262,6 +264,14 @@ function projectsLine(space: PortfolioSpace): string {
   gap: var(--space-2);
   align-items: center;
   margin-block-start: auto;
+}
+
+/* The way in gives way where the card is narrower than the sign and its words, as a phone's in
+   Russian is: its words end in an ellipsis, whole in its hint (One-line labels), so the card keeps
+   to its frame. At their own width they ran the card 49px past a frame of 256 at 320px. */
+.open-space {
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 /* The sign's glyph stands on the edge the card's words start at, its target reaching out past

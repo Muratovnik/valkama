@@ -866,7 +866,8 @@ after it.
 The space window creates a space of the main store and edits one, as one dialog with one
 save. Its ways in are «New space» over the cards of «All spaces», and on a phone the same;
 a sign «Configure space» beside each card's «Open space», a sign and not a word so that the
-card's ways in stay on one line, its glyph on the edge the card's words start at; «Create a
+card's ways in stay on one line, its glyph on the edge the card's words start at, and where a
+phone's card is narrower than both, «Open space» gives way as a one-line label does; «Create a
 space» in the empty state where there is no space yet; and the context bar's space menu, on
 every page. A card of an attached store has no sign: such a store is opened read-only. Under
 the cards a quiet line names the registered projects that are in no space, and only while
