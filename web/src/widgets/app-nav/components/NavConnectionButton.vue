@@ -40,7 +40,9 @@ export const connectionTroubled = (connection: string) => connection === 'reconn
 import { computed, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import { statePresentation } from '@/shared/lib/uiSystem.ts'
+import { useFocusThroughWait } from '@/shared/lib/useFocusThroughWait.ts'
 import InfoTip from '@/shared/ui/InfoTip.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
@@ -89,15 +91,35 @@ watch(control, (element) => {
 })
 onBeforeUnmount(() => observer?.disconnect())
 
+/** The panel the narrow rail's press opens, which stands apart, at the page's end. */
+function panel() {
+  const panelId = control.value?.getAttribute('aria-controls')
+  return panelId ? document.querySelector(`#${CSS.escape(panelId)}`) : null
+}
+
+/**
+ * A refresh disables the control and the panel's Refresh while it reads, which drops focus
+ * from the one pressed to the page; with the connection still lost, it takes focus back
+ * (`useFocusThroughWait`). Focus leaving the panel closes it, so its Refresh gives focus to the
+ * control that opened it, as Escape does. A connection that came back takes both away instead.
+ */
+useFocusThroughWait(
+  () => control.value,
+  () => props.refreshing,
+)
+useFocusThroughWait(
+  panel,
+  () => props.refreshing,
+  () => moveFocus(control.value),
+)
+
 /**
  * The connection is back: the panel has nothing left to say and the control goes. Focus on
  * either would fall to the page's start, so it goes to the rail's own place, the entry on show.
  */
 watch(lost, (now) => {
   if (now) return
-  const panelId = control.value?.getAttribute('aria-controls')
-  const panel = panelId ? document.querySelector(`#${CSS.escape(panelId)}`) : null
-  const held = [control.value, panel].some((place) => place?.contains(document.activeElement))
+  const held = [control.value, panel()].some((place) => place?.contains(document.activeElement))
   tip.value?.close()
   if (held) emit('settled')
 })

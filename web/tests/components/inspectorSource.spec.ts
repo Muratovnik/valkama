@@ -54,6 +54,7 @@ const row = (source: string, opener?: Partial<DocumentOpener>) =>
               h(InspectorRelations, {
                 item: item(source),
                 writable: false,
+                reread: () => Promise.resolve(),
               }),
           },
         ),

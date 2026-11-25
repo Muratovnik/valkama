@@ -13,6 +13,10 @@
  * Nothing here copies content. A snippet is what matched, not the record: a
  * product that keeps a second copy of somebody's knowledge holds a stale one,
  * and the moment the two disagree the copy is the one nobody distrusts.
+ *
+ * A search disables its field and its button while it waits, and the browser drops focus from
+ * a control disabled under it: searched with Enter, the reader was left on the page. What had
+ * focus takes it back once the answer is in (`useFocusThroughWait`).
  */
 import { computed, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -28,6 +32,7 @@ import type { MemoryResult } from '@/shared/api/memoryApi.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { actorName } from '@/shared/lib/actor.ts'
+import { useFocusThroughWait } from '@/shared/lib/useFocusThroughWait.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import ScreenLink from '@/shared/ui/ScreenLink.vue'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
@@ -48,6 +53,11 @@ const { t, d } = useI18n()
 
 const query = ref('')
 const busy = ref(false)
+const form = ref<HTMLFormElement | null>(null)
+useFocusThroughWait(
+  () => form.value,
+  () => busy.value,
+)
 const failure = ref('')
 const results = ref<readonly MemoryResult[]>([])
 const provider = ref('')
@@ -210,6 +220,7 @@ function when(value: string): string {
         </template>
       </DataEmptyState>
       <form
+        ref="form"
         class="memory-form"
         @submit.prevent="search"
       >

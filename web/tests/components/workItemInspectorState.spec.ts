@@ -377,7 +377,11 @@ describe('WorkItemInspector resource state', () => {
 describe('inspector relations hierarchy', () => {
   it('names related work and evidence independently and opens the related-task picker', async () => {
     const wrapper = mount(InspectorRelations, {
-      props: { item: record('Связанная работа', 1), writable: true },
+      props: {
+        item: record('Связанная работа', 1),
+        reread: () => Promise.resolve(),
+        writable: true,
+      },
       global: {
         plugins: [createI18n({ legacy: false, locale: 'ru', messages })],
         stubs: { RelatedWorkPicker: true },

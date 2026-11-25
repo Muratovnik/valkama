@@ -16,8 +16,10 @@
  * the top, closed cards too, since a commit belongs to whichever card it was made for. «Attach»
  * writes the module's action, the person's attach (`attachCommit`): the commit leaves the list, it
  * is said aloud, and the page reads its numbers again (`attached`). An attach that fails keeps the
- * row and its line, with the server's reason under the field. Past the most one read answers the
- * list shows the newest and says how many there are.
+ * row and its line, with the server's reason under the field, and the control it was sent from
+ * takes back the focus its wait took (`useFocusThroughWait`): the line is disabled while the
+ * attach waits, and the browser drops focus from a control disabled under it to the page. Past
+ * the most one read answers the list shows the newest and says how many there are.
  *
  * Its states are the shared panel's: the wait, a list that could not be read with its retry —
  * the number over it then says «—» (`unread`) — and «All commits are attached». Each row's body
@@ -36,6 +38,7 @@ import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
 import { uiEmpty, uiError, uiLoading, uiReady } from '@/shared/api/platformUiState.ts'
 import { attachCommit, readUnattachedCommits } from '@/shared/api/unattachedCommitsApi.ts'
 import type { UnattachedCommit, UnattachedCommits } from '@/shared/api/unattachedCommitsApi.ts'
+import { useFocusThroughWait } from '@/shared/lib/useFocusThroughWait.ts'
 import ChartTable from '@/shared/ui/ChartTable.vue'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 import SearchCombobox from '@/shared/ui/SearchCombobox.vue'
@@ -174,6 +177,10 @@ async function attach(commit: UnattachedCommit) {
 const emptyWords = computed(() => ({ empty: t('volumes.commits.empty') }))
 
 const root = ref<HTMLElement | null>(null)
+useFocusThroughWait(
+  () => root.value,
+  () => sending.value,
+)
 /** Its columns while they fit the frame, a block a commit where they do not. */
 const fit = useTableFit(root, [() => rows.value], () => ({ steps: ['one'], otherwise: 'stack' }))
 </script>

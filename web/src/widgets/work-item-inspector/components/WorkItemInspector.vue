@@ -76,6 +76,7 @@ import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { ChainScope, WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import type { PlanningWorkflow, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { typedFailure } from '@/shared/api/typedFailure.ts'
+import { useFocusThroughWait } from '@/shared/lib/useFocusThroughWait.ts'
 import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import DrawerFrame from '@/shared/ui/DrawerFrame.vue'
@@ -134,6 +135,11 @@ const { t } = useI18n()
 
 const busy = ref(false)
 const frame = ref<InstanceType<typeof DrawerFrame> | null>(null)
+// A write disables the control it was sent from, a step's box or Stop: focus comes back to it.
+useFocusThroughWait(
+  () => frame.value?.$el as HTMLElement | undefined,
+  () => busy.value,
+)
 const facts = ref<InstanceType<typeof InspectorFacts> | null>(null)
 const overview = ref<InstanceType<typeof InspectorOverview> | null>(null)
 /** Whether a question on the card waits for its answer, and what they are; the discussion knows. */
@@ -450,8 +456,8 @@ defineExpose({ close, openFrom })
               v-else-if="section === 'relations'"
               v-model:opened="relationsOpened"
               :item="payload"
+              :reread="reloaded"
               :writable="writable && !busy"
-              @changed="reloaded"
               @open="openFrom"
             />
             <InspectorAgents

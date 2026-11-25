@@ -191,15 +191,10 @@ export function useThreadForms(identity: () => string, changed: () => void) {
       void nextTick(() => right.take(() => moveFocus(anchored(entryAnchor(root)))))
     })
   }
+  /** The button pressed, which the write disables, takes focus back from the thread's head. */
   function sendReopen(key: string, root: number) {
     failedAt.value = { form: 'reopen', key }
-    // The write disables the button that was pressed, which drops focus on the page: it comes
-    // back there unless the person has taken it somewhere since.
-    const right = grantFocus()
-    void writes.reopen(root).then(async () => {
-      await nextTick()
-      right.take(() => placeFocus(anchored(resolveAnchor(key))))
-    })
+    void writes.reopen(root)
   }
   function markAgain(key: string, root: number) {
     held.value.add(key)

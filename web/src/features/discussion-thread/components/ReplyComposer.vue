@@ -8,12 +8,18 @@
  * question here. The key stops at this form either way. It used to go on to the card while
  * the field held words, and the card answered it with its own question about closing the
  * whole card, which was not what the key was pressed for.
+ *
+ * Sending disables the form while it waits, and the browser drops focus from a control disabled
+ * under it. The editor gives it back to the field; the mark beside it, from which Enter sends
+ * too, takes it back itself (`useFocusThroughWait`), so a refused reply does not leave it on
+ * the page.
  */
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useAskedCancel } from '@/features/discussion-thread/composables/useAskedCancel.ts'
 
+import { useFocusThroughWait } from '@/shared/lib/useFocusThroughWait.ts'
 import ConfirmStrip from '@/shared/ui/ConfirmStrip.vue'
 import MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
 import type { EditorSuggestion } from '@/shared/ui/MarkdownEditor.vue'
@@ -36,6 +42,11 @@ const { t } = useI18n()
 
 const form = ref<HTMLFormElement | null>(null)
 const editor = ref<InstanceType<typeof MarkdownEditor> | null>(null)
+const markBox = ref<HTMLElement | null>(null)
+useFocusThroughWait(
+  () => markBox.value,
+  () => props.pending,
+)
 const previewing = ref(false)
 const empty = computed(() => !text.value.trim())
 const { asking, cancel } = useAskedCancel(
@@ -94,6 +105,7 @@ defineExpose({ takeFocus: () => editor.value?.focusAtTop() })
     </MarkdownEditor>
     <label
       v-if="canMark"
+      ref="markBox"
       class="reply-mark"
     >
       <input

@@ -11,6 +11,7 @@ import { vWorkItemTitle } from '@/entities/work-item/components/workItemTitle.ts
 import { linkWorkItems, planningRefusal } from '@/shared/api/planningApi.ts'
 import { LINK_KINDS } from '@/shared/api/planningModel.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
+import { useFocusThroughWait } from '@/shared/lib/useFocusThroughWait.ts'
 import { useStateName } from '@/shared/lib/useStateName.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
@@ -23,9 +24,10 @@ import VIcon from '@/shared/ui/VIcon.vue'
 const props = defineProps<{
   item: WorkItem
   writable: boolean
+  /** Reads the card again after a change, done once what it shows is the change. */
+  reread: () => Promise<unknown>
 }>()
 const emit = defineEmits<{
-  changed: []
   open: [reference: string]
 }>()
 /** The groups the reader opened or folded, by key; a group not named keeps its first state. */
@@ -50,6 +52,18 @@ const SYMMETRIC: ReadonlySet<Link['kind']> = new Set(['relates-to'])
 
 const pickerOpen = ref(false)
 const busy = ref(false)
+const root = ref<HTMLElement | null>(null)
+/**
+ * A removal disables every remove while it waits, the one pressed among them, and the browser
+ * drops focus from it to the page: a refused removal left the reader there. It takes focus back
+ * once the wait is over (`useFocusThroughWait`); a row the removal took away takes nothing.
+ * A removal that went through waits on until the card is read again: its row stands until
+ * then, and its remove, enabled, sent the same removal a second time.
+ */
+useFocusThroughWait(
+  () => root.value,
+  () => busy.value,
+)
 const error = ref('')
 const groups = computed(() =>
   LINK_KINDS.flatMap((kind) => {
@@ -108,7 +122,7 @@ async function remove(link: Link) {
       kind: link.kind,
       remove: true,
     })
-    emit('changed')
+    await props.reread()
   } catch (error_) {
     error.value =
       planningRefusal(error_)?.message ??
@@ -120,7 +134,10 @@ async function remove(link: Link) {
 </script>
 
 <template>
-  <div class="relations">
+  <div
+    ref="root"
+    class="relations"
+  >
     <section class="relation-section">
       <SectionHeader
         :title="t('workItem.links')"
@@ -232,7 +249,7 @@ async function remove(link: Link) {
         :writable="writable"
         :open="pickerOpen"
         @close="pickerOpen = false"
-        @changed="emit('changed')"
+        @changed="reread"
         @open="emit('open', $event)"
       />
     </section>
