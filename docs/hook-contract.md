@@ -1665,7 +1665,8 @@ session or a person wrote, even on a listed item.
 A batch that is not the last and holds no candidate touches no store. Any other
 batch opens the store read-only, never migrates or locks it. Candidates are read
 from the project registry and in one statement; an attached store is opened only
-when a candidate's key is bound to it. The list on a last batch is read through the
+for a candidate the primary store does not hold, so with every candidate at home no
+other file is touched. The list on a last batch is read through the
 indexes on a session's events and on an item's events and comments, so it reads no
 whole table. A store at another schema version is not read. Measured over
 HTTP on the running handler, one connection per request as the client makes them, on
