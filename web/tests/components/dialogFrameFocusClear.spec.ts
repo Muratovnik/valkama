@@ -3,6 +3,7 @@ import { nextTick } from 'vue'
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
+import { caretLine } from '@/shared/lib/caretLine.ts'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
 
 import { present } from '../support/present.ts'
@@ -12,7 +13,10 @@ import { present } from '../support/present.ts'
 // and its ring stand clear of the words and whole inside the body. happy-dom lays nothing out,
 // so each box states where it stands and the observer reports a resize when the test says so.
 // A ring is 2px wide and 2px out (`base.css`), and the scroll goes a pixel further, since it
-// stops at a whole one.
+// stops at a whole one. Where a text area's caret line stands is the browser's layout too, so
+// the test says where it is.
+
+vi.mock('@/shared/lib/caretLine.ts', () => ({ caretLine: vi.fn() }))
 
 /** Each element observed, and what its observer reports a resize to. */
 const observed = new Map<Element, ResizeObserverCallback>()
@@ -129,4 +133,46 @@ it('a focus that comes over the body’s top edge scrolls down until its ring st
   tab.focus()
   // From the top edge at 100, down past its ring's top side at 94, and a pixel.
   expect(scrolled).toHaveBeenCalledWith({ top: -7 })
+})
+
+it('a text area taller than the room the words leave keeps its caret’s line in sight, not its lower end', async () => {
+  const { wrapper, body, scrolled } = await focusedDialog()
+  // A text field shows focus by its own edge, and draws no ring (`VTextInput`).
+  const field = document.createElement('textarea')
+  field.style.outline = 'none'
+  body.prepend(field)
+  // 300px of text from 110px down, its caret on its first line.
+  place(field, 110, 410)
+  vi.mocked(caretLine).mockReturnValue({ top: 120, bottom: 146 })
+  field.focus()
+  await wrapper.setProps({ note: 'Agents that name the space will no longer find it.' })
+  await nextTick()
+  const words = wordsOf()
+  place(words, 340, 400)
+  resized(words, 60)
+  // The caret's line stands in the 240px the note leaves: nothing moves, where its lower end at
+  // 410 took the body 71px down and that line over its top edge.
+  expect(scrolled).not.toHaveBeenCalled()
+
+  // On its last line under the note, the caret's line comes up over it, with a pixel.
+  vi.mocked(caretLine).mockReturnValue({ top: 330, bottom: 356 })
+  resized(body, 300)
+  expect(scrolled).toHaveBeenLastCalledWith({ top: 17 })
+})
+
+it('the body the browser focuses, with nothing in it that takes focus, is not scrolled', async () => {
+  const { wrapper, body, scrolled } = await focusedDialog()
+  // Chrome makes a box that scrolls focusable while nothing in it takes focus, and rings it.
+  body.tabIndex = -1
+  body.style.outline = '2px solid'
+  body.style.outlineOffset = '-2px'
+  body.focus()
+  expect(document.activeElement).toBe(body)
+  await wrapper.setProps({ error: 'The work was not created.' })
+  await nextTick()
+  const words = wordsOf()
+  place(words, 340, 400)
+  resized(words, 60)
+  resized(body, 260)
+  expect(scrolled).not.toHaveBeenCalled()
 })

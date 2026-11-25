@@ -1087,7 +1087,11 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   Tab stopped on remove buttons and fields hidden whole under a rename's words, and
   a refusal that came after a Shift+Tab back into the form stood over the whole of
   the focused tab. The ring stands whole at the body's top and lower edges too:
-  scrolled flush with an edge, a control lost the side of its ring there.
+  scrolled flush with an edge, a control lost the side of its ring there. A text
+  area taller than the room the words leave keeps the line its caret is on in
+  sight rather than its lower end, which took that line over the body's top edge
+  as a refusal came; the body itself, which the browser focuses while nothing in
+  it can take focus, is never scrolled for being focused.
 - **Inspectors:** persistent right-side detail uses the shared resizable
   inspector. Width is bounded by the actual workspace, not the viewport. The
   panel lives while any item is open and only its content changes with the item:

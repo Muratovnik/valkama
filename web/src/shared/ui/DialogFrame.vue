@@ -5,7 +5,8 @@
  * at the end of the body, and while the form is longer than the dialog at its lower edge over
  * what scrolls under it; a control focused from the keyboard is kept clear of those words, and
  * its ring whole inside the body, as the focus comes to it and while it stays there as the words
- * come, change or grow and as the body gets shorter, so no focus stands under them.
+ * come, change or grow and as the body gets shorter, so no focus stands under them. A text area
+ * taller than the room the words leave keeps the line its caret is on in sight.
  *
  * Its parts are `data-part` `dialog-body` and `said`, the box of those words.
  */
@@ -13,6 +14,7 @@ import { computed, ref } from 'vue'
 
 import { useResizeObserver } from '@vueuse/core'
 
+import { caretLine } from '@/shared/lib/caretLine.ts'
 import OverlayHeader from '@/shared/ui/OverlayHeader.vue'
 import OverlayHost from '@/shared/ui/OverlayHost.vue'
 import type { OverlayPaneNames, PaneFit } from '@/shared/ui/overlayPanes.ts'
@@ -106,27 +108,35 @@ function ringOf(control: HTMLElement) {
 /**
  * The control focused from the keyboard in the body is scrolled until it stands whole with its
  * ring in what the body shows: under the body's top edge, and over the words while they stand at
- * its lower edge, else over that edge itself. A control too tall for that keeps its lower end in
- * sight. It runs on every change of where those edges stand against that control: as the focus
- * comes to it, and while the focus stays, as the words come, change or grow (their observer) and
- * as the body gets shorter (its own). The browser's own scroll to a text field shows only its
- * caret, and left the rest of a description's box under a refusal; it brought a control flush
- * with an edge, and cut off the side of the ring there; the room the body keeps is measured a
- * frame late; and, answered as the focus came alone, a refusal that arrived after a Shift+Tab
- * back into the form stood over all of the focused tab.
+ * its lower edge, else over that edge itself. A text area too tall for that keeps the line its
+ * caret is on in sight, and any other control its lower end; the body itself, which the browser
+ * focuses while nothing in it can take focus, is not scrolled. It runs on every change of where
+ * those edges stand against that control: as the focus comes to it, and while the focus stays,
+ * as the words come, change or grow (their observer) and as the body gets shorter (its own).
+ * The browser's own scroll to a text field shows only its caret, and left the rest of a
+ * description's box under a refusal; it brought a control flush with an edge, and cut off the
+ * side of the ring there; the room the body keeps is measured a frame late; and, answered as the
+ * focus came alone, a refusal that arrived after a Shift+Tab back into the form stood over all
+ * of the focused tab. Kept by its lower end, a tall description took the line its caret was on
+ * over the body's top edge as a refusal came; and the body, focused, was taken for a control in
+ * it and scrolled toward its end at every change.
  */
 function keepClear() {
   const scroller = body.value
   const words = said.value
   const focused = document.activeElement
-  if (!scroller || !(focused instanceof HTMLElement)) return
+  if (!scroller || !(focused instanceof HTMLElement) || focused === scroller) return
   if (!scroller.contains(focused) || words?.contains(focused)) return
   if (!focused.matches(':focus-visible')) return
   const top = scroller.getBoundingClientRect().top + scroller.clientTop
   const edge = top + scroller.clientHeight
   const lower = words ? Math.min(edge, words.getBoundingClientRect().top) : edge
-  const box = focused.getBoundingClientRect()
   const ring = ringOf(focused) + HAIR
+  const whole = focused.getBoundingClientRect()
+  const box =
+    focused instanceof HTMLTextAreaElement && whole.height + 2 * ring > lower - top
+      ? caretLine(focused)
+      : whole
   const under = box.bottom + ring - lower
   const over = top - (box.top - ring)
   if (under > 0) scroller.scrollBy({ top: Math.ceil(under) })

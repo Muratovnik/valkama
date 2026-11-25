@@ -12,20 +12,30 @@
  * the edge and cut off 3.6 to 4.5px of the 4px ring, as at the remove buttons of a long space
  * and the description's toolbar on a phone.
  *
+ * A description taller than the room the words leave keeps the line its caret is on in sight,
+ * as a refusal comes and as the window gets shorter: kept by its lower end instead, at 1280 and
+ * 1024 by 480 the caret on its first line went 52px over the body's top edge. The body itself,
+ * which Chrome focuses while nothing in it can take focus, as in «Split off a part» while it
+ * creates, is not scrolled for it: taken for a control in it, it went 43px toward its end on the
+ * refusal and 60px more as the window got shorter.
+ *
  * Read in «New work» 480px tall at a desktop's, a narrow window's and two phones' widths, and in
  * the window of a space with eleven projects at every width its layout changes at, in both
- * languages. Served `served/graphSpaceFrames.ts` and `spaceWindowBackend.ts`'s double.
+ * languages. Served `served/graphSpaceFrames.ts`, `served/dividing.ts` and
+ * `spaceWindowBackend.ts`'s double.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page, TestInfo } from '@playwright/test'
 
+import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { bodyOverflows, focusStop, walkFocus } from './dialogFocus.ts'
 import type { FocusStop } from './dialogFocus.ts'
 import { frames } from './frames.ts'
-import { spaceScope } from './planningFixtures.ts'
+import { spaceScope, workItemRef } from './planningFixtures.ts'
+import { goalSpace, placedCard } from './served/dividing.ts'
 import { ITEMS, spaceFramesRead } from './served/graphSpaceFrames.ts'
 import { spaceAnswer } from './servedAnswers.ts'
 import { installSpaceWindowBackend, longSpaceWorld } from './spaceWindowBackend.ts'
@@ -40,12 +50,14 @@ const WORDS = {
     open: 'Новая работа',
     dialog: 'Новая работа',
     title: 'Название',
+    description: 'Описание',
     noAnswer: 'Работа не создана: сервер не ответил. Введённое сохранено — попробуйте ещё раз.',
   },
   'en-US': {
     open: 'New work item',
     dialog: 'New work',
     title: 'Title',
+    description: 'Description',
     noAnswer:
       'The work was not created: the server did not answer. What you typed is kept; try again.',
   },
@@ -226,3 +238,214 @@ for (const { width, height } of [
         await keep(info, `space-${String(width)}-${lang}`, { up, down })
       })
     })
+
+/** Forty lines of a description, more than the field shows at its tallest. */
+const LONG = Array.from(
+  { length: 40 },
+  (_, line) => `Step ${String(line + 1)}: stop the service, copy the store aside, restore it.`,
+).join('\n')
+
+/** What the body shows of what it holds, top to lower edge, the words' top while they stand. */
+const shownRoom = (dialog: Locator) =>
+  dialog.evaluate((node) => {
+    const body = node.querySelector('[data-part="dialog-body"]')
+    if (!body) return null
+    const top = body.getBoundingClientRect().top + body.clientTop
+    const words = node.querySelector('[data-part="said"]')?.getBoundingClientRect().top
+    const edge = top + body.clientHeight
+    return { top, lower: words === undefined ? edge : Math.min(edge, words) }
+  })
+
+/**
+ * The line the caret is on in `field`, read off the field's own box and how far its text is
+ * scrolled, for a caret at the start of its text or at its end: the first line stands under the
+ * text's top padding, the last over its lower padding at the end of all it scrolls. `caret` is
+ * where the caret is, which makes it that line.
+ */
+const caretAtEdge = (field: Locator, edge: 'end' | 'start') =>
+  field.evaluate((node, at) => {
+    const area = node as HTMLTextAreaElement
+    const style = getComputedStyle(area)
+    const line = Number.parseFloat(style.lineHeight)
+    const box = area.getBoundingClientRect()
+    const start = at === 'start'
+    // Where the text's own top stands, scrolled as it is.
+    const text = box.top + area.clientTop - area.scrollTop
+    const top = start
+      ? text + Number.parseFloat(style.paddingTop)
+      : text + area.scrollHeight - Number.parseFloat(style.paddingBottom) - line
+    return {
+      top,
+      bottom: top + line,
+      height: box.height,
+      caret: area.selectionEnd === area.selectionStart ? area.selectionStart : -1,
+      expected: start ? 0 : area.value.length,
+    }
+  }, edge)
+
+type CaretLine = Awaited<ReturnType<typeof caretAtEdge>>
+type Room = Awaited<ReturnType<typeof shownRoom>>
+
+/** The caret's line stands whole in what the body shows, and is the line `caretAtEdge` read. */
+function inSight(line: CaretLine, room: Room, what: string) {
+  const seen = JSON.stringify({ line, room })
+  expect(line.caret, `${what}: the caret stayed where it was`).toBe(line.expected)
+  expect
+    .soft(line.top, `${what}: under the body's top edge ${seen}`)
+    .toBeGreaterThanOrEqual(room?.top ?? Infinity)
+  expect
+    .soft(line.bottom, `${what}: over the words ${seen}`)
+    .toBeLessThanOrEqual(room?.lower ?? -Infinity)
+}
+
+/** Scrolls the body as a reader's wheel would until `field`'s top stands at its top edge. */
+const fieldToTop = (dialog: Locator) =>
+  dialog.evaluate((node) => {
+    const body = node.querySelector('[data-part="dialog-body"]')
+    const area = node.querySelector('textarea')
+    if (!(body instanceof HTMLElement) || !area) return
+    const top = body.getBoundingClientRect().top + body.clientTop
+    body.scrollTop += Math.floor(area.getBoundingClientRect().top - top) - 1
+  })
+
+for (const width of [1280, 1024] as const)
+  for (const locale of ['ru-RU', 'en-US'] as const)
+    test.describe(`a long description in «New work» ${String(width)}×${String(SHORT)} in ${locale}`, () => {
+      test.use({ locale })
+
+      test('the caret’s first line stays in sight as a refusal comes and the window gets shorter', async ({
+        page,
+      }, info) => {
+        const { dialog, release } = await openComposer(page, width, locale)
+        // Each create is answered at once.
+        release()
+        const field = dialog.getByRole('textbox', { name: WORDS[locale].description, exact: true })
+        await field.fill(LONG)
+        await field.press('Control+Home')
+        await fieldToTop(dialog)
+        const before = await caretAtEdge(field, 'start')
+        const room = await shownRoom(dialog)
+        expect(
+          Math.abs(before.top - (room?.top ?? 0)),
+          JSON.stringify({ before, room }),
+        ).toBeLessThan(12)
+
+        await field.press('Control+Enter')
+        await expect(dialog.getByRole('alert')).toHaveText(WORDS[locale].noAnswer)
+        await frames(dialog)
+        await expect(field).toBeFocused()
+        const refused = await caretAtEdge(field, 'start')
+        const refusedRoom = await shownRoom(dialog)
+        // The field is taller than what the refusal leaves: it cannot stand whole.
+        expect(refused.height).toBeGreaterThan((refusedRoom?.lower ?? 0) - (refusedRoom?.top ?? 0))
+        inSight(refused, refusedRoom, 'refused')
+
+        await page.setViewportSize({ width, height: 320 })
+        await frames(dialog)
+        const shorter = await caretAtEdge(field, 'start')
+        inSight(shorter, await shownRoom(dialog), 'shorter')
+        await keep(info, `caret-${String(width)}-${locale}`, { before, refused, shorter })
+      })
+
+      test('the caret’s last line comes out from under a refusal', async ({ page }, info) => {
+        const { dialog, release } = await openComposer(page, width, locale)
+        release()
+        const field = dialog.getByRole('textbox', { name: WORDS[locale].description, exact: true })
+        await field.fill(LONG)
+        await field.press('Control+End')
+        await frames(dialog)
+        const before = await caretAtEdge(field, 'end')
+        await field.press('Control+Enter')
+        await expect(dialog.getByRole('alert')).toHaveText(WORDS[locale].noAnswer)
+        await frames(dialog)
+        await expect(field).toBeFocused()
+        const refused = await caretAtEdge(field, 'end')
+        const room = await shownRoom(dialog)
+        // Where the caret's line stood before, the refusal now stands.
+        expect(room?.lower ?? Infinity).toBeLessThan(before.bottom)
+        inSight(refused, room, 'refused')
+        await keep(info, `caret-end-${String(width)}-${locale}`, { before, refused, room })
+      })
+    })
+
+/** What «Split off a part» is called and its parts are named, in each language. */
+const SPLIT = {
+  'ru-RU': {
+    more: 'Ещё',
+    entry: 'Отделить часть…',
+    dialog: 'Отделить часть',
+    name: 'Название',
+    create: 'Создать',
+  },
+  'en-US': {
+    more: 'More',
+    entry: 'Split off a part…',
+    dialog: 'Split off a part',
+    name: 'Title',
+    create: 'Create',
+  },
+} as const
+
+/** Presses Shift+Tab, a few times at most, until the focus is on `body` itself. */
+async function backToBody(page: Page, body: Locator) {
+  for (let press = 0; press < 3; press++) {
+    await page.keyboard.press('Shift+Tab')
+    if (await body.evaluate((node) => node === document.activeElement)) return
+  }
+}
+
+for (const locale of ['ru-RU', 'en-US'] as const)
+  test.describe(`«Split off a part» 1280×380 in ${locale}`, () => {
+    test.use({ locale })
+
+    test('the body focused while the create waits is not scrolled by a refusal or a shorter window', async ({
+      page,
+    }, info) => {
+      const words = SPLIT[locale]
+      await page.setViewportSize({ width: 1280, height: 380 })
+      await installBackend(page, { space: goalSpace, card: placedCard })
+      const { held, release } = holdBack()
+      await page.route('**/api/planning/work-items', async (route) => {
+        await held
+        await route.fulfill({ status: 503, body: '' })
+      })
+      await page.goto(
+        serializePlatformRoute({
+          module_id: 'planning',
+          scope: spaceScope,
+          entity: planningWorkItemEntity(workItemRef),
+        }),
+      )
+      await page.getByRole('button', { name: words.more, exact: true }).click()
+      await page.getByRole('menuitem', { name: words.entry, exact: true }).click()
+      const dialog = page.getByRole('dialog', { name: words.dialog })
+      await expect(dialog).toHaveCSS('transform', 'none')
+      await dialog
+        .getByRole('textbox', { name: words.name })
+        .fill('Alert settings survive a restart')
+      await dialog.locator('[data-step]').last().getByRole('checkbox').check()
+      const create = dialog.getByRole('button', { name: words.create, exact: true })
+      await create.focus()
+      await page.keyboard.press('Enter')
+      await expect(dialog.locator('form')).toHaveAttribute('aria-busy', 'true')
+      const body = dialog.locator('[data-part="dialog-body"]')
+      // Back from the foot: nothing in the body takes focus while it waits but the body itself.
+      await backToBody(page, body)
+      await expect(body).toBeFocused()
+      await frames(dialog)
+      const scrollTop = () => body.evaluate((node) => node.scrollTop)
+      const before = await scrollTop()
+
+      release()
+      await expect(dialog.getByRole('alert')).toBeVisible()
+      await frames(dialog)
+      const refused = await scrollTop()
+      await page.setViewportSize({ width: 1280, height: 320 })
+      await frames(dialog)
+      const shorter = await scrollTop()
+      await keep(info, `split-body-${locale}`, { before, refused, shorter })
+      await expect(body).toBeFocused()
+      expect.soft(refused, 'refused').toBe(before)
+      expect.soft(shorter, 'shorter').toBe(before)
+    })
+  })
