@@ -7,7 +7,8 @@
  * bars than the list said were waiting.
  *
  * A block being read is the last waiting one whose head has reached the top of the list, where
- * the browser brings it too, its scroll margin under the top, and at the end of the list the last
+ * the browser brings it too: under the room the panel keeps at its top edge for a focus ring
+ * (`scroll-padding`) and the block's scroll margin under that. At the end of the list it is the last
  * of all, since the last blocks never reach the top. Above the first, it is the first: N is never
  * a block the reader has not come to, and the step down from there is to the second. One a step
  * brought up stays the one being read until the reader scrolls, so a block near the end keeps
@@ -80,7 +81,12 @@ function track() {
     at.value = all.length - 1
     return
   }
-  const top = scroller.getBoundingClientRect().top + REACHED
+  // The line the browser brings a block to: the room the panel keeps at its top edge, then
+  // the block's own margin under it.
+  const top =
+    scroller.getBoundingClientRect().top +
+    REACHED +
+    (Number.parseFloat(getComputedStyle(scroller).scrollPaddingTop) || 0)
   const reached = all.filter(
     (block) =>
       block.getBoundingClientRect().top <=
