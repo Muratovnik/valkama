@@ -1139,17 +1139,17 @@ def _compose(
     lines = [first]
     current = None
     for reference, title, entry in shown:
-        name = _name(title)
+        name = title_line(title)
         if entry["kind"] == "folded":
             current = None  # the line names the item itself
-            lines.append(f"{reference} {_quote(name)}: {_folded(entry)}")
+            lines.append(f"{reference} {quote(name)}: {_folded(entry)}")
             continue
         if reference != current:
             current = reference
-            lines.append(f"{reference} {_quote(name)}:")
+            lines.append(f"{reference} {quote(name)}:")
         said = " ".join(str(entry.get("text", "")).split())
         line = f"- {entry['kind']} at {entry['at']}{_where(entry)}{_flags(entry)}"
-        lines.append(line + (f": {_quote(said)}" if said else ""))
+        lines.append(line + (f": {quote(said)}" if said else ""))
     if left:
         lines.append(f"- and {left} {'earlier' if older else 'more'}, in the history of the item.")
     return "\n".join([*lines, *last])
@@ -1227,11 +1227,11 @@ def _thread(entry: dict) -> str:
     return f" in thread {thread}" + (f" of agent {owner}" if owner else "")
 
 
-def _quote(text: str) -> str:
+def quote(text: str) -> str:
     return f"«{text}»"
 
 
-def _name(title: str) -> str:
+def title_line(title: str) -> str:
     """An item's title on one line, cut to `MOST_TITLE` with an ellipsis."""
 
     name = " ".join(title.split())
@@ -1288,8 +1288,8 @@ def shown(told: list[tuple[str, str, dict]], language: str) -> str:
         lines.append(
             words["line"].format(
                 what=words["both" if len(kinds) > 1 else kinds.pop()],
-                reference=_printable(reference),
-                title=_quote(_name(_printable(title))),
+                reference=printable(reference),
+                title=quote(title_line(printable(title))),
             )
         )
     rest = len(items) - MOST_SHOWN
@@ -1300,7 +1300,7 @@ def shown(told: list[tuple[str, str, dict]], language: str) -> str:
     return "\n".join(lines)
 
 
-def _printable(text: str) -> str:
+def printable(text: str) -> str:
     return "".join(ch for ch in text if ch.isprintable() or ch.isspace())
 
 
