@@ -1091,7 +1091,11 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   area taller than the room the words leave keeps the line its caret is on in
   sight rather than its lower end, which took that line over the body's top edge
   as a refusal came; the body itself, which the browser focuses while nothing in
-  it can take focus, is never scrolled for being focused.
+  it can take focus, is never scrolled for being focused. A control a save or a
+  create disables while it waits takes the focus back once the wait ends, unless
+  the reader has put it somewhere since, and stays disabled meanwhile, so a
+  second press starts nothing: dropped to the page, the focus of a refused save
+  sent the next Tab to Cancel.
 - **Inspectors:** persistent right-side detail uses the shared resizable
   inspector. Width is bounded by the actual workspace, not the viewport. The
   panel lives while any item is open and only its content changes with the item:

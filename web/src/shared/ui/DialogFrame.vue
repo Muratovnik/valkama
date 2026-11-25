@@ -8,6 +8,11 @@
  * come, change or grow and as the body gets shorter, so no focus stands under them. A text area
  * taller than the room the words leave keeps the line its caret is on in sight.
  *
+ * While it is `busy`, what the form waits for may disable the control that had focus, and the
+ * browser then drops focus to the page; once it is done, that control takes focus back, unless
+ * the reader has put it somewhere since. Saved from the keyboard, a refused save left the focus
+ * on the page, and the next Tab went to Cancel.
+ *
  * Its parts are `data-part` `dialog-body` and `said`, the box of those words.
  */
 import { computed, ref } from 'vue'
@@ -15,6 +20,8 @@ import { computed, ref } from 'vue'
 import { useResizeObserver } from '@vueuse/core'
 
 import { caretLine } from '@/shared/lib/caretLine.ts'
+import { moveFocus } from '@/shared/lib/moveFocus.ts'
+import { useFocusThroughWait } from '@/shared/lib/useFocusThroughWait.ts'
 import OverlayHeader from '@/shared/ui/OverlayHeader.vue'
 import OverlayHost from '@/shared/ui/OverlayHost.vue'
 import type { OverlayPaneNames, PaneFit } from '@/shared/ui/overlayPanes.ts'
@@ -65,6 +72,21 @@ const emit = defineEmits<{
 
 /** Absent rather than false, because `aria-busy="false"` is a claim and not a default. */
 const busyMark = computed(() => props.busy || undefined)
+const form = ref<HTMLFormElement | null>(null)
+
+/**
+ * The control in the form that had focus as the dialog began to wait takes it back once the
+ * wait is over, if it fell to the page (`useFocusThroughWait`), as a key or a press put it
+ * (`moveFocus`); the body's own rule then shows it (`keepClear`). A control the wait took away
+ * or left disabled takes nothing, and neither does a dialog that closed.
+ */
+useFocusThroughWait(
+  () => form.value,
+  () => props.busy,
+  (held) => {
+    if (props.open && held.isConnected) moveFocus(held, { preventScroll: true })
+  },
+)
 /**
  * The box that scrolls what the dialog holds, handed to what stands among the head's `actions`,
  * still while it scrolls, for a way through what it holds.
@@ -159,6 +181,7 @@ function keepClear() {
     @pane-fit="(fit) => emit('pane-fit', fit)"
   >
     <form
+      ref="form"
       class="dialog-frame"
       :class="{ 'is-paired': pane }"
       :aria-busy="busyMark"

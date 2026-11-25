@@ -28,13 +28,14 @@
  * foot's end (`MarkdownFoot`), and a host whose action stands elsewhere leaves the
  * foot out.
  */
-import { computed, nextTick, ref, useId, watch } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { markdownEdit } from '@/shared/lib/markdownEdits.ts'
 import type { MarkdownTool, TextEdit } from '@/shared/lib/markdownEdits.ts'
 import { revealFrame } from '@/shared/lib/revealFrame.ts'
 import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
+import { useFocusThroughWait } from '@/shared/lib/useFocusThroughWait.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import MarkdownFoot from '@/shared/ui/MarkdownFoot.vue'
 import MarkdownSuggestions from '@/shared/ui/MarkdownSuggestions.vue'
@@ -215,19 +216,13 @@ watch(preview, (showing) => {
 
 /**
  * A control that is disabled loses its focus, so sending left the writer on the page,
- * refused or not, whether from the field or a button in the foot. Read before the
- * render that disables them, and given back to the field only if the writer has not
- * gone somewhere else in the meantime.
+ * refused or not, whether from the field or a button in the foot: it goes back to the field
+ * (`useFocusThroughWait`).
  */
-let hadFocus = false
-watch(
+useFocusThroughWait(
+  () => surface.value,
   () => props.disabled,
-  (disabled) => {
-    if (disabled) hadFocus = surface.value?.contains(document.activeElement) ?? false
-    else if (hadFocus)
-      void nextTick(() => document.activeElement === document.body && field.takeFocus())
-  },
-  { flush: 'pre' },
+  () => field.takeFocus(),
 )
 
 function edited(value: string) {

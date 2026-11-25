@@ -12,7 +12,7 @@
  *
  * Nothing chosen here is text anyone wrote, so Escape and Cancel close at once.
  */
-import { computed, nextTick, onMounted, ref, useId, watch } from 'vue'
+import { computed, onMounted, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useAskedCancel } from '@/features/discussion-thread/composables/useAskedCancel.ts'
@@ -24,6 +24,7 @@ import {
 import type { ListPoint, PointStanding } from '@/features/discussion-thread/utils/stepPoints.ts'
 
 import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
+import { useFocusThroughWait } from '@/shared/lib/useFocusThroughWait.ts'
 import VButton from '@/shared/ui/VButton.vue'
 
 const props = defineProps<{
@@ -88,17 +89,10 @@ function focusFirst() {
 onMounted(focusFirst)
 
 // A write disables the boxes, which drops focus on the page; a refused one gives it back.
-let hadFocus = false
-watch(
+useFocusThroughWait(
+  () => form.value,
   () => props.pending,
-  (pending) => {
-    if (pending) hadFocus = form.value?.contains(document.activeElement) ?? false
-    else if (hadFocus)
-      void nextTick(() => {
-        if (document.activeElement === document.body) focusFirst()
-      })
-  },
-  { flush: 'pre' },
+  focusFirst,
 )
 </script>
 

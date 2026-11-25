@@ -11,12 +11,13 @@
  * The hint names the card's own space and no number in it: a fixed example key read as a
  * task of whatever space the card was in.
  */
-import { nextTick, onMounted, ref, watch } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useAskedCancel } from '@/features/discussion-thread/composables/useAskedCancel.ts'
 
 import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
+import { useFocusThroughWait } from '@/shared/lib/useFocusThroughWait.ts'
 import ConfirmStrip from '@/shared/ui/ConfirmStrip.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VTextInput from '@/shared/ui/VTextInput.vue'
@@ -35,17 +36,11 @@ const form = ref<HTMLFormElement | null>(null)
 const field = ref<InstanceType<typeof VTextInput> | null>(null)
 onMounted(() => field.value?.control()?.focus({ preventScroll: true }))
 
-let hadFocus = false
-watch(
+// A write disables the form, which drops focus on the page; a refused one gives it to the field.
+useFocusThroughWait(
+  () => form.value,
   () => props.pending,
-  (pending) => {
-    if (pending) hadFocus = form.value?.contains(document.activeElement) ?? false
-    else if (hadFocus)
-      void nextTick(() => {
-        if (document.activeElement === document.body) placeFocus(field.value?.control())
-      })
-  },
-  { flush: 'pre' },
+  () => placeFocus(field.value?.control()),
 )
 
 function send() {

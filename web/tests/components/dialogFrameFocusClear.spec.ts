@@ -1,4 +1,4 @@
-import { nextTick } from 'vue'
+import { defineComponent, h, nextTick, ref } from 'vue'
 
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -175,4 +175,67 @@ it('the body the browser focuses, with nothing in it that takes focus, is not sc
   resized(words, 60)
   resized(body, 260)
   expect(scrolled).not.toHaveBeenCalled()
+})
+
+/**
+ * A dialog whose Save waits while `busy`, disabled meanwhile, as a window's own button is: the
+ * focus on it falls to the page as it is disabled, or stays where the reader puts it.
+ */
+function waitingDialog() {
+  const busy = ref(false)
+  const Host = defineComponent({
+    render() {
+      return h(
+        DialogFrame,
+        { open: true, busy: busy.value, title: 'Space LNG', closeLabel: 'Cancel' },
+        {
+          default: () => h('input', { 'aria-label': 'Name' }),
+          footer: () => h('button', { type: 'submit', disabled: busy.value }, 'Save'),
+        },
+      )
+    },
+  })
+  mount(Host, { attachTo: document.body })
+  return { busy }
+}
+
+/** The waiting dialog's field or button of that name. */
+const control = (name: string) =>
+  present(
+    [...document.querySelectorAll<HTMLElement>('input, button')].find(
+      (node) => (node.getAttribute('aria-label') ?? node.textContent) === name,
+    ),
+    name,
+  )
+
+it('a control a save disables under the focus takes it back once the save is refused', async () => {
+  const { busy } = waitingDialog()
+  await nextTick()
+  const save = control('Save')
+  save.focus()
+  busy.value = true
+  await nextTick()
+  // The browser takes the focus off it as it next draws; until then it holds a focus nothing
+  // can use, and either way the focus stands on nothing.
+  expect(save.matches(':disabled')).toBe(true)
+  document.body.focus()
+
+  busy.value = false
+  await nextTick()
+  await nextTick()
+  expect(document.activeElement).toBe(save)
+})
+
+it('a focus the reader puts somewhere while the save waits stays there', async () => {
+  const { busy } = waitingDialog()
+  await nextTick()
+  control('Save').focus()
+  busy.value = true
+  await nextTick()
+  const name = control('Name')
+  name.focus()
+  busy.value = false
+  await nextTick()
+  await nextTick()
+  expect(document.activeElement).toBe(name)
 })
