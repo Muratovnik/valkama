@@ -1184,9 +1184,9 @@ in the terminal it comes under the message's last lines.
 Done, the parser is fixed.
 
 ---
-- [MAIN-12](http://127.0.0.1:8642/open/MAIN-12) «Fix the parser» — created · comment
-- [MAIN-9](http://127.0.0.1:8642/open/MAIN-9) «Release notes» → Done · steps · summary
-- [MAIN-4](http://127.0.0.1:8642/open/MAIN-4) «Parser rewrite»
+- [MAIN-12](http://127.0.0.1:8642/open/MAIN-12) «Fix the parser» — created, comment added
+- [MAIN-9](http://127.0.0.1:8642/open/MAIN-9) «Release notes» — moved to Done, steps ticked: 3, summary written
+- [MAIN-4](http://127.0.0.1:8642/open/MAIN-4) «Parser rewrite» — changed
 ```
 
 Whose writes count: the planning write calls the store recorded with the payload's
@@ -1212,11 +1212,17 @@ order the items were first written:
   binds is named without a link;
 - the title on one line, cut to 80 characters with `…`, with its Markdown shown as
   written;
-- what was done, in this order and joined by ` · `: `created`; the state the item
-  is in now, after an arrow, when one of the calls moved it; `comment`;
-  `question to the owner`; `steps`, for any change to the checklist; `summary`,
-  for a summary or a report. A claim that moved nothing, refs, links, labels and
-  other field edits add no word, so such an item's line is its number and title.
+- a dash and what was done, each thing a phrase that names the act, in this order
+  and joined by commas: `created`; `claimed`; `moved to` the state the item is in
+  now, when one of the calls moved it; `steps changed`, for a new list of steps;
+  `steps ticked:` and `steps reopened:` with how many; `comment added`;
+  `discussion resolved`; `question put to the owner`; `summary written`, for a
+  summary or a report; `links changed`; `labels changed`. The steps, links and
+  labels an item is created with add nothing to `created`, and the move a claim
+  makes by starting an item adds nothing to `claimed`. Only the calls made for
+  the item count: a link another item's call ends here adds nothing. An item
+  none of these fits, one whose calls only edited fields or attached refs, is
+  `changed`, so every line says what happened.
 
 At most 12 items have a line, and one more line counts the rest. The words follow
 the owner's alert language, as the line naming a notice does: Russian or English.
