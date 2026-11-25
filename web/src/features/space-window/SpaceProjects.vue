@@ -30,7 +30,7 @@
  * `root` (what comes before its last folder `root-head`, its last folder `root-tail`), `fresh`,
  * `remove`.
  */
-import { computed, ref, shallowRef, useId, useTemplateRef } from 'vue'
+import { computed, nextTick, ref, shallowRef, useId, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useResizeObserver } from '@vueuse/core'
@@ -48,6 +48,7 @@ import type { ProjectChoice, SpaceDraft } from '@/features/space-window/spaceDra
 import SpaceFolderProject from '@/features/space-window/SpaceFolderProject.vue'
 
 import { ellipsisFit, ellipsisLeast } from '@/shared/lib/ellipsisFit.ts'
+import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import SearchCombobox from '@/shared/ui/SearchCombobox.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
@@ -103,6 +104,31 @@ function add(id: string) {
     root: project.root,
     fresh: false,
   })
+}
+
+const rowsBox = useTemplateRef<HTMLElement>('rowsBox')
+const addBox = useTemplateRef<HTMLElement>('addBox')
+
+/**
+ * Takes the project's row away. A focused remove leaves with its row, and the focus goes to the
+ * remove of the next row, else of the one before, else to «Add project», ringed as the last input
+ * asks (`moveFocus`): left to the page, it stood nowhere and unringed until the next Tab.
+ */
+async function remove(id: string) {
+  const order = rows.value.map((row) => row.project_id)
+  const at = order.indexOf(id)
+  const held = document.activeElement
+  draft.value = withoutProject(draft.value, id)
+  await nextTick()
+  if (!(held instanceof HTMLElement) || held.isConnected) return
+  const near = [...order.slice(at + 1), ...order.slice(0, at).reverse()]
+    .map((one) =>
+      rowsBox.value?.querySelector<HTMLElement>(
+        `[data-project="${CSS.escape(one)}"] [data-part="remove"]`,
+      ),
+    )
+    .find(Boolean)
+  moveFocus(near ?? addBox.value?.querySelector<HTMLElement>('input'))
 }
 
 const folderOpen = ref(false)
@@ -167,6 +193,7 @@ const headLeast = (project: string) => {
     </p>
     <div
       v-else
+      ref="rowsBox"
       class="project-rows"
       role="radiogroup"
       :aria-label="t('spaceWindow.defaultGroup')"
@@ -237,7 +264,7 @@ const headLeast = (project: string) => {
           :disabled="disabled"
           :aria-label="t('spaceWindow.removeProject', { name: project.display_name })"
           icon
-          @click="draft = withoutProject(draft, project.project_id)"
+          @click="remove(project.project_id)"
         >
           <VIcon
             name="close"
@@ -251,7 +278,10 @@ const headLeast = (project: string) => {
         />
       </div>
     </div>
-    <div class="projects-add">
+    <div
+      ref="addBox"
+      class="projects-add"
+    >
       <SearchCombobox
         class="projects-search"
         :model-value="picked"

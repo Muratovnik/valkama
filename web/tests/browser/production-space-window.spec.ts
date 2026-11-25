@@ -229,6 +229,40 @@ for (const size of SIZES) {
       await expect(page.locator('[data-part="unplaced"]')).not.toContainText('lighthouse')
     })
 
+    test('a removed project’s row hands the focus to the next remove, else the one before, else to the search', async ({
+      page,
+    }) => {
+      await installSpaceWindowBackend(page, world())
+      await openPortfolio(page, size)
+      await page.getByRole('button', { name: words.configure('ATL') }).click()
+      const dialog = page.getByRole('dialog', { name: words.editTitle('ATL') })
+      const search = dialog.getByRole('combobox', { name: words.add })
+      await search.click()
+      await search.fill('light')
+      await page.getByRole('option', { name: /lighthouse/u }).click()
+      // By name: atlas-api, then the default atlas-web, which has no remove, then lighthouse.
+      await expect(dialog.locator('[data-project]')).toHaveCount(3)
+      const removeOf = (project: string) =>
+        dialog.locator(`[data-project="${project}"] [data-part="remove"]`)
+      const ringed = (project: string) =>
+        removeOf(project).evaluate((node) => node.matches(':focus-visible'))
+
+      // A press: the next remove takes the focus, past the default's row, and no ring.
+      await removeOf('atlas-api').click()
+      await expect(dialog.locator('[data-project="atlas-api"]')).toHaveCount(0)
+      await expect(removeOf('lighthouse')).toBeFocused()
+      expect(await ringed('lighthouse')).toBe(false)
+      // A key on the last row: the one before takes it, ringed; alone, the default has a remove.
+      await page.keyboard.press('Enter')
+      await expect(dialog.locator('[data-project="lighthouse"]')).toHaveCount(0)
+      await expect(removeOf('atlas-web')).toBeFocused()
+      expect(await ringed('atlas-web')).toBe(true)
+      // The last row: «Add project» takes it.
+      await page.keyboard.press('Enter')
+      await expect(dialog.locator('[data-project]')).toHaveCount(0)
+      await expect(search).toBeFocused()
+    })
+
     test('changes the key of a space that has issued no number, then removes the empty space', async ({
       page,
     }, info) => {

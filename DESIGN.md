@@ -900,7 +900,9 @@ whole while the row has room for it, and shown whole in its hint, its «…» ag
 folder in every row: given the whole room before the last folder, the cut start hid whole
 letters and left what was left of one empty after its «…», from none to some 8px; a last
 folder cut too leaves the start its first letter and the whole «…», which a fixed share drew as
-the letter and one dot; and its remove. The default has no remove while the space has other
+the letter and one dot; and its remove. A focused remove that leaves with its row hands the
+focus to the next row's remove, else the one before, else to «Add project», where the page lost
+it. The default has no remove while the space has other
 projects, so the window repeats the server's rule rather than meeting its refusal, and the first
 project added becomes the default by itself. «Add project» searches the registered projects
 the space does not have, those in no
@@ -1090,7 +1092,9 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   scrolled flush with an edge, a control lost the side of its ring there. A text
   area taller than the room the words leave keeps the line its caret is on in
   sight rather than its lower end, which took that line over the body's top edge
-  as a refusal came; the body itself, which the browser focuses while nothing in
+  as a refusal came; where the field's own scroll has taken that line out of the
+  field's view, the line the field shows nearest to it stands in sight instead,
+  since kept in its place the line drew the field out of sight; the body itself, which the browser focuses while nothing in
   it can take focus, is never scrolled for being focused. A control a save or a
   create disables while it waits takes the focus back once the wait ends, unless
   the reader has put it somewhere since, and stays disabled meanwhile, so a
