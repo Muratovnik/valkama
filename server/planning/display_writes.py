@@ -96,6 +96,7 @@ _WORDS = {
         "links": "изменены связи",
         "labels": "изменены метки",
         "changed": "изменена",
+        "caption": "Записи в Valkama",
         "rest": "и ещё {count} {items}",
     },
     "en": {
@@ -112,6 +113,7 @@ _WORDS = {
         "links": "links changed",
         "labels": "labels changed",
         "changed": "changed",
+        "caption": "Written to Valkama",
         "rest": "and {count} more {items}",
     },
 }
@@ -271,8 +273,10 @@ def literal(text: str) -> str:
 
 
 def _render(items: list[_Item], language: str, linkable: Callable[[set[str]], set[str]]) -> str:
-    """A rule, then a line per item: its number, its title, a dash and what was done.
+    """A rule, a caption, then a line per item: its number, its title, a dash and what was done.
 
+    The caption says whose list this is: without it the list reads as the end of the
+    agent's own text, most of all under a reply that closes with a list of items.
     Each thing done is a phrase of its own, and an item none of them fits is "changed".
     """
 
@@ -280,7 +284,7 @@ def _render(items: list[_Item], language: str, linkable: Callable[[set[str]], se
     words = _WORDS[language]
     named = items[:MOST_LINES]
     linked = linkable({item.reference for item in named})
-    lines = ["---"]
+    lines = ["---", f"*{words['caption']}*", ""]
     for item in named:
         state = literal(item.state)
         said = [

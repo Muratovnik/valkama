@@ -358,7 +358,7 @@ class WrittenListTests(Writes, unittest.TestCase):
         self.assertIsNone(self.reply("Working on it\n", index=0, final=False))
         self.assertEqual(0, self.opened, "a batch that is not the last reads no store")
         self.assertEqual(
-            f"Done.\n\n---\n{line(reference, 'Fix the parser', ' — created, comment added')}",
+            f"Done.\n\n---\n*Written to Valkama*\n\n{line(reference, 'Fix the parser', ' — created, comment added')}",
             self.reply("Done.\n", index=1, final=True),
         )
 
@@ -383,7 +383,7 @@ class WrittenListTests(Writes, unittest.TestCase):
         self.comment(own, AS_OTHER)
         self.comment(child, AS_CHILD)
         self.assertEqual(
-            f"Done.\n\n---\n{line(own, 'Own', ' — created')}",
+            f"Done.\n\n---\n*Written to Valkama*\n\n{line(own, 'Own', ' — created')}",
             self.reply(),
         )
 
@@ -400,7 +400,8 @@ class WrittenListTests(Writes, unittest.TestCase):
         )
         self.tool("apply_work_item_changes", id=own, comment={"body": f"Follows {other}"})
         self.assertEqual(
-            f"Done.\n\n---\n{line(own, 'Own', ' — created, comment added')}", self.reply()
+            f"Done.\n\n---\n*Written to Valkama*\n\n{line(own, 'Own', ' — created, comment added')}",
+            self.reply(),
         )
 
     def test_the_next_message_lists_only_what_came_after_the_last_list(self) -> None:
@@ -409,7 +410,7 @@ class WrittenListTests(Writes, unittest.TestCase):
         self.assertIn(first, self.reply() or "")
         second = self.create("Second")
         self.assertEqual(
-            f"Done.\n\n---\n{line(second, 'Second', ' — created')}",
+            f"Done.\n\n---\n*Written to Valkama*\n\n{line(second, 'Second', ' — created')}",
             self.reply(message_id="second"),
         )
         self.assertIsNone(self.reply(message_id="third"))
@@ -427,7 +428,7 @@ class WrittenListTests(Writes, unittest.TestCase):
         self.assertIsNone(self.reply())
         later = self.create("Later")
         self.assertEqual(
-            f"Done.\n\n---\n{line(later, 'Later', ' — created')}",
+            f"Done.\n\n---\n*Written to Valkama*\n\n{line(later, 'Later', ' — created')}",
             self.reply(message_id="second"),
         )
 
@@ -456,7 +457,10 @@ class WrittenListTests(Writes, unittest.TestCase):
             " — created, moved to Todo, steps changed, comment added,"
             " question put to the owner, summary written"
         )
-        self.assertEqual(f"Done.\n\n---\n{line(busy, 'Everything', expected)}", self.reply())
+        self.assertEqual(
+            f"Done.\n\n---\n*Written to Valkama*\n\n{line(busy, 'Everything', expected)}",
+            self.reply(),
+        )
 
     def test_an_item_no_phrase_fits_is_said_to_have_changed(self) -> None:
         labelled = self.create("Labels")
@@ -469,7 +473,7 @@ class WrittenListTests(Writes, unittest.TestCase):
             refs=[{"kind": "url", "value": "https://example.com/a"}],
         )
         self.assertEqual(
-            "Done.\n\n---\n"
+            "Done.\n\n---\n*Written to Valkama*\n\n"
             + line(labelled, "Labels", " — labels changed")
             + "\n"
             + line(referred, "Only a ref", " — changed"),
@@ -491,7 +495,7 @@ class WrittenListTests(Writes, unittest.TestCase):
         )
         self.steps(relisted, "Another")
         self.assertEqual(
-            "Done.\n\n---\n"
+            "Done.\n\n---\n*Written to Valkama*\n\n"
             + line(ticked, "Ticked", " — steps ticked: 3, steps reopened: 1")
             + "\n"
             + line(relisted, "Relisted", " — steps changed"),
@@ -506,7 +510,7 @@ class WrittenListTests(Writes, unittest.TestCase):
         self.tool("apply_work_item_changes", id=finished, claim=True)
         self.tool("apply_work_item_changes", id=finished, transition={"state": "todo"})
         self.assertEqual(
-            "Done.\n\n---\n"
+            "Done.\n\n---\n*Written to Valkama*\n\n"
             + line(started, "Started", " — claimed")
             + "\n"
             + line(finished, "Finished", " — claimed, moved to Todo"),
@@ -523,7 +527,8 @@ class WrittenListTests(Writes, unittest.TestCase):
             resolutions=[{"comment_id": thread["applied"]["comment"]["comment_id"]}],
         )
         self.assertEqual(
-            f"Done.\n\n---\n{line(discussed, 'Discussed', ' — discussion resolved')}", self.reply()
+            f"Done.\n\n---\n*Written to Valkama*\n\n{line(discussed, 'Discussed', ' — discussion resolved')}",
+            self.reply(),
         )
 
     def test_a_link_made_from_another_item_adds_nothing_to_this_ones_line(self) -> None:
@@ -537,7 +542,7 @@ class WrittenListTests(Writes, unittest.TestCase):
             links=[{"other": first, "kind": "relates-to"}],
         )
         self.assertEqual(
-            "Done.\n\n---\n"
+            "Done.\n\n---\n*Written to Valkama*\n\n"
             + line(first, "First", " — created, comment added")
             + "\n"
             + line(str(second["reference"]), "Second", " — created"),
@@ -560,7 +565,7 @@ class WrittenListTests(Writes, unittest.TestCase):
             "apply_work_item_changes", id=later, links=[{"other": other, "kind": "relates-to"}]
         )
         self.assertEqual(
-            "Done.\n\n---\n"
+            "Done.\n\n---\n*Written to Valkama*\n\n"
             + line(str(made["reference"]), "Made whole", " — created")
             + "\n"
             + line(later, "Linked later", " — created, links changed"),
@@ -575,7 +580,8 @@ class WrittenListTests(Writes, unittest.TestCase):
             "apply_work_item_changes", AS_OTHER, id=reference, transition={"state": "backlog"}
         )
         self.assertEqual(
-            f"Done.\n\n---\n{line(reference, 'Moved twice', ' — moved to Backlog')}", self.reply()
+            f"Done.\n\n---\n*Written to Valkama*\n\n{line(reference, 'Moved twice', ' — moved to Backlog')}",
+            self.reply(),
         )
 
     def test_a_question_in_a_comments_list_is_the_comments_alone(self) -> None:
@@ -588,7 +594,8 @@ class WrittenListTests(Writes, unittest.TestCase):
             comment={"body": "Findings", "list": {"label": "What to take on", "options": options}},
         )
         self.assertEqual(
-            f"Done.\n\n---\n{line(reference, 'Listed', ' — comment added')}", self.reply()
+            f"Done.\n\n---\n*Written to Valkama*\n\n{line(reference, 'Listed', ' — comment added')}",
+            self.reply(),
         )
 
     def test_a_title_is_folded_cut_and_shown_literally(self) -> None:
@@ -596,7 +603,7 @@ class WrittenListTests(Writes, unittest.TestCase):
         odd = self.create("#  [x](y)   *b*\n`c` <d> | e_f")
         long = self.create("a" * 100)
         self.assertEqual(
-            "Done.\n\n---\n"
+            "Done.\n\n---\n*Written to Valkama*\n\n"
             + line(odd, r"\# \[x\]\(y\) \*b\* \`c\` \<d\> \| e\_f", " — created")
             + "\n"
             + line(long, "a" * 79 + "…", " — created"),
@@ -613,7 +620,7 @@ class WrittenListTests(Writes, unittest.TestCase):
                 for number, reference in enumerate(made[:12])
             ]
             + ["- and 2 more items"],
-            content.split("\n---\n", 1)[1].split("\n"),
+            content.split("\n---\n*Written to Valkama*\n\n", 1)[1].split("\n"),
         )
         for number in range(13):
             self.create(f"More {number}")
@@ -627,7 +634,11 @@ class WrittenListTests(Writes, unittest.TestCase):
         for message, count in enumerate((13, 14, 17)):
             made = [self.create(f"Задача {number}") for number in range(count)]
             self.comment(made[0])
-            lines = (self.reply(message_id=str(message)) or "").split("\n---\n", 1)[1].split("\n")
+            lines = (
+                (self.reply(message_id=str(message)) or "")
+                .split("\n---\n*Записи в Valkama*\n\n", 1)[1]
+                .split("\n")
+            )
             self.assertEqual(
                 line(made[0], "Задача 0", " — создана, добавлен комментарий"), lines[0]
             )
@@ -643,7 +654,7 @@ class WrittenListTests(Writes, unittest.TestCase):
             "apply_work_item_changes", id=whole, checklist_ticks=[{"item_id": step, "done": False}]
         )
         self.assertEqual(
-            "Done.\n\n---\n"
+            "Done.\n\n---\n*Записи в Valkama*\n\n"
             + line(
                 whole,
                 "Всё сразу",
@@ -666,7 +677,7 @@ class WrittenListTests(Writes, unittest.TestCase):
         reference = self.create("Deferred")
         self.assertIsNone(self.reply("```\ncode\n"))
         self.assertEqual(
-            f"Done.\n\n---\n{line(reference, 'Deferred', ' — created')}",
+            f"Done.\n\n---\n*Written to Valkama*\n\n{line(reference, 'Deferred', ' — created')}",
             self.reply(message_id="next"),
         )
 
@@ -679,7 +690,7 @@ class WrittenListTests(Writes, unittest.TestCase):
     def test_the_rule_stands_past_a_blank_line_whatever_the_text_ends_with(self) -> None:
         self.prompt()
         reference = self.create("Rule")
-        rule = f"---\n{line(reference, 'Rule', ' — created')}"
+        rule = f"---\n*Written to Valkama*\n\n{line(reference, 'Rule', ' — created')}"
         for delta, shown in (
             ("Done.", "Done.\n\n"),
             ("Done.\n", "Done.\n\n"),
@@ -715,7 +726,7 @@ class ListAndLinksTests(Writes, ListenerCase):
         content = json.loads(response.read())["hookSpecificOutput"]["displayContent"]
         url = acknowledgements.work_item_url("MAIN-1")
         self.assertEqual(
-            f"See [MAIN-1]({url}).\n\n---\n{line('MAIN-1', 'MAIN item 0', ' — comment added')}",
+            f"See [MAIN-1]({url}).\n\n---\n*Written to Valkama*\n\n{line('MAIN-1', 'MAIN item 0', ' — comment added')}",
             content,
         )
 
@@ -730,7 +741,7 @@ class ListAndLinksTests(Writes, ListenerCase):
         response = self.post(batch("Done.\n", session_id=ME))
         content = json.loads(response.read())["hookSpecificOutput"]["displayContent"]
         self.assertEqual(
-            "Done.\n\n---\n- LOOSE-1 «LOOSE item 0» — comment added\n"
+            "Done.\n\n---\n*Written to Valkama*\n\n- LOOSE-1 «LOOSE item 0» — comment added\n"
             + line("MAIN-1", "MAIN item 0", " — comment added"),
             content,
         )
