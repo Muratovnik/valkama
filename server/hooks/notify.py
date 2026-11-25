@@ -1809,18 +1809,18 @@ def _compose(
     lines = [first]
     current = None
     for reference, title, entry in shown:
-        name = _name(title)
+        name = title_line(title)
         if entry["kind"] == "folded":
             current = None  # the line names the item itself
-            lines.append(f"{reference} {_quote(name)}{_under(entry)}: {_folded(entry)}")
+            lines.append(f"{reference} {quote(name)}{_under(entry)}: {_folded(entry)}")
             continue
         heading = (reference, bool(entry.get("left")))
         if heading != current:
             current = heading
             lines.append(
-                f"{reference} {_quote(name)}: {LEFT_WAITING}"
+                f"{reference} {quote(name)}: {LEFT_WAITING}"
                 if entry.get("left")
-                else f"{reference} {_quote(name)}{_under(entry)}:"
+                else f"{reference} {quote(name)}{_under(entry)}:"
             )
         lines.append(_line(entry))
     if left:
@@ -1848,7 +1848,7 @@ def _line(entry: dict) -> str:
     line = f"- {kind} at {entry['at']}{_where(entry)}{_flags(entry)}"
     if entry.get("answered_you"):
         return f"{line}: {said}" if said else line
-    quoted = f": {_quote(said)}" if said else ""
+    quoted = f": {quote(said)}" if said else ""
     if not entry.get("asked_of_you"):
         return line + quoted
     fields = "; ".join(
@@ -1865,7 +1865,7 @@ def _under(entry: dict) -> str:
     """The goal or stage an item of the tree's news came under, when it is not that item."""
 
     under = entry.get("under")
-    return f", under {under[0]} {_quote(_name(under[1]))}" if under else ""
+    return f", under {under[0]} {quote(title_line(under[1]))}" if under else ""
 
 
 def _folded(entry: dict) -> str:
@@ -1953,11 +1953,11 @@ def _thread(entry: dict) -> str:
     return f" in thread {thread}" + (f" of agent {owner}" if owner else "")
 
 
-def _quote(text: str) -> str:
+def quote(text: str) -> str:
     return f"«{text}»"
 
 
-def _name(title: str) -> str:
+def title_line(title: str) -> str:
     """An item's title on one line, cut to `MOST_TITLE` with an ellipsis."""
 
     name = " ".join(title.split())
@@ -2031,8 +2031,8 @@ def shown(told: list[tuple[str, str, dict]], language: str) -> str:
         lines.append(
             words["line"].format(
                 what=what,
-                reference=_printable(reference),
-                title=_quote(_name(_printable(title))),
+                reference=printable(reference),
+                title=quote(title_line(printable(title))),
             )
         )
     rest = len(items) - MOST_SHOWN
@@ -2043,7 +2043,7 @@ def shown(told: list[tuple[str, str, dict]], language: str) -> str:
     return "\n".join(lines)
 
 
-def _printable(text: str) -> str:
+def printable(text: str) -> str:
     return "".join(ch for ch in text if ch.isprintable() or ch.isspace())
 
 

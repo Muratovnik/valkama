@@ -66,6 +66,10 @@ class BusyError(Exception):
     """The lock is held exclusively by an earlier run and the caller does not wait; why."""
 
 
+class AbandonedError(Exception):
+    """The run that waited for the lock is no longer wanted, and holds nothing."""
+
+
 def logon_local_app_data() -> str | None:
     """The user's LOCALAPPDATA as Windows set it at logon, or None where it set none.
 
@@ -438,6 +442,7 @@ def shared(
     wait: bool = True,
     say: Callable[[str], None] = _say,
     report_every: float = REPORT_SECONDS,
+    abandoned: Callable[[], bool] | None = None,
 ) -> Iterator[None]:
     """Hold a place at the earlier branches' lock for `run`, counting `cpus`, while the block runs.
 
@@ -445,7 +450,8 @@ def shared(
     tree's. A run whose environment marks this very lock as held by an ancestor holds
     nothing. While an earlier run holds the lock exclusively, the run waits, saying
     why at once and every `report_every` seconds, or with `wait` false raises `BusyError`
-    with the reason and holds nothing.
+    with the reason and holds nothing. Before each try, a run that `abandoned` says is
+    no longer wanted raises `AbandonedError` and holds nothing.
     """
 
     path = path or lock_path()
@@ -466,6 +472,8 @@ def shared(
     place: tuple[BinaryIO, Path] | None = None
     try:
         while True:
+            if abandoned is not None and abandoned():
+                raise AbandonedError(f"{run} is no longer wanted")
             reason: str | None = None
             with _deciding(admission):
                 if held_exclusively(path):

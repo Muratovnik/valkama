@@ -10,7 +10,8 @@ DIR with a profile of `CORES` cores, says the gate's admission line on stderr, r
 COMMAND with `{k}` replaced and `HEAVY_GATE_LEASE` and `HEAVY_GATE_K` set, and
 passes on its exit code; `hold` answers its JSON line and stays until P exits;
 `status --json` lists the leases. A file `refuse` in DIR makes `run` and `hold`
-answer no room, with exit code 75. Every call appends its arguments to
+answer no room, with exit code 75. A file `stall` makes a `hold` that waits wait
+for good, as an entry in `DIR/queue`, until P exits. Every call appends its arguments to
 `DIR/calls.jsonl`, for a test to read. `write_entry_point` writes the
 `heavy-gate.json` that points at it, as the installer writes the real one.
 """
@@ -122,6 +123,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         ]
         sys.stdout.write(json.dumps({"protocol": 1, "leases": leases, "queue": []}) + "\n")
         return 0
+    if options.verb == "hold" and options.wait and (state / "stall").exists():
+        # A waiter that never gets room, in the queue until the process it holds for
+        # exits, as the gate's waiter watches that process and no other.
+        queue = state / "queue"
+        queue.mkdir(exist_ok=True)
+        waiter = queue / f"{os.getpid()}.json"
+        waiter.write_text(json.dumps({"pid": os.getpid(), "for": options.pid}), encoding="utf-8")
+        try:
+            _wait_for(options.pid)
+        finally:
+            waiter.unlink(missing_ok=True)
+        return 75
     if (state / "refuse").exists():
         answer = json.dumps(_refusal())
         if options.verb == "hold":
