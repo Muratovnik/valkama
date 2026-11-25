@@ -88,10 +88,11 @@ const switchLabel = computed(() => t('analytics.shown.label', { chart: props.tit
     :body-as="bodyAs"
     :body-label="listLabel"
   >
-    <template #actions="{ size }">
+    <template #actions="{ size, wrap }">
       <SegmentedControl
         :model-value="shown"
         :size="size"
+        :wrap="wrap"
         :label="switchLabel"
         :options="options"
         @update:model-value="choose"

@@ -208,10 +208,11 @@ const tables = (pauses: Pauses) =>
     <template #beside>
       <SectionScope />
     </template>
-    <template #actions="{ size }">
+    <template #actions="{ size, wrap }">
       <SegmentedControl
         v-model="wait"
         :size="size"
+        :wrap="wrap"
         :label="t('analytics.pauses.waits.label')"
         :options="waits"
       />

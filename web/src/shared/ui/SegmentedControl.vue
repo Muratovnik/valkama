@@ -35,7 +35,9 @@
  * it stays one line
  * where that line holds it, and where it does not its segments stand in columns of one width,
  * as wide as what holds it, on the fewest lines the room allows, a line short of the others
- * only the last (`segmentColumns`). Each host used to state the wrap and only some the sharing:
+ * only the last (`segmentColumns`). A holder as wide as what it holds, as a heading row's controls
+ * in Analytics are, cannot be what the row stands across: its host names the width that is
+ * (`--segmented-wrapped-width`). Each host used to state the wrap and only some the sharing:
  * on a phone the scope choice of Participation stood its two segments 135 and 110px wide on
  * lines of 240. Each line then shared its own room, and the set's four broke their two lines
  * 17px apart; the periods, wrapped by their bar, stood three over two at 390px. A host that
@@ -346,11 +348,12 @@ defineExpose({ columnsAt })
 /* Wrapped, the row stands in columns of one width (`useSegmentColumns`) across what holds it,
    each centring its words: a grid, so a last line short of the others keeps its segments under
    the columns above instead of growing them into the room it leaves, and a rounding never sends
-   a line's last segment to the next. */
+   a line's last segment to the next. A host whose holder is as wide as what it holds names the
+   width the row stands across instead (`--segmented-wrapped-width`). */
 .segmented.wrap.columns {
   display: grid;
   grid-template-columns: repeat(var(--segmented-columns), minmax(0, 1fr));
-  inline-size: 100%;
+  inline-size: var(--segmented-wrapped-width, 100%);
 
   .segmented-option {
     min-width: 0;
