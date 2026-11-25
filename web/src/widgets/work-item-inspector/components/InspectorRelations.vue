@@ -11,6 +11,7 @@ import { vWorkItemTitle } from '@/entities/work-item/components/workItemTitle.ts
 import { linkWorkItems, planningRefusal } from '@/shared/api/planningApi.ts'
 import { LINK_KINDS } from '@/shared/api/planningModel.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
+import { useFocusThroughWait } from '@/shared/lib/useFocusThroughWait.ts'
 import { useStateName } from '@/shared/lib/useStateName.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
@@ -50,6 +51,16 @@ const SYMMETRIC: ReadonlySet<Link['kind']> = new Set(['relates-to'])
 
 const pickerOpen = ref(false)
 const busy = ref(false)
+const root = ref<HTMLElement | null>(null)
+/**
+ * A removal disables every remove while it waits, the one pressed among them, and the browser
+ * drops focus from it to the page: a refused removal left the reader there. It takes focus back
+ * once the wait is over (`useFocusThroughWait`); a row the removal took away takes nothing.
+ */
+useFocusThroughWait(
+  () => root.value,
+  () => busy.value,
+)
 const error = ref('')
 const groups = computed(() =>
   LINK_KINDS.flatMap((kind) => {
@@ -120,7 +131,10 @@ async function remove(link: Link) {
 </script>
 
 <template>
-  <div class="relations">
+  <div
+    ref="root"
+    class="relations"
+  >
     <section class="relation-section">
       <SectionHeader
         :title="t('workItem.links')"

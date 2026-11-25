@@ -4171,10 +4171,16 @@ press of a mouse, pen or finger the interface moves focus just the same, for a s
 reader and the next Tab, and draws no ring: the last press or key decides, and a pointer
 passing over the page does not. A landing at the end of a round trip yields to the person: if
 they moved focus themselves after the action began, into a field to type or to another control,
-focus stays where they put it. A press of the pointer rings nothing it lands on, including
-an element only the interface focuses. The interface takes focus to a whole and not to a line
-of words that only says something about it: how a question ended, its passed deadline and its
-title in the list of everything waiting describe or name the question, which takes the focus
+focus stays where they put it. A control a write or a search disables while it waits, in a
+dialog as in a card or a page's form, takes the focus back once the wait ends, unless the person
+has put it somewhere since, and stays disabled meanwhile, so a second press sends nothing: a
+refused tick of a step's box, a link's remove, Stop, a report made the outcome, a reply sent from
+its mark, a commit's Attach and a failed knowledge search all left focus on the page, and so did
+a tick that went through. A control the write took away with it takes nothing back. A press of
+the pointer rings nothing it lands on, including an element only the interface focuses. The
+interface takes focus to a whole and not to a line of words that only says something about it:
+how a question ended, its passed deadline and its title in the list of everything waiting
+describe or name the question, which takes the focus
 and the ring. Words that stay where focus lands, because taking it to their whole would send
 the next Tab to the start of a long form — why a write or a read did not go through, a reply
 just written, a list's heading — carry `.focus-landing` from `base.css`: the ring stands 4px

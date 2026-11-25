@@ -12,6 +12,8 @@
  * replying, making steps of its list where it has one, and on a report making it the
  * outcome, so the first two never move. The mark's
  * icon names what a press will do, and the line of the mark says how the thread stands.
+ * A write one of them sends disables them all while it waits, which drops focus to the page;
+ * the one pressed takes it back once the wait is over (`useFocusThroughWait`), refused or not.
  *
  * A list the agent put under the root stands under the root's words (`list`), in this sheet.
  */
@@ -41,6 +43,7 @@ import { actorName, actorSession } from '@/shared/lib/actor.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import { referenceSpaceKey } from '@/shared/lib/referenceLinks.ts'
 import { plainText } from '@/shared/lib/richText.ts'
+import { useFocusThroughWait } from '@/shared/lib/useFocusThroughWait.ts'
 import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
 import EntryAction from '@/shared/ui/EntryAction.vue'
 import EntryHead from '@/shared/ui/EntryHead.vue'
@@ -79,10 +82,15 @@ const {
 const metaId = useId()
 const markId = useId()
 const entry = ref<HTMLElement | null>(null)
+const head = ref<InstanceType<typeof EntryHead> | null>(null)
 const root = computed(() => props.row.comment)
 const key = computed(() => props.row.key)
 const mark = computed(() => root.value.resolution)
 const busy = computed(() => props.pending || writing.value)
+useFocusThroughWait(
+  () => head.value?.$el as HTMLElement | undefined,
+  () => busy.value,
+)
 const formOpen = computed(() => isOpen(key.value))
 const resolving = computed(() => isOpen(key.value, 'resolve'))
 const folded = computed(
@@ -216,7 +224,7 @@ function sendMark() {
       <InspectorThreadFlags :flags="foldedFlags" />
     </template>
     <template v-else>
-      <EntryHead>
+      <EntryHead ref="head">
         <MetaLine
           :id="metaId"
           class="thread-meta"
