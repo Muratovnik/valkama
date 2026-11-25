@@ -388,11 +388,12 @@ async function close() {
 
 /* The line with no window stands as tall as the line with one and its words in its middle, as a
    button's stand in a control's height: a window beside it on the same row shows its line as that
-   button, and the words of the two stood 5.5px apart. */
+   button, and the words of the two stood 5.5px apart. A window narrower than its words gives them
+   a second row, as it does the line with a window: kept on one row, «Прошлое окно: показаний не
+   было» ran 30px past a window at 320px, a run of text past every box, and scrolled the panel. */
 .quota-past-none {
   display: flex;
   align-items: center;
   min-height: var(--size-control-inline);
-  white-space: nowrap;
 }
 </style>
