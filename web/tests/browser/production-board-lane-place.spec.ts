@@ -32,12 +32,17 @@ const PARTS = ['lane-toggle', 'lane-state', 'lane-counts', 'lane-elsewhere', 'la
 /**
  * Every heading as drawn: its place, its height in the sixty-fourths of a pixel layout works in, and the
  * parts on each of its rows, top to bottom; a part whose middle falls inside a row found already
- * stands on it. Runs in the page, and scrolls the board to its first states or its middle ones
- * first.
+ * stands on it. Runs in the page, and holds the board scrolled to its first states or its middle
+ * ones while it reads.
  */
 const drawnHeads = async (board: HTMLElement, [where, names]: [string, string[]]) => {
-  const states = board.querySelectorAll<HTMLElement>('.lanes-state')
-  board.scrollLeft = where === 'start' ? 0 : (states[2]?.offsetLeft ?? 0)
+  // The third state stands where the columns are as wide as the width they were last measured at,
+  // which a new width reaches a frame later: aimed once, at the start, a walk that crossed a width
+  // where one more column fits scrolled to another state on the way up than on the way down.
+  const aim = () =>
+    where === 'start'
+      ? 0
+      : (board.querySelectorAll<HTMLElement>('.lanes-state')[2]?.offsetLeft ?? 0)
   const read = () =>
     [...board.querySelectorAll('.lane-head')].map((head) => {
       const parts = [...head.querySelectorAll(names.map((name) => `.${name}`).join(', '))]
@@ -62,13 +67,18 @@ const drawnHeads = async (board: HTMLElement, [where, names]: [string, string[]]
       return `${name} ${place} ${height}: ${rows.map((row) => row.names.join(' + ')).join(' / ')}`
     })
   // A new width reaches the board a frame before its headings, which are measured a frame later
-  // still: read until three frames running draw the same.
+  // still: read until three frames running draw the same, with the board aimed again before each
+  // and still at its aim after it, so a state the columns moved from under the scroll is a change.
   let drawn = ['']
+  let held = ''
   for (let same = 0, at = 0; same < 3 && at < 60; at += 1) {
+    board.scrollLeft = aim()
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
     const now = read()
-    same = JSON.stringify(now) === JSON.stringify(drawn) ? same + 1 : 0
+    const scroll = `${board.scrollLeft} ${aim()}`
+    same = JSON.stringify(now) === JSON.stringify(drawn) && scroll === held ? same + 1 : 0
     drawn = now
+    held = scroll
   }
   return drawn
 }
