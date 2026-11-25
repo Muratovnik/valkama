@@ -358,7 +358,7 @@ class WrittenListTests(Writes, unittest.TestCase):
         self.assertIsNone(self.reply("Working on it\n", index=0, final=False))
         self.assertEqual(0, self.opened, "a batch that is not the last reads no store")
         self.assertEqual(
-            f"Done.\n\n---\n{line(reference, 'Fix the parser', ' — created · comment')}",
+            f"Done.\n\n---\n{line(reference, 'Fix the parser', ' — created, comment added')}",
             self.reply("Done.\n", index=1, final=True),
         )
 
@@ -399,7 +399,9 @@ class WrittenListTests(Writes, unittest.TestCase):
             )["reference"]
         )
         self.tool("apply_work_item_changes", id=own, comment={"body": f"Follows {other}"})
-        self.assertEqual(f"Done.\n\n---\n{line(own, 'Own', ' — created · comment')}", self.reply())
+        self.assertEqual(
+            f"Done.\n\n---\n{line(own, 'Own', ' — created, comment added')}", self.reply()
+        )
 
     def test_the_next_message_lists_only_what_came_after_the_last_list(self) -> None:
         self.prompt()
@@ -429,28 +431,139 @@ class WrittenListTests(Writes, unittest.TestCase):
             self.reply(message_id="second"),
         )
 
-    def test_each_word_in_its_fixed_order_and_nothing_for_the_rest(self) -> None:
-        quiet = self.create("Only refs and labels")
-        self.prompt()
-        busy = self.create("Everything")
+    def everything(self, reference: str) -> None:
         self.tool(
             "apply_work_item_changes",
-            id=busy,
+            id=reference,
             summary={"done": "The change", "next": "Nothing"},
             questions=[{"kind": "question", "prompt": "Which path?", "fields": FIELDS}],
             comment={"body": "A note"},
             checklist=["One step"],
             transition={"state": "todo"},
         )
+
+    def steps(self, reference: str, *texts: str) -> list[str]:
+        """Set *reference*'s steps and answer their ids."""
+
+        applied = self.tool("apply_work_item_changes", id=reference, checklist=list(texts))
+        return [str(step["item_id"]) for step in applied["applied"]["checklist"]]
+
+    def test_each_phrase_in_its_fixed_order(self) -> None:
+        self.prompt()
+        busy = self.create("Everything")
+        self.everything(busy)
+        expected = (
+            " — created, moved to Todo, steps changed, comment added,"
+            " question put to the owner, summary written"
+        )
+        self.assertEqual(f"Done.\n\n---\n{line(busy, 'Everything', expected)}", self.reply())
+
+    def test_an_item_no_phrase_fits_is_said_to_have_changed(self) -> None:
+        labelled = self.create("Labels")
+        referred = self.create("Only a ref")
+        self.prompt()
+        self.tool("apply_work_item_changes", id=labelled, update={"labels": ["x"]})
         self.tool(
             "apply_work_item_changes",
-            id=quiet,
+            id=referred,
             refs=[{"kind": "url", "value": "https://example.com/a"}],
-            update={"labels": ["x"]},
         )
-        expected = " — created · → Todo · comment · question to the owner · steps · summary"
         self.assertEqual(
-            f"Done.\n\n---\n{line(busy, 'Everything', expected)}\n{line(quiet, 'Only refs and labels')}",
+            "Done.\n\n---\n"
+            + line(labelled, "Labels", " — labels changed")
+            + "\n"
+            + line(referred, "Only a ref", " — changed"),
+            self.reply(),
+        )
+
+    def test_steps_say_what_was_done_to_them_and_to_how_many(self) -> None:
+        ticked = self.create("Ticked")
+        one, two, three = self.steps(ticked, "One", "Two", "Three")
+        relisted = self.create("Relisted")
+        self.prompt()
+        self.tool(
+            "apply_work_item_changes",
+            id=ticked,
+            checklist_ticks=[{"item_id": one}, {"item_id": two}, {"item_id": three}],
+        )
+        self.tool(
+            "apply_work_item_changes", id=ticked, checklist_ticks=[{"item_id": two, "done": False}]
+        )
+        self.steps(relisted, "Another")
+        self.assertEqual(
+            "Done.\n\n---\n"
+            + line(ticked, "Ticked", " — steps ticked: 3, steps reopened: 1")
+            + "\n"
+            + line(relisted, "Relisted", " — steps changed"),
+            self.reply(),
+        )
+
+    def test_a_claim_says_the_move_it_made_and_a_later_move_is_said_too(self) -> None:
+        started = self.create("Started")
+        finished = self.create("Finished")
+        self.prompt()
+        self.tool("apply_work_item_changes", id=started, claim=True)
+        self.tool("apply_work_item_changes", id=finished, claim=True)
+        self.tool("apply_work_item_changes", id=finished, transition={"state": "todo"})
+        self.assertEqual(
+            "Done.\n\n---\n"
+            + line(started, "Started", " — claimed")
+            + "\n"
+            + line(finished, "Finished", " — claimed, moved to Todo"),
+            self.reply(),
+        )
+
+    def test_a_resolved_thread_has_a_phrase_of_its_own(self) -> None:
+        discussed = self.create("Discussed")
+        thread = self.tool("apply_work_item_changes", id=discussed, comment={"body": "A note"})
+        self.prompt()
+        self.tool(
+            "apply_work_item_changes",
+            id=discussed,
+            resolutions=[{"comment_id": thread["applied"]["comment"]["comment_id"]}],
+        )
+        self.assertEqual(
+            f"Done.\n\n---\n{line(discussed, 'Discussed', ' — discussion resolved')}", self.reply()
+        )
+
+    def test_a_link_made_from_another_item_adds_nothing_to_this_ones_line(self) -> None:
+        self.prompt()
+        first = self.create("First")
+        self.comment(first)
+        second = self.tool(
+            "create_work_item",
+            space="MAIN",
+            title="Second",
+            links=[{"other": first, "kind": "relates-to"}],
+        )
+        self.assertEqual(
+            "Done.\n\n---\n"
+            + line(first, "First", " — created, comment added")
+            + "\n"
+            + line(str(second["reference"]), "Second", " — created"),
+            self.reply(),
+        )
+
+    def test_what_a_new_item_is_made_with_is_said_by_created_alone(self) -> None:
+        other = self.create("Theirs", AS_OTHER)
+        self.prompt()
+        made = self.tool(
+            "create_work_item",
+            space="MAIN",
+            title="Made whole",
+            labels=["x"],
+            checklist=["One step"],
+            links=[{"other": other, "kind": "relates-to"}],
+        )
+        later = self.create("Linked later")
+        self.tool(
+            "apply_work_item_changes", id=later, links=[{"other": other, "kind": "relates-to"}]
+        )
+        self.assertEqual(
+            "Done.\n\n---\n"
+            + line(str(made["reference"]), "Made whole", " — created")
+            + "\n"
+            + line(later, "Linked later", " — created, links changed"),
             self.reply(),
         )
 
@@ -462,7 +575,7 @@ class WrittenListTests(Writes, unittest.TestCase):
             "apply_work_item_changes", AS_OTHER, id=reference, transition={"state": "backlog"}
         )
         self.assertEqual(
-            f"Done.\n\n---\n{line(reference, 'Moved twice', ' → Backlog')}", self.reply()
+            f"Done.\n\n---\n{line(reference, 'Moved twice', ' — moved to Backlog')}", self.reply()
         )
 
     def test_a_question_in_a_comments_list_is_the_comments_alone(self) -> None:
@@ -474,7 +587,9 @@ class WrittenListTests(Writes, unittest.TestCase):
             id=reference,
             comment={"body": "Findings", "list": {"label": "What to take on", "options": options}},
         )
-        self.assertEqual(f"Done.\n\n---\n{line(reference, 'Listed', ' — comment')}", self.reply())
+        self.assertEqual(
+            f"Done.\n\n---\n{line(reference, 'Listed', ' — comment added')}", self.reply()
+        )
 
     def test_a_title_is_folded_cut_and_shown_literally(self) -> None:
         self.prompt()
@@ -513,9 +628,31 @@ class WrittenListTests(Writes, unittest.TestCase):
             made = [self.create(f"Задача {number}") for number in range(count)]
             self.comment(made[0])
             lines = (self.reply(message_id=str(message)) or "").split("\n---\n", 1)[1].split("\n")
-            self.assertEqual(line(made[0], "Задача 0", " — создана · комментарий"), lines[0])
+            self.assertEqual(
+                line(made[0], "Задача 0", " — создана, добавлен комментарий"), lines[0]
+            )
             lasts.append(lines[-1])
         self.assertEqual(["- и ещё 1 задача", "- и ещё 2 задачи", "- и ещё 5 задач"], lasts)
+        whole = self.create("Всё сразу")
+        self.assertIn(whole, self.reply(message_id="made") or "")
+        self.tool("apply_work_item_changes", id=whole, claim=True, update={"labels": ["x"]})
+        self.everything(whole)
+        (step,) = self.steps(whole, "Один шаг")
+        self.tool("apply_work_item_changes", id=whole, checklist_ticks=[{"item_id": step}])
+        self.tool(
+            "apply_work_item_changes", id=whole, checklist_ticks=[{"item_id": step, "done": False}]
+        )
+        self.assertEqual(
+            "Done.\n\n---\n"
+            + line(
+                whole,
+                "Всё сразу",
+                " — взята в работу, переведена в Todo, изменён список шагов, отмечено шагов: 1,"
+                " возвращено шагов: 1, добавлен комментарий, задан вопрос владельцу,"
+                " записан итог, изменены метки",
+            ),
+            self.reply(message_id="whole"),
+        )
         self.assertEqual(
             ["задача", "задачи", "задач", "задач", "задача", "задач"],
             [
@@ -578,7 +715,8 @@ class ListAndLinksTests(Writes, ListenerCase):
         content = json.loads(response.read())["hookSpecificOutput"]["displayContent"]
         url = acknowledgements.work_item_url("MAIN-1")
         self.assertEqual(
-            f"See [MAIN-1]({url}).\n\n---\n{line('MAIN-1', 'MAIN item 0', ' — comment')}", content
+            f"See [MAIN-1]({url}).\n\n---\n{line('MAIN-1', 'MAIN item 0', ' — comment added')}",
+            content,
         )
 
     def test_an_item_in_a_space_no_project_binds_is_listed_without_a_link(self) -> None:
@@ -592,8 +730,8 @@ class ListAndLinksTests(Writes, ListenerCase):
         response = self.post(batch("Done.\n", session_id=ME))
         content = json.loads(response.read())["hookSpecificOutput"]["displayContent"]
         self.assertEqual(
-            "Done.\n\n---\n- LOOSE-1 «LOOSE item 0» — comment\n"
-            + line("MAIN-1", "MAIN item 0", " — comment"),
+            "Done.\n\n---\n- LOOSE-1 «LOOSE item 0» — comment added\n"
+            + line("MAIN-1", "MAIN item 0", " — comment added"),
             content,
         )
 
