@@ -12,7 +12,8 @@
  * A form the write closes as it answers — a reply, points made steps — leaves no control of
  * its own to wait on: its thread holds the focus, in sight, at every frame of the read, and once
  * the card is read again focus lands on the reply written, or on the icon that opened the form,
- * ringed.
+ * ringed. A report made the outcome takes away the icon pressed, and focus goes to the comment
+ * form, in sight, at a desktop's two widths and a phone's.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -55,11 +56,13 @@ const MORE = {
     replyField: 'Your reply',
     makeSteps: 'Make conditions',
     addSteps: 'Add 2 conditions',
+    composer: 'Write a comment',
   },
   ru: {
     replyField: 'Ваш ответ',
     makeSteps: 'В условия',
     addSteps: 'Добавить 2 условия',
+    composer: 'Написать комментарий',
   },
 } as const
 
@@ -238,3 +241,33 @@ for (const width of [1440, 1024] as const)
         expect(counted.onNothing).toBe(0)
       })
     })
+
+// A desktop's widths and a phone's: at a phone's only that nothing is cut, overlaps or scrolls
+// sideways, and that focus stands in sight.
+for (const lang of ['en', 'ru'] as const)
+  test.describe(`a report made the outcome in ${lang}`, () => {
+    test.use({ locale: lang === 'ru' ? 'ru-RU' : 'en-US' })
+
+    for (const width of [1440, 1024, 390, 320] as const)
+      test(`with Enter leaves the focus on the comment form, in sight, at ${String(width)}`, async ({
+        page,
+      }) => {
+        await page.setViewportSize({ width, height: 900 })
+        await page.emulateMedia({ reducedMotion: 'reduce' })
+        const { drawer } = await cardWithThreads(page)
+        const make = drawer.getByRole('button', { name: WORDS[lang].makeOutcome, exact: true })
+        await make.focus(WAIT)
+        await page.keyboard.press('Enter')
+        await expect(make).toHaveCount(0, WAIT)
+        const composer = drawer.getByRole('form', { name: MORE[lang].composer, exact: true })
+        await expect(composer).toBeFocused(WAIT)
+        await frames(drawer)
+        expect(await inSightClear(composer)).toBe(true)
+        expect(await drawer.evaluate((node) => node.scrollWidth - node.clientWidth)).toBe(0)
+        expect(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          ),
+        ).toBe(0)
+      })
+  })

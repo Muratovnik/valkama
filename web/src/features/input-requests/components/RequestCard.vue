@@ -261,8 +261,7 @@ const unsentChosen = computed(() =>
 const change = useAnswerChange({
   busy,
   focusCancel: () => foot.value?.focusWayOut(),
-  focusChange: () =>
-    card.value?.querySelector<HTMLElement>('.request-change')?.focus({ preventScroll: true }),
+  changeControl: () => card.value?.querySelector<HTMLElement>('.request-change'),
   forget,
   request,
   reveal,
