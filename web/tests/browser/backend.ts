@@ -60,6 +60,8 @@ export type BackendOptions = {
   closedWith?: string
   /** The discussion the card's item has. */
   comments?: unknown[]
+  /** The spaces the shell's context lists, in place of the fixture's own. */
+  contextSpaces?: unknown[]
   /** The history the card's read answers with. */
   events?: unknown[]
   includeAttachedDuplicate?: boolean
@@ -100,6 +102,11 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
   const platformReads: string[] = []
   const prefsWrites: unknown[] = []
   const registrations = moduleRegistrations()
+  /** The stores whose spaces the double answers for. */
+  const servedScopeIds = new Set([
+    dataScopeId,
+    ...(options.includeAttachedDuplicate ? [attachedDataScopeId] : []),
+  ])
   /** The names as the server keeps them, and every write of them, as the server takes it. */
   const accountNames: Record<string, string> = { ...options.accountNames }
   const accountNameWrites: { names: Record<string, string>; replace?: boolean }[] = []
@@ -277,11 +284,13 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
               status: 'ready',
               payload: {
                 primary: { data_scope_id: dataScopeId, is_writable: true },
-                spaces: [
-                  spaceRef,
-                  ...(options.includeAttachedDuplicate ? [attachedSpaceRef] : []),
-                  ...(options.includeEmptySpace ? [emptySpaceRef] : []),
-                ].map((space) => shellSpaceFor(space)),
+                spaces:
+                  options.contextSpaces ??
+                  [
+                    spaceRef,
+                    ...(options.includeAttachedDuplicate ? [attachedSpaceRef] : []),
+                    ...(options.includeEmptySpace ? [emptySpaceRef] : []),
+                  ].map((space) => shellSpaceFor(space)),
                 ui_prefs: options.uiPrefs ?? null,
               },
             },
@@ -307,10 +316,7 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
             const requestedKey = scope.space_ref.space_key
             if (
               requestedKey !== spaceRef.space_key ||
-              ![
-                dataScopeId,
-                ...(options.includeAttachedDuplicate ? [attachedDataScopeId] : []),
-              ].includes(requestedScopeId ?? '')
+              !servedScopeIds.has(requestedScopeId ?? '')
             ) {
               return fulfill(
                 {
@@ -345,10 +351,7 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
           if (
             requestedKey !== spaceRef.space_key ||
             ![blockedWorkItem.reference, workItemRef.reference].includes(requestedReference) ||
-            ![
-              dataScopeId,
-              ...(options.includeAttachedDuplicate ? [attachedDataScopeId] : []),
-            ].includes(requestedScopeId ?? '')
+            !servedScopeIds.has(requestedScopeId ?? '')
           ) {
             return fulfill(
               {
