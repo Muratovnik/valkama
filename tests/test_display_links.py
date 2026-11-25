@@ -1,7 +1,10 @@
 """The `MessageDisplay` hook endpoint: what the client gets, on a real listener.
 
 The oracle for "a real item" is the `/open` route itself, followed over HTTP, so the
-batched read cannot drift from what a click on the link does.
+batched read cannot drift from what a click on the link does. The oracle for the list
+under a reply is the hook contract's section on it: whose writes, since when, and
+what one line holds, with the agents' writes made through the MCP tools as a client
+makes them.
 """
 
 from __future__ import annotations
@@ -14,20 +17,48 @@ import os
 import sqlite3
 import tempfile
 import unittest
+import uuid
 from pathlib import Path
 from unittest import mock
 from urllib.parse import urlsplit
 
-from server import http_surface, store
-from server.planning import acknowledgements, display_links, interactions
+from server import http_surface, mcp_surface, store
+from server.alerts import settings as alert_settings
+from server.hooks import ingest, normalize
+from server.planning import (
+    acknowledgements,
+    api,
+    calls,
+    display_links,
+    display_writes,
+    interactions,
+    service,
+)
 from tests.test_work_item_link import LinkedStoreCase
 
 MESSAGE_ID = "5b2a9c8e-1f63-4d8a-b7c4-9e0d2a6f1c3b"
+#: The session whose own conversation writes the message, and the others around it.
+ME = "019a3c2e-5b7d-7c11-9e0f-2f4b6d8a1c3e"
+OTHER = "019a3c2e-7777-7c11-9e0f-2f4b6d8a1c3e"
+CHILD = "019a3c2e-9999-7c11-9e0f-2f4b6d8a1c3e"
+#: Codex proves its session in `_meta`, the shortest door in a test; a thread id
+#: other than the session is one of its subagents.
+AS_ME = {"sessionId": ME}
+AS_OTHER = {"sessionId": OTHER}
+AS_CHILD = {"sessionId": ME, "threadId": CHILD}
+FIELDS = [{"id": "path", "label": "Which path?", "type": "text", "required": True, "options": []}]
 
 
-def batch(delta: str, *, index: int = 0, final: bool = True, message_id: str = MESSAGE_ID) -> dict:
+def batch(
+    delta: str,
+    *,
+    index: int = 0,
+    final: bool = True,
+    message_id: str = MESSAGE_ID,
+    session_id: str = "abc123",
+) -> dict:
     return {
-        "session_id": "abc123",
+        "session_id": session_id,
         "transcript_path": "C:\\work\\t.jsonl",
         "cwd": "C:\\work",
         "hook_event_name": "MessageDisplay",
@@ -44,14 +75,24 @@ def shown(delta: str, url: str = "http://u") -> str:
 
 
 class OpenMessagesTests(unittest.TestCase):
-    """The state between batches, without a store: no candidate ever opens one."""
+    """The state between batches, without a store: no candidate ever opens one.
+
+    The payloads name no session, so no last batch asks for the list either.
+    """
 
     def setUp(self) -> None:
         self.open_store = mock.Mock(side_effect=AssertionError("the store was opened"))
         self.messages = display_links.OpenMessages(limit=2)
 
     def answer(self, payload: dict) -> dict:
-        return display_links.answer(payload, self.open_store, "unused", messages=self.messages)
+        payload = {name: value for name, value in payload.items() if name != "session_id"}
+        return display_links.answer(
+            payload,
+            self.open_store,
+            "unused",
+            messages=self.messages,
+            shown=display_writes.ShownCalls(),
+        )
 
     def test_a_text_with_no_candidate_never_opens_the_store(self) -> None:
         for text in ("", "plain text\n", "`MAIN-1`", "```\nMAIN-1\n```\n", "http://x/MAIN-1"):
@@ -114,6 +155,13 @@ class OpenMessagesTests(unittest.TestCase):
 
 
 class ListenerCase(LinkedStoreCase):
+    def setUp(self) -> None:
+        super().setUp()
+        # The listener keeps each session's place in this module; every test starts afresh.
+        shown = mock.patch.object(display_writes, "SHOWN", display_writes.ShownCalls())
+        shown.start()
+        self.addCleanup(shown.stop)
+
     def post(
         self,
         payload: object,
@@ -214,6 +262,340 @@ class AnswerTests(ListenerCase):
                 f"[MAIN-1]({acknowledgements.work_item_url('MAIN-1')}) MAIN-2\n",
                 self.displayed(batch("MAIN-1 MAIN-2\n")),
             )
+
+
+class Writes:
+    """Writes as they reach a store: an agent's through its tools, a person's through the
+    interface's boundary, a prompt through the hook that records it."""
+
+    conn: sqlite3.Connection
+
+    def tool(self, name: str, meta: object = AS_ME, **arguments: object) -> dict:
+        answer = mcp_surface.call_tool(self.conn, name, arguments, meta=meta)
+        self.conn.commit()
+        assert isinstance(answer, dict)
+        return answer
+
+    def create(self, title: str, meta: object = AS_ME) -> str:
+        return str(self.tool("create_work_item", meta, space="MAIN", title=title)["reference"])
+
+    def comment(self, reference: str, meta: object = AS_ME) -> None:
+        self.tool("apply_work_item_changes", meta, id=reference, comment={"body": "A note"})
+
+    def person_comments(self, reference: str) -> None:
+        path = "/api/planning/work-item/comment"
+        with calls.bind(calls.browser(), path):
+            api.handle_post(self.conn, path, {"id": reference, "body": "A person's note"})
+        self.conn.commit()
+
+    def prompt(self, session_id: str = ME) -> None:
+        event = normalize.lifecycle_event(
+            "claude",
+            "user-prompt-submit",
+            {"session_id": session_id, "hook_event_name": "UserPromptSubmit"},
+            event_uid=str(uuid.uuid4()),
+            occurred_at="2026-11-01T10:00:00.000Z",
+        )
+        assert event is not None
+        ingest.record(self.conn, event, delivery="direct")
+        self.conn.commit()
+
+
+def line(reference: str, title: str, done: str = "") -> str:
+    """One line of the list as the hook contract spells it."""
+
+    return f"- [{reference}]({acknowledgements.work_item_url(reference)}) «{title}»{done}"
+
+
+class WrittenListTests(Writes, unittest.TestCase):
+    """The list under the last batch of a message, on a store the tools wrote to."""
+
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(directory.cleanup)
+        environment = mock.patch.dict(
+            os.environ, {"VALKAMA_DB": str(Path(directory.name) / "store.sqlite3")}
+        )
+        environment.start()
+        self.addCleanup(environment.stop)
+        self.conn = store.connect()
+        self.addCleanup(self.conn.close)
+        service.create_planning_space(self.conn, project_id="p", name="Main", key="MAIN")
+        alert_settings.write(self.conn, {"locale": "en"})
+        self.conn.commit()
+        # This store has no project registry; which numbers lead to a card is the
+        # listener cases' subject, so here every listed one does.
+        every = mock.patch.object(
+            display_links, "existing_references", lambda _conn, _db, references: set(references)
+        )
+        every.start()
+        self.addCleanup(every.stop)
+        self.shown = display_writes.ShownCalls()
+        self.messages = display_links.OpenMessages()
+        self.opened = 0
+
+    def open_store(self) -> sqlite3.Connection:
+        self.opened += 1
+        return store.open_read_only()
+
+    def answer(self, payload: dict) -> str | None:
+        answer = display_links.answer(
+            payload, self.open_store, store.db_path(), messages=self.messages, shown=self.shown
+        )
+        if not answer:
+            return None
+        content = answer["hookSpecificOutput"]
+        assert isinstance(content, dict)
+        return str(content["displayContent"])
+
+    def reply(self, delta: str = "Done.\n", **payload: object) -> str | None:
+        return self.answer({**batch(delta, session_id=ME), **payload})
+
+    def test_the_last_batch_lists_what_the_conversation_wrote_since_the_prompt(self) -> None:
+        self.prompt()
+        reference = self.create("Fix the parser")
+        self.comment(reference)
+        self.assertIsNone(self.reply("Working on it\n", index=0, final=False))
+        self.assertEqual(0, self.opened, "a batch that is not the last reads no store")
+        self.assertEqual(
+            f"Done.\n\n---\n{line(reference, 'Fix the parser', ' — created · comment')}",
+            self.reply("Done.\n", index=1, final=True),
+        )
+
+    def test_a_subagent_or_a_payload_without_a_session_gets_no_list(self) -> None:
+        self.prompt()
+        self.create("Fix the parser")
+        for change in ({"agent_id": "a1"}, {"session_id": None}, {"session_id": ""}):
+            with self.subTest(change=change):
+                self.assertIsNone(self.answer({**batch("Done.\n", session_id=ME), **change}))
+        self.assertEqual(0, len(self.shown))
+
+    def test_only_this_conversations_own_writes_are_listed(self) -> None:
+        self.prompt()
+        self.prompt(OTHER)
+        own = self.create("Own")
+        theirs = self.create("Another session's", AS_OTHER)
+        child = self.create("A subagent's", AS_CHILD)
+        persons = self.create("Written on by a person", AS_OTHER)
+        self.person_comments(persons)
+        self.person_comments(own)
+        self.comment(theirs, AS_OTHER)
+        self.comment(own, AS_OTHER)
+        self.comment(child, AS_CHILD)
+        self.assertEqual(
+            f"Done.\n\n---\n{line(own, 'Own', ' — created')}",
+            self.reply(),
+        )
+
+    def test_the_other_end_of_a_link_or_a_mention_gets_no_line(self) -> None:
+        other = self.create("Theirs", AS_OTHER)
+        self.prompt()
+        own = str(
+            self.tool(
+                "create_work_item",
+                space="MAIN",
+                title="Own",
+                links=[{"other": other, "kind": "relates-to"}],
+            )["reference"]
+        )
+        self.tool("apply_work_item_changes", id=own, comment={"body": f"Follows {other}"})
+        self.assertEqual(f"Done.\n\n---\n{line(own, 'Own', ' — created · comment')}", self.reply())
+
+    def test_the_next_message_lists_only_what_came_after_the_last_list(self) -> None:
+        self.prompt()
+        first = self.create("First")
+        self.assertIn(first, self.reply() or "")
+        second = self.create("Second")
+        self.assertEqual(
+            f"Done.\n\n---\n{line(second, 'Second', ' — created')}",
+            self.reply(message_id="second"),
+        )
+        self.assertIsNone(self.reply(message_id="third"))
+
+    def test_with_no_place_kept_the_list_starts_after_the_latest_prompt(self) -> None:
+        before = self.create("Before the prompt")
+        self.prompt()
+        after = self.create("After the prompt")
+        content = self.reply() or ""
+        self.assertNotIn(before, content)
+        self.assertIn(line(after, "After the prompt", " — created"), content)
+
+    def test_with_no_prompt_either_it_lists_nothing_and_starts_from_there(self) -> None:
+        self.create("Before any prompt")
+        self.assertIsNone(self.reply())
+        later = self.create("Later")
+        self.assertEqual(
+            f"Done.\n\n---\n{line(later, 'Later', ' — created')}",
+            self.reply(message_id="second"),
+        )
+
+    def test_each_word_in_its_fixed_order_and_nothing_for_the_rest(self) -> None:
+        quiet = self.create("Only refs and labels")
+        self.prompt()
+        busy = self.create("Everything")
+        self.tool(
+            "apply_work_item_changes",
+            id=busy,
+            summary={"done": "The change", "next": "Nothing"},
+            questions=[{"kind": "question", "prompt": "Which path?", "fields": FIELDS}],
+            comment={"body": "A note"},
+            checklist=["One step"],
+            transition={"state": "todo"},
+        )
+        self.tool(
+            "apply_work_item_changes",
+            id=quiet,
+            refs=[{"kind": "url", "value": "https://example.com/a"}],
+            update={"labels": ["x"]},
+        )
+        expected = " — created · → Todo · comment · question to the owner · steps · summary"
+        self.assertEqual(
+            f"Done.\n\n---\n{line(busy, 'Everything', expected)}\n{line(quiet, 'Only refs and labels')}",
+            self.reply(),
+        )
+
+    def test_a_moved_item_is_named_by_the_state_it_is_in_now(self) -> None:
+        reference = self.create("Moved twice")
+        self.prompt()
+        self.tool("apply_work_item_changes", id=reference, transition={"state": "todo"})
+        self.tool(
+            "apply_work_item_changes", AS_OTHER, id=reference, transition={"state": "backlog"}
+        )
+        self.assertEqual(
+            f"Done.\n\n---\n{line(reference, 'Moved twice', ' → Backlog')}", self.reply()
+        )
+
+    def test_a_question_in_a_comments_list_is_the_comments_alone(self) -> None:
+        reference = self.create("Listed")
+        self.prompt()
+        options = [{"id": "a", "label": "Widen the check"}]
+        self.tool(
+            "apply_work_item_changes",
+            id=reference,
+            comment={"body": "Findings", "list": {"label": "What to take on", "options": options}},
+        )
+        self.assertEqual(f"Done.\n\n---\n{line(reference, 'Listed', ' — comment')}", self.reply())
+
+    def test_a_title_is_folded_cut_and_shown_literally(self) -> None:
+        self.prompt()
+        odd = self.create("#  [x](y)   *b*\n`c` <d> | e_f")
+        long = self.create("a" * 100)
+        self.assertEqual(
+            "Done.\n\n---\n"
+            + line(odd, r"\# \[x\]\(y\) \*b\* \`c\` \<d\> \| e\_f", " — created")
+            + "\n"
+            + line(long, "a" * 79 + "…", " — created"),
+            self.reply(),
+        )
+
+    def test_twelve_lines_then_one_counting_the_rest(self) -> None:
+        self.prompt()
+        made = [self.create(f"Item {number}") for number in range(14)]
+        content = self.reply() or ""
+        self.assertEqual(
+            [
+                line(reference, f"Item {number}", " — created")
+                for number, reference in enumerate(made[:12])
+            ]
+            + ["- and 2 more items"],
+            content.split("\n---\n", 1)[1].split("\n"),
+        )
+        for number in range(13):
+            self.create(f"More {number}")
+        self.assertTrue((self.reply(message_id="next") or "").endswith("\n- and 1 more item"))
+
+    def test_russian_words_and_counts(self) -> None:
+        alert_settings.write(self.conn, {"locale": "ru"})
+        self.conn.commit()
+        self.prompt()
+        lasts = []
+        for message, count in enumerate((13, 14, 17)):
+            made = [self.create(f"Задача {number}") for number in range(count)]
+            self.comment(made[0])
+            lines = (self.reply(message_id=str(message)) or "").split("\n---\n", 1)[1].split("\n")
+            self.assertEqual(line(made[0], "Задача 0", " — создана · комментарий"), lines[0])
+            lasts.append(lines[-1])
+        self.assertEqual(["- и ещё 1 задача", "- и ещё 2 задачи", "- и ещё 5 задач"], lasts)
+        self.assertEqual(
+            ["задача", "задачи", "задач", "задач", "задача", "задач"],
+            [
+                display_writes._plural(("задача", "задачи", "задач"), count, "ru")
+                for count in (1, 2, 5, 11, 21, 112)
+            ],
+        )
+
+    def test_a_message_that_ends_inside_a_fence_leaves_the_list_to_the_next(self) -> None:
+        self.prompt()
+        reference = self.create("Deferred")
+        self.assertIsNone(self.reply("```\ncode\n"))
+        self.assertEqual(
+            f"Done.\n\n---\n{line(reference, 'Deferred', ' — created')}",
+            self.reply(message_id="next"),
+        )
+
+    def test_an_unseen_batch_leaves_the_list_to_the_next_message(self) -> None:
+        self.prompt()
+        reference = self.create("Deferred")
+        self.assertIsNone(self.reply(index=2, final=True))
+        self.assertIn(reference, self.reply(message_id="next") or "")
+
+    def test_the_rule_stands_past_a_blank_line_whatever_the_text_ends_with(self) -> None:
+        self.prompt()
+        reference = self.create("Rule")
+        rule = f"---\n{line(reference, 'Rule', ' — created')}"
+        for delta, shown in (
+            ("Done.", "Done.\n\n"),
+            ("Done.\n", "Done.\n\n"),
+            ("Done.\n\n", "Done.\n\n"),
+            ("", "\n"),
+        ):
+            with self.subTest(delta=delta):
+                self.shown = display_writes.ShownCalls()
+                self.assertEqual(shown + rule, self.reply(delta, message_id=delta or "empty"))
+
+    def test_nothing_written_or_only_a_deleted_item_answers_nothing(self) -> None:
+        self.prompt()
+        self.assertIsNone(self.reply())
+        reference = self.create("Gone")
+        self.tool("delete_work_item", id=reference)
+        self.assertIsNone(self.reply(message_id="second"))
+
+    def test_the_session_place_is_bounded(self) -> None:
+        shown = display_writes.ShownCalls(limit=2)
+        for session_id in ("a", "b", "c"):
+            shown.keep(session_id, 1)
+        self.assertEqual((2, None, 1), (len(shown), shown.since("a"), shown.since("c")))
+
+
+class ListAndLinksTests(Writes, ListenerCase):
+    def test_links_and_the_list_come_in_one_answer(self) -> None:
+        self.conn = store.connect()
+        self.addCleanup(self.conn.close)
+        alert_settings.write(self.conn, {"locale": "en"})
+        self.prompt()
+        self.comment("MAIN-1")
+        response = self.post(batch("See MAIN-1.\n", session_id=ME))
+        content = json.loads(response.read())["hookSpecificOutput"]["displayContent"]
+        url = acknowledgements.work_item_url("MAIN-1")
+        self.assertEqual(
+            f"See [MAIN-1]({url}).\n\n---\n{line('MAIN-1', 'MAIN item 0', ' — comment')}", content
+        )
+
+    def test_an_item_in_a_space_no_project_binds_is_listed_without_a_link(self) -> None:
+        # Its address leads to no card, so the number stays plain, as a mention of it does.
+        self.conn = store.connect()
+        self.addCleanup(self.conn.close)
+        alert_settings.write(self.conn, {"locale": "en"})
+        self.prompt()
+        self.comment("LOOSE-1")
+        self.comment("MAIN-1")
+        response = self.post(batch("Done.\n", session_id=ME))
+        content = json.loads(response.read())["hookSpecificOutput"]["displayContent"]
+        self.assertEqual(
+            "Done.\n\n---\n- LOOSE-1 «LOOSE item 0» — comment\n"
+            + line("MAIN-1", "MAIN item 0", " — comment"),
+            content,
+        )
 
 
 class NothingReachesTheReaderTests(ListenerCase):

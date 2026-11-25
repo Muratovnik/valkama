@@ -1095,7 +1095,8 @@ which holds paths and hashes, never the archive directory.
 An agent in Claude Code writes a plain number, `MAIN-12`, and spends no output
 tokens on the address. Claude Code's `MessageDisplay` hook asks the running
 listener what to show instead, and the reader sees a link. Only the screen
-changes: the transcript and what the model sees keep the plain number. Codex has
+changes: the transcript and what the model sees keep the plain number. The same
+answer puts under the end of a message the work items the agent wrote to. Codex has
 no such event, so an agent there writes the link itself.
 
 This one hook is not the `valkama hook` command. It is an `http` hook, because
@@ -1113,17 +1114,19 @@ started per batch would cost more than the whole answer does:
 ### The request and the answer
 
 `POST /api/hooks/message-display` takes the hook input Claude Code sends and reads
-`hook_event_name`, `message_id`, `index`, `final` and `delta`.
+`hook_event_name`, `message_id`, `index`, `final` and `delta`, and for the list of
+written items `session_id` and `agent_id`.
 
 | Situation | Status | Body |
 | --- | --- | --- |
-| The batch holds a real item outside protected text | 200 | `{"hookSpecificOutput": {"hookEventName": "MessageDisplay", "displayContent": "…"}}` |
+| The batch holds a real item outside protected text, or it is the last batch of a message and there is a list of written items to show | 200 | `{"hookSpecificOutput": {"hookEventName": "MessageDisplay", "displayContent": "…"}}` |
 | Anything else, including an internal failure | 200 | empty |
 | A browser's request, a foreign `Host`, a body that is not framed JSON | 4xx | the listener's refusal envelope |
 
-`displayContent` replaces that batch's `delta`, every other character as it came.
-An empty body shows the batch as it was, and so does any failure or refusal the
-client meets: it reports those in its debug log and not in the session.
+`displayContent` replaces that batch's `delta`, every other character as it came,
+with the list of written items after it when there is one. An empty body shows the
+batch as it was, and so does any failure or refusal the client meets: it reports
+those in its debug log and not in the session.
 
 ### Which numbers become links
 
@@ -1169,12 +1172,68 @@ releases them, including the empty final batch a message ending in a newline get
 | The listener restarted during a message | The rest of that message as sent, since it may start inside a code block |
 | A batch never arrived, or the message was pushed out of the bound | The rest of that message as sent |
 
+### The work items written under the reply
+
+Under the last batch of a message the reader also sees the work items the session's
+own conversation wrote to since the list was last shown: what an agent did in the
+planning space shows next to what it says, without the model writing a word of it.
+In the VS Code window every message is one batch, so every message can carry a list;
+in the terminal it comes under the message's last lines.
+
+```markdown
+Done, the parser is fixed.
+
+---
+- [MAIN-12](http://127.0.0.1:8642/open/MAIN-12) «Fix the parser» — created · comment
+- [MAIN-9](http://127.0.0.1:8642/open/MAIN-9) «Release notes» → Done · steps · summary
+- [MAIN-4](http://127.0.0.1:8642/open/MAIN-4) «Parser rewrite»
+```
+
+Whose writes count: the planning write calls the store recorded with the payload's
+`session_id` and no agent, which are the session's own conversation. What its
+subagents wrote is not listed, and a payload that carries an `agent_id` gets no
+list. A payload without a `session_id` gets none either.
+
+Since when: the listener keeps, in memory and for at most 256 sessions, the newest
+call each session's list has covered, and the next list starts after it. With no
+such place, on a session's first message or after the listener restarted, the list
+starts after the session's latest prompt. A session with no recorded prompt gets no
+list on that message, and its next list starts from there. The place moves forward
+only when a list is shown or there was nothing to list.
+
+When it comes: only on the batch with `final` true. A message whose earlier batch
+went unseen, or that ends inside an open fenced code block, gets no list, and what
+it would have shown comes with the next message.
+
+What a line holds, after a blank line and a `---` rule, one line per item in the
+order the items were first written:
+
+- the number, linked where a mention of it would be: an item in a space no project
+  binds is named without a link;
+- the title on one line, cut to 80 characters with `…`, with its Markdown shown as
+  written;
+- what was done, in this order and joined by ` · `: `created`; the state the item
+  is in now, after an arrow, when one of the calls moved it; `comment`;
+  `question to the owner`; `steps`, for any change to the checklist; `summary`,
+  for a summary or a report. A claim that moved nothing, refs, links, labels and
+  other field edits add no word, so such an item's line is its number and title.
+
+At most 12 items have a line, and one more line counts the rest. The words follow
+the owner's alert language, as the line naming a notice does: Russian or English.
+
+What is left out: an item deleted since, and an item whose row cannot be read; the
+other end of a link, an item a comment mentions and the duplicates a merge closed,
+which a call changes on the way to the item it was made for; and anything another
+session or a person wrote, even on a listed item.
+
 ### What it costs
 
-A batch with no candidate touches no store. A batch with candidates opens the store
-read-only, never migrates or locks it, reads the project registry, and reads all
-its candidates in one statement; an attached store is opened only when a candidate's
-key is bound to it. A store at another schema version is not read. Measured over
+A batch that is not the last and holds no candidate touches no store. Any other
+batch opens the store read-only, never migrates or locks it. Candidates are read
+from the project registry and in one statement; an attached store is opened only
+when a candidate's key is bound to it. The list on a last batch is read through the
+indexes on a session's events and on an item's events and comments, so it reads no
+whole table. A store at another schema version is not read. Measured over
 HTTP on the running handler, one connection per request as the client makes them, on
 a store of 7,800 items and a registry of 30 projects, on a machine under other load
 (the worst of three series of 400):
@@ -1185,6 +1244,8 @@ a store of 7,800 items and a registry of 30 projects, on a machine under other l
 | 10 KB, no candidate | 4 ms | 22 ms |
 | 10 KB, 300 different mentions | 10 ms | 29 ms |
 | 170 KB, 3,000 mentions | 42 ms | 64 ms |
+
+These figures are for the links alone, measured before the list existed.
 
 The registered timeout is 2 s rather than the event's default of 10 s, because
 the display waits for the answer and the answer normally takes milliseconds. What
@@ -1198,7 +1259,8 @@ that message shows as it was and the next one has links.
 
 The text is scanned in memory and never logged, stored, spooled or put into an
 event. A failure logs the exception's class alone, because its message could quote
-the reply. The route records no call and writes nothing.
+the reply. The route records no call and writes nothing; between messages it keeps,
+per session, only the id of the newest call its list covered.
 
 The route takes a local process that is not a browser. The listener's `Host` check
 applies as everywhere; a request with `Origin` or `Sec-Fetch-Site`, which a browser
