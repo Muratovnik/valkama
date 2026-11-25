@@ -398,6 +398,6 @@ test('reduced motion brings a row’s actions up at once', async ({ page }) => {
   await openBoard(page)
   const actions = page.locator('.lane-actions').first()
   const duration = await actions.evaluate((node) => getComputedStyle(node).transitionDuration)
-  // The page's own rule for a reader who asked: a hundredth of a millisecond.
-  expect(Number.parseFloat(duration)).toBeLessThan(0.001)
+  // The page's own rule for a reader who asked: no transition at all.
+  expect(Number.parseFloat(duration)).toBe(0)
 })

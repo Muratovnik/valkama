@@ -444,9 +444,7 @@ defineExpose({ focusWayOut })
 }
 
 /* What the host puts first stands on the row's left end, its glyph on the axis of the radios,
-   which stand the rows' inset in from it: none where the rows have none (`--request-row-inset`).
-   It changes lines by no transition: the reduced-motion rule gives every property one, and the
-   frame it took drew the glyph at the far end of the line it was leaving. */
+   which stand the rows' inset in from it: none where the rows have none (`--request-row-inset`). */
 :slotted(*) {
   position: relative;
   inset-inline-start: calc(
@@ -454,7 +452,6 @@ defineExpose({ focusWayOut })
       (var(--font-size-interface) - var(--size-control-inline)) / 2
   );
   margin-inline-end: auto;
-  transition-property: none;
 }
 
 .request-pair {

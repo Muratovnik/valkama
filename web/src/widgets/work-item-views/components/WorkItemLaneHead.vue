@@ -227,9 +227,6 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
   padding-inline-start: calc(var(--space-1) + var(--lane-chevron-size) + var(--space-2));
   margin-block-start: calc(-1 * var(--space-1));
 
-  /* The board's width lands in the frame it changes: the reduced-motion rule would ease it. */
-  transition-property: none;
-
   /* Its ground, under its words, over the room at its sides and above it and not below: a shadow
      spread round it hid the first 4px of the tile coming out from under it held at the top, and
      drew nothing in a forced palette, where the tiles passing beside it showed as stripes. */

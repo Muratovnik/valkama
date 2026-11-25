@@ -4238,6 +4238,13 @@ headings and controls, a text equivalent for every chart, honored
 reduced-motion, and correct behavior when text is scaled. Color is always
 doubled by text or shape and is never the only carrier of a state.
 
+Under a preference for reduced motion nothing changes by a transition, and an animation
+lasts an instant and runs once (`shell.css`): what is shown again stands in the frame that
+shows it, so focus sent to a control coming back from `visibility: hidden` lands on it.
+Transitions of an instant instead gave every property of every element one, begun at the
+value being left: leaving an answer's change form dropped the focus on the page, a dialog
+held where it stood sat at its room's top for a frame, and a measured width eased.
+
 The focus ring is drawn on `:focus-visible` alone: where the keyboard put focus,
 and where the interface moved it in answer to something — how a question ended,
 the next question, why a send failed — when a key, and not a press, was the last input
