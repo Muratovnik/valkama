@@ -64,28 +64,8 @@ const SURFACES = { kanban: '.work-item-board', list: '.work-item-list', graph: '
  * items; narrowed to the second project it holds only the blocking one.
  */
 async function serveScopes(page: Page) {
-  const served = await installBackend(page)
+  const served = await installBackend(page, { contextSpaces: SPACES })
   await page.addInitScript(() => localStorage.setItem('valkama-locale', 'ru'))
-  await page.route(
-    (url) => url.pathname === '/api/platform/context',
-    (route) =>
-      route.fulfill({
-        contentType: 'application/json',
-        body: JSON.stringify({
-          interface_version: 'valkama-context',
-          scope: globalScope,
-          state: {
-            interface_version: 'valkama-ui-state',
-            status: 'ready',
-            payload: {
-              primary: { data_scope_id: dataScopeId, is_writable: true },
-              spaces: SPACES,
-              ui_prefs: null,
-            },
-          },
-        }),
-      }),
-  )
   /** The project each read of a space narrowed to, or null for the whole space. */
   const reads: (string | null)[] = []
   await page.route('**/api/planning?*', async (route) => {

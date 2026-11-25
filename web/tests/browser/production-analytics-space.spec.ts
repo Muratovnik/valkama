@@ -15,13 +15,7 @@ import { serveUsage, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { PAUSES, pausesAnswer, pausesOf } from '../fixtures/pauses.ts'
 import { record, serve } from './analyticsPage.ts'
-import {
-  dataScopeId,
-  globalScope,
-  shellSpaceFor,
-  spaceRef,
-  spaceScope,
-} from './planningFixtures.ts'
+import { dataScopeId, shellSpaceFor, spaceRef, spaceScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 const SIDE = { data_scope_id: dataScopeId, space_key: 'SIDE' }
@@ -48,35 +42,18 @@ const BY_SPACE: Record<string, TimedStretch[]> = {
 /** The page's double, with two spaces in the context bar; returns the space each read named. */
 async function serveSpaces(page: Page, locale: 'en' | 'ru') {
   await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
-  await serve(page, [])
-  await page.route(
-    (url) => url.pathname === '/api/platform/context',
-    (route) =>
-      route.fulfill({
-        json: {
-          interface_version: 'valkama-context',
-          scope: globalScope,
-          state: {
-            interface_version: 'valkama-ui-state',
-            status: 'ready',
-            payload: {
-              primary: { data_scope_id: dataScopeId, is_writable: true },
-              spaces: [
-                shellSpaceFor(spaceRef),
-                {
-                  ...SIDE,
-                  name: 'Side space',
-                  default_project: 'side-project',
-                  projects: [{ project_id: 'side-project', display_name: 'Side project' }],
-                  other_space_projects: [],
-                },
-              ],
-              ui_prefs: null,
-            },
-          },
-        },
-      }),
-  )
+  await serve(page, [], false, {
+    contextSpaces: [
+      shellSpaceFor(spaceRef),
+      {
+        ...SIDE,
+        name: 'Side space',
+        default_project: 'side-project',
+        projects: [{ project_id: 'side-project', display_name: 'Side project' }],
+        other_space_projects: [],
+      },
+    ],
+  })
   const named: (string | null)[] = []
   await page.route('**/api/analytics/usage?*', async (route) => {
     const query = new URL(route.request().url()).searchParams

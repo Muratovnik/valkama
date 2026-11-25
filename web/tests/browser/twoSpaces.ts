@@ -53,19 +53,9 @@ function directory() {
 
 /** Two spaces of one store; `hold` keeps the second's read until it settles. */
 export async function serveTwoSpaces(page: Page, hold?: () => Promise<unknown>) {
-  await installBackend(page)
-  await page.route(
-    (url) => url.pathname === '/api/platform/context',
-    (route) =>
-      route.fulfill({
-        contentType: 'application/json',
-        body: ready('valkama-context', {
-          primary: { data_scope_id: dataScopeId, is_writable: true },
-          spaces: [shellSpaceFor(spaceRef), { ...shellSpaceFor(secondSpace), name: SECOND_TITLE }],
-          ui_prefs: null,
-        }),
-      }),
-  )
+  await installBackend(page, {
+    contextSpaces: [shellSpaceFor(spaceRef), { ...shellSpaceFor(secondSpace), name: SECOND_TITLE }],
+  })
   await page.route(
     (url) => url.pathname === '/api/platform/planning',
     (route) =>

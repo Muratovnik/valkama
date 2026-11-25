@@ -15,7 +15,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { participationDouble } from '../support/participationDouble.ts'
 import { installBackend } from './backend.ts'
-import { dataScopeId, globalScope, shellSpaceFor } from './planningFixtures.ts'
+import { dataScopeId, shellSpaceFor } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 const SCOPE = { en: 'Scope', ru: 'Область' } as const
@@ -28,27 +28,8 @@ const WIDE = [1440, 1024, 620, 390] as const
 /** Settings → Participation in a space of this key, listed by the shell's context, at `width`. */
 async function openIn(page: Page, locale: 'en' | 'ru', key: string, width: number) {
   await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
-  await installBackend(page)
   const space = { data_scope_id: dataScopeId, space_key: key }
-  await page.route(
-    (url) => url.pathname === '/api/platform/context',
-    (route) =>
-      route.fulfill({
-        json: {
-          interface_version: 'valkama-context',
-          scope: globalScope,
-          state: {
-            interface_version: 'valkama-ui-state',
-            status: 'ready',
-            payload: {
-              primary: { data_scope_id: dataScopeId, is_writable: true },
-              spaces: [shellSpaceFor(space)],
-              ui_prefs: null,
-            },
-          },
-        },
-      }),
-  )
+  await installBackend(page, { contextSpaces: [shellSpaceFor(space)] })
   const double = participationDouble()
   await page.route(
     (url) => url.pathname === '/api/planning/participation',
