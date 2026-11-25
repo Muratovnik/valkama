@@ -10,12 +10,13 @@
  * `spaceWindowBackend.ts`'s double and `served/graphSpaceFrames.ts`.
  */
 import { expect } from '@playwright/test'
-import type { Locator, Page } from '@playwright/test'
+import type { Page } from '@playwright/test'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { frames } from './frames.ts'
+import { focusedByKey, holdBack, onThePage } from './heldWrite.ts'
 import { spaceScope } from './planningFixtures.ts'
 import { ITEMS, spaceFramesRead } from './served/graphSpaceFrames.ts'
 import { spaceAnswer } from './servedAnswers.ts'
@@ -26,25 +27,6 @@ import {
 } from './spaceWindowBackend.ts'
 import { openPortfolio, WORDS } from './spaceWindowPage.ts'
 import { test } from './test.ts'
-
-/** A promise the test settles itself, to hold back an answer until it calls `release`. */
-function holdBack() {
-  let settle: ((value: undefined) => void) | undefined
-  const held = new Promise<undefined>((done) => {
-    settle = done
-  })
-  return { held, release: () => settle?.(undefined) }
-}
-
-/** Focus has gone to the page: what held it was disabled under it. */
-const onThePage = (page: Page) =>
-  expect.poll(() => page.evaluate(() => document.activeElement === document.body)).toBe(true)
-
-/** `control` has the focus, ringed as a key puts it. */
-async function focusedByKey(control: Locator) {
-  await expect(control).toBeFocused()
-  expect(await control.evaluate((node) => node.matches(':focus-visible'))).toBe(true)
-}
 
 for (const { width, height } of [
   { width: 1280, height: 800 },

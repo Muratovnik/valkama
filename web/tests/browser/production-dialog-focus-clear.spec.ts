@@ -34,6 +34,7 @@ import { installBackend } from './backend.ts'
 import { bodyOverflows, focusStop, walkFocus } from './dialogFocus.ts'
 import type { FocusStop } from './dialogFocus.ts'
 import { frames } from './frames.ts'
+import { holdBack } from './heldWrite.ts'
 import { spaceScope, workItemRef } from './planningFixtures.ts'
 import { goalSpace, placedCard } from './served/dividing.ts'
 import { ITEMS, spaceFramesRead } from './served/graphSpaceFrames.ts'
@@ -77,15 +78,6 @@ async function keep(info: TestInfo, name: string, measured: unknown) {
     body: JSON.stringify(measured, null, 1),
     contentType: 'application/json',
   })
-}
-
-/** A promise the test settles itself, to hold back an answer until it calls `release`. */
-function holdBack() {
-  let settle: ((value: undefined) => void) | undefined
-  const held = new Promise<undefined>((done) => {
-    settle = done
-  })
-  return { held, release: () => settle?.(undefined) }
 }
 
 /**
