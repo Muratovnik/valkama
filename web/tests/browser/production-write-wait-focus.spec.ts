@@ -20,13 +20,21 @@ import { installBackend } from './backend.ts'
 import { openCard } from './editorPage.ts'
 import { enableExecutionTab, executionHistory } from './executionFixtures.ts'
 import { frames } from './frames.ts'
-import { focusedByKey, holdBack, onThePage } from './heldWrite.ts'
+import {
+  failRead,
+  focusedByKey,
+  heldWrites,
+  onThePage,
+  onwardFrom,
+  pressHeld,
+  REASON,
+  refuse,
+  tabGoesOn,
+} from './heldWrite.ts'
 import { blockedWorkItem, spaceRef, spaceScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 import { talkedOn } from './threadFixtures.ts'
 
-/** The server's own sentence for every refusal here. */
-const REASON = 'The store is read-only for maintenance.'
 const STEP = 'Frontend contract'
 
 const WORDS = {
@@ -65,71 +73,6 @@ const WORDS = {
     search: 'Искать в знаниях',
   },
 } as const
-
-const refuse = (route: Route) =>
-  route.fulfill({ status: 400, json: { error: { code: 'invalid_request', message: REASON } } })
-
-/**
- * Every write to `path` held back until `release`, then answered by `answer`: refused with
- * {@link REASON} unless the test says otherwise. Reads under the same path pass, unless `reads`
- * says they are held too.
- */
-async function heldWrites(
-  page: Page,
-  path: string,
-  answer: (route: Route) => Promise<void> = refuse,
-  reads = false,
-) {
-  const { held, release } = holdBack()
-  const sent: unknown[] = []
-  await page.route(`**${path}`, async (route) => {
-    if (!reads && route.request().method() === 'GET') return route.fallback()
-    sent.push(route.request().postDataJSON())
-    await held
-    return answer(route)
-  })
-  return { release, sent }
-}
-
-/** What has focus, by its id or its name: the same control read twice reads the same. */
-const focusName = (page: Page) =>
-  page.evaluate(() => {
-    const now = document.activeElement
-    return !now || now === document.body
-      ? ''
-      : now.id || now.getAttribute('aria-label') || (now.textContent ?? '').trim()
-  })
-
-/** Where the next Tab from `control` goes while nothing waits. */
-async function onwardFrom(page: Page, control: Locator) {
-  await control.focus()
-  await page.keyboard.press('Tab')
-  const onward = await focusName(page)
-  expect(onward).not.toBe('')
-  return onward
-}
-
-/**
- * Presses `key` on `control` with its write held: the control is disabled under focus, which
- * falls to the page, and a second press while it waits sends nothing more. Says where a Tab
- * from the control went before it was pressed.
- */
-async function pressHeld(page: Page, control: Locator, key: string, sent: readonly unknown[]) {
-  const onward = await onwardFrom(page, control)
-  await control.focus()
-  await page.keyboard.press(key)
-  await expect(control).toBeDisabled()
-  await onThePage(page)
-  await page.keyboard.press(key)
-  expect(sent).toHaveLength(1)
-  return onward
-}
-
-/** The next Tab goes on to `onward`, where it went from the control before the wait. */
-async function tabGoesOn(page: Page, onward: string) {
-  await page.keyboard.press('Tab')
-  expect(await focusName(page)).toBe(onward)
-}
 
 /** The card with its discussion, its threads in the double's record. */
 async function cardWithThreads(page: Page) {
@@ -233,9 +176,7 @@ for (const width of [1440, 1024] as const)
           page.route('**/api/execution/history*', (route) => route.fulfill({ json: live })),
         )
         await drawer.getByRole('tab', { name: words.execution, exact: true }).click()
-        const { release, sent } = await heldWrites(page, '/api/execution/stop', (route) =>
-          route.fulfill({ status: 500, body: REASON }),
-        )
+        const { release, sent } = await heldWrites(page, '/api/execution/stop', failRead)
         const stop = drawer.getByRole('button', { name: words.stop, exact: true })
         await pressHeld(page, stop, 'Enter', sent)
 
@@ -316,12 +257,7 @@ for (const width of [1440, 1024] as const)
         await drawer.getByRole('tab', { name: words.memory, exact: true }).click()
         const field = drawer.getByRole('textbox', { name: words.search })
         await field.fill('ratchet')
-        const { release, sent } = await heldWrites(
-          page,
-          '/api/memory/search?*',
-          (route) => route.fulfill({ status: 500, body: REASON }),
-          true,
-        )
+        const { release, sent } = await heldWrites(page, '/api/memory/search?*', failRead, true)
         const onward = await pressHeld(page, field, 'Enter', sent)
 
         release()

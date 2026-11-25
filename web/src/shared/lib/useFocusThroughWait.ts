@@ -10,9 +10,9 @@ function backOn(held: HTMLElement) {
 
 /**
  * Gives the focus back after a wait that disabled what held it. A form disables its controls
- * while a write it sent waits, and the browser takes focus off a control disabled under it, to
- * the page: a refused write then left the writer there, and the next Tab began wherever the
- * browser chose. So the control in `scope` that has focus as `waiting` turns true is read then,
+ * while a write it sent or a read it asked for waits, and the browser takes focus off a
+ * control disabled under it, to the page: a refused write or a failed read then left the
+ * reader there, and the next Tab began wherever the browser chose. So the control in `scope` that has focus as `waiting` turns true is read then,
  * before the render that disables it, and once the wait ends and focus still stands on nothing
  * (`focusOnNothing`), `giveBack` is handed it, for the form to put the focus there or where its
  * own rule says; by default it goes back to that control, unless the wait took it away. A reader

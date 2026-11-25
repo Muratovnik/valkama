@@ -32,6 +32,7 @@ import ChainMembers from '@/widgets/work-item-inspector/components/ChainMembers.
 import { groupLabels, groupMembers } from '@/widgets/work-item-inspector/utils/chainSummary.ts'
 import type { ChainView } from '@/widgets/work-item-inspector/utils/inspectorReturn.ts'
 import { useChainForecast } from '@/widgets/work-item-inspector/utils/useChainForecast.ts'
+import { useChainWait } from '@/widgets/work-item-inspector/utils/useChainWait.ts'
 
 import { waitingOn } from '@/entities/work-item/utils/waiting.ts'
 import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
@@ -39,7 +40,6 @@ import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
 import type { ChainScope, WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import { useStateName } from '@/shared/lib/useStateName.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
-import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
@@ -66,20 +66,9 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const stateName = useStateName()
 
-/**
- * The first read of the chain, shown as every wait is: nothing for a read that answers
- * quickly, and once shown, long enough to be read, with the chain held back meanwhile.
- * A read again with the chain on screen keeps it there and shows nothing.
- *
- * The section is a block of the card, so its wait is no announcement of its own: the card
- * has one status region for its waits, and the section says its wait by its busy mark and
- * its word on screen.
- */
-const { shown: firstShown, held: firstHeld } = useLoadingPresence(
-  () => !props.chain && props.loading,
-)
-/** The word the held line shows: the panel's, once the wait is shown, and nothing before. */
-const firstWord = computed(() => (firstShown.value ? t('platform.states.loading') : ''))
+/** The section, whose first read is held back as every wait is, and whose Retry waits with it. */
+const area = ref<HTMLElement | null>(null)
+const { held: firstHeld, word: firstWord } = useChainWait(props, area)
 
 /** The answer on screen is the root's contents, which stand even where nothing is inside. */
 const contents = computed(() => props.chain?.scope === 'tree')
@@ -249,6 +238,7 @@ defineExpose({ restore, reveal, view })
 <template>
   <section
     v-if="visible"
+    ref="area"
     class="chain"
     :aria-busy="busy"
     :aria-label="t('workItem.chain.title')"
@@ -293,7 +283,8 @@ defineExpose({ restore, reveal, view })
       {{ firstWord }}
     </p>
     <div
-      v-if="failed && !firstHeld"
+      v-if="failed"
+      v-show="!firstHeld"
       class="chain-failure"
       role="alert"
     >

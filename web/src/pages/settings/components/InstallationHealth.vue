@@ -22,6 +22,7 @@ import type {
 } from '@/shared/api/doctorApi.ts'
 import { uiDegraded, uiError, uiLoading, uiReady } from '@/shared/api/platformUiState.ts'
 import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
+import { useFocusThroughWait } from '@/shared/lib/useFocusThroughWait.ts'
 import CountBadge from '@/shared/ui/CountBadge.vue'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
@@ -36,6 +37,12 @@ const { locale, t, te } = useI18n()
 const report = ref<DoctorReport | null>(null)
 const loading = ref(false)
 const failed = ref(false)
+/** Check again waits disabled as the report is read, and takes focus back once it is. */
+const root = ref<HTMLElement | null>(null)
+useFocusThroughWait(
+  () => root.value,
+  () => loading.value,
+)
 const ORDER: Record<DoctorStatus, number> = { fail: 0, warn: 1, unknown: 2, ok: 3 }
 const PANEL_PAYLOAD = true as const
 
@@ -134,6 +141,7 @@ onMounted(load)
 
 <template>
   <section
+    ref="root"
     class="installation-health"
     :aria-label="t('health.heading')"
   >
