@@ -882,12 +882,15 @@ says why under it, once: the reason states the key's form, and no hint says it a
 field holds the room of every hint and reason it can come to say from the start, the hint that
 names the key as wide as the widest key, so a reason appearing or another taking its place
 moves nothing under the field; given room only while it stood, a reason a line longer than the
-hint pushed the projects down at 390px. Once the space has issued a number its key stands as
+hint pushed the projects down at 390px. A key typed in place of the space's says that the
+space's projects move to it; an emptied one gives the key's form instead, since there is no key
+for them to move to. Once the space has issued a number its key stands as
 text with the reason it does not change, since it is in those numbers; a renamed space says
 that what names the space by its name will no longer find it under the form, over the foot's
-buttons, in room the edit holds for those words there from the start, so neither the form nor
-the foot moves at the first letter typed or when the old name comes back; held under the name,
-that room stood empty between the name and the key, farther apart than any other two fields.
+buttons, from the first letter typed, and the foot's buttons go down by those words while the
+form above stays where it stood in the window; no room is held for them, since held over the
+buttons it stood there as a blank of some 100px while nothing was renamed, and held under the
+name, as a gap between the name and the key farther than between any other two fields.
 The projects stand one a row, by name as the interface's language orders names, whatever the
 browser's language is, so a Russian interface puts Cyrillic names before Latin ones: a radio
 that makes it the default, on the name's first line however the name wraps; its name, which
@@ -895,10 +898,14 @@ takes at most two fifths of the row and wraps there rather than take its folder'
 folder, cut in its middle so that its last folder, which tells one project from the next, stays
 whole while the row has room for it, and shown whole in its hint, its «…» against that last
 folder in every row: given the whole room before the last folder, the cut start hid whole
-letters and left what was left of one empty after its «…», from none to some 8px; and its
-remove. The default has no remove while the space has other projects, so the window repeats the
-server's rule rather than meeting its refusal, and the first project added becomes the default
-by itself. «Add project» searches the registered projects the space does not have, those in no
+letters and left what was left of one empty after its «…», from none to some 8px; a last
+folder cut too leaves the start its first letter and the whole «…», which a fixed share drew as
+the letter and one dot; and its remove. A focused remove that leaves with its row hands the
+focus to the next row's remove, else the one before, else to «Add project», where the page lost
+it. The default has no remove while the space has other
+projects, so the window repeats the server's rule rather than meeting its refusal, and the first
+project added becomes the default by itself. «Add project» searches the registered projects
+the space does not have, those in no
 space first, then those of other spaces with what moving one means, each part by name as the
 rows are; what is typed finds a project by its name before one only its folder matches, those
 in no space still first among the names, and a folder's path in the list breaks where its line
@@ -1072,7 +1079,27 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   at each edge, so a line appearing under a field or a refusal at the end of the
   form moved its title and every field above them under the hand. What arrives
   before that first act, a picture decoded or a list read as it opens, is under
-  nobody's hand, and the dialog stays centred on it.
+  nobody's hand, and the dialog stays centred on it. What a dialog says over its
+  foot's buttons, a change's meaning or a refusal, stands over what scrolls under
+  it, and no control the keyboard reaches stands under those words: the body keeps
+  their height clear at its lower edge for a focused control and its ring, so a
+  Tab scrolls it out from under them (WCAG 2.4.11), a text field's whole box and
+  not only its caret, and a focus that stays is scrolled clear the same way as the
+  words come, change or grow over it and as the body gets shorter. Without that a
+  Tab stopped on remove buttons and fields hidden whole under a rename's words, and
+  a refusal that came after a Shift+Tab back into the form stood over the whole of
+  the focused tab. The ring stands whole at the body's top and lower edges too:
+  scrolled flush with an edge, a control lost the side of its ring there. A text
+  area taller than the room the words leave keeps the line its caret is on in
+  sight rather than its lower end, which took that line over the body's top edge
+  as a refusal came; where the field's own scroll has taken that line out of the
+  field's view, the line the field shows nearest to it stands in sight instead,
+  since kept in its place the line drew the field out of sight; the body itself, which the browser focuses while nothing in
+  it can take focus, is never scrolled for being focused. A control a save or a
+  create disables while it waits takes the focus back once the wait ends, unless
+  the reader has put it somewhere since, and stays disabled meanwhile, so a
+  second press starts nothing: dropped to the page, the focus of a refused save
+  sent the next Tab to Cancel.
 - **Inspectors:** persistent right-side detail uses the shared resizable
   inspector. Width is bounded by the actual workspace, not the viewport. The
   panel lives while any item is open and only its content changes with the item:

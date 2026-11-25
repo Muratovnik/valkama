@@ -18,6 +18,11 @@ export const SIZES = [
   { lang: 'ru', width: 390, height: 844 },
 ] as const
 
+/**
+ * The window's words in each language. `remove` is the foot's button that removes the space
+ * itself, not a project's: a project's row says «Remove <name> from the space» («Убрать <name> из
+ * пространства»), so `remove` finds none of them.
+ */
 export const WORDS = {
   en: {
     newSpace: 'New space',
@@ -32,6 +37,7 @@ export const WORDS = {
     keyHint: (key: string) => `Part of every work item’s number: ${key}‑1, ${key}‑2 …`,
     keyInvalid: 'a key is 2 to 8 Latin letters and digits, a letter first',
     keyMoves: 'The space’s projects move to the new key with it.',
+    keyForm: '2 to 8 Latin letters and digits, a letter first.',
     projects: 'Projects',
     add: 'Add project',
     create: 'Create',
@@ -65,6 +71,7 @@ export const WORDS = {
     keyHint: (key: string) => `Входит в номер каждой задачи: ${key}‑1, ${key}‑2 …`,
     keyInvalid: 'ключ — это 2–8 латинских букв и цифр, первая — буква',
     keyMoves: 'Проекты пространства перейдут на новый ключ вместе с ним.',
+    keyForm: '2–8 латинских букв и цифр, первая — буква.',
     projects: 'Проекты',
     add: 'Добавить проект',
     create: 'Создать',

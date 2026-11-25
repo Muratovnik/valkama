@@ -9,8 +9,9 @@
  * key's form, no hint says the form again; the field holds the room of every hint and reason it
  * can come to say, so neither moves what stands under it. A renamed space says what a new name
  * changes under the form, over the foot's buttons and over a refusal there (`DialogFrame`'s
- * note), in room the edit holds for it from the start, so neither the form nor the foot moves;
- * held under the name, that room stood empty between the name and the key.
+ * note), from the first letter typed, and the foot's buttons move down by its height. No room is
+ * held for it: held over the buttons, it stood there as a blank while nothing was renamed, and
+ * held under the name, as a gap between the name and the key.
  *
  * A space with no work items can be removed, after a question asked in the window; one with
  * work has no Remove, and where the foot cannot hold all three the way out and the save change
@@ -80,8 +81,13 @@ const renamed = computed(
   () => origin.value !== null && draft.value.name.trim() !== origin.value.name,
 )
 const keyLocked = computed(() => origin.value?.keyLocked === true)
+/** A typed key other than the space's: an emptied one is no key for the projects to move to. */
 const keyMoves = computed(
-  () => origin.value !== null && !keyLocked.value && draft.value.key !== origin.value.key,
+  () =>
+    origin.value !== null &&
+    !keyLocked.value &&
+    draft.value.key !== '' &&
+    draft.value.key !== origin.value.key,
 )
 /** What the key's field says under it; nothing while its error says why, which states the form. */
 const keyHint = computed(() => {
@@ -100,7 +106,8 @@ const keyHint = computed(() => {
 const keyWords = computed(() => ({
   hints: [
     t('spaceWindow.keyHint', { key: WIDEST_KEY }),
-    t(origin.value ? 'spaceWindow.keyMoves' : 'spaceWindow.keyForm'),
+    t('spaceWindow.keyForm'),
+    ...(origin.value ? [t('spaceWindow.keyMoves')] : []),
   ],
   errors: keyReasons.value,
 }))
@@ -131,15 +138,12 @@ const registryLine = computed(() =>
 const closeLabel = computed(() => (notice.value ? t('spaceWindow.close') : t('spaceWindow.cancel')))
 const busy = computed(() => saving.value || phase.value === 'reading')
 /**
- * What a new name changes, said over the foot once the name differs from the space's, in a room
- * the edit holds for it from the start: given room only as it came, it pushed the whole form
- * down under the caret at the first letter typed.
+ * What a new name changes, said over the foot while the name differs from the space's, and
+ * nothing before: the form above stays where it stood, and the foot moves down by its height.
  */
-const renameWords = computed(() =>
-  origin.value ? t('spaceWindow.renamed', { key: origin.value.key }) : '',
+const renameNote = computed(() =>
+  renamed.value && origin.value ? t('spaceWindow.renamed', { key: origin.value.key }) : '',
 )
-/** The words while the name differs from the space's, and none before. */
-const renameNote = computed(() => (renamed.value ? renameWords.value : ''))
 const renameHintId = useId()
 /** The name is described by what a new name changes while it stands, and by nothing before. */
 const nameDescribedBy = computed(() => (renamed.value ? renameHintId : undefined))
@@ -170,7 +174,6 @@ const submitLabel = computed(() => {
     :error="error"
     :note="renameNote"
     :note-id="renameHintId"
-    :held-note="renameWords"
     steady-scroll
     @close="close"
     @submit="save"

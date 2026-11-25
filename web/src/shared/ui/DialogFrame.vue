@@ -1,6 +1,27 @@
 <script setup lang="ts">
+/**
+ * The frame of every command dialog: its head, a body that scrolls what it holds, and a foot of
+ * buttons. What the form says of a change (`note`) and why a submit was refused (`error`) stand
+ * at the end of the body, and while the form is longer than the dialog at its lower edge over
+ * what scrolls under it; a control focused from the keyboard is kept clear of those words, and
+ * its ring whole inside the body, as the focus comes to it and while it stays there as the words
+ * come, change or grow and as the body gets shorter, so no focus stands under them. A text area
+ * taller than the room the words leave keeps the line its caret is on in sight.
+ *
+ * While it is `busy`, what the form waits for may disable the control that had focus, and the
+ * browser then drops focus to the page; once it is done, that control takes focus back, unless
+ * the reader has put it somewhere since. Saved from the keyboard, a refused save left the focus
+ * on the page, and the next Tab went to Cancel.
+ *
+ * Its parts are `data-part` `dialog-body` and `said`, the box of those words.
+ */
 import { computed, ref } from 'vue'
 
+import { useResizeObserver } from '@vueuse/core'
+
+import { caretLine } from '@/shared/lib/caretLine.ts'
+import { moveFocus } from '@/shared/lib/moveFocus.ts'
+import { useFocusThroughWait } from '@/shared/lib/useFocusThroughWait.ts'
 import OverlayHeader from '@/shared/ui/OverlayHeader.vue'
 import OverlayHost from '@/shared/ui/OverlayHost.vue'
 import type { OverlayPaneNames, PaneFit } from '@/shared/ui/overlayPanes.ts'
@@ -16,11 +37,6 @@ const props = withDefaults(
     context?: string | readonly TextRun[]
     /** Why the last submit did not go through. */
     error?: string
-    /**
-     * The words `note` can come to say, whose room is held over the foot from the start, so that
-     * saying them moves nothing in the form or the foot.
-     */
-    heldNote?: string
     /**
      * What the form says over the foot while it stands, such as what a change will mean when it
      * is saved; `noteId` is its id, for the field it describes.
@@ -41,7 +57,6 @@ const props = withDefaults(
     busy: false,
     context: '',
     error: '',
-    heldNote: '',
     note: '',
     noteId: undefined,
     placement: 'center',
@@ -57,11 +72,98 @@ const emit = defineEmits<{
 
 /** Absent rather than false, because `aria-busy="false"` is a claim and not a default. */
 const busyMark = computed(() => props.busy || undefined)
+const form = ref<HTMLFormElement | null>(null)
+
+/**
+ * The control in the form that had focus as the dialog began to wait takes it back once the
+ * wait is over, if it fell to the page (`useFocusThroughWait`), as a key or a press put it
+ * (`moveFocus`); the body's own rule then shows it (`keepClear`). A control the wait took away
+ * or left disabled takes nothing, and neither does a dialog that closed.
+ */
+useFocusThroughWait(
+  () => form.value,
+  () => props.busy,
+  (held) => {
+    if (props.open && held.isConnected) moveFocus(held, { preventScroll: true })
+  },
+)
 /**
  * The box that scrolls what the dialog holds, handed to what stands among the head's `actions`,
  * still while it scrolls, for a way through what it holds.
  */
 const body = ref<HTMLElement | null>(null)
+
+/**
+ * How tall the words over the foot stand while they say something, to the next whole pixel,
+ * which the body keeps clear at its lower edge for what the keyboard reaches (`scroll-padding`),
+ * so a focused control scrolls out from under them. Without it a Tab stopped on a control wholly
+ * under the words, as the browser saw it inside the body.
+ */
+const said = ref<HTMLElement | null>(null)
+const saidHeight = ref(0)
+useResizeObserver(said, ([entry]) => {
+  saidHeight.value = Math.ceil(entry?.borderBoxSize[0]?.blockSize ?? 0)
+  keepClear()
+})
+useResizeObserver(body, () => {
+  keepClear()
+})
+const saying = computed(() => Boolean(props.error || props.note))
+const saidRoom = computed(() => (saying.value ? saidHeight.value : 0))
+const bodyRoom = computed(() =>
+  saidRoom.value ? { '--size-said-room': `${String(saidRoom.value)}px` } : undefined,
+)
+/** A pixel past the ring: a scroll stops at a whole pixel, and left a fraction under an edge. */
+const HAIR = 1
+
+/**
+ * How far the focus ring reaches out of `control` (`base.css`): none where the control shows
+ * focus its own way.
+ */
+function ringOf(control: HTMLElement) {
+  const style = getComputedStyle(control)
+  return style.outlineStyle === 'none'
+    ? 0
+    : Number.parseFloat(style.outlineWidth) + Number.parseFloat(style.outlineOffset)
+}
+
+/**
+ * The control focused from the keyboard in the body is scrolled until it stands whole with its
+ * ring in what the body shows: under the body's top edge, and over the words while they stand at
+ * its lower edge, else over that edge itself. A text area too tall for that keeps the line its
+ * caret is on in sight, and any other control its lower end; the body itself, which the browser
+ * focuses while nothing in it can take focus, is not scrolled. It runs on every change of where
+ * those edges stand against that control: as the focus comes to it, and while the focus stays,
+ * as the words come, change or grow (their observer) and as the body gets shorter (its own).
+ * The browser's own scroll to a text field shows only its caret, and left the rest of a
+ * description's box under a refusal; it brought a control flush with an edge, and cut off the
+ * side of the ring there; the room the body keeps is measured a frame late; and, answered as the
+ * focus came alone, a refusal that arrived after a Shift+Tab back into the form stood over all
+ * of the focused tab. Kept by its lower end, a tall description took the line its caret was on
+ * over the body's top edge as a refusal came; and the body, focused, was taken for a control in
+ * it and scrolled toward its end at every change.
+ */
+function keepClear() {
+  const scroller = body.value
+  const words = said.value
+  const focused = document.activeElement
+  if (!scroller || !(focused instanceof HTMLElement) || focused === scroller) return
+  if (!scroller.contains(focused) || words?.contains(focused)) return
+  if (!focused.matches(':focus-visible')) return
+  const top = scroller.getBoundingClientRect().top + scroller.clientTop
+  const edge = top + scroller.clientHeight
+  const lower = words ? Math.min(edge, words.getBoundingClientRect().top) : edge
+  const ring = ringOf(focused) + HAIR
+  const whole = focused.getBoundingClientRect()
+  const box =
+    focused instanceof HTMLTextAreaElement && whole.height + 2 * ring > lower - top
+      ? caretLine(focused)
+      : whole
+  const under = box.bottom + ring - lower
+  const over = top - (box.top - ring)
+  if (under > 0) scroller.scrollBy({ top: Math.ceil(under) })
+  else if (over > 0) scroller.scrollBy({ top: -Math.min(Math.ceil(over), Math.floor(-under)) })
+}
 </script>
 
 <template>
@@ -79,6 +181,7 @@ const body = ref<HTMLElement | null>(null)
     @pane-fit="(fit) => emit('pane-fit', fit)"
   >
     <form
+      ref="form"
       class="dialog-frame"
       :class="{ 'is-paired': pane }"
       :aria-busy="busyMark"
@@ -106,7 +209,10 @@ const body = ref<HTMLElement | null>(null)
       <div
         ref="body"
         class="dialog-frame-body"
+        data-part="dialog-body"
         :class="{ 'is-steady': steadyScroll }"
+        :style="bodyRoom"
+        @focusin="keepClear"
       >
         <slot />
         <!-- A refused submit is announced where the operator is looking: at the
@@ -114,27 +220,17 @@ const body = ref<HTMLElement | null>(null)
              above the foot's buttons while the form is longer than the dialog. What
              the form says of a change stands there too, over the refusal. -->
         <div
-          v-if="error || note || heldNote"
+          v-if="saying"
+          ref="said"
           class="dialog-frame-said"
-          :class="{ 'is-said': Boolean(error || note) }"
+          data-part="said"
         >
-          <div
-            v-if="note || heldNote"
-            class="held-room"
+          <small
+            v-if="note"
+            :id="noteId"
+            class="dialog-frame-note"
+            >{{ note }}</small
           >
-            <small
-              v-if="note"
-              :id="noteId"
-              class="dialog-frame-note"
-              >{{ note }}</small
-            >
-            <small
-              v-if="heldNote"
-              class="held-room-unseen dialog-frame-note"
-              aria-hidden="true"
-              >{{ heldNote }}</small
-            >
-          </div>
           <p
             v-if="error"
             class="dialog-frame-error"
@@ -158,8 +254,6 @@ const body = ref<HTMLElement | null>(null)
     </template>
   </OverlayHost>
 </template>
-
-<style scoped src="@/shared/ui/heldRoom.css"></style>
 
 <style scoped>
 /* A dialog floats inset from the window, or on a narrow one stands across all of it, and its
@@ -188,10 +282,18 @@ const body = ref<HTMLElement | null>(null)
    What it holds that sticks to its top or bottom edge sticks inside its inset, as the browser
    keeps a stuck box clear of the scroller's padding, so the inset passes over the top of it
    with what scrolls showing through: it is told to stand that much further out
-   (`--size-stuck-top`, `--size-stuck-bottom`), at the very edge. */
+   (`--size-stuck-top`, `--size-stuck-bottom`), at the very edge.
+   What the keyboard reaches scrolls in whole with its focus ring (WCAG 2.4.11, Focus Not
+   Obscured): the body keeps free at its top and lower edges the ring's offset and width
+   (`base.css`) and a hair, since the scroll stops at a whole pixel and left a fraction of a pixel
+   cut (`--size-ring-room`); flush with an edge, the edge cut off that side of the ring. While
+   words are stuck over the foot, the lower edge keeps as much more as they stand tall
+   (`--size-said-room`, measured). */
 .dialog-frame-body {
   --size-stuck-top: calc(-1 * var(--space-dialog-inset));
   --size-stuck-bottom: calc(-1 * var(--space-dialog-inset));
+  --size-said-room: 0px;
+  --size-ring-room: calc(var(--space-half) + var(--size-focus-ring) + var(--space-hair));
 
   display: grid;
   gap: var(--space-6);
@@ -199,6 +301,7 @@ const body = ref<HTMLElement | null>(null)
   min-height: 0;
   padding: var(--space-dialog-inset);
   overflow-y: auto;
+  scroll-padding-block: var(--size-ring-room) calc(var(--size-said-room) + var(--size-ring-room));
 }
 
 /* Paid for out of the end inset, so the words end where they would with no scrollbar. One that
@@ -219,8 +322,9 @@ const body = ref<HTMLElement | null>(null)
    long form alone a refusal stood out of sight under the fold, and a press on Save seemed to do
    nothing. It sticks at the very edge (`--size-stuck-bottom`) on the dialog's own ground, which
    reaches that edge and a step above its words, given back by its margins so that a form that
-   fits lays it where it always stood. While only held room stands there it has no ground and
-   takes no press, so what scrolls under it shows and answers. */
+   fits lays it where it always stood. No room is held for it: it comes with its words and goes
+   with them, and the foot moves by its height, rather than stand as a blank over the buttons
+   while nothing is said. */
 .dialog-frame-said {
   position: sticky;
   inset-block-end: var(--size-stuck-bottom);
@@ -229,12 +333,7 @@ const body = ref<HTMLElement | null>(null)
   gap: var(--space-3);
   padding-block: var(--space-3) var(--space-dialog-inset);
   margin: calc(-1 * var(--space-3)) 0 calc(-1 * var(--space-dialog-inset));
-  pointer-events: none;
-
-  &.is-said {
-    background: var(--color-surface);
-    pointer-events: auto;
-  }
+  background: var(--color-surface);
 }
 
 .dialog-frame-note {
