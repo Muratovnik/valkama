@@ -26,6 +26,9 @@ import {
 } from '../fixtures/workItem.ts'
 import { asRoot } from '../support/threads.ts'
 
+/** The card read again after a write, which the write waits on. */
+const reread = vi.fn(() => Promise.resolve())
+
 vi.mock('@/shared/api/planningApi.ts', async (load) => ({
   ...(await load<typeof import('@/shared/api/planningApi.ts')>()),
   commentWorkItem: vi.fn(),
@@ -49,7 +52,7 @@ describe('task description and discussion', () => {
   it('edits an empty description, retains it on conflict and retries with refreshed revision', async () => {
     const item = record('Task', 1)
     const wrapper = mount(InspectorDescription, {
-      props: { item, writable: true },
+      props: { reread, item, writable: true },
       global: editingPlugins(),
     })
     expect(wrapper.text()).toContain('No description yet.')
@@ -78,14 +81,14 @@ describe('task description and discussion', () => {
       description: 'Draft description',
       expected_revision: 2,
     })
-    expect(wrapper.emitted('changed')).toHaveLength(1)
+    expect(reread).toHaveBeenCalledTimes(1)
     expect(wrapper.find('form').exists()).toBe(false)
   })
 
   it('edits a loaded description and preserves it after a failed request', async () => {
     const item = { ...record('Task', 1), description: 'Existing description' }
     const wrapper = mount(InspectorDescription, {
-      props: { item, writable: true },
+      props: { reread, item, writable: true },
       global: editingPlugins(),
     })
     expect(wrapper.text()).toContain('Existing description')
@@ -96,13 +99,13 @@ describe('task description and discussion', () => {
     await wrapper.get('form').trigger('submit')
     await flushPromises()
     expect(value(wrapper, 'Description')).toBe('Updated draft')
-    expect(wrapper.emitted('changed')).toBeUndefined()
+    expect(reread).not.toHaveBeenCalled()
   })
 
   it('keeps comments while pending and on failure; clears only a confirmed success', async () => {
     const item = record('Task', 1)
     const wrapper = mount(InspectorDiscussion, {
-      props: { item, writable: true },
+      props: { reread, item, writable: true },
       global: editingPlugins(),
     })
     await wrapper.get('textarea').setValue('A useful comment')
@@ -122,13 +125,13 @@ describe('task description and discussion', () => {
     await wrapper.get('form').trigger('submit')
     await flushPromises()
     expect(value(wrapper, 'Comment')).toBe('')
-    expect(wrapper.emitted('changed')).toHaveLength(1)
+    expect(reread).toHaveBeenCalledTimes(1)
   })
 
   it('publishes the outcome a closing move asks for, keeps a failed draft and carries the move on', async () => {
     const item = record('Task', 4)
     const wrapper = mount(InspectorDiscussion, {
-      props: { item, writable: true },
+      props: { reread, item, writable: true },
       global: editingPlugins(),
     })
     expect(wrapper.find('textarea[aria-label="What was done"]').exists()).toBe(false)
@@ -156,7 +159,7 @@ describe('task description and discussion', () => {
       make_current: true,
       expected_revision: 4,
     })
-    expect(wrapper.emitted('changed')).toHaveLength(1)
+    expect(reread).toHaveBeenCalledTimes(1)
     expect(wrapper.emitted('resume')).toEqual([['done']])
     // The form has answered its question, and the comment is back.
     expect(wrapper.find('textarea[aria-label="What was done"]').exists()).toBe(false)
@@ -165,7 +168,7 @@ describe('task description and discussion', () => {
 
   it('does not save an outcome with half of it missing, from the button or Ctrl+Enter', async () => {
     const wrapper = mount(InspectorDiscussion, {
-      props: { item: record('Task', 4), writable: true },
+      props: { reread, item: record('Task', 4), writable: true },
       global: editingPlugins(),
     })
     await wrapper.vm.askOutcome({ key: 'done', name: 'Done' })
@@ -181,7 +184,7 @@ describe('task description and discussion', () => {
   it('steps back to the comment with both drafts kept, and the move left where it stopped', async () => {
     const item = record('Task', 4)
     const wrapper = mount(InspectorDiscussion, {
-      props: { item, writable: true },
+      props: { reread, item, writable: true },
       global: editingPlugins(),
     })
     await wrapper.get('textarea[aria-label="Comment"]').setValue('A comment draft')
@@ -211,7 +214,7 @@ describe('task description and discussion', () => {
       ],
     }
     const wrapper = mount(InspectorDiscussion, {
-      props: { item, writable: true },
+      props: { reread, item, writable: true },
       global: editingPlugins(),
     })
     await wrapper.vm.askOutcome({ key: 'done', name: 'Done' })
@@ -238,7 +241,7 @@ describe('task description and discussion', () => {
       ],
     }
     const wrapper = mount(InspectorDiscussion, {
-      props: { item, writable: true },
+      props: { reread, item, writable: true },
       global: editingPlugins(),
     })
     expect(wrapper.text()).toContain('Unknown time')
@@ -302,7 +305,7 @@ describe('task description and discussion', () => {
       ],
     }
     const wrapper = mount(InspectorDiscussion, {
-      props: { item, writable: false },
+      props: { reread, item, writable: false },
       global: editingPlugins(),
     })
     const entries = wrapper.findAll('.thread-entry')
@@ -330,7 +333,7 @@ describe('task description and discussion', () => {
       comments: [{ id: 11, kind: 'report', ...asRoot, author: 'user', body: '', at: now, report }],
     }
     const wrapper = mount(InspectorOverview, {
-      props: { item, resourceRef, writable: true },
+      props: { reread, item, resourceRef, writable: true },
       global: editingPlugins(),
     })
     const details = wrapper.get('.outcome .outcome-details')
@@ -369,7 +372,7 @@ describe('task description and discussion', () => {
       ],
     }
     const wrapper = mount(InspectorOverview, {
-      props: { item, resourceRef, writable: false },
+      props: { reread, item, resourceRef, writable: false },
       global: editingPlugins(),
     })
     expect(wrapper.text()).toContain('Read me')
@@ -382,7 +385,7 @@ describe('task description and discussion', () => {
   it('does not clear a new item draft when an earlier item request finishes', async () => {
     const item = record('Task A', 1)
     const wrapper = mount(InspectorDiscussion, {
-      props: { item, writable: true },
+      props: { reread, item, writable: true },
       global: editingPlugins(),
     })
     const request = deferred<void>()
@@ -394,6 +397,6 @@ describe('task description and discussion', () => {
     await flushPromises()
     await wrapper.get('textarea').setValue('B note')
     expect(value(wrapper, 'Comment')).toBe('B note')
-    expect(wrapper.emitted('changed')).toBeUndefined()
+    expect(reread).not.toHaveBeenCalled()
   })
 })

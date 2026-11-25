@@ -32,10 +32,14 @@ const props = defineProps<{
   item: WorkItem
   writable: boolean
   target?: PlanningTarget
+  /**
+   * Reads the card again after a write, done once what it shows is the write's: a section's
+   * write waits on it, so what it disabled stays so until then.
+   */
+  reread: () => Promise<unknown>
 }>()
 
 const emit = defineEmits<{
-  'changed': []
   /** What was pressed is about to go, and focus must not go with it. */
   'hold-focus': []
   'refresh': []
@@ -68,7 +72,7 @@ function readQuestions() {
 }
 function answered(entry: InputRequestEntry) {
   questions.changed(entry)
-  emit('changed')
+  void props.reread()
 }
 const discussion = ref<InstanceType<typeof InspectorDiscussion> | null>(null)
 const checklistSection = ref<HTMLElement | null>(null)
@@ -177,8 +181,8 @@ defineExpose({ askOutcome, readQuestions: questions.readNow, revealChecklist, re
 
     <InspectorDescription
       :item="item"
+      :reread="reread"
       :writable="writable"
-      @changed="emit('changed')"
       @refresh="emit('refresh')"
     />
 
@@ -296,10 +300,10 @@ defineExpose({ askOutcome, readQuestions: questions.readNow, revealChecklist, re
       :questions="questionEntries"
       :questions-cut="questionsCut"
       :questions-unread="questionsUnread"
+      :reread="reread"
       :writable="writable"
       @answered="answered"
       @read-questions="readQuestions"
-      @changed="emit('changed')"
       @refresh="emit('refresh')"
       @resume="(stateKey) => emit('resume', stateKey)"
     />

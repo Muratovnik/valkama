@@ -86,12 +86,13 @@ const props = withDefaults(
     suggest: InstanceType<typeof RequestCard>['$props']['suggest']
     writable: boolean
     filter?: ThreadFilter
+    /** Reads the card again after a write, done once what it shows is the write's. */
+    reread: () => Promise<unknown>
   }>(),
   { filter: 'all' },
 )
 const emit = defineEmits<{
   'answered': [entry: InputRequestEntry]
-  'changed': []
   'refresh': []
   'select': [commentId: number]
   'show-all': []
@@ -113,7 +114,7 @@ useDraftSource('answer', () =>
 
 const forms = useThreadForms(
   () => props.item.work_item_id,
-  () => emit('changed'),
+  () => props.reread(),
 )
 provideThreadForms(forms)
 const { hasDraft: holdsWords, held, isOpen, pending: writing, settleFocus, show } = forms

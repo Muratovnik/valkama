@@ -5,7 +5,7 @@ import { checklistWith } from '@/features/discussion-thread/utils/stepPoints.ts'
 import { replyInThread, resolveThread, setWorkItemChecklist } from '@/shared/api/planningApi.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 
-type Submit = (operation: () => Promise<unknown>, accepted?: () => void) => Promise<void>
+type Submit = (operation: () => Promise<unknown>, accepted?: () => void) => Promise<boolean>
 
 export type ThreadParent = { reply_to: number } | { reply_to_request: string }
 
@@ -14,10 +14,11 @@ export type ThreadParent = { reply_to: number } | { reply_to_request: string }
  * list made steps of the item.
  *
  * `submit` is the host's: it owns whether a write is under way, why the last one failed
- * and what follows one that went through. A reply that also marks is two writes in a row,
- * so they can part ways: the reply stands whatever becomes of the mark, and the root it
- * could not mark stays named in `unmarked` until a later attempt gets through. That is not
- * a failed write, the reply is on the server, so it never reaches the host as one.
+ * and what follows one that went through, and answers, once the wait has ended, whether it
+ * did. A reply that also marks is two writes in a row, so they can part ways: the reply
+ * stands whatever becomes of the mark, and the root it could not mark stays named in
+ * `unmarked` until a later attempt gets through. That is not a failed write, the reply is
+ * on the server, so it never reaches the host as one.
  */
 export function useThreadWrites(identity: () => string, submit: Submit) {
   const unmarked = ref(new Set<number>())

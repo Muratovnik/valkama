@@ -34,9 +34,11 @@ export const anchored = (id: string) => document.querySelector<HTMLElement>(`#${
  * written in its own, so opening another form sets a draft aside rather than losing it.
  * Those drafts are text nobody has anywhere else, so the card asks before leaving them.
  *
- * Focus follows a write. A new reply exists only after the card is read again, so focus
- * waits on the reply button until then; a mark's thread stays one element as it folds, so
- * focus can go straight to it. Each move asks the right its action was given as it began
+ * Focus follows a write. A write waits until the card is read again, with the thread's controls
+ * disabled, so a form a write closed hands focus back once that wait has ended: a new reply
+ * exists only after that read, and takes the focus once it stands, from the reply button that
+ * holds it until then; a mark's thread stays one element as it folds, so focus can go straight
+ * to it. Each move asks the right its action was given as it began
  * (`grantFocus`): a person who has gone on into another field while the write was out stays
  * there, and loses neither the field nor the letters they type into it.
  *
@@ -51,8 +53,8 @@ export const anchored = (id: string) => document.querySelector<HTMLElement>(`#${
  * kept here with the draft, by thread, and not in the field: a thread folded or filtered
  * away takes its field with it and keeps its draft, and the choice goes with the draft.
  */
-export function useThreadForms(identity: () => string, changed: () => void) {
-  const { pending, error, submit } = useInspectorMutation(identity, changed)
+export function useThreadForms(identity: () => string, reread: () => Promise<unknown>) {
+  const { pending, error, submit } = useInspectorMutation(identity, reread)
   const writes = useThreadWrites(identity, submit)
   const open = ref<{ form: ThreadForm; key: string } | null>(null)
   const replies = ref<Record<string, string>>({})
@@ -119,16 +121,24 @@ export function useThreadForms(identity: () => string, changed: () => void) {
     else open.value = { form, key }
     stepsOf.value = entry
   }
-  async function hide(back: ThreadForm, right: FocusRight) {
+  /** The open form goes, saying which thread's it was. */
+  function close() {
     const key = open.value?.key
     open.value = null
     failedAt.value = null
+    return key
+  }
+  /** Focus goes back to what opened the thread's form, or to the thread's way into it. */
+  async function backTo(key: string | undefined, back: ThreadForm, right: FocusRight) {
     if (!key) return
     await nextTick()
     const first = anchored(back === 'resolve' ? resolveAnchor(key) : replyAnchor(key))
     const to = opener?.isConnected ? opener : first
     opener = null
     right.take(() => placeFocus(to))
+  }
+  async function hide(back: ThreadForm, right: FocusRight) {
+    await backTo(close(), back, right)
   }
   /** Escape, or Cancel: the words go with it, since asking first is the form's. */
   function cancel() {
@@ -166,10 +176,18 @@ export function useThreadForms(identity: () => string, changed: () => void) {
     const right = grantFocus()
     const body = replies.value[key] ?? ''
     const words = { body, ...chosen.get(key)?.told(body) }
-    void writes.reply(parent, words, marking ? root : null, (written) => {
-      replies.value[key] = ''
-      marks.value[key] = false
-      void hide('reply', right).then(() => {
+    let written = 0
+    let closed: string | undefined
+    void writes
+      .reply(parent, words, marking ? root : null, (id) => {
+        written = id
+        replies.value[key] = ''
+        marks.value[key] = false
+        closed = close()
+      })
+      .then(async (through) => {
+        if (!through) return
+        await backTo(closed, 'reply', right)
         if (marking && !writes.unmarked.value.has(root)) {
           right.take(() => moveFocus(anchored(entryAnchor(root))))
         } else {
@@ -177,7 +195,6 @@ export function useThreadForms(identity: () => string, changed: () => void) {
           settleFocus()
         }
       })
-    })
   }
   function sendResolve(key: string, root: number) {
     failedAt.value = { form: 'resolve', key }
@@ -191,7 +208,10 @@ export function useThreadForms(identity: () => string, changed: () => void) {
       void nextTick(() => right.take(() => moveFocus(anchored(entryAnchor(root)))))
     })
   }
-  /** The button pressed, which the write disables, takes focus back from the thread's head. */
+  /**
+   * The button pressed, which the write disables until the card is read again, takes focus back
+   * from the thread's head.
+   */
   function sendReopen(key: string, root: number) {
     failedAt.value = { form: 'reopen', key }
     void writes.reopen(root)
@@ -211,10 +231,15 @@ export function useThreadForms(identity: () => string, changed: () => void) {
   ) {
     failedAt.value = { form: 'steps', key }
     const right = grantFocus()
-    void writes.addSteps(card, points, () => {
-      void hide('steps', right)
-      added.value = { count: points.length, entry }
-    })
+    let closed: string | undefined
+    void writes
+      .addSteps(card, points, () => {
+        closed = close()
+        added.value = { count: points.length, entry }
+      })
+      .then((through) => {
+        if (through) void backTo(closed, 'steps', right)
+      })
   }
   function toggle(key: string) {
     if (!expanded.value.delete(key)) expanded.value.add(key)

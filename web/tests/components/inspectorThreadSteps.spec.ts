@@ -33,6 +33,9 @@ import {
   unmountAll,
 } from '../support/threadCard.ts'
 
+/** The card read again after a write. */
+const reread = () => Promise.resolve()
+
 vi.mock('@/shared/api/planningApi.ts', async (load) => ({
   ...(await load<typeof import('@/shared/api/planningApi.ts')>()),
   setWorkItemChecklist: vi.fn(),
@@ -63,7 +66,7 @@ const Host = defineComponent({
   },
   setup(props) {
     provideCardSteps({ item: () => props.item, refresh: refreshed, reveal: revealed })
-    return () => h(InspectorDiscussion, { item: props.item, writable: props.writable })
+    return () => h(InspectorDiscussion, { item: props.item, reread, writable: props.writable })
   },
 })
 
@@ -294,7 +297,7 @@ describe('where the icon is not', () => {
   it('stands on no entry of a discussion with no card to take the steps', () => {
     const wrapper = mount(InspectorDiscussion, {
       attachTo: document.body,
-      props: { item: card([root(1, { body: '- One' })]), writable: true },
+      props: { reread, item: card([root(1, { body: '- One' })]), writable: true },
       global: { plugins },
     })
     track(wrapper)

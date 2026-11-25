@@ -16,6 +16,9 @@ import { messages } from '@/shared/i18n/index.ts'
 
 import { getButton, workItemFixture as record, value } from '../fixtures/workItem.ts'
 
+/** The card read again after a write. */
+const reread = () => Promise.resolve()
+
 vi.mock('@/shared/api/planningApi.ts', async (load) => ({
   ...(await load<typeof import('@/shared/api/planningApi.ts')>()),
   commentWorkItem: vi.fn(),
@@ -24,7 +27,7 @@ vi.mock('@/shared/api/planningApi.ts', async (load) => ({
 
 function mountComposer() {
   return mount(InspectorDiscussion, {
-    props: { item: record('Task', 3), writable: true },
+    props: { reread, item: record('Task', 3), writable: true },
     global: { plugins: [createI18n({ legacy: false, locale: 'en', messages })] },
   })
 }

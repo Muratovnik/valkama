@@ -17,6 +17,9 @@ import { messages } from '@/shared/i18n/index.ts'
 
 import { workItemFixture } from '../fixtures/workItem.ts'
 
+/** The card read again after a write. */
+const reread = () => Promise.resolve()
+
 type Link = WorkItem['links'][number]
 
 function blocker(reference: string, end: Partial<Link>): Link {
@@ -52,7 +55,7 @@ const UNREADABLE = {
 function overview(links: Link[]) {
   const item = { ...workItemFixture('Waiting work', 1), links }
   return mount(InspectorOverview, {
-    props: { item, writable: false },
+    props: { reread, item, writable: false },
     global: {
       plugins: [createI18n({ legacy: false, locale: 'en', messages })],
       stubs: {

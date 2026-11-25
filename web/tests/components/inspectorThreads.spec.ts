@@ -27,6 +27,7 @@ import {
   plugins,
   reply,
   replyField,
+  reread,
   root,
   thread,
   track,
@@ -152,8 +153,8 @@ describe('replying', () => {
     })
     expect(resolveThread).not.toHaveBeenCalled()
     expect(wrapper.find('textarea[aria-label="Your reply"]').exists()).toBe(false)
-    expect(wrapper.emitted('changed')).toHaveLength(1)
-    // Not read yet: focus waits on the way back rather than on the page.
+    expect(reread).toHaveBeenCalledTimes(1)
+    // Read again without the reply yet: focus waits on the way back rather than on the page.
     expect(document.activeElement?.id).toBe('thread-reply-comment-1')
     await wrapper.setProps({
       item: card([root(1), reply(2, 1), reply(3, 1, { by_person: true })]),
@@ -272,7 +273,7 @@ describe('replying', () => {
         const guard = provideDraftGuard()
         return () => {
           unsaved = guard.unsaved.value
-          return h(InspectorDiscussion, { item: card([root(1), root(2)]), writable: true })
+          return h(InspectorDiscussion, { item: card([root(1), root(2)]), reread, writable: true })
         }
       },
     })
@@ -322,7 +323,7 @@ describe('replying', () => {
     await flushPromises()
     // The reply is on the server: its field is gone and the card reads it again.
     expect(wrapper.find('textarea[aria-label="Your reply"]').exists()).toBe(false)
-    expect(wrapper.emitted('changed')).toHaveLength(1)
+    expect(reread).toHaveBeenCalledTimes(1)
     expect(wrapper.get('.reply-mark-failed').attributes('role')).toBe('alert')
     expect(wrapper.get('.reply-mark-failed').text()).toContain(
       'The reply was sent, but the thread could not be marked.',

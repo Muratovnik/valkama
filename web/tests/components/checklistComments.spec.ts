@@ -15,6 +15,9 @@ import { hintOf } from '../support/hint.ts'
 import { present } from '../support/present.ts'
 import { asRoot } from '../support/threads.ts'
 
+/** The card read again after a write, which the write waits on. */
+const reread = vi.fn(() => Promise.resolve())
+
 vi.mock('@/shared/api/planningApi.ts', async (load) => ({
   ...(await load<typeof import('@/shared/api/planningApi.ts')>()),
   commentWorkItem: vi.fn(),
@@ -58,7 +61,7 @@ describe('checklist-linked comments', () => {
     item.checklist.reverse()
     const wrapper = mount(InspectorOverview, {
       attachTo: document.body,
-      props: { item, writable: true },
+      props: { reread, item, writable: true },
       global: global(),
     })
     const form = wrapper.get('form')
@@ -93,7 +96,7 @@ describe('checklist-linked comments', () => {
   it('retains the selected context on refresh and failure, without rebinding a removed or renamed step', async () => {
     const item = itemFixture()
     const wrapper = mount(InspectorDiscussion, {
-      props: { item, writable: true },
+      props: { reread, item, writable: true },
       global: global(),
     })
     await wrapper.vm.discussStep(stepA)
@@ -143,7 +146,7 @@ describe('checklist-linked comments', () => {
     ]
     item.checklist.reverse()
     const wrapper = mount(InspectorDiscussion, {
-      props: { item, writable: false },
+      props: { reread, item, writable: false },
       global: global(),
     })
     expect(wrapper.get('blockquote').text()).toBe('ConditionFirst step')
@@ -164,7 +167,7 @@ describe('checklist-linked comments', () => {
   it('keeps the outcome draft while a step is discussed and never anchors an outcome', async () => {
     const item = itemFixture()
     const wrapper = mount(InspectorDiscussion, {
-      props: { item, writable: true },
+      props: { reread, item, writable: true },
       global: global(),
     })
     await wrapper.vm.askOutcome({ key: 'done', name: 'Done' })
@@ -193,7 +196,7 @@ describe('checklist-linked comments', () => {
   it('clears the anchor on item change and ignores completion of the previous item request', async () => {
     const item = itemFixture()
     const wrapper = mount(InspectorDiscussion, {
-      props: { item, writable: true },
+      props: { reread, item, writable: true },
       global: global(),
     })
     await wrapper.vm.discussStep(stepA)
@@ -210,7 +213,7 @@ describe('checklist-linked comments', () => {
     expect(wrapper.find('.step-context').exists()).toBe(false)
     request.resolve()
     await flushPromises()
-    expect(wrapper.emitted('changed')).toBeUndefined()
+    expect(reread).not.toHaveBeenCalled()
     await wrapper.vm.discussStep(stepA)
     expect(wrapper.find('.step-context').exists()).toBe(false)
     await wrapper.vm.discussStep(stepB)

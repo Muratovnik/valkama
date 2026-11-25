@@ -65,12 +65,13 @@ const props = withDefaults(
     questionsCut?: boolean
     /** The questions could not be read, or not all of them. */
     questionsUnread?: boolean
+    /** Reads the card again after a write, done once what it shows is the write's. */
+    reread: () => Promise<unknown>
   }>(),
   { questions: () => [], questionsCut: false, questionsUnread: false },
 )
 const emit = defineEmits<{
   'answered': [entry: InputRequestEntry]
-  'changed': []
   'read-questions': []
   'refresh': []
   'resume': [stateKey: string]
@@ -176,7 +177,7 @@ watch(
 )
 const { pending, error, submit } = useInspectorMutation(
   () => props.item.work_item_id,
-  () => emit('changed'),
+  () => props.reread(),
 )
 const canSend = computed(() => Boolean(note.value.trim()))
 function publish() {
@@ -391,10 +392,10 @@ defineExpose({ askOutcome, discussStep, revealQuestion })
       :item="item"
       :pending="pending"
       :questions="questions"
+      :reread="reread"
       :suggest="mentions.suggest"
       :writable="writable"
       @answered="emit('answered', $event)"
-      @changed="emit('changed')"
       @refresh="emit('refresh')"
       @select="select"
       @show-all="chosenFilter = 'all'"

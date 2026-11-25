@@ -24,6 +24,9 @@ import { messages, pluralRules } from '@/shared/i18n/index.ts'
 import { stateOf, workItemFixture } from '../fixtures/workItem.ts'
 import { hintOf } from '../support/hint.ts'
 
+/** The card read again after a write. */
+const reread = () => Promise.resolve()
+
 // A group that can reach its session asks where a press on it would go. No server answers
 // here, so the plan fails the way an unreachable one does, without going to the network.
 vi.mock('@/shared/api/openPlanModel.ts', async (load) => {
@@ -438,7 +441,7 @@ function overview(agents: WorkItemAgent[] | undefined, closed = false) {
   }
   return mount(InspectorOverview, {
     global: { plugins: [i18n], stubs: { InspectorChain: true } },
-    props: { item: { ...item, agents, ...(closed ? finished : {}) }, writable: false },
+    props: { reread, item: { ...item, agents, ...(closed ? finished : {}) }, writable: false },
   })
 }
 

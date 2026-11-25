@@ -24,6 +24,9 @@ import type { EditorSuggestion } from '@/shared/ui/MarkdownEditor.vue'
 
 import { workItemFixture as record } from '../fixtures/workItem.ts'
 
+/** The card read again after a write. */
+const reread = () => Promise.resolve()
+
 vi.mock('@/shared/api/planningApi.ts', async (load) => ({
   ...(await load<typeof import('@/shared/api/planningApi.ts')>()),
   publishWorkItemReport: vi.fn(),
@@ -57,7 +60,7 @@ describe('the description editor', () => {
   it('tells the task chosen from its list, not a number typed, and forgets it once saved', async () => {
     const item = { ...record('Task', 4), description: 'Old words' }
     const wrapper = mount(InspectorDescription, {
-      props: { item, writable: true },
+      props: { reread, item, writable: true },
       global: global(),
     })
     await wrapper.get('button').trigger('click')
@@ -84,7 +87,7 @@ describe('the description editor', () => {
   it('forgets what was chosen when the edit is cancelled', async () => {
     const item = { ...record('Task', 4), description: 'Old words' }
     const wrapper = mount(InspectorDescription, {
-      props: { item, writable: true },
+      props: { reread, item, writable: true },
       global: global(),
     })
     await wrapper.get('button').trigger('click')
@@ -111,7 +114,7 @@ describe('the outcome editor', () => {
   it('tells a task chosen in either field when the outcome is saved', async () => {
     const item = record('Task', 5)
     const wrapper = mount(InspectorDiscussion, {
-      props: { item, writable: true },
+      props: { reread, item, writable: true },
       global: global(),
     })
     await wrapper.vm.askOutcome({ key: 'done', name: 'Done' })
