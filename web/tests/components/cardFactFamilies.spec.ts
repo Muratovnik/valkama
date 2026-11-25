@@ -17,6 +17,9 @@ import { messages } from '@/shared/i18n/index.ts'
 
 import { workItemFixture } from '../fixtures/workItem.ts'
 
+/** The card read again after a write. */
+const reread = () => Promise.resolve()
+
 const READY = { key: 'todo', name: 'To do', category: 'ready', is_terminal: false } as const
 const DEV = { key: 'dev', name: 'Development', category: 'active', is_terminal: false } as const
 const AT = '2026-11-03T10:00:00Z'
@@ -143,7 +146,7 @@ describe('a step its former holder marked', () => {
       step('00000000-0000-4000-8000-000000000012', false),
     ]
     const wrapper = mount(InspectorOverview, {
-      props: { item: record, writable: true },
+      props: { reread, item: record, writable: true },
       global: {
         plugins: [i18n()],
         stubs: { InspectorDescription: true, InspectorDiscussion: true, InspectorSummary: true },

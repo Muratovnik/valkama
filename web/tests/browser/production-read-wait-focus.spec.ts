@@ -8,10 +8,12 @@
  * Settings, the Diagnostics' Check again; and on the rail, the lost connection's refresh, at a
  * desktop's two widths in both languages; and the Refresh of the panel a narrow rail opens
  * instead, which closes as focus leaves it, so the focus goes to the dot that opened it.
- * Each read held back by the test and failed as the server says.
+ * Each read held back by the test and failed as the server says. A refresh that brings the
+ * connection back takes the control away, from the rail and from the narrow rail's panel, and
+ * the focus it held goes to the rail's entry on show, ringed after a key and not after a press.
  */
 import { expect } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import type { Locator, Page, Route } from '@playwright/test'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
@@ -35,6 +37,23 @@ const WORDS = {
   en: { chain: 'Chain', diagnostics: 'Diagnostics' },
   ru: { chain: 'Цепочка', diagnostics: 'Диагностика' },
 } as const
+
+/** A read the double answers as it does any. */
+const answered = (route: Route) => route.fallback()
+
+/** The ways a refresh is pressed: with Enter, a click, and a double click. */
+const PRESSES = {
+  'key': async (page: Page, control: Locator) => {
+    await control.focus()
+    await page.keyboard.press('Enter')
+  },
+  'pointer': (_page: Page, control: Locator) => control.click(),
+  'double click': (_page: Page, control: Locator) => control.dblclick(),
+}
+type Press = keyof typeof PRESSES
+
+/** The rail's entry on show, which the focus of a control the connection took away goes to. */
+const entryOnShow = (page: Page) => page.locator('.app-nav .nav-item.module-planning')
 
 /** The board with its stream delivered and then dropped: the rail says the connection is lost. */
 async function lostConnection(page: Page) {
@@ -129,6 +148,29 @@ for (const width of [1440, 1024] as const)
         await tabGoesOn(page, onward)
         expect(sent).toHaveLength(1)
       })
+
+      for (const input of ['key', 'pointer', 'double click'] as const satisfies Press[])
+        test(`a lost connection’s refresh by ${input} that brings it back gives the focus to the entry on show`, async ({
+          page,
+        }) => {
+          const rail = await lostConnection(page)
+          const entry = entryOnShow(page)
+          const onward = await onwardFrom(page, entry)
+          const { release, sent } = await heldWrites(page, '/api/modules', answered, true)
+          await PRESSES[input](page, rail)
+          await expect(rail).toBeDisabled()
+          await onThePage(page)
+
+          release()
+          await expect(rail).toHaveCount(0)
+          await frames(entry)
+          await expect(entry).toBeFocused()
+          expect(await entry.evaluate((node) => node.matches(':focus-visible'))).toBe(
+            input === 'key',
+          )
+          await tabGoesOn(page, onward)
+          expect(sent).toHaveLength(1)
+        })
     })
 
 test('the narrow rail’s Refresh pressed with Enter gives the focus to its dot once it fails', async ({
@@ -157,3 +199,33 @@ test('the narrow rail’s Refresh pressed with Enter gives the focus to its dot 
   await expect(rail).toBeEnabled()
   expect(sent).toHaveLength(1)
 })
+
+for (const width of [390, 320] as const)
+  for (const lang of ['en', 'ru'] as const)
+    test.describe(`the narrow rail at ${String(width)} in ${lang}`, () => {
+      test.use({ locale: lang === 'ru' ? 'ru-RU' : 'en-US' })
+
+      test('its Refresh that brings the connection back gives the focus to the entry on show', async ({
+        page,
+      }) => {
+        await page.setViewportSize({ width, height: 844 })
+        const rail = await lostConnection(page)
+        await rail.click()
+        const refresh = page.locator('.nav-tip-action')
+        await expect(refresh).toBeVisible()
+        const { release, sent } = await heldWrites(page, '/api/modules', answered, true)
+        await refresh.focus()
+        await page.keyboard.press('Enter')
+        await expect(refresh).toHaveCount(0)
+
+        release()
+        await expect(rail).toHaveCount(0)
+        const entry = entryOnShow(page)
+        await frames(entry)
+        await focusedByKey(entry)
+        expect(
+          await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
+        ).toBe(0)
+        expect(sent).toHaveLength(1)
+      })
+    })

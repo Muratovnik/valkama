@@ -49,6 +49,7 @@ import {
 } from '@/shared/api/planningApi.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { useCommentMentions } from '@/shared/lib/mentionSuggest.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 import MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
@@ -65,12 +66,13 @@ const props = withDefaults(
     questionsCut?: boolean
     /** The questions could not be read, or not all of them. */
     questionsUnread?: boolean
+    /** Reads the card again after a write, done once what it shows is the write's. */
+    reread: () => Promise<unknown>
   }>(),
   { questions: () => [], questionsCut: false, questionsUnread: false },
 )
 const emit = defineEmits<{
   'answered': [entry: InputRequestEntry]
-  'changed': []
   'read-questions': []
   'refresh': []
   'resume': [stateKey: string]
@@ -148,9 +150,6 @@ function backToComment() {
 function resumeOutcome() {
   if (held.value) void askOutcome(held.value)
 }
-function removeAnchor() {
-  anchor.value = null
-}
 /** How the step this comment is about stands now, which the quote and its hint say. */
 const anchorStanding = computed(() =>
   anchor.value ? anchorState(props.item, anchor.value.id, anchor.value.text) : 'current',
@@ -176,7 +175,7 @@ watch(
 )
 const { pending, error, submit } = useInspectorMutation(
   () => props.item.work_item_id,
-  () => emit('changed'),
+  () => props.reread(),
 )
 const canSend = computed(() => Boolean(note.value.trim()))
 function publish() {
@@ -201,13 +200,15 @@ function publish() {
 /**
  * A write that takes away the control holding focus leaves focus on the page. It comes
  * to the comment standing there now, once that stands: a move carried on keeps the card
- * unwritable, and the comment away, until it is through.
+ * unwritable, and the comment away, until it is through. The comment is shown as it takes
+ * the focus (`placeFocus`): a report made the outcome can stand far down the thread, and a
+ * focus that scrolled nothing left the comment above the window or under the card's tabs.
  */
 let focusOwed = false
 function payFocus() {
   if (!focusOwed || !composer.value) return
   focusOwed = false
-  if (document.activeElement === document.body) composer.value.focus({ preventScroll: true })
+  if (document.activeElement === document.body) placeFocus(composer.value)
 }
 watch(composer, payFocus, { flush: 'post' })
 function oweFocus() {
@@ -320,7 +321,7 @@ defineExpose({ askOutcome, discussStep, revealQuestion })
             :disabled="pending"
             icon
             reach
-            @click="removeAnchor"
+            @click="anchor = null"
           >
             <VIcon name="close" />
           </VButton>
@@ -391,10 +392,10 @@ defineExpose({ askOutcome, discussStep, revealQuestion })
       :item="item"
       :pending="pending"
       :questions="questions"
+      :reread="reread"
       :suggest="mentions.suggest"
       :writable="writable"
       @answered="emit('answered', $event)"
-      @changed="emit('changed')"
       @refresh="emit('refresh')"
       @select="select"
       @show-all="chosenFilter = 'all'"

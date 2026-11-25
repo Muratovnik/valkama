@@ -4255,7 +4255,11 @@ tick of a step's box, a link's remove, Stop, a report made the outcome, a reply 
 mark, a commit's Attach, a failed knowledge search, a chain's Retry, Check again in Diagnostics
 and the connection's Refresh all left focus on the page, and so did a tick that went through. A
 control the wait took away with it takes nothing back; one the wait only hid, as the chain's
-Retry is hidden while its read waits, takes it back once it stands again. A press of the pointer
+Retry is hidden while its read waits, takes it back once it stands again. A thread's form the
+write closes as it answers, a reply's or the points made steps, takes its focus with it while
+what opened it waits disabled on the read, so the thread holds the focus, the comment's sheet
+or the question, until the card is read again, and the reply written or the icon that opened
+the form takes it then. A press of the pointer
 rings nothing it lands on, including an element only the interface focuses. The interface takes
 focus to a whole and not to a line of words that only says something about it: how a question
 ended, its passed deadline and its title in the list of everything waiting

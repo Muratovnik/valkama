@@ -169,8 +169,7 @@ const errorText = computed(() => {
 const change = useAnswerChange({
   busy,
   focusCancel: () => foot.value?.focusWayOut(),
-  focusChange: () =>
-    root.value?.querySelector<HTMLElement>('.comment-list-change')?.focus({ preventScroll: true }),
+  changeControl: () => root.value?.querySelector<HTMLElement>('.comment-list-change'),
   forget,
   request,
   reveal,

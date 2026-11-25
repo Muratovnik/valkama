@@ -21,8 +21,13 @@ import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
-const props = defineProps<{ item: WorkItem; writable: boolean }>()
-const emit = defineEmits<{ changed: []; refresh: [] }>()
+const props = defineProps<{
+  item: WorkItem
+  writable: boolean
+  /** Reads the card again after a write, done once what it shows is the write's. */
+  reread: () => Promise<unknown>
+}>()
+const emit = defineEmits<{ refresh: [] }>()
 const { t } = useI18n()
 const editing = ref(false)
 const previewing = ref(false)
@@ -51,7 +56,7 @@ watch(
 )
 const { pending, error, submit } = useInspectorMutation(
   () => props.item.work_item_id,
-  () => emit('changed'),
+  () => props.reread(),
 )
 // An open editor whose text differs from what is saved is work a close would lose.
 useDraftSource('description', () => editing.value && draft.value !== props.item.description)

@@ -6,6 +6,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { installDiscussionBackend } from './discussionBackend.ts'
 import { installDocuments, LONG_PATH } from './documentBackend.ts'
 import { planningSpace, spaceScope } from './planningFixtures.ts'
+import { talkedOn } from './threadFixtures.ts'
 
 /**
  * A card open with its comment field in reach, and how to read what a field is doing.
@@ -21,6 +22,15 @@ export async function openCard(page: Page, prepare?: () => Promise<unknown>) {
   const comment = drawer.locator('.discussion-form').getByRole('textbox')
   await expect(comment).toBeVisible()
   return { backend, drawer, comment }
+}
+
+/** The card with its discussion, its threads in the double's record. */
+export async function cardWithThreads(page: Page) {
+  const opened = await openCard(page)
+  opened.backend.item.comments.push(...talkedOn())
+  await page.reload()
+  await expect(opened.drawer).toHaveCSS('transform', 'none')
+  return opened
 }
 
 /**

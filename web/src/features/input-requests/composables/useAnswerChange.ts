@@ -6,13 +6,16 @@ import { EMPTY_DRAFT } from '@/features/input-requests/utils/validateAnswers.ts'
 import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
+import { placeFocus } from '@/shared/lib/scriptedFocus.ts'
 
 /**
  * The way into a change of an answer and the way back out of it.
  *
  * In, the form opens on the answer in force and focus goes to it. Out, nothing changed closes
  * at once and anything changed is asked about first, with focus on going on, so a reflexive
- * Enter or Escape keeps the work. Whether it is open lives in the draft (`changing`), which
+ * Enter or Escape keeps the work. The way in takes focus back once the form has closed and is
+ * shown as it does (`placeFocus`): it stands on the head, and a form left from its foot leaves
+ * the head above the window. Whether it is open lives in the draft (`changing`), which
  * outlives this; only the asking is held here, since a dialog closing answers it anyway.
  */
 export function useAnswerChange(host: {
@@ -20,10 +23,10 @@ export function useAnswerChange(host: {
   request: ComputedRef<InputRequestEntry['request']>
   unchanged: ComputedRef<boolean>
   unsent: ComputedRef<string>
+  /** The way in, which takes focus back once the form has closed. */
+  changeControl: () => HTMLElement | null | undefined
   /** Puts focus back on Cancel, where the asking could not. */
   focusCancel: () => void
-  /** Puts focus back on the way in, once the form has closed. */
-  focusChange: () => void
   forget: () => void
   /** Takes focus to the form that just opened. */
   reveal: () => void
@@ -41,7 +44,7 @@ export function useAnswerChange(host: {
     host.forget()
     host.write(EMPTY_DRAFT)
     await nextTick()
-    host.focusChange()
+    placeFocus(host.changeControl())
   }
   function cancel() {
     if (host.busy.value) return

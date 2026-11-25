@@ -20,6 +20,7 @@ import { getButton } from '../fixtures/workItem.ts'
 import {
   card,
   entryIds,
+  heldReread,
   inThread,
   key,
   MARK,
@@ -27,6 +28,7 @@ import {
   plugins,
   reply,
   replyField,
+  reread,
   root,
   thread,
   track,
@@ -137,7 +139,8 @@ describe('replying', () => {
 
   it('sends under the root, closes the field and lands on the new reply once it is read', async () => {
     const item = card([root(1), reply(2, 1)])
-    const wrapper = open(item)
+    const { read, release } = heldReread()
+    const wrapper = open(item, { reread: read })
     await inThread(wrapper, 1, 'Reply').trigger('click')
     await nextTick()
     expect(document.activeElement).toBe(replyField(wrapper).element)
@@ -152,12 +155,17 @@ describe('replying', () => {
     })
     expect(resolveThread).not.toHaveBeenCalled()
     expect(wrapper.find('textarea[aria-label="Your reply"]').exists()).toBe(false)
-    expect(wrapper.emitted('changed')).toHaveLength(1)
-    // Not read yet: focus waits on the way back rather than on the page.
-    expect(document.activeElement?.id).toBe('thread-reply-comment-1')
+    expect(read).toHaveBeenCalledTimes(1)
+    // Not read yet, and Reply waits on the read disabled: the thread holds the focus meanwhile,
+    // rather than the page.
+    expect(inThread(wrapper, 1, 'Reply').attributes('disabled')).toBeDefined()
+    expect(document.activeElement?.id).toBe('work-report-1')
     await wrapper.setProps({
       item: card([root(1), reply(2, 1), reply(3, 1, { by_person: true })]),
     })
+    await flushPromises()
+    expect(document.activeElement?.id).toBe('work-report-1')
+    release()
     await flushPromises()
     expect(document.activeElement?.id).toBe('thread-comment-3')
     expect(thread(wrapper, 1).text()).not.toContain('New reply')
@@ -272,7 +280,7 @@ describe('replying', () => {
         const guard = provideDraftGuard()
         return () => {
           unsaved = guard.unsaved.value
-          return h(InspectorDiscussion, { item: card([root(1), root(2)]), writable: true })
+          return h(InspectorDiscussion, { item: card([root(1), root(2)]), reread, writable: true })
         }
       },
     })
@@ -322,7 +330,7 @@ describe('replying', () => {
     await flushPromises()
     // The reply is on the server: its field is gone and the card reads it again.
     expect(wrapper.find('textarea[aria-label="Your reply"]').exists()).toBe(false)
-    expect(wrapper.emitted('changed')).toHaveLength(1)
+    expect(reread).toHaveBeenCalledTimes(1)
     expect(wrapper.get('.reply-mark-failed').attributes('role')).toBe('alert')
     expect(wrapper.get('.reply-mark-failed').text()).toContain(
       'The reply was sent, but the thread could not be marked.',

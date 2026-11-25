@@ -29,6 +29,9 @@ import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 
 import { stateOf, workItemFixture } from '../fixtures/workItem.ts'
 
+/** The card read again after a write. */
+const reread = () => Promise.resolve()
+
 vi.mock('@/shared/api/planningClosingApi.ts', () => ({ cancelWorkItem: vi.fn() }))
 
 const i18n = () => createI18n({ legacy: false, locale: 'en', messages, missingWarn: false })
@@ -262,7 +265,7 @@ describe('put-off work and a marked step on Overview', () => {
     }
     const overview = (writable: boolean) =>
       mount(InspectorOverview, {
-        props: { item: { ...task(), checklist: [marked] }, writable },
+        props: { reread, item: { ...task(), checklist: [marked] }, writable },
         global: {
           plugins: [i18n()],
           stubs: { InspectorDescription: true, InspectorDiscussion: true, InspectorSummary: true },

@@ -3,6 +3,7 @@
  * phone's: the mark that goes with a reply answers a press across its whole line, at least the
  * 24px DESIGN.md sets as every target's floor, and the asking before written words are dropped
  * stands on the column's edge with its buttons at its end, in a reply and in the mark's form.
+ * The mark's form, opened under a long root, has its field in sight at four widths.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -11,12 +12,13 @@ import { expectStripOnColumn } from './confirmStrip.ts'
 import { openCard } from './editorPage.ts'
 import { launchedSessionId } from './executionFixtures.ts'
 import { frames } from './frames.ts'
+import { inSightClear } from './heldWrite.ts'
 import { requestedShot } from './keptShots.ts'
 import { sessionHead } from './metaLine.ts'
 import { asked } from './questionBackend.ts'
 import { openQuestion } from './questionPage.ts'
 import { test } from './test.ts'
-import { talkedOn } from './threadFixtures.ts'
+import { root, talkedOn } from './threadFixtures.ts'
 
 const WORDS = {
   en: { mark: 'Mark the thread resolved', reply: 'Reply', resolve: 'Resolve' },
@@ -263,3 +265,29 @@ test.describe('under a finger', () => {
       await expect(page.getByRole('dialog').filter({ hasText: KNOWN })).toBeVisible()
     })
 })
+
+// The mark's line opens under the root's words, which can reach past the window: it is shown as
+// it takes the focus. A desktop's widths and a phone's, at a phone's only that it is in sight.
+for (const width of [1440, 1024, 390, 320] as const)
+  test(`a mark's line opened under a long root has the focus in sight at ${String(width)}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    const opened = await openCard(page)
+    const words = Array.from({ length: 40 }, (_, at) => `Paragraph ${String(at + 1)} of the root.`)
+    opened.backend.item.comments.push(root(1, words.join('\n\n')))
+    await page.reload()
+    const thread = opened.drawer.locator('#work-report-1')
+    await thread.getByRole('button', { name: 'Resolve', exact: true }).focus({ timeout: 10_000 })
+    await page.keyboard.press('Enter')
+    const field = thread.getByRole('textbox', { name: 'Decision (optional)' })
+    await expect(field).toBeFocused({ timeout: 10_000 })
+    await frames(opened.drawer)
+    expect(await inSightClear(field)).toBe(true)
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      ),
+    ).toBe(0)
+  })

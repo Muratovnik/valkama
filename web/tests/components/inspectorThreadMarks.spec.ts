@@ -10,11 +10,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { replyInThread, resolveThread } from '@/shared/api/planningApi.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
-import { getButton } from '../fixtures/workItem.ts'
+import { deferred, getButton } from '../fixtures/workItem.ts'
 import { requestEntry } from '../support/inputRequests.ts'
 import {
   card,
   entryIds,
+  heldReread,
   inThread,
   key,
   MARK,
@@ -62,7 +63,8 @@ describe('a question has a thread too', () => {
     const id = entry.request.request_id
     const under = root(2, { reply_to_request: id, body: 'Which docs?' })
     const item = card([under])
-    const wrapper = open(item, { questions: [entry] })
+    const { read, release } = heldReread()
+    const wrapper = open(item, { questions: [entry], reread: read })
     const tail = wrapper.get('.thread-question .thread-tail')
     expect(tail.text()).toContain('Which docs?')
     expect(wrapper.find('.thread-entry').exists()).toBe(false)
@@ -81,6 +83,13 @@ describe('a question has a thread too', () => {
       body: 'All of them',
       reply_to_request: id,
     })
+    // The field has gone and Reply waits on the read disabled: the question, the thread's
+    // root, holds the focus rather than the page, and Reply has it back once the card is read.
+    expect(getButton(wrapper, 'Reply').attributes('disabled')).toBeDefined()
+    expect(document.activeElement).toBe(wrapper.get('.thread-question .request-card').element)
+    release()
+    await flushPromises()
+    expect(document.activeElement).toBe(getButton(wrapper, 'Reply').element)
   })
 
   it('still shows a reply when its question could not be read', () => {
@@ -235,6 +244,32 @@ describe('marking', () => {
     await flushPromises()
     expect(button.attributes('aria-label')).toBe('Resolve')
     expect(document.activeElement).toBe(button.element)
+  })
+
+  it('keeps the mark taken off disabled until the card is read again', async () => {
+    const item = card([root(1, { resolution: MARK })])
+    const read = deferred<void>()
+    const wrapper = open(item, { reread: () => read.promise })
+    await inThread(wrapper, 1, 'Expand').trigger('click')
+    const button = inThread(wrapper, 1, 'Reopen')
+    vi.mocked(resolveThread).mockResolvedValue({
+      work_item: 'MAIN-12',
+      comment_id: 1,
+      resolution: null,
+    })
+    await button.trigger('click')
+    await flushPromises()
+    // Off on the server, the mark still stands here until the card's read answers, and the
+    // button over it sends nothing more.
+    expect(button.attributes('aria-label')).toBe('Reopen')
+    expect(button.attributes('disabled')).toBeDefined()
+    await button.trigger('click')
+    expect(resolveThread).toHaveBeenCalledTimes(1)
+    await wrapper.setProps({ item: card([root(1)]) })
+    read.resolve()
+    await flushPromises()
+    expect(button.attributes('aria-label')).toBe('Resolve')
+    expect(button.attributes('disabled')).toBeUndefined()
   })
 
   it('says a reply came after the mark', () => {

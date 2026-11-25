@@ -18,6 +18,9 @@ import { getButton, stateOf } from '../fixtures/workItem.ts'
 import { requestEntry } from '../support/inputRequests.ts'
 import { card, plugins, root, track, unmountAll } from '../support/threadCard.ts'
 
+/** The card read again after a write. */
+const reread = () => Promise.resolve()
+
 afterEach(unmountAll)
 
 function answered(): InputRequestEntry {
@@ -46,7 +49,7 @@ function guarded(item: WorkItem, questions: InputRequestEntry[]) {
       const guard = provideDraftGuard()
       return () => {
         unsaved = guard.unsaved.value
-        return h(InspectorDiscussion, { item, writable: true, questions })
+        return h(InspectorDiscussion, { item, reread, writable: true, questions })
       }
     },
   })

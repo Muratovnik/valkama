@@ -17,6 +17,9 @@ import { provideReferenceLinks } from '@/shared/lib/referenceLinks.ts'
 
 import { workItemFixture } from '../fixtures/workItem.ts'
 
+/** The card read again after a write. */
+const reread = () => Promise.resolve()
+
 const STEP = '00000000-0000-4000-8000-000000000010'
 
 function overview(writable: boolean, open = vi.fn()) {
@@ -31,7 +34,7 @@ function overview(writable: boolean, open = vi.fn()) {
       by_previous_holder: false,
     },
   ]
-  const render = () => h(InspectorOverview, { item, writable })
+  const render = () => h(InspectorOverview, { item, reread, writable })
   // The card's own layer of reference links, as the inspector provides it.
   const Host = defineComponent({
     setup() {

@@ -29,6 +29,9 @@ import { documentOrder } from '../support/documentOrder.ts'
 import { requestEntry, requestList } from '../support/inputRequests.ts'
 import { card, open, root, thread, unmountAll } from '../support/threadCard.ts'
 
+/** The card read again after a write. */
+const reread = () => Promise.resolve()
+
 vi.mock('@/shared/api/inputRequestApi.ts', async (original) => ({
   ...(await original<typeof import('@/shared/api/inputRequestApi.ts')>()),
   answerInputRequest: vi.fn(),
@@ -97,7 +100,7 @@ function discussion(item: WorkItem, questions: InputRequestEntry[], locale: 'en'
     ru: i18n.global.getDateTimeFormat('ru'),
   }
   return mount(InspectorDiscussion, {
-    props: { item, writable: true, questions },
+    props: { reread, item, writable: true, questions },
     global: { plugins: [createI18n({ legacy: false, locale, messages, datetimeFormats })] },
   })
 }
@@ -137,7 +140,7 @@ async function asking(entries: InputRequestEntry[]) {
   const item = card([root(1)])
   const target = { ...requestEntry().target }
   const wrapper = mount(InspectorOverview, {
-    props: { item, target, writable: true },
+    props: { reread, item, target, writable: true },
     global: {
       plugins: [createI18n({ legacy: false, locale: 'en', messages })],
       stubs: { InspectorDescription: true, InspectorSummary: true },

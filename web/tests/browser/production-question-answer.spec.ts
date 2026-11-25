@@ -7,6 +7,8 @@ import { expect } from '@playwright/test'
 
 import type { InputRequestField } from '@/shared/api/inputRequestModel.ts'
 
+import { frames } from './frames.ts'
+import { inSightClear } from './heldWrite.ts'
 import { expectDateHeld } from './metaLine.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { asked, mixedField, QUESTION_ID, routeField, send } from './questionBackend.ts'
@@ -314,6 +316,30 @@ test('Escape with nothing changed leaves the form at once, and the card stays op
   await expect(change).toBeFocused()
   await expect(drawer).toBeVisible()
 })
+
+// Left from its foot, the form closes under the head, which then stands above the window: the
+// way in is shown as it takes the focus back. A desktop's widths and a phone's.
+for (const width of [1440, 1024, 390, 320] as const)
+  test(`Escape from the change form’s foot has the focus back on its way in, in sight, at ${String(width)}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    const { card, drawer } = await openQuestion(page, [asked(whole)])
+    const change = card.getByRole('button', { name: 'Change answer', exact: true })
+    await change.click({ timeout: 10_000 })
+    await card.getByRole('button', { name: 'Cancel', exact: true }).focus({ timeout: 10_000 })
+    await page.keyboard.press('Escape')
+    await expect(card.getByRole('radio')).toHaveCount(0, { timeout: 10_000 })
+    await expect(change).toBeFocused({ timeout: 10_000 })
+    await frames(drawer)
+    expect(await inSightClear(change)).toBe(true)
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      ),
+    ).toBe(0)
+  })
 
 test('Escape with something changed asks first, on the way back, and a second Escape goes back', async ({
   page,

@@ -189,6 +189,7 @@ function sendMark() {
     tabindex="-1"
     class="thread-entry"
     :class="{ 'is-folded': folded }"
+    :data-thread="key"
     :aria-labelledby="labelledBy"
   >
     <EntryHead v-if="mark">

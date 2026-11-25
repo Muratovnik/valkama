@@ -6,7 +6,8 @@
  * Cancel close an empty line at once and ask, as a reply's field does, before they drop
  * words written in it (`useAskedCancel`), and neither reaches the card around it. Enter
  * sends, as a one-line form does. A write disables the field, which drops focus on the page,
- * so a refused one gives it back there.
+ * so a refused one gives it back there. The line opens under the root's words, which can reach
+ * past the window, so the field is shown as it takes the focus (`placeFocus`).
  *
  * The hint names the card's own space and no number in it: a fixed example key read as a
  * task of whatever space the card was in.
@@ -34,7 +35,7 @@ const { t } = useI18n()
 
 const form = ref<HTMLFormElement | null>(null)
 const field = ref<InstanceType<typeof VTextInput> | null>(null)
-onMounted(() => field.value?.control()?.focus({ preventScroll: true }))
+onMounted(() => placeFocus(field.value?.control()))
 
 // A write disables the form, which drops focus on the page; a refused one gives it to the field.
 useFocusThroughWait(

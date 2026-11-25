@@ -6,8 +6,7 @@
  *
  * Read on a card — a step's box ticked with Space, refused and let through; a link's remove, an
  * attempt's Stop, a report made the outcome, a thread's mark taken off, a reply sent with Enter
- * from its mark and a knowledge search, each refused, and a link's remove that went through,
- * which stays disabled until the card is read again — and on Volumes, a commit's Attach
+ * from its mark and a knowledge search, each refused — and on Volumes, a commit's Attach
  * refused, at a desktop's two widths in both languages; and a refused step's box, which comes
  * back into sight at a phone's two widths. Served by `discussionBackend.ts`'s double and the
  * shared backend, each wait held back by the test and answered as it says.
@@ -19,14 +18,13 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { volumesAnswer } from '../support/volumesDouble.ts'
 import { installBackend } from './backend.ts'
-import { openCard } from './editorPage.ts'
+import { cardWithThreads, openCard } from './editorPage.ts'
 import { enableExecutionTab, executionHistory } from './executionFixtures.ts'
 import { frames } from './frames.ts'
 import {
   failRead,
   focusedByKey,
   heldWrites,
-  holdBack,
   onThePage,
   onwardFrom,
   pressHeld,
@@ -36,7 +34,6 @@ import {
 } from './heldWrite.ts'
 import { blockedWorkItem, spaceRef, spaceScope } from './planningFixtures.ts'
 import { test } from './test.ts'
-import { talkedOn } from './threadFixtures.ts'
 
 const STEP = 'Frontend contract'
 
@@ -76,15 +73,6 @@ const WORDS = {
     search: 'Искать в знаниях',
   },
 } as const
-
-/** The card with its discussion, its threads in the double's record. */
-async function cardWithThreads(page: Page) {
-  const opened = await openCard(page)
-  opened.backend.item.comments.push(...talkedOn())
-  await page.reload()
-  await expect(opened.drawer).toHaveCSS('transform', 'none')
-  return opened
-}
 
 /** A step's box ticked with Space, its tick held, then refused or taken as the server does. */
 async function tickHeld(page: Page, through: boolean) {
@@ -191,46 +179,6 @@ for (const width of [1440, 1024] as const)
         await frames(drawer)
         await focusedByKey(remove)
         await tabGoesOn(page, onward)
-        expect(sent).toHaveLength(1)
-      })
-
-      test('a link’s remove that went through stays disabled until the card is read again', async ({
-        page,
-      }) => {
-        const { backend, drawer } = await openCard(page)
-        await drawer.getByRole('tab', { name: words.relations, exact: true }).click()
-        const reread = holdBack()
-        let removed = false
-        let asked = 0
-        const { release, sent } = await heldWrites(
-          page,
-          '/api/planning/work-item/link',
-          (route) => {
-            backend.item.links = []
-            backend.item.revision += 1
-            removed = true
-            return route.fulfill({ json: backend.item })
-          },
-        )
-        await page.route('**/api/modules/planning/work-item?*', async (route) => {
-          if (removed) {
-            asked += 1
-            await reread.held
-          }
-          return route.fallback()
-        })
-        const remove = drawer.getByRole('button', { name: words.unlink, exact: true })
-        await pressHeld(page, remove, 'Enter', sent)
-
-        release()
-        await expect.poll(() => asked).toBeGreaterThan(0)
-        await frames(drawer)
-        // Gone from the server, the link still stands here until the card is read again, and a
-        // second Enter, wherever the focus is, sends nothing.
-        await expect(remove).toBeDisabled()
-        await page.keyboard.press('Enter')
-        reread.release()
-        await expect(remove).toHaveCount(0)
         expect(sent).toHaveLength(1)
       })
 
