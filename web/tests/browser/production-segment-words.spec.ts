@@ -7,9 +7,15 @@
  * edge at 320px. Every segment of the page keeps its words inside its room at every width; where
  * its column cuts them they end in an ellipsis and are whole in its hint and its name, and a
  * short key's words are never cut.
+ *
+ * Whether the longest key's words fit is read off the room the segment gives them at each width,
+ * not off the width: a scrollbar the panel draws takes room the window would give them, and with
+ * one drawn, as a desktop's screen draws it, «Пространство WWWWWWWW» is cut at 390px too. Words
+ * that fit stand whole, with no ellipsis and no hint; words that do not end in an ellipsis, whole
+ * in the hint. The spec draws the scrollbars; with Playwright's hidden ones the same checks hold.
  */
 import { expect } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
@@ -17,6 +23,9 @@ import { participationDouble } from '../support/participationDouble.ts'
 import { installBackend } from './backend.ts'
 import { dataScopeId, shellSpaceFor } from './planningFixtures.ts'
 import { test } from './test.ts'
+
+// Playwright hides scrollbars; the settings panel's own takes room a desktop's screen gives it.
+test.use({ launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'] } })
 
 const SCOPE = { en: 'Scope', ru: 'Область' } as const
 const SPACE_WORD = { en: 'Space', ru: 'Пространство' } as const
@@ -27,6 +36,8 @@ const WIDE = [1440, 1024, 620, 390] as const
 
 /** Settings → Participation in a space of this key, listed by the shell's context, at `width`. */
 async function openIn(page: Page, locale: 'en' | 'ru', key: string, width: number) {
+  // The hint's delay runs on this clock, so a test can say that no hint came after it.
+  await page.clock.install()
   await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
   const space = { data_scope_id: dataScopeId, space_key: key }
   await installBackend(page, { contextSpaces: [shellSpaceFor(space)] })
@@ -59,6 +70,8 @@ const segmentWords = (page: Page) =>
       const style = getComputedStyle(segment)
       const start = box.left + Number.parseFloat(style.paddingLeft)
       const end = box.right - Number.parseFloat(style.paddingRight)
+      const room =
+        box.width - Number.parseFloat(style.paddingLeft) - Number.parseFloat(style.paddingRight)
       let [left, right, laid] = [Infinity, -Infinity, 0]
       let ellipsis = true
       const walker = document.createTreeWalker(segment, NodeFilter.SHOW_TEXT)
@@ -88,6 +101,8 @@ const segmentWords = (page: Page) =>
         text: segment.textContent?.trim() ?? '',
         inside: left >= start - 0.5 && right <= end + 0.5,
         cut: right - left < laid - 0.5,
+        // Whether the segment's room holds its words laid out whole.
+        fits: laid <= room + 0.5,
         ellipsis,
         hint: segment.dataset.tooltip ?? null,
         hintKind: segment.dataset.tooltipKind ?? null,
@@ -115,6 +130,38 @@ const isCut = async (page: Page, words: string) => {
   return segments.find((one) => one.text === words)?.cut
 }
 
+/** The segment of these words, as `segmentWords` reads it. */
+async function segmentOf(page: Page, words: string) {
+  const segments = await segmentWords(page)
+  const found = segments.find((one) => one.text === words)
+  if (!found) throw new Error(`no segment «${words}»`)
+  return found
+}
+
+/**
+ * Two frames drawn: a row that wraps works its columns out as the resize is drawn
+ * (`useSegmentColumns`), so a read before that frame sees the room the last width gave.
+ */
+const drawn = (page: Page) =>
+  page.evaluate(
+    () =>
+      new Promise<void>((done) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => done()))
+      }),
+  )
+
+/** The pointer rests on the segment past the hint's delay, from off it. */
+async function rest(page: Page, segment: Locator) {
+  const viewport = page.viewportSize() ?? { width: 0, height: 0 }
+  await page.mouse.move(viewport.width - 2, viewport.height - 2)
+  await page.clock.runFor(1000)
+  await segment.hover({ timeout: 10_000 })
+  await page.clock.runFor(1000)
+}
+
+/** The words the hint lays over the segment: its whole words where they are cut, none where not. */
+const hintWords = (fits: boolean, words: string) => (fits ? [] : [words])
+
 for (const locale of ['en', 'ru'] as const) {
   test(`a short space key stands whole in its scope segment at every width in ${locale}`, async ({
     page,
@@ -132,19 +179,27 @@ for (const locale of ['en', 'ru'] as const) {
     page,
   }) => {
     const { words, segment } = await openIn(page, locale, LONG_KEY, 1440)
-    // Where the row has room for them the words stand whole.
-    for (const width of WIDE) {
+    const fitted: boolean[] = []
+    for (const width of [...WIDE, 320]) {
       await page.setViewportSize({ width, height: 1000 })
-      await expect.poll(() => wordMisses(page), { message: `${width}px` }).toEqual([])
-      expect(await isCut(page, words), `${width}px`).toBe(false)
+      await drawn(page)
+      await expect
+        .poll(() => wordMisses(page), { message: `${width}px`, timeout: 10_000 })
+        .toEqual([])
+      const { cut, fits } = await segmentOf(page, words)
+      fitted.push(fits)
+      // Cut where the segment's room is narrower than the words, and only there.
+      expect(cut, `${width}px: cut, the words fitting their room: ${fits}`).toBe(!fits)
+      await expect(segment, `${width}px`).toHaveAccessibleName(words, { timeout: 10_000 })
+      // The hint lays the whole words over cut ones (DESIGN.md, Hints), and none over whole ones.
+      await rest(page, segment)
+      await expect(page.locator('.whole-text'), `${width}px`).toHaveText(hintWords(fits, words), {
+        timeout: 10_000,
+      })
     }
-    // At 320px one column is narrower than them: the case this is about.
-    await page.setViewportSize({ width: 320, height: 1000 })
-    await expect.poll(() => wordMisses(page), { message: '320px' }).toEqual([])
-    await expect.poll(() => isCut(page, words)).toBe(true)
-    await expect(segment).toHaveAccessibleName(words)
-    // The hint lays the whole words over the cut ones (DESIGN.md, Hints).
-    await segment.hover()
-    await expect(page.locator('.whole-text')).toHaveText(words)
+    // At 1440px the row holds them, and at 320px one column is narrower than them, scrollbar or
+    // none: the case this is about, and each the other's control.
+    expect(fitted.at(0), '1440px').toBe(true)
+    expect(fitted.at(-1), '320px').toBe(false)
   })
 }
