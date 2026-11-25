@@ -28,7 +28,7 @@ import { task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { PAUSES, pausesAnswer } from '../fixtures/pauses.ts'
 import { openPanel, record, serve } from './analyticsPage.ts'
-import { globalScope, projectId, shellSpaceFor, spaceRef, spaceScope } from './planningFixtures.ts'
+import { projectId, shellSpaceFor, spaceRef, spaceScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 /** How far two edges may stand apart and still be one place: the layout's rounding. */
@@ -77,29 +77,10 @@ const SECTIONS: Record<string, { choice: boolean; by?: string }> = {
 /** The context bar's spaces, the one the page reads named `name` at the time of each read. */
 async function serveSpace(page: Page, locale: 'en' | 'ru') {
   await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
-  await serve(page, WORLD)
+  const named = { ...shellSpaceFor(spaceRef), name: SHORT }
+  await serve(page, WORLD, false, { contextSpaces: [named] })
   await page.route('**/api/analytics/pauses?*', (route) =>
     route.fulfill({ json: pausesAnswer(PAUSES) }),
-  )
-  const named = { name: SHORT }
-  await page.route(
-    (url) => url.pathname === '/api/platform/context',
-    (route) =>
-      route.fulfill({
-        json: {
-          interface_version: 'valkama-context',
-          scope: globalScope,
-          state: {
-            interface_version: 'valkama-ui-state',
-            status: 'ready',
-            payload: {
-              primary: { data_scope_id: spaceRef.data_scope_id, is_writable: true },
-              spaces: [{ ...shellSpaceFor(spaceRef), name: named.name }],
-              ui_prefs: null,
-            },
-          },
-        },
-      }),
   )
   return named
 }
