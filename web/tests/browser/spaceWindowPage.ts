@@ -18,6 +18,11 @@ export const SIZES = [
   { lang: 'ru', width: 390, height: 844 },
 ] as const
 
+/**
+ * The window's words in each language. `remove` is the foot's button that removes the space
+ * itself, not a project's: a project's row says «Remove <name> from the space» («Убрать <name> из
+ * пространства»), so `remove` finds none of them.
+ */
 export const WORDS = {
   en: {
     newSpace: 'New space',
