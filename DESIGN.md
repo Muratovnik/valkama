@@ -3324,7 +3324,12 @@ The bar holds what every part reads by: the period, the filters, how fresh the d
 refresh. Which projects the figures are of stands beside the heading of every section the
 period's figures fill, after its «ⓘ», in the quiet ink: «Overview · project Billing» on a page
 scoped to one, by the name the context bar gives it, or «all projects»; the overview's «ⓘ» says
-the same as a sentence. A project's week beside the global one, with the project named only in
+the same as a sentence. The words take the room the heading and the section's choice leave on
+the heading's line, never their own width: a long name wraps there and ends its second line in an
+ellipsis, whole in its hint, so the choice and what the section holds stand where a short name
+leaves them. At their own width an 85-character space name took the pauses' choice a line down
+at 1440px, 40px, and at 1024px the words and the choice a line each, the tables 61px. A
+project's week beside the global one, with the project named only in
 the context bar, read as two answers for one week. The quota's sections say none: the quota is
 an account's, of no project, and their «ⓘ» says the chosen project does not change it. The bar
 has no room for those words: beside the period they took its line to two rows beside a span of

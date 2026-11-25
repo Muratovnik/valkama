@@ -46,7 +46,8 @@
  * under the tokens, and choosing a measure moved the table under it.
  *
  * What a reader of the page selects it by: the level is `data-level`, its kind; its heading row is
- * `data-level-head`.
+ * `data-level-head`, the controls at the row's end `data-level-actions` and what the level holds
+ * `data-level-body`.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -230,6 +231,7 @@ const levelStyle = computed(() => ({
       <div
         v-if="$slots.actions"
         class="level-actions"
+        data-level-actions
       >
         <slot
           name="actions"
@@ -242,6 +244,7 @@ const levelStyle = computed(() => ({
       v-if="$slots.default"
       class="level-body"
       :aria-label="bodyLabel"
+      data-level-body
     >
       <slot />
     </component>
