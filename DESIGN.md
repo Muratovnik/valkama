@@ -4173,15 +4173,16 @@ passing over the page does not. A landing at the end of a round trip yields to t
 they moved focus themselves after the action began, into a field to type or to another control,
 focus stays where they put it. A control that any wait disables, for a write or for a read, in a
 dialog as in a card, a page's form or the rail, takes the focus back once the wait ends, unless
-the person has put it somewhere since, and stays disabled meanwhile, so a second press sends
-nothing: a refused tick of a step's box, a link's remove, Stop, a report made the outcome, a
-reply sent from its mark, a commit's Attach, a failed knowledge search, a chain's Retry, Check
-again in Diagnostics and the connection's Refresh all left focus on the page, and so did a tick
-that went through. A control the wait took away with it takes nothing back; one the wait only
-hid, as the chain's Retry is hidden while its read waits, takes it back once it stands again. A
-press of the pointer rings nothing it lands on, including an element only the interface focuses.
-The interface takes focus to a whole and not to a line of words that only says something about
-it: how a question ended, its passed deadline and its title in the list of everything waiting
+the person has put it somewhere since, and stays disabled meanwhile, and after a write that went
+through until what it changed has been read again, so a second press sends nothing: a refused
+tick of a step's box, a link's remove, Stop, a report made the outcome, a reply sent from its
+mark, a commit's Attach, a failed knowledge search, a chain's Retry, Check again in Diagnostics
+and the connection's Refresh all left focus on the page, and so did a tick that went through. A
+control the wait took away with it takes nothing back; one the wait only hid, as the chain's
+Retry is hidden while its read waits, takes it back once it stands again. A press of the pointer
+rings nothing it lands on, including an element only the interface focuses. The interface takes
+focus to a whole and not to a line of words that only says something about it: how a question
+ended, its passed deadline and its title in the list of everything waiting
 describe or name the question, which takes the focus
 and the ring. Words that stay where focus lands, because taking it to their whole would send
 the next Tab to the start of a long form — why a write or a read did not go through, a reply

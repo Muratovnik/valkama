@@ -456,8 +456,8 @@ defineExpose({ close, openFrom })
               v-else-if="section === 'relations'"
               v-model:opened="relationsOpened"
               :item="payload"
+              :reread="reloaded"
               :writable="writable && !busy"
-              @changed="reloaded"
               @open="openFrom"
             />
             <InspectorAgents

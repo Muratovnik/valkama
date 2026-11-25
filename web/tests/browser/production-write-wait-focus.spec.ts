@@ -24,6 +24,7 @@ import {
   failRead,
   focusedByKey,
   heldWrites,
+  holdBack,
   onThePage,
   onwardFrom,
   pressHeld,
@@ -156,6 +157,46 @@ for (const width of [1440, 1024] as const)
         await frames(drawer)
         await focusedByKey(remove)
         await tabGoesOn(page, onward)
+        expect(sent).toHaveLength(1)
+      })
+
+      test('a link’s remove that went through stays disabled until the card is read again', async ({
+        page,
+      }) => {
+        const { backend, drawer } = await openCard(page)
+        await drawer.getByRole('tab', { name: words.relations, exact: true }).click()
+        const reread = holdBack()
+        let removed = false
+        let asked = 0
+        const { release, sent } = await heldWrites(
+          page,
+          '/api/planning/work-item/link',
+          (route) => {
+            backend.item.links = []
+            backend.item.revision += 1
+            removed = true
+            return route.fulfill({ json: backend.item })
+          },
+        )
+        await page.route('**/api/modules/planning/work-item?*', async (route) => {
+          if (removed) {
+            asked += 1
+            await reread.held
+          }
+          return route.fallback()
+        })
+        const remove = drawer.getByRole('button', { name: words.unlink, exact: true })
+        await pressHeld(page, remove, 'Enter', sent)
+
+        release()
+        await expect.poll(() => asked).toBeGreaterThan(0)
+        await frames(drawer)
+        // Gone from the server, the link still stands here until the card is read again, and a
+        // second Enter, wherever the focus is, sends nothing.
+        await expect(remove).toBeDisabled()
+        await page.keyboard.press('Enter')
+        reread.release()
+        await expect(remove).toHaveCount(0)
         expect(sent).toHaveLength(1)
       })
 

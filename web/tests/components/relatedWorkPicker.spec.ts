@@ -213,11 +213,38 @@ describe('related task picker', () => {
 })
 
 describe('grouped related tasks', () => {
+  it('keeps every remove disabled after a removal until the card has been read again', async () => {
+    const item = data()
+    let settle: (() => void) | undefined
+    const reading = new Promise<void>((done) => {
+      settle = done
+    })
+    const reread = vi.fn(() => reading)
+    vi.mocked(linkWorkItems).mockResolvedValueOnce()
+    const wrapper = mount(InspectorRelations, {
+      props: { item, writable: true, reread },
+      global: { plugins: [i18n()], stubs: { RelatedWorkPicker: true } },
+    })
+    const remove = () => wrapper.get('.link-remove')
+    await remove().trigger('click')
+    await flushPromises()
+    // Gone from the server, the link still stands here until the card is read again.
+    expect(remove().attributes('disabled')).toBeDefined()
+    await remove().trigger('click')
+    expect(linkWorkItems).toHaveBeenCalledTimes(1)
+    expect(reread).toHaveBeenCalledTimes(1)
+    settle?.()
+    await flushPromises()
+    expect(remove().attributes('disabled')).toBeUndefined()
+    wrapper.unmount()
+  })
+
   it('groups direction, adds from one section action, preserves open and removes incoming correctly', async () => {
     const item = data()
     item.links.push({ ...item.links[0], direction: 'outgoing' })
+    const reread = vi.fn(() => Promise.resolve())
     const wrapper = mount(InspectorRelations, {
-      props: { item, writable: true },
+      props: { item, writable: true, reread },
       global: { plugins: [i18n()], stubs: { RelatedWorkPicker: true } },
     })
     expect(wrapper.findAll('.relation-group')).toHaveLength(2)
@@ -238,7 +265,7 @@ describe('grouped related tasks', () => {
     await wrapper.findAll('.link-remove')[1].trigger('click')
     await flushPromises()
     expect(wrapper.get('[role="alert"]').text()).toBe('Removal refused')
-    expect(wrapper.emitted('changed')).toBeUndefined()
+    expect(reread).not.toHaveBeenCalled()
     await wrapper.findAll('.link-remove')[1].trigger('click')
     await flushPromises()
     expect(linkWorkItems).toHaveBeenLastCalledWith({
@@ -247,7 +274,7 @@ describe('grouped related tasks', () => {
       kind: 'blocks',
       remove: true,
     })
-    expect(wrapper.emitted('changed')).toHaveLength(1)
+    expect(reread).toHaveBeenCalledTimes(1)
     await wrapper.setProps({ writable: false })
     expect(wrapper.findAll('.link-remove')).toHaveLength(0)
     wrapper.unmount()
@@ -265,7 +292,7 @@ describe('grouped related tasks', () => {
       },
     ]
     const wrapper = mount(InspectorRelations, {
-      props: { item, writable: true },
+      props: { item, writable: true, reread: () => Promise.resolve() },
       global: { plugins: [i18n()], stubs: { RelatedWorkPicker: true } },
     })
     const groups = wrapper.findAll('.relation-group')

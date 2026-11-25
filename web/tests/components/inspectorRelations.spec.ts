@@ -38,6 +38,7 @@ function mountRelations(links: Link[], opened?: Record<string, boolean>) {
   return mount(InspectorRelations, {
     props: {
       item,
+      reread: () => Promise.resolve(),
       writable: false,
       ...(opened ? { opened } : {}),
     },
