@@ -20,7 +20,10 @@ contract: the commands, the answers and the exit codes used here.
   in a Job Object and keeps the lease until it exits. A KIND whose worker count
   can change gets its share K: every `{k}` in COMMAND becomes K, and
   `HEAVY_GATE_K` holds it. Its exit code is COMMAND's, 75 for no room, 64 for
-  bad arguments.
+  bad arguments. A run still waiting for room leaves the queue, with 75, once the
+  process that started it is gone. A program that is an npm shim, such as `npx`,
+  starts as the program and script it names, so cmd.exe never reads an argument
+  such as `--grep=a|b`; any other batch file is refused an argument it would read.
 - `hold_until_exit` takes a lease for this process until it ends, through the
   gate's `hold`: the whole unittest suite takes one from the `tests` package's
   `load_tests`, since it is loaded here and run later.
@@ -52,6 +55,7 @@ import contextlib
 import json
 import math
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -66,11 +70,15 @@ HERE = Path(__file__).resolve()
 ROOT = HERE.parents[1]
 
 if TYPE_CHECKING or __package__:
+    from server import process_reads, processes
     from tests import legacy_lock
 else:
     # Run as a script, this file imports nothing through the `tests` package: importing
     # it moves the environment, and COMMAND must inherit the caller's.
     import legacy_lock
+
+    # `legacy_lock` put the repository root on the path.
+    from server import process_reads, processes
 
 #: The gate's protocol this file speaks, as its entry points and answers name it.
 PROTOCOL = 1
@@ -202,11 +210,127 @@ def rules_want(kind: str, rules: Path = RULES) -> int | None:
     return None
 
 
+class UnsafeCommandError(Exception):
+    """COMMAND's program is a batch file that cmd.exe would read an argument of; why."""
+
+
+#: What cmd.exe acts on in the command line of a batch file, quoted or not: `a|b` there
+#: is a pipe and `%PATH%` the variable's value (CVE-2024-24576 and its kind).
+CMD_SPECIAL = frozenset('"%&<>^|()!\r\n')
+#: How long `npx.cmd`'s question of npm's global prefix may take, as the shim asks it.
+PREFIX_SECONDS = 30.0
+#: The last line of a shim npm's cmd-shim writes, in `node_modules/.bin` or npm's
+#: global prefix: the program found as the lines above say, then the script it names.
+_CMD_SHIM = re.compile(r'"%_prog%"\s+"%dp0%\\(?P<script>[^"%]+)"\s+%\*$')
+_CMD_SHIM_BESIDE = re.compile(r'IF EXIST "%dp0%\\(?P<program>[^"%\\]+)"')
+_CMD_SHIM_ON_PATH = re.compile(r'SET "_prog=(?P<program>[^"%\\]+)"')
+#: The last line of `npm.cmd` and `npx.cmd` as npm writes them beside node.exe.
+_NPM_SHIM = re.compile(r'"%NODE_EXE%"\s+"%(?P<name>\w+)%"\s+%\*$')
+
+
+def _set_beside(name: str, text: str) -> str | None:
+    """The path below `%~dp0` the shim `text` sets `name` to, or None."""
+
+    found = re.search(rf'SET "{re.escape(name)}=%~dp0\\(?P<path>[^"%]+)"', text)
+    return found["path"] if found else None
+
+
+def _program(directory: Path, beside: str | None, on_path: str | None) -> str | None:
+    """A shim's program: `beside` it when that file is there, else `on_path`, else None."""
+
+    if beside and (directory / beside).is_file():
+        return str(directory / beside)
+    found = shutil.which(on_path) if on_path else None
+    # Never a script that PATHEXT would open: cmd-shim takes `.JS` out of it for this.
+    return found if found and Path(found).suffix.lower() in (".exe", ".com") else None
+
+
+def _npm_prefix_cli(node: str, prefix_script: str, below: str) -> str | None:
+    """The CLI under npm's global prefix that `npx.cmd` prefers, when one is installed there."""
+
+    try:
+        answer = processes.run_text([node, prefix_script], timeout=PREFIX_SECONDS)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    # The shim's `FOR /F` keeps the last line that is not empty.
+    lines = [line for line in answer.stdout.splitlines() if line.strip()]
+    if not lines:
+        return None
+    cli = Path(lines[-1]) / below
+    return str(cli) if cli.is_file() else None
+
+
+def npm_shim(path: Path) -> list[str] | None:
+    """The program and script the npm shim at `path` starts, or None when it is no shim of npm's.
+
+    npm starts a package's command on Windows through a batch file it writes, which
+    hands its arguments to cmd.exe as text. Read as npm wrote it, the shim names what
+    it starts, and that starts with the arguments as they are.
+    """
+
+    try:
+        text = path.read_bytes().decode("utf-8", "strict")
+    except (OSError, UnicodeDecodeError):
+        return None  # a shim of no shape this knows starts as the batch file it is
+    lines = text.strip().splitlines()
+    last = lines[-1].strip() if lines else ""
+    directory = path.parent
+    found = _CMD_SHIM.search(last)
+    if found:
+        beside = _CMD_SHIM_BESIDE.search(text)
+        on_path = _CMD_SHIM_ON_PATH.search(text)
+        program = _program(
+            directory,
+            beside["program"] if beside else None,
+            on_path["program"] if on_path else None,
+        )
+        script = os.path.normpath(directory / found["script"])
+        return [program, script] if program and Path(script).is_file() else None
+    found = _NPM_SHIM.search(last)
+    cli = _set_beside(found["name"], text) if found else None
+    if found is None or cli is None:
+        return None
+    node = _program(directory, _set_beside("NODE_EXE", text), "node")
+    if node is None:
+        return None
+    script = os.path.normpath(directory / cli)
+    prefix_script = _set_beside("NPM_PREFIX_JS", text)
+    under_prefix = re.search(
+        rf'SET "NPM_PREFIX_{re.escape(found["name"])}=%%F\\(?P<path>[^"%]+)"', text
+    )
+    if prefix_script and under_prefix:
+        prefixed = _npm_prefix_cli(
+            node, os.path.normpath(directory / prefix_script), under_prefix["path"]
+        )
+        script = prefixed or script
+    return [node, script] if Path(script).is_file() else None
+
+
 def _resolved(command: Sequence[str]) -> list[str] | None:
-    """COMMAND with its program found, so `npx` starts as `npx.cmd`; None when there is none."""
+    """COMMAND with its program found; None when there is none.
+
+    `UnsafeCommandError` for a batch file that cmd.exe would read an argument of.
+    Windows runs a batch file through cmd.exe, which reads the arguments as a command
+    line of its own, whatever quoting a caller gives them. So `npx`, `npm` and a
+    package's `.bin` entry start as the program and script their npm shim names, and
+    any other batch file starts only while no argument holds a character cmd.exe acts on.
+    """
 
     program = shutil.which(command[0])
-    return None if program is None else [program, *command[1:]]
+    if program is None:
+        return None
+    if Path(program).suffix.lower() not in (".cmd", ".bat"):
+        return [program, *command[1:]]
+    shim = npm_shim(Path(program))
+    if shim is not None:
+        return [*shim, *command[1:]]
+    for word in command[1:]:
+        if CMD_SPECIAL.intersection(word):
+            raise UnsafeCommandError(
+                f"{program} is a batch file, and cmd.exe would read the argument {word!r}"
+                " instead of handing it on: start the program it runs instead"
+            )
+    return [program, *command[1:]]
 
 
 def run_direct(
@@ -225,7 +349,11 @@ def run_direct(
             say(f"COMMAND names {PLACEHOLDER}, but kind {kind!r} gives no worker count")
             return EXIT_USAGE
         words = [word.replace(PLACEHOLDER, str(k)) for word in words]
-    resolved = _resolved(words)
+    try:
+        resolved = _resolved(words)
+    except UnsafeCommandError as unsafe:
+        say(str(unsafe))
+        return EXIT_USAGE
     if resolved is None:
         say(f"cannot find the program {words[0]!r}")
         return EXIT_NOT_FOUND
@@ -272,6 +400,125 @@ def _no_room(kind: str, why: object, say: Callable[[str], None]) -> int:
         " to wait for room, for example in the background"
     )
     return EXIT_NO_ROOM
+
+
+#: How often a run waiting for room asks whether the process it waits for is there.
+WATCH_SECONDS = 0.25
+#: What `OpenProcess` needs to wait on a process and to read its start.
+_SYNCHRONIZE_AND_QUERY = 0x00100000 | 0x1000
+_ACCESS_DENIED = 5
+#: The launchers that start Python as their child and wait for it.
+_LAUNCHERS = ("py.exe", "pyw.exe")
+
+
+def _started(pid: int) -> str:
+    """When process `pid` started, as `process_reads` reads it; empty when it cannot say."""
+
+    if sys.platform != "win32":
+        return ""
+    return str(process_reads.Windows().process(pid)["identity_token"])
+
+
+class Watched(contextlib.AbstractContextManager["Watched"]):
+    """A process a waiting run belongs to, held open so that its id cannot pass to another.
+
+    It is gone once it exits, and from the start when it had gone already: when it
+    started at another time than `started` or not before `before`, its id was reused.
+    A process this user may not open is never gone, since nothing can be known of it.
+    """
+
+    def __init__(self, pid: int, *, started: str = "", before: str = "") -> None:
+        self.pid = pid
+        self._handle: int | None = None
+        self._gone = False
+        if sys.platform != "win32":
+            return
+        import _winapi
+
+        try:
+            self._handle = _winapi.OpenProcess(_SYNCHRONIZE_AND_QUERY, False, pid)
+        except OSError as error:
+            self._gone = getattr(error, "winerror", None) != _ACCESS_DENIED
+            return
+        # The handle holds the id, so this reads the start of the process it holds.
+        start = _started(pid)
+        self._gone = bool(start) and (
+            (bool(started) and start != started) or (bool(before) and start >= before)
+        )
+
+    def gone(self) -> bool:
+        if self._gone:
+            return True
+        if self._handle is not None:
+            import _winapi
+
+            self._gone = _winapi.WaitForSingleObject(self._handle, 0) == _winapi.WAIT_OBJECT_0
+        elif sys.platform != "win32":
+            try:
+                os.kill(self.pid, 0)
+            except PermissionError:
+                pass
+            except OSError:
+                self._gone = True
+        return self._gone
+
+    def close(self) -> None:
+        if self._handle is not None:
+            import _winapi
+
+            _winapi.CloseHandle(self._handle)
+            self._handle = None
+
+    def __exit__(self, *_exc: object) -> None:
+        self.close()
+
+
+def caller(pid: int | None = None) -> int:
+    """The process a run belongs to: `pid`, else the one that started this process.
+
+    A virtual environment's `python.exe`, like `py.exe`, starts the interpreter as its
+    child and waits for it, so it ends with the interpreter and outlives its own
+    caller: the process that started a launcher is the caller.
+    """
+
+    if pid:
+        return pid
+    parent = os.getppid()
+    if sys.platform != "win32":
+        return parent
+    reads = process_reads.Windows()
+    image = os.path.normcase(str(reads.process(parent)["executable_path"]))
+    own = os.path.normcase(str(reads.process(os.getpid())["executable_path"]))
+    venv = os.path.normcase(os.path.abspath(sys.executable))
+    if image and (image == venv != own or Path(image).name in _LAUNCHERS):
+        return reads.parent(parent) or parent
+    return parent
+
+
+def _until_gone(argv: Sequence[str], asked: Watched, kind: str, say: Callable[[str], None]) -> int:
+    """`argv`'s exit code, or 75 once the process that asked for the run is gone first.
+
+    The gate's waiter and the bridge each wait for the process above them, so this
+    process ending is what lets a run still waiting for room leave the queue; a run
+    already going goes on under its lease.
+    """
+
+    child = subprocess.Popen(argv)
+    try:
+        while True:
+            try:
+                return child.wait(timeout=WATCH_SECONDS)
+            except subprocess.TimeoutExpired:
+                if asked.gone():
+                    say(
+                        f"the process that asked for {PROJECT}:{kind} has exited:"
+                        " a run still waiting for room leaves the queue"
+                    )
+                    return EXIT_NO_ROOM
+    except BaseException:
+        # As `subprocess.call` does: an interrupt or a failure here ends the gate too.
+        child.kill()
+        raise
 
 
 def gated_command(
@@ -324,6 +571,7 @@ def run(
             say,
         )
     flag = "--wait" if waiting else "--no-wait"
+    started = _started(os.getpid())
     argv = [
         *found.argv,
         *("run", "--kind", kind, flag),
@@ -331,10 +579,12 @@ def run(
         *(("--want", str(want)) if want is not None else ()),
         *(("--pid", str(pid)) if pid is not None else ()),
         *("--", sys.executable, str(HERE), "bridge", "--kind", kind, flag),
+        *("--owner", f"{os.getpid()}@{started}"),
         *("--state", str(found.state), "--lock", str(lock), "--", *command),
     ]
     try:
-        return subprocess.call(argv)
+        with Watched(caller(pid), before=started) as asked:
+            return _until_gone(argv, asked, kind, say)
     except OSError as error:
         say(f"the heavy-process gate cannot be started ({error}): running without it")
         return run_direct(kind, command, want, say=say)
@@ -347,24 +597,48 @@ def bridge(
     state: Path,
     lock: Path,
     wait: bool,
+    owners: Sequence[tuple[int, str]] = (),
     say: Callable[[str], None] = _say,
 ) -> int:
-    """COMMAND inside the gate's lease, holding its place at the earlier branches' lock too."""
+    """COMMAND inside the gate's lease, holding its place at the earlier branches' lock too.
+
+    `owners` are the processes the run is for, each with when it started: once one
+    of them is gone, a run still waiting at that lock leaves it, and its lease with it.
+    """
 
     lease = os.environ.get(LEASE_VARIABLE) or None
-    resolved = _resolved(command)
+    try:
+        resolved = _resolved(command)
+    except UnsafeCommandError as unsafe:
+        say(str(unsafe))
+        return EXIT_USAGE
     if resolved is None:
         say(f"cannot find the program {command[0]!r}")
         return EXIT_NOT_FOUND
     run_name = f"{PROJECT}:{kind} under the heavy-process gate"
-    try:
-        with legacy_lock.shared(
-            run_name, lease_cpus(state, lease), lease=lease, path=lock, wait=wait, say=say
-        ):
-            environment = {**os.environ, **legacy_lock.marker(lock)}
-            return subprocess.call(resolved, env=environment)
-    except legacy_lock.BusyError as busy:
-        return _no_room(kind, busy, say)
+    with contextlib.ExitStack() as held:
+        watched = [held.enter_context(Watched(pid, started=start)) for pid, start in owners]
+        try:
+            with legacy_lock.shared(
+                run_name,
+                lease_cpus(state, lease),
+                lease=lease,
+                path=lock,
+                wait=wait,
+                say=say,
+                abandoned=lambda: any(owner.gone() for owner in watched),
+            ):
+                held.close()
+                environment = {**os.environ, **legacy_lock.marker(lock)}
+                return subprocess.call(resolved, env=environment)
+        except legacy_lock.BusyError as busy:
+            return _no_room(kind, busy, say)
+        except legacy_lock.AbandonedError:
+            say(
+                f"the process that asked for {PROJECT}:{kind} has exited:"
+                " leaving the queue and the lease"
+            )
+            return EXIT_NO_ROOM
 
 
 #: The hold processes of this process's leases, kept for as long as it runs.
@@ -493,6 +767,13 @@ def load_note(lock: Path | None = None, gate: str | None = None) -> str | None:
     )
 
 
+def _owner(word: str) -> tuple[int, str]:
+    """`PID@STARTED`, as `run` names itself to its bridge."""
+
+    pid, _at, started = word.partition("@")
+    return int(pid), started
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python tests/heavy_gate.py",
@@ -515,6 +796,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     inner.add_argument("--state", type=Path, required=True)
     inner.add_argument("--wait", action="store_true")
     inner.add_argument("--no-wait", dest="wait", action="store_false")
+    inner.add_argument("--owner", type=_owner, action="append", default=[])
     inner.add_argument("argv", nargs=argparse.REMAINDER)
     for sub in (running, asked, inner):
         # Stand-ins for a test: the earlier branches' lock and the gate's entry point.
@@ -531,7 +813,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("name the command to run after --")
     if options.command == "bridge":
         lock = options.lock or legacy_lock.lock_path()
-        return bridge(options.kind, command, state=options.state, lock=lock, wait=options.wait)
+        return bridge(
+            options.kind,
+            command,
+            state=options.state,
+            lock=lock,
+            wait=options.wait,
+            owners=options.owner,
+        )
     if options.want is not None and options.want < 1:
         parser.error("--want is a whole number from 1")
     return run(

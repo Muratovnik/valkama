@@ -12,9 +12,12 @@ import io
 import json
 import math
 import os
+import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from collections.abc import Callable
 from pathlib import Path
@@ -70,16 +73,27 @@ class GateCase(unittest.TestCase):
             os.environ.pop(name, None)
         self.said: list[str] = []
         self.stderr = ""
+        self.stdout = ""
 
     def observed(self, kind: str, *words: str, **options: object) -> tuple[int, dict]:
         """`run` of the observer as `kind`, and what the observer saw; `{}` when it never ran."""
 
+        options.setdefault("gate", str(self.entry))
+        command = [sys.executable, "-c", OBSERVER, str(self.lock), str(ROOT), *words]
+        return self.ran(kind, command, **options)
+
+    def ran(self, kind: str, command: list[str], **options: object) -> tuple[int, dict]:
+        """`run` of `command` as `kind`, and the last JSON line it printed; `{}` for none."""
+
         out = self.directory / "observed.json"
         out.unlink(missing_ok=True)
         options.setdefault("lock", self.lock)
-        options.setdefault("gate", str(self.entry))
-        command = [sys.executable, "-c", OBSERVER, str(self.lock), str(ROOT), *words]
-        with mock.patch.object(subprocess, "call", self._call(out)):
+        call = self._call(out)
+        with (
+            mock.patch.object(subprocess, "call", call),
+            # The gate's command, which `run` waits for while its caller is there.
+            mock.patch.object(heavy_gate, "_until_gone", lambda argv, *_rest: call(argv)),
+        ):
             code = heavy_gate.run(kind, command, say=self.said.append, **options)  # type: ignore[arg-type]
         return code, json.loads(out.read_text()) if out.is_file() else {}
 
@@ -91,7 +105,8 @@ class GateCase(unittest.TestCase):
         def call(argv: list[str], **options: object) -> int:
             done = real(argv, capture_output=True, check=False, **options)  # type: ignore[call-overload]
             self.stderr = done.stderr.decode(errors="replace")
-            lines = [line for line in done.stdout.decode().splitlines() if line.startswith("{")]
+            self.stdout = done.stdout.decode(errors="replace")
+            lines = [line for line in self.stdout.splitlines() if line.startswith("{")]
             if lines:
                 out.write_text(lines[-1])
             return int(done.returncode)
@@ -307,6 +322,134 @@ class HoldTests(GateCase):
         self.assertIn("--no-wait", call)
 
 
+#: Starts the command in its arguments, says its process id, and sleeps until killed: the
+#: caller of a run, such as the shell an agent's tool started it from.
+CALLER = """\
+import subprocess, sys, time
+print(subprocess.Popen(sys.argv[1:]).pid, flush=True)
+time.sleep(120)
+"""
+
+#: How soon a run whose caller is gone gives up its place, at most.
+LEAVE_SECONDS = 10.0
+
+
+def _running(pid: int) -> bool:
+    if sys.platform == "win32":
+        import _winapi
+
+        try:
+            handle = _winapi.OpenProcess(0x00100000, False, pid)  # SYNCHRONIZE
+        except OSError:
+            return False
+        try:
+            return _winapi.WaitForSingleObject(handle, 0) != _winapi.WAIT_OBJECT_0
+        finally:
+            _winapi.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True
+
+
+@unittest.skipUnless(sys.platform == "win32", "a process is watched through its handle there")
+class WatchedTests(unittest.TestCase):
+    """A watched process is gone once it exits, or at once when its id now names another."""
+
+    def test_a_process_is_there_until_it_exits(self) -> None:
+        child = subprocess.Popen(
+            [sys.executable, "-c", "import sys; sys.stdin.read()"], stdin=subprocess.PIPE
+        )
+        self.addCleanup(child.wait, DEADLINE_SECONDS)
+        started = heavy_gate._started(child.pid)
+        self.assertTrue(started)
+        with heavy_gate.Watched(child.pid, started=started) as watched:
+            self.assertFalse(watched.gone())
+            assert child.stdin is not None
+            child.stdin.close()
+            child.wait(DEADLINE_SECONDS)
+            self.assertTrue(watched.gone())
+
+    def test_an_id_that_started_at_another_time_or_after_the_run_is_another_process(self) -> None:
+        def gone(pid: int, **named: str) -> bool:
+            with heavy_gate.Watched(pid, **named) as watched:
+                return watched.gone()
+
+        mine = heavy_gate._started(os.getpid())
+        self.assertFalse(gone(os.getpid(), started=mine))
+        self.assertTrue(gone(os.getpid(), started="2000-01-01T00:00:00.0000000Z"))
+        # A caller starts before what it starts: one that started later took its id.
+        self.assertTrue(gone(os.getpid(), before=mine))
+        self.assertFalse(gone(os.getppid(), before=mine))
+        self.assertTrue(gone(0x7FFFFFF0))  # a pid that does not exist
+
+
+class AbandonedWaitTests(GateCase):
+    """A run waiting for room leaves once the process that asked for it is gone.
+
+    Admitted by the gate, it waits for the earlier branches' lock, which an earlier
+    whole-machine run holds, keeping the gate's lease all the while. Its caller, or
+    the run itself, is then killed alone, as a stop of a part of the tree kills it.
+    """
+
+    def waiting(self) -> tuple[subprocess.Popen[bytes], int, Path]:
+        """A caller, the run it started, and the marker the command would leave."""
+
+        marker = self.directory / "ran"
+        command = [sys.executable, "-c", f"open({str(marker)!r}, 'w').close()"]
+        caller = subprocess.Popen(
+            [
+                *(sys.executable, "-c", CALLER, sys.executable, COMMAND, "run"),
+                *("--kind", "browser-targeted", "--wait"),
+                *(f"--lock={self.lock}", f"--gate={self.entry}", "--", *command),
+            ],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
+        self.addCleanup(self._end, caller)
+        assert caller.stdout is not None
+        run = int(caller.stdout.readline())
+        leases = self.state / "leases"
+        deadline = time.monotonic() + DEADLINE_SECONDS
+        while not any(leases.glob("*.json")):
+            self.assertLess(time.monotonic(), deadline, "the gate never admitted the run")
+            time.sleep(0.05)
+        # Long enough for the bridge under the lease to be waiting at the lock.
+        time.sleep(1.0)
+        return caller, run, marker
+
+    def _end(self, caller: subprocess.Popen[bytes]) -> None:
+        caller.kill()
+        caller.wait(DEADLINE_SECONDS)
+        assert caller.stdout is not None
+        caller.stdout.close()
+
+    def assert_left(self, run: int, marker: Path) -> None:
+        leases = self.state / "leases"
+        deadline = time.monotonic() + LEAVE_SECONDS
+        while _running(run) or any(leases.glob("*.json")):
+            if time.monotonic() > deadline:
+                self.fail(f"still waiting {LEAVE_SECONDS} s after its caller went")
+            time.sleep(0.1)
+        self.assertFalse(marker.exists(), "the command ran for a caller that is gone")
+
+    def test_a_run_whose_caller_is_killed_leaves_the_queue_and_the_lease(self) -> None:
+        with earlier_whole_machine_run(self.lock):
+            caller, run, marker = self.waiting()
+            caller.kill()
+            self.assert_left(run, marker)
+        self.assertEqual(([], []), legacy_lock.entries(self.lock, reclaim=True))
+
+    def test_a_waiting_run_that_is_killed_itself_leaves_nothing_waiting(self) -> None:
+        with earlier_whole_machine_run(self.lock):
+            _caller, run, marker = self.waiting()
+            os.kill(run, signal.SIGTERM)
+            self.assert_left(run, marker)
+        self.assertEqual(([], []), legacy_lock.entries(self.lock, reclaim=True))
+
+
 def loaded_ids(suite: unittest.TestSuite) -> set[str]:
     """Every test a loaded suite holds, by id."""
 
@@ -471,6 +614,153 @@ class LoadNoteTests(GateCase):
         self.assertNotIn("heavy runs were going", passed)
         self.assertIn("FAILED", free)
         self.assertNotIn("heavy runs were going", free)
+
+
+#: Arguments that cmd.exe acts on when a batch file is handed them, one set each: a
+#: command started through `npx` or a package's `.bin` entry gets each back as it was.
+METACHARACTERS = {
+    "pipe": ["--grep=@one|@two"],
+    "command separator": ["a&b", "x & echo injected"],
+    "redirection": ["a<b", "a>b", "2>&1"],
+    "escape": ["a^b", "^"],
+    "variables": ["%PATH%", "%~dp0", "50%", "%%"],
+    "delayed expansion": ["!PATH!"],
+    "quotes": ['"quoted"', 'a"b', 'a " b', '\\"', "dir\\"],
+    "groups": ["(x)", ")"],
+    "plain": ["two words", "", "--workers=4"],
+}
+
+#: Prints, as one JSON line, the arguments a script started by a shim was given.
+ECHO_JS = 'console.log(JSON.stringify({ args: process.argv.slice(2), from: "%s" }))\n'
+
+#: A shim as npm's cmd-shim writes it into `node_modules/.bin`, for a script beside it.
+CMD_SHIM = """\
+@ECHO off
+GOTO start
+:find_dp0
+SET dp0=%~dp0
+EXIT /b
+:start
+SETLOCAL
+CALL :find_dp0
+
+IF EXIST "%dp0%\\node.exe" (
+  SET "_prog=%dp0%\\node.exe"
+) ELSE (
+  SET "_prog=node"
+  SET PATHEXT=%PATHEXT:;.JS;=;%
+)
+
+endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\{script}" %*
+"""
+
+#: `npx.cmd` as npm writes it beside node.exe: its own CLI, or the one under npm's
+#: global prefix when one is installed there.
+NPX_CMD = """\
+:: Created by npm, please don't edit manually.
+@ECHO OFF
+
+SETLOCAL
+
+SET "NODE_EXE=%~dp0\\node.exe"
+IF NOT EXIST "%NODE_EXE%" (
+  SET "NODE_EXE=node"
+)
+
+SET "NPM_PREFIX_JS=%~dp0\\node_modules\\npm\\bin\\npm-prefix.js"
+SET "NPX_CLI_JS=%~dp0\\node_modules\\npm\\bin\\npx-cli.js"
+FOR /F "delims=" %%F IN ('CALL "%NODE_EXE%" "%NPM_PREFIX_JS%"') DO (
+  SET "NPM_PREFIX_NPX_CLI_JS=%%F\\node_modules\\npm\\bin\\npx-cli.js"
+)
+IF EXIST "%NPM_PREFIX_NPX_CLI_JS%" (
+  SET "NPX_CLI_JS=%NPM_PREFIX_NPX_CLI_JS%"
+)
+
+"%NODE_EXE%" "%NPX_CLI_JS%" %*
+"""
+
+
+#: Prints its arguments as one JSON line, on one line for a batch file to hand to
+#: `python -c`: a newline ends a batch file's command line.
+ARGS_ONE_LINE = "import json, sys; print(json.dumps({'args': sys.argv[1:]}))"
+
+
+@unittest.skipUnless(sys.platform == "win32", "batch files are Windows'")
+@unittest.skipUnless(shutil.which("node"), "the shims start node")
+class BatchFileTests(GateCase):
+    """A command whose program is a batch file never has cmd.exe read its arguments.
+
+    Each shim is a real one, in npm's own words, on `PATH` ahead of every other, and
+    each run goes through `run` as a person types it: directly, and under a lease.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        scratch = ROOT / "tmp"
+        scratch.mkdir(exist_ok=True)
+        directory = tempfile.TemporaryDirectory(
+            prefix="gate-cmd-", dir=scratch, ignore_cleanup_errors=True
+        )
+        self.addCleanup(directory.cleanup)
+        self.bin = Path(directory.name)
+        # A package's `.bin` entry, and npx as npm installs it beside node.
+        (self.bin / "pkg").mkdir()
+        (self.bin / "pkg" / "cli.js").write_text(ECHO_JS % "package")
+        (self.bin / "vk-probe.cmd").write_text(CMD_SHIM.format(script="pkg\\cli.js"))
+        npm = self.bin / "node_modules" / "npm" / "bin"
+        npm.mkdir(parents=True)
+        (npm / "npx-cli.js").write_text(ECHO_JS % "bundled")
+        self.prefix = self.bin / "prefix"
+        prefix_js = f"console.log({json.dumps(str(self.prefix))})\n"
+        (npm / "npm-prefix.js").write_text(prefix_js)
+        (self.bin / "vk-npx.cmd").write_text(NPX_CMD)
+        # A batch file of no shim's shape: it runs the observer itself.
+        (self.bin / "vk-plain.cmd").write_text(f'@"{sys.executable}" -c "{ARGS_ONE_LINE}" %*\n')
+        path = mock.patch.dict(os.environ, {"PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}"})
+        path.start()
+        self.addCleanup(path.stop)
+        self.missing = str(self.directory / "none.json")
+
+    def started(self, program: str, words: list[str], **options: object) -> tuple[int, dict]:
+        return self.ran("browser-targeted", [program, *words], **options)
+
+    def test_every_metacharacter_reaches_a_package_shim_as_it_was(self) -> None:
+        for how, gate in (("directly", self.missing), ("under a lease", str(self.entry))):
+            for name, words in METACHARACTERS.items():
+                with self.subTest(how=how, set=name):
+                    code, seen = self.started("vk-probe", words, gate=gate, wait=True)
+                    self.assertEqual(0, code, (self.said, self.stderr))
+                    self.assertEqual({"args": words, "from": "package"}, seen)
+                    self.assertNotIn("injected", self.stdout.split())
+
+    def test_npx_reaches_the_cli_under_npms_prefix_and_its_own_without_one(self) -> None:
+        words = [word for group in METACHARACTERS.values() for word in group]
+        code, seen = self.started("vk-npx", words, gate=self.missing)
+        self.assertEqual(0, code, self.said)
+        self.assertEqual({"args": words, "from": "bundled"}, seen)
+        under = self.prefix / "node_modules" / "npm" / "bin"
+        under.mkdir(parents=True)
+        (under / "npx-cli.js").write_text(ECHO_JS % "prefix")
+        code, seen = self.started("vk-npx", words, gate=str(self.entry), wait=True)
+        self.assertEqual(0, code, (self.said, self.stderr))
+        self.assertEqual({"args": words, "from": "prefix"}, seen)
+
+    def test_another_batch_file_runs_with_plain_arguments_and_is_refused_any_other(self) -> None:
+        code, seen = self.started("vk-plain", ["two words", "--workers=4"], gate=self.missing)
+        self.assertEqual(0, code, self.said)
+        self.assertEqual(["two words", "--workers=4"], seen["args"])
+        for how, gate in (("directly", self.missing), ("under a lease", str(self.entry))):
+            for name, words in METACHARACTERS.items():
+                if name == "plain":
+                    continue
+                with self.subTest(how=how, set=name):
+                    self.said.clear()
+                    code, seen = self.started("vk-plain", words, gate=gate, wait=True)
+                    self.assertEqual(heavy_gate.EXIT_USAGE, code)
+                    self.assertEqual({}, seen)
+                    said = "\n".join([*self.said, self.stderr])
+                    self.assertIn("is a batch file", said)
+                    self.assertIn(repr(words[0]), said)
 
 
 class CommandLineTests(GateCase):
