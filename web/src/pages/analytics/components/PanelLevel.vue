@@ -284,9 +284,6 @@ const levelStyle = computed(() => ({
   gap: var(--space-1) var(--space-3);
   align-items: center;
   min-width: 0;
-
-  /* Its own width is what a wrapped row of choices at its end stands across (`.level-actions`). */
-  container-type: inline-size;
 }
 
 .level-heading {
@@ -313,18 +310,19 @@ const levelStyle = computed(() => ({
 
 /* The controls stand at the row's end, and on a line of their own keep to its width: a row of
    choices wider than the line wraps there (`wrap`) instead of running past the row's edge, and
-   stands across the whole row (`--segmented-wrapped-width`). This box is only as wide as what it
-   holds, so a wrapped row as wide as the box shrank it to the row's own columns and measured that
-   as its room: a chart's three views stood in one column, 82px wide in a row of 224 at 320px. */
+   stands across the whole row. The box takes the rest of its line and sets what it holds at its
+   end, so its width is the line's: only as wide as what it held, a wrapped row as wide as the box
+   shrank it to the row's own columns and measured that as its room, and a chart's three views
+   stood in one column, 82px wide in a row of 224 at 320px. A row measuring its own width as a
+   container instead stood 0px wide where what holds it is as wide as its content, and the table
+   under it ran past the window. */
 .level-actions {
-  --segmented-wrapped-width: 100cqi;
-
   display: flex;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   gap: var(--space-1);
+  justify-content: flex-end;
   align-items: center;
   min-width: 0;
-  margin-inline-start: auto;
 }
 
 /* A row of one line: the heading takes what its controls leave it and is cut short there, by the
