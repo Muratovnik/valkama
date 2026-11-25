@@ -32,9 +32,13 @@ const words = useScopeWords()
 
 <style scoped>
 /* The words take the room the row's other parts leave on its line, never their own width, so no
-   name moves those parts; with less than 10rem of it they take a line of their own. */
+   name moves those parts; with less than 10rem of it they take a line of their own. The row's
+   controls grow too, to take a line of their own whole on a phone (`PanelLevel`), and beside the
+   words they shared the room equally: at 1440px the words stood 261px wide instead of 522 and a
+   name of 50 characters wrapped. Grown a million times faster, the words take all of it there,
+   and what the controls get is less than a layout unit. */
 .section-scope {
-  flex: 1 1 0;
+  flex: 1000000 1 0;
   min-width: min(100%, 10rem);
   color: var(--color-text-muted);
   font: var(--font-detail);

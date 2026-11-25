@@ -16,6 +16,13 @@
  * heading's line after its «ⓘ», within the row, over none of its other parts, on two lines at most
  * and with their whole words as their hint. At a phone's 390 and 320 pixels only that nothing
  * breaks: the words within the row, over none of its parts, and the page with no sideways scroll.
+ *
+ * At 1440 and 1024 the words also keep all the room their line leaves: they end the row's gap
+ * before the choice on their line, or at the row's end where none stands there, and the long name
+ * stands on as many lines as it did with all that room, never cut. The controls' box, grown into
+ * the line beside them, took half of it, and the comparison of two names inside one build could
+ * not see that: both had lost the same room. The lines are the ones measured with this name for
+ * the pauses and two dimensions while the words had all the room.
  * Each run prints what it measured, and every check is soft, so a run says every section and part
  * that moved rather than the first.
  */
@@ -28,17 +35,29 @@ import { task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { PAUSES, pausesAnswer } from '../fixtures/pauses.ts'
 import { openPanel, record, serve } from './analyticsPage.ts'
-import { globalScope, projectId, shellSpaceFor, spaceRef, spaceScope } from './planningFixtures.ts'
+import { projectId, shellSpaceFor, spaceRef, spaceScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 /** How far two edges may stand apart and still be one place: the layout's rounding. */
 const NEAR = 0.5
+
+/** The heading row's gap between two parts on one line (`--space-3`). */
+const ROW_GAP = 12
 
 const SHORT = 'Main'
 /** 85 characters, as long as the name that moved the pauses' choice. */
 const LONG = 'Rover telemetry, mission planning and ground station integration for an example fleet'
 
 const SPACE_WORD = { en: 'space', ru: 'пространство' }
+
+/**
+ * The lines the long name stood on beside these sections' headings while the words had all the
+ * room their line left, whole in every one: measured then with this name.
+ */
+const ROOM_LINES: Record<'en' | 'ru', Record<number, Record<string, number>>> = {
+  en: { 1440: { pauses: 2, project: 1, model: 1 }, 1024: { pauses: 2, project: 2, model: 2 } },
+  ru: { 1440: { pauses: 2, project: 2, model: 2 }, 1024: { pauses: 2, project: 2, model: 2 } },
+}
 
 /** An hour of one task on Tuesday under one model, in the project the double holds. */
 const WORLD: TimedStretch[] = [
@@ -77,29 +96,10 @@ const SECTIONS: Record<string, { choice: boolean; by?: string }> = {
 /** The context bar's spaces, the one the page reads named `name` at the time of each read. */
 async function serveSpace(page: Page, locale: 'en' | 'ru') {
   await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
-  await serve(page, WORLD)
+  const named = { ...shellSpaceFor(spaceRef), name: SHORT }
+  await serve(page, WORLD, false, { contextSpaces: [named] })
   await page.route('**/api/analytics/pauses?*', (route) =>
     route.fulfill({ json: pausesAnswer(PAUSES) }),
-  )
-  const named = { name: SHORT }
-  await page.route(
-    (url) => url.pathname === '/api/platform/context',
-    (route) =>
-      route.fulfill({
-        json: {
-          interface_version: 'valkama-context',
-          scope: globalScope,
-          state: {
-            interface_version: 'valkama-ui-state',
-            status: 'ready',
-            payload: {
-              primary: { data_scope_id: spaceRef.data_scope_id, is_writable: true },
-              spaces: [{ ...shellSpaceFor(spaceRef), name: named.name }],
-              ui_prefs: null,
-            },
-          },
-        },
-      }),
   )
   return named
 }
@@ -115,7 +115,7 @@ async function measured(page: Page, section: string) {
   return level.evaluate((root) => {
     const top = root.getBoundingClientRect().top
     const left = root.getBoundingClientRect().left
-    const at = (element: Element | null | undefined) => {
+    const at = (element: Element | Range | null | undefined) => {
       if (!element) return null
       const box = element.getBoundingClientRect()
       return {
@@ -132,6 +132,13 @@ async function measured(page: Page, section: string) {
     const actions = row?.querySelector(':scope > [data-level-actions]')
     const parts = [heading, about, actions].filter((part): part is Element => Boolean(part))
     const words = scope ? at(scope) : null
+    // What the controls' box holds, as far as it reaches: the box itself may be wider.
+    let held = null
+    if (actions) {
+      const range = document.createRange()
+      range.selectNodeContents(actions)
+      held = at(range)
+    }
     const over = parts
       .filter((part) => {
         const box = at(part)
@@ -153,6 +160,7 @@ async function measured(page: Page, section: string) {
       about: at(about),
       words,
       choice: at(actions),
+      held,
       body: at(root.querySelector(':scope > [data-level-body]')),
       first: at(root.querySelector('[data-environment]')),
       over,
@@ -208,6 +216,24 @@ function standStill(name: string, short: Measured, long: Measured) {
   }
 }
 
+/**
+ * The words keep all the room their line leaves: they end the row's gap before what the controls
+ * hold where those stand on their line, and at the row's end where nothing does.
+ */
+function keepTheRoom(name: string, seen: Measured) {
+  const { words, held, row } = seen
+  if (!words || !row) throw new Error(`${name}: the heading row's parts`)
+  const beside = held && held.top < words.bottom && held.bottom > words.top
+  if (beside)
+    expect
+      .soft(held.left - words.right, `${name}: the words up to the row's gap before the choice`)
+      .toBeLessThan(ROW_GAP + NEAR)
+  else
+    expect
+      .soft(row.right - words.right, `${name}: the words up to the row's end`)
+      .toBeLessThan(NEAR)
+}
+
 /** The long words on the heading's line after its «ⓘ», on two lines at most, whole in a hint. */
 function besideHeading(name: string, long: Measured) {
   const { words, heading, about } = long
@@ -242,7 +268,14 @@ for (const locale of ['en', 'ru'] as const)
         standStill(section, short, long)
         holdsTogether(section, long)
         besideHeading(section, long)
+        keepTheRoom(`${section}, the short name`, short)
+        keepTheRoom(`${section}, the long name`, long)
+        expect.soft(long.cut, `${section}: the long words whole, as with all the room`).toBe(false)
       }
+      for (const [section, lines] of Object.entries(ROOM_LINES[locale][width] ?? {}))
+        expect
+          .soft(seen[section]?.long.lines, `${section}: the long words' lines with all the room`)
+          .toBe(lines)
       expect(Object.keys(seen)).toHaveLength(Object.keys(SECTIONS).length)
       await record(info, `scope room ${locale} ${width}`, seen)
     })
