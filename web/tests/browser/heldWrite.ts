@@ -53,7 +53,7 @@ export async function heldWrites(
  * The card's reads held back from `hold` until `release`, as after a write that went through:
  * what it changed is then on the server and not yet on the card. `asked` counts the reads held.
  */
-export async function heldRereads(page: Page) {
+async function heldRereads(page: Page) {
   const { held, release } = holdBack()
   let holding = false
   let asked = 0
