@@ -15,6 +15,7 @@ import { requestEntry } from '../support/inputRequests.ts'
 import {
   card,
   entryIds,
+  heldReread,
   inThread,
   key,
   MARK,
@@ -62,7 +63,8 @@ describe('a question has a thread too', () => {
     const id = entry.request.request_id
     const under = root(2, { reply_to_request: id, body: 'Which docs?' })
     const item = card([under])
-    const wrapper = open(item, { questions: [entry] })
+    const { read, release } = heldReread()
+    const wrapper = open(item, { questions: [entry], reread: read })
     const tail = wrapper.get('.thread-question .thread-tail')
     expect(tail.text()).toContain('Which docs?')
     expect(wrapper.find('.thread-entry').exists()).toBe(false)
@@ -81,6 +83,13 @@ describe('a question has a thread too', () => {
       body: 'All of them',
       reply_to_request: id,
     })
+    // The field has gone and Reply waits on the read disabled: the question, the thread's
+    // root, holds the focus rather than the page, and Reply has it back once the card is read.
+    expect(getButton(wrapper, 'Reply').attributes('disabled')).toBeDefined()
+    expect(document.activeElement).toBe(wrapper.get('.thread-question .request-card').element)
+    release()
+    await flushPromises()
+    expect(document.activeElement).toBe(getButton(wrapper, 'Reply').element)
   })
 
   it('still shows a reply when its question could not be read', () => {

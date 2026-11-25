@@ -8,15 +8,28 @@
  * Read on a card — a link's remove, a report made the outcome and a thread's mark taken off —
  * at a desktop's two widths in both languages. Served by `discussionBackend.ts`'s double, each
  * write and the card's read after it held back by the test.
+ *
+ * A form the write closes as it answers — a reply, points made steps — leaves no control of
+ * its own to wait on: its thread holds the focus, in sight, at every frame of the read, and once
+ * the card is read again focus lands on the reply written, or on the icon that opened the form,
+ * ringed.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 import { cardWithThreads, openCard } from './editorPage.ts'
 import { frames } from './frames.ts'
-import { focusedByKey, tabGoesOn, wentThrough } from './heldWrite.ts'
+import {
+  focusedByKey,
+  framesOnNothing,
+  inSightClear,
+  readHeldAfter,
+  tabGoesOn,
+  wentThrough,
+} from './heldWrite.ts'
 import { blockedWorkItem } from './planningFixtures.ts'
 import { test } from './test.ts'
+import { root } from './threadFixtures.ts'
 
 const WORDS = {
   en: {
@@ -36,6 +49,28 @@ const WORDS = {
     resolve: 'Разобрано',
   },
 } as const
+
+const MORE = {
+  en: {
+    replyField: 'Your reply',
+    makeSteps: 'Make conditions',
+    addSteps: 'Add 2 conditions',
+  },
+  ru: {
+    replyField: 'Ваш ответ',
+    makeSteps: 'В условия',
+    addSteps: 'Добавить 2 условия',
+  },
+} as const
+
+/** The id the double gives the next comment: the record holds ten from `talkedOn`. */
+const NEXT_COMMENT = 11
+
+/** A comment holding a list of two points, neither a step of the card yet. */
+const LISTED = ['What is left:', '1. Wire the route', '2. Review the copy'].join('\n')
+
+/** A wait or a press of this spec's own gives up after this long. */
+const WAIT = { timeout: 10_000 }
 
 /** The card's thread with a mark, opened out to the button that takes the mark off. */
 async function markedThread(page: Page, words: (typeof WORDS)[keyof typeof WORDS]) {
@@ -135,5 +170,71 @@ for (const width of [1440, 1024] as const)
         await focusedByKey(resolve)
         await tabGoesOn(page, onward)
         expect(sent).toHaveLength(1)
+      })
+
+      // The form goes as the write answers, and what opened it waits on the read disabled.
+      test('a reply sent with Ctrl+Enter leaves the focus on its thread until the card is read again, then on the reply', async ({
+        page,
+      }) => {
+        const more = MORE[lang]
+        const { drawer } = await cardWithThreads(page)
+        // The thread asking whether the second report should replace the first, and its Reply.
+        const thread = drawer.locator('#work-report-3')
+        await thread.locator('#thread-reply-comment-3').click(WAIT)
+        const field = thread.getByRole('textbox', { name: more.replyField, exact: true })
+        await expect(field).toBeFocused(WAIT)
+        await field.fill('Beside it, then.')
+        const read = await readHeldAfter(page, '/api/planning/work-item/comment')
+        const onNothing = await framesOnNothing(page, field)
+
+        await page.keyboard.press('Control+Enter')
+        await expect.poll(read.asked, WAIT).toBeGreaterThan(0)
+        await expect(field).toHaveCount(0, WAIT)
+        await frames(drawer)
+        await expect(thread).toBeFocused(WAIT)
+        expect(await inSightClear(thread, false)).toBe(true)
+
+        read.release()
+        const written = drawer.locator(`#thread-comment-${String(NEXT_COMMENT)}`)
+        await expect(written).toBeFocused(WAIT)
+        await frames(drawer)
+        await focusedByKey(written)
+        expect(await inSightClear(written)).toBe(true)
+        const counted = await onNothing()
+        expect(counted.gone).toBeGreaterThan(0)
+        expect(counted.onNothing).toBe(0)
+      })
+
+      test('points made steps with Enter leave the focus on their thread until the card is read again, then on the icon', async ({
+        page,
+      }) => {
+        const more = MORE[lang]
+        const { backend, drawer } = await openCard(page)
+        backend.item.comments.push(root(1, LISTED))
+        await page.reload()
+        const thread = drawer.locator('#work-report-1')
+        const action = thread.getByRole('button', { name: more.makeSteps, exact: true })
+        await action.click(WAIT)
+        const add = thread.getByRole('button', { name: more.addSteps, exact: true })
+        const read = await readHeldAfter(page, '/api/planning/work-item/checklist')
+        const onNothing = await framesOnNothing(page, add)
+
+        await add.focus(WAIT)
+        await page.keyboard.press('Enter')
+        await expect.poll(read.asked, WAIT).toBeGreaterThan(0)
+        await expect(add).toHaveCount(0, WAIT)
+        await frames(drawer)
+        await expect(thread).toBeFocused(WAIT)
+        expect(await inSightClear(thread, false)).toBe(true)
+
+        read.release()
+        await expect(action).toBeEnabled(WAIT)
+        await expect(action).toBeFocused(WAIT)
+        await frames(drawer)
+        await focusedByKey(action)
+        expect(await inSightClear(action)).toBe(true)
+        const counted = await onNothing()
+        expect(counted.gone).toBeGreaterThan(0)
+        expect(counted.onNothing).toBe(0)
       })
     })

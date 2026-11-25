@@ -13,13 +13,19 @@ import InspectorDiscussion from '@/widgets/work-item-inspector/components/Inspec
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
-import { workItemFixture as record } from '../fixtures/workItem.ts'
+import { deferred, workItemFixture as record } from '../fixtures/workItem.ts'
 import { asRoot } from './threads.ts'
 
 type Row = WorkItem['comments'][number]
 
 /** The card read again after a write, which the write waits on. */
 export const reread = vi.fn(() => Promise.resolve())
+
+/** A read of the card again that waits until the test lets it answer, with `release`. */
+export function heldReread() {
+  const held = deferred<undefined>()
+  return { read: vi.fn(() => held.promise), release: () => held.resolve(undefined) }
+}
 
 export const time = (minute: number) => `2026-11-03T10:${String(minute).padStart(2, '0')}:00Z`
 export const MARK = { at: time(50), by: 'user', by_person: true, text: 'Moved to MAIN-14' }

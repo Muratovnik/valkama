@@ -23,6 +23,7 @@ import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { getButton, stateOf } from '../fixtures/workItem.ts'
 import {
   card,
+  heldReread,
   inThread,
   key,
   plugins,
@@ -63,17 +64,19 @@ const Host = defineComponent({
   props: {
     item: { type: Object as PropType<WorkItem>, required: true },
     writable: { type: Boolean, default: true },
+    reread: { type: Function as PropType<() => Promise<unknown>>, default: reread },
   },
   setup(props) {
     provideCardSteps({ item: () => props.item, refresh: refreshed, reveal: revealed })
-    return () => h(InspectorDiscussion, { item: props.item, reread, writable: props.writable })
+    return () =>
+      h(InspectorDiscussion, { item: props.item, reread: props.reread, writable: props.writable })
   },
 })
 
-function open(item: WorkItem, writable = true) {
+function open(item: WorkItem, writable = true, read = reread) {
   const wrapper = mount(Host, {
     attachTo: document.body,
-    props: { item, writable },
+    props: { item, writable, reread: read },
     global: { plugins },
   })
   track(wrapper)
@@ -144,6 +147,25 @@ describe('choosing the points', () => {
     expect(document.activeElement).toBe(inThread(wrapper, 1, ACTION).element)
     await getButton(wrapper, 'Show conditions').trigger('click')
     expect(revealed).toHaveBeenCalledOnce()
+  })
+
+  it('leaves the focus on the thread while the card is read again, and then on the icon', async () => {
+    const item = card([root(1, { body: 'Left:\n1. One\n2. Two' })])
+    const { read, release } = heldReread()
+    const wrapper = open(item, true, read)
+    await inThread(wrapper, 1, ACTION).trigger('click')
+    await nextTick()
+    vi.mocked(setWorkItemChecklist).mockResolvedValueOnce(item)
+    await form(wrapper).trigger('submit')
+    await flushPromises()
+    expect(read).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('.steps-form').exists()).toBe(false)
+    // The icon waits on the read disabled, so the thread holds the focus rather than the page.
+    expect(inThread(wrapper, 1, ACTION).attributes('disabled')).toBeDefined()
+    expect(document.activeElement).toBe(thread(wrapper, 1).element)
+    release()
+    await flushPromises()
+    expect(document.activeElement).toBe(inThread(wrapper, 1, ACTION).element)
   })
 
   it('offers a report what it says was done and what comes next, and a reply its own list', async () => {

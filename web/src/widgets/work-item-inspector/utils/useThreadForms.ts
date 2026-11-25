@@ -30,15 +30,22 @@ export const writtenAnchor = (commentId: number) => `thread-comment-${commentId}
 export const anchored = (id: string) => document.querySelector<HTMLElement>(`#${id}`)
 
 /**
+ * The whole that stands for a thread and outlasts its forms, a comment's `article` or a
+ * question's card, marked with the thread's key in `data-thread`.
+ */
+const threadWhole = (key: string) => document.querySelector<HTMLElement>(`[data-thread="${key}"]`)
+
+/**
  * The forms of a card's threads: one stands open at a time and every thread keeps what was
  * written in its own, so opening another form sets a draft aside rather than losing it.
  * Those drafts are text nobody has anywhere else, so the card asks before leaving them.
  *
  * Focus follows a write. A write waits until the card is read again, with the thread's controls
- * disabled, so a form a write closed hands focus back once that wait has ended: a new reply
- * exists only after that read, and takes the focus once it stands, from the reply button that
- * holds it until then; a mark's thread stays one element as it folds, so focus can go straight
- * to it. Each move asks the right its action was given as it began
+ * disabled. A form the write closes as it answers takes what held focus with it, and what
+ * opened the form waits disabled, so the thread holds the focus until the read is in
+ * (`threadWhole`); then it goes back to what opened the form, and on to a new reply, which
+ * exists only after that read, once it stands. A mark's thread stays one element as it folds,
+ * so focus can go straight to it. Each move asks the right its action was given as it began
  * (`grantFocus`): a person who has gone on into another field while the write was out stays
  * there, and loses neither the field nor the letters they type into it.
  *
@@ -140,6 +147,15 @@ export function useThreadForms(identity: () => string, reread: () => Promise<unk
   async function hide(back: ThreadForm, right: FocusRight) {
     await backTo(close(), back, right)
   }
+  /**
+   * A write went through and closed the thread's form, before the card is read again: the
+   * thread holds the focus meanwhile, taken before the form goes.
+   */
+  function closeForRead(right: FocusRight) {
+    const key = close()
+    if (key) right.take(() => moveFocus(threadWhole(key)))
+    return key
+  }
   /** Escape, or Cancel: the words go with it, since asking first is the form's. */
   function cancel() {
     const current = open.value
@@ -183,7 +199,7 @@ export function useThreadForms(identity: () => string, reread: () => Promise<unk
         written = id
         replies.value[key] = ''
         marks.value[key] = false
-        closed = close()
+        closed = closeForRead(right)
       })
       .then(async (through) => {
         if (!through) return
@@ -234,7 +250,7 @@ export function useThreadForms(identity: () => string, reread: () => Promise<unk
     let closed: string | undefined
     void writes
       .addSteps(card, points, () => {
-        closed = close()
+        closed = closeForRead(right)
         added.value = { count: points.length, entry }
       })
       .then((through) => {

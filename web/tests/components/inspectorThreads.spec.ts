@@ -20,6 +20,7 @@ import { getButton } from '../fixtures/workItem.ts'
 import {
   card,
   entryIds,
+  heldReread,
   inThread,
   key,
   MARK,
@@ -138,7 +139,8 @@ describe('replying', () => {
 
   it('sends under the root, closes the field and lands on the new reply once it is read', async () => {
     const item = card([root(1), reply(2, 1)])
-    const wrapper = open(item)
+    const { read, release } = heldReread()
+    const wrapper = open(item, { reread: read })
     await inThread(wrapper, 1, 'Reply').trigger('click')
     await nextTick()
     expect(document.activeElement).toBe(replyField(wrapper).element)
@@ -153,12 +155,17 @@ describe('replying', () => {
     })
     expect(resolveThread).not.toHaveBeenCalled()
     expect(wrapper.find('textarea[aria-label="Your reply"]').exists()).toBe(false)
-    expect(reread).toHaveBeenCalledTimes(1)
-    // Read again without the reply yet: focus waits on the way back rather than on the page.
-    expect(document.activeElement?.id).toBe('thread-reply-comment-1')
+    expect(read).toHaveBeenCalledTimes(1)
+    // Not read yet, and Reply waits on the read disabled: the thread holds the focus meanwhile,
+    // rather than the page.
+    expect(inThread(wrapper, 1, 'Reply').attributes('disabled')).toBeDefined()
+    expect(document.activeElement?.id).toBe('work-report-1')
     await wrapper.setProps({
       item: card([root(1), reply(2, 1), reply(3, 1, { by_person: true })]),
     })
+    await flushPromises()
+    expect(document.activeElement?.id).toBe('work-report-1')
+    release()
     await flushPromises()
     expect(document.activeElement?.id).toBe('thread-comment-3')
     expect(thread(wrapper, 1).text()).not.toContain('New reply')

@@ -226,6 +226,7 @@ defineExpose({ revealQuestion })
       >
         <RequestCard
           :ref="(card) => (cards[row.key] = card as CardHandle | null)"
+          :data-thread="row.key"
           :entry="row.entry"
           :draft="draftFor(row.entry)"
           :item-closed="!item.open"
