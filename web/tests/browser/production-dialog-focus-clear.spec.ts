@@ -14,7 +14,11 @@
  *
  * A description taller than the room the words leave keeps the line its caret is on in sight,
  * as a refusal comes and as the window gets shorter: kept by its lower end instead, at 1280 and
- * 1024 by 480 the caret on its first line went 52px over the body's top edge. The body itself,
+ * 1024 by 480 the caret on its first line went 52px over the body's top edge. Where the field's
+ * own scroll has taken that line out of the field's view, by its wheel or as it got shorter, the
+ * line it shows nearest to the caret stands in sight instead: kept in its place, the line drew the
+ * body after a spot it never brings into view, and the field went out of sight on a refusal at
+ * 1280 by 480, and down to 10px of it at 320 tall. The body itself,
  * which Chrome focuses while nothing in it can take focus, as in «Split off a part» while it
  * creates, is not scrolled for it: taken for a control in it, it went 43px toward its end on the
  * refusal and 60px more as the window got shorter.
@@ -283,6 +287,26 @@ const caretAtEdge = (field: Locator, edge: 'end' | 'start') =>
     }
   }, edge)
 
+/**
+ * The first or the last line `field` shows, read off its own box: what stands for the caret's
+ * line once the field's own scroll has taken that line out of its view.
+ */
+const shownAtEdge = (field: Locator, edge: 'end' | 'start') =>
+  field.evaluate((node, at) => {
+    const area = node as HTMLTextAreaElement
+    const line = Number.parseFloat(getComputedStyle(area).lineHeight)
+    const box = area.getBoundingClientRect()
+    const shown = box.top + area.clientTop
+    const top = at === 'start' ? shown : shown + area.clientHeight - line
+    return {
+      top,
+      bottom: top + line,
+      height: box.height,
+      caret: area.selectionEnd === area.selectionStart ? area.selectionStart : -1,
+      expected: at === 'start' ? 0 : area.value.length,
+    }
+  }, edge)
+
 type CaretLine = Awaited<ReturnType<typeof caretAtEdge>>
 type Room = Awaited<ReturnType<typeof shownRoom>>
 
@@ -364,7 +388,37 @@ for (const width of [1280, 1024] as const)
         // Where the caret's line stood before, the refusal now stands.
         expect(room?.lower ?? Infinity).toBeLessThan(before.bottom)
         inSight(refused, room, 'refused')
-        await keep(info, `caret-end-${String(width)}-${locale}`, { before, refused, room })
+
+        // The field gets shorter and keeps its scroll: the caret's line falls under its lower
+        // edge, and what the field shows nearest to it stays in sight.
+        await page.setViewportSize({ width, height: 320 })
+        await frames(dialog)
+        const shorter = await shownAtEdge(field, 'end')
+        inSight(shorter, await shownRoom(dialog), 'shorter')
+        await keep(info, `caret-end-${String(width)}-${locale}`, { before, refused, room, shorter })
+      })
+
+      test('a description scrolled by its own wheel keeps what it shows in sight', async ({
+        page,
+      }, info) => {
+        const { dialog, release } = await openComposer(page, width, locale)
+        release()
+        const field = dialog.getByRole('textbox', { name: WORDS[locale].description, exact: true })
+        await field.fill(LONG)
+        await field.press('Control+Home')
+        await fieldToTop(dialog)
+        // The wheel scrolls the field's own text, and takes the caret's first line out of it.
+        await field.hover()
+        await page.mouse.wheel(0, 300)
+        await expect.poll(() => field.evaluate((node) => node.scrollTop)).toBeGreaterThan(100)
+
+        await field.press('Control+Enter')
+        await expect(dialog.getByRole('alert')).toHaveText(WORDS[locale].noAnswer)
+        await frames(dialog)
+        await expect(field).toBeFocused()
+        const refused = await shownAtEdge(field, 'start')
+        inSight(refused, await shownRoom(dialog), 'refused')
+        await keep(info, `caret-wheeled-${String(width)}-${locale}`, { refused })
       })
     })
 

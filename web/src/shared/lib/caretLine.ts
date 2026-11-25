@@ -33,7 +33,12 @@ const LAYOUT = [
 
 const pixels = (value: string) => Number.parseFloat(value) || 0
 
-/** The caret's line in `field`, top and bottom in the window, as it is drawn now. */
+/**
+ * The caret's line in `field`, top and bottom in the window, as it is drawn now; where the
+ * field's scroll has taken it out of the field's view, the line the field shows nearest to it.
+ * Kept in sight in its place, the line drew the body toward a spot no scroll of the body brings
+ * into view, and took the field out of view on the way.
+ */
 export function caretLine(field: HTMLTextAreaElement): { bottom: number; top: number } {
   const style = getComputedStyle(field)
   const copy = document.createElement('div')
@@ -66,11 +71,10 @@ export function caretLine(field: HTMLTextAreaElement): { bottom: number; top: nu
   // The mark's box is its letters' height, inside the line's: the line it falls on, whole.
   const line = Math.max(0, Math.floor((first.top - from + first.height / 2) / height))
   copy.remove()
-  const top =
-    field.getBoundingClientRect().top +
-    field.clientTop +
-    pixels(style.paddingTop) +
-    line * height -
-    field.scrollTop
+  const shown = field.getBoundingClientRect().top + field.clientTop
+  const drawn = shown + pixels(style.paddingTop) + line * height - field.scrollTop
+  // Scrolled out of the field's own view, by a wheel or a shorter field, the line is drawn
+  // nowhere: the line the field shows nearest to it stands for it.
+  const top = Math.max(shown, Math.min(drawn, shown + field.clientHeight - height))
   return { top, bottom: top + height }
 }
