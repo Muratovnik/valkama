@@ -325,6 +325,12 @@ def _resolved(command: Sequence[str]) -> list[str] | None:
     shim = npm_shim(Path(program))
     if shim is not None:
         return [*shim, *command[1:]]
+    # cmd.exe reads the batch file's own path as a word of its command line too.
+    if CMD_SPECIAL.intersection(program):
+        raise UnsafeCommandError(
+            f"{program} is a batch file, and cmd.exe would act on a character of its path"
+            " instead of starting it: start the program it runs instead"
+        )
     for word in command[1:]:
         if CMD_SPECIAL.intersection(word):
             raise UnsafeCommandError(
@@ -562,6 +568,15 @@ def run(
     found = _located(gate, say)
     if found is None:
         return run_direct(kind, command, want, say=say)
+    # Asked before the queue as well, so a command that cannot start waits for no lease;
+    # the bridge finds it again where it starts it, about 0.1 s for an npm shim.
+    try:
+        if _resolved(command) is None:
+            say(f"cannot find the program {command[0]!r}")
+            return EXIT_NOT_FOUND
+    except UnsafeCommandError as unsafe:
+        say(str(unsafe))
+        return EXIT_USAGE
     lock = Path(os.path.abspath(lock or legacy_lock.lock_path()))
     waiting = waits(wait)
     if not waiting and not legacy_lock.under_holder(lock) and legacy_lock.held_exclusively(lock):

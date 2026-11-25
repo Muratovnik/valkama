@@ -660,6 +660,7 @@ METACHARACTERS = {
     "delayed expansion": ["!PATH!"],
     "quotes": ['"quoted"', 'a"b', 'a " b', '\\"', "dir\\"],
     "groups": ["(x)", ")"],
+    "line breaks": ["a\nb", "a\r\nb"],
     "plain": ["two words", "", "--workers=4"],
 }
 
@@ -794,6 +795,23 @@ class BatchFileTests(GateCase):
                     said = "\n".join([*self.said, self.stderr])
                     self.assertIn("is a batch file", said)
                     self.assertIn(repr(words[0]), said)
+        # Refused before the queue: the gate was never asked for a lease.
+        self.assertFalse((self.state / "calls.jsonl").exists())
+
+    def test_a_batch_file_whose_path_cmd_would_split_is_refused(self) -> None:
+        split = self.bin / "R&D"
+        split.mkdir()
+        program = split / "vk-plain.cmd"
+        program.write_bytes((self.bin / "vk-plain.cmd").read_bytes())
+        for how, gate in (("directly", self.missing), ("under a lease", str(self.entry))):
+            with self.subTest(how=how):
+                self.said.clear()
+                code, seen = self.started(str(program), ["plain"], gate=gate, wait=True)
+                self.assertEqual(heavy_gate.EXIT_USAGE, code)
+                self.assertEqual({}, seen)
+                self.assertIn("is a batch file", "\n".join(self.said))
+                self.assertIn(str(program), "\n".join(self.said))
+        self.assertFalse((self.state / "calls.jsonl").exists())
 
 
 class CommandLineTests(GateCase):
