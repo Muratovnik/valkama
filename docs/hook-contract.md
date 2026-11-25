@@ -1208,7 +1208,8 @@ it would have shown comes with the next message.
 What a line holds, after a blank line and a `---` rule, one line per item in the
 order the items were first written:
 
-- the number, linked to the address a mention gets;
+- the number, linked where a mention of it would be: an item in a space no project
+  binds is named without a link;
 - the title on one line, cut to 80 characters with `…`, with its Markdown shown as
   written;
 - what was done, in this order and joined by ` · `: `created`; the state the item

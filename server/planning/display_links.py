@@ -150,7 +150,12 @@ def answer(
     try:
         real = existing_references(store, primary_db, candidates) if candidates else set()
         listing = (
-            display_writes.listing(store, session_id, shown.since(session_id))
+            display_writes.listing(
+                store,
+                session_id,
+                shown.since(session_id),
+                lambda references: existing_references(store, primary_db, references),
+            )
             if session_id is not None
             else None
         )

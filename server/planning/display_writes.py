@@ -17,7 +17,9 @@ link's other end, an item a comment mentions and the duplicates a merge closed c
 an event of the call too, but none of them is what the call was made for, so none
 gets a line for it. What was done to an item with a line is read from every row the
 listed calls wrote there, each pointing at its call through `call_id`. A deleted
-item is left out, and so is one whose row cannot be read; nothing is guessed.
+item is left out, and so is one whose row cannot be read; nothing is guessed. A
+number is a link only where a mention of it would be: an item in a space no project
+binds is named without one, because its address leads to no card.
 """
 
 from __future__ import annotations
@@ -27,6 +29,7 @@ import re
 import sqlite3
 import threading
 from collections import OrderedDict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from ..hooks import notify
@@ -148,8 +151,17 @@ class _Item:
     done: set[str] = field(default_factory=set)
 
 
-def listing(conn: sqlite3.Connection, session_id: str, since: int | None) -> Listing:
-    """What *session_id*'s own calls after the call *since* wrote, and the newest of them."""
+def listing(
+    conn: sqlite3.Connection,
+    session_id: str,
+    since: int | None,
+    linkable: Callable[[set[str]], set[str]],
+) -> Listing:
+    """What *session_id*'s own calls after the call *since* wrote, and the newest of them.
+
+    *linkable* answers which of the listed numbers lead to a card, as it does for a
+    mention; the others are named without a link.
+    """
 
     if since is None:
         prompt = conn.execute(_LAST_PROMPT, (session_id,)).fetchone()
@@ -164,7 +176,7 @@ def listing(conn: sqlite3.Connection, session_id: str, since: int | None) -> Lis
     items = _items(conn, written)
     if not items:
         return Listing("", newest)
-    return Listing(_render(items, notify.shown_language(conn)), newest)
+    return Listing(_render(items, notify.shown_language(conn), linkable), newest)
 
 
 def _items(conn: sqlite3.Connection, written: list[sqlite3.Row]) -> list[_Item]:
@@ -198,8 +210,8 @@ def literal(text: str) -> str:
     return _MARKDOWN.sub(lambda found: "\\" + found.group(), one_line)
 
 
-def _render(items: list[_Item], language: str) -> str:
-    """A rule, then a line per item: its link, its title, then what was done, if anything.
+def _render(items: list[_Item], language: str, linkable: Callable[[set[str]], set[str]]) -> str:
+    """A rule, then a line per item: its number, its title, then what was done, if anything.
 
     The state an item was moved to leads its words with its own arrow; any other first
     word follows a dash.
@@ -207,15 +219,19 @@ def _render(items: list[_Item], language: str) -> str:
 
     language = language if language in _WORDS else "en"
     words = _WORDS[language]
+    named = items[:MOST_LINES]
+    linked = linkable({item.reference for item in named})
     lines = ["---"]
-    for item in items[:MOST_LINES]:
+    for item in named:
         said = [
             f"→ {literal(item.state)}" if done == "moved" else words[done]
             for done in _ORDER
             if done in item.done
         ]
-        link = f"[{item.reference}]({work_item_url(item.reference)})"
-        line = f"- {link} {notify.quote(literal(item.title))}"
+        number = item.reference
+        if number in linked:
+            number = f"[{number}]({work_item_url(number)})"
+        line = f"- {number} {notify.quote(literal(item.title))}"
         if said:
             line += (" " if said[0].startswith("→") else " — ") + " · ".join(said)
         lines.append(line)

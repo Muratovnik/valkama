@@ -323,6 +323,13 @@ class WrittenListTests(Writes, unittest.TestCase):
         service.create_planning_space(self.conn, project_id="p", name="Main", key="MAIN")
         alert_settings.write(self.conn, {"locale": "en"})
         self.conn.commit()
+        # This store has no project registry; which numbers lead to a card is the
+        # listener cases' subject, so here every listed one does.
+        every = mock.patch.object(
+            display_links, "existing_references", lambda _conn, _db, references: set(references)
+        )
+        every.start()
+        self.addCleanup(every.stop)
         self.shown = display_writes.ShownCalls()
         self.messages = display_links.OpenMessages()
         self.opened = 0
@@ -572,6 +579,22 @@ class ListAndLinksTests(Writes, ListenerCase):
         url = acknowledgements.work_item_url("MAIN-1")
         self.assertEqual(
             f"See [MAIN-1]({url}).\n\n---\n{line('MAIN-1', 'MAIN item 0', ' — comment')}", content
+        )
+
+    def test_an_item_in_a_space_no_project_binds_is_listed_without_a_link(self) -> None:
+        # Its address leads to no card, so the number stays plain, as a mention of it does.
+        self.conn = store.connect()
+        self.addCleanup(self.conn.close)
+        alert_settings.write(self.conn, {"locale": "en"})
+        self.prompt()
+        self.comment("LOOSE-1")
+        self.comment("MAIN-1")
+        response = self.post(batch("Done.\n", session_id=ME))
+        content = json.loads(response.read())["hookSpecificOutput"]["displayContent"]
+        self.assertEqual(
+            "Done.\n\n---\n- LOOSE-1 «LOOSE item 0» — comment\n"
+            + line("MAIN-1", "MAIN item 0", " — comment"),
+            content,
         )
 
 
