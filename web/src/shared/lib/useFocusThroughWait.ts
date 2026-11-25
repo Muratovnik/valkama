@@ -3,9 +3,13 @@ import { nextTick, watch } from 'vue'
 import { focusOnNothing } from '@/shared/lib/focusRight.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 
-/** What held focus takes it back, as a key or a press put it there, if it still stands. */
+/**
+ * What held focus takes it back, as a key or a press put it there, if it still stands, and is
+ * shown where it stands now (`placeFocus`): what the wait put above it can have pushed it out of
+ * its scroller, as a refusal's notice pushed a step's box past the drawer's foot on a phone.
+ */
 function backOn(held: HTMLElement) {
-  if (held.isConnected) moveFocus(held, { preventScroll: true })
+  if (held.isConnected) moveFocus(held)
 }
 
 /**

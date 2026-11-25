@@ -6,9 +6,11 @@
  *
  * Read on a card — a step's box ticked with Space, refused and let through; a link's remove, an
  * attempt's Stop, a report made the outcome, a thread's mark taken off, a reply sent with Enter
- * from its mark and a knowledge search, each refused — and on Volumes, a commit's Attach
- * refused, at a desktop's two widths in both languages. Served by `discussionBackend.ts`'s
- * double and the shared backend, each wait held back by the test and answered as it says.
+ * from its mark and a knowledge search, each refused, and a link's remove that went through,
+ * which stays disabled until the card is read again — and on Volumes, a commit's Attach
+ * refused, at a desktop's two widths in both languages; and a refused step's box, which comes
+ * back into sight at a phone's two widths. Served by `discussionBackend.ts`'s double and the
+ * shared backend, each wait held back by the test and answered as it says.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page, Route } from '@playwright/test'
@@ -102,6 +104,38 @@ async function tickHeld(page: Page, through: boolean) {
   await pressHeld(page, box, 'Space', held.sent)
   return { ...held, box, drawer }
 }
+
+/** Whether `control` stands whole inside the window and every box around it that clips. */
+const inSight = (control: Locator) =>
+  control.evaluate((node) => {
+    const box = node.getBoundingClientRect()
+    let top = 0
+    let bottom = window.innerHeight
+    for (let around = node.parentElement; around; around = around.parentElement)
+      if (/auto|scroll|hidden/u.test(getComputedStyle(around).overflowY)) {
+        const frame = around.getBoundingClientRect()
+        top = Math.max(top, frame.top)
+        bottom = Math.min(bottom, frame.bottom)
+      }
+    return box.top >= top && box.bottom <= bottom
+  })
+
+// At a phone's width the refusal's notice above the steps pushed the box past the drawer's foot.
+for (const width of [390, 320] as const)
+  test(`a step’s box has the focus back in sight once its tick is refused at ${String(width)}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 800 })
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    const { box, drawer, release, sent } = await tickHeld(page, false)
+
+    release()
+    await expect(drawer.getByText(REASON)).toBeVisible()
+    await frames(drawer)
+    await focusedByKey(box)
+    await expect.poll(() => inSight(box)).toBe(true)
+    expect(sent).toHaveLength(1)
+  })
 
 for (const width of [1440, 1024] as const)
   for (const lang of ['en', 'ru'] as const)
