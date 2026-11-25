@@ -59,12 +59,13 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import tomllib
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import IO, TYPE_CHECKING, Any
 
 HERE = Path(__file__).resolve()
 ROOT = HERE.parents[1]
@@ -660,6 +661,8 @@ def hold_until_exit(
     With no room and no wait it exits 75, saying why; where the gate fails, the run
     goes on without a lease, as the gate's contract says. The mark covers every
     process the run starts, and a second call in the same process, which finds it.
+    While it waits, for the gate or for the earlier branches' lock, it exits 75 once
+    the process that started it is gone.
     """
 
     lock = lock or legacy_lock.lock_path()
@@ -677,6 +680,47 @@ def hold_until_exit(
                 say,
             )
         )
+    with Watched(caller(), before=_started(os.getpid())) as asked:
+        _hold(kind, found, lock, waiting, asked, say)
+    os.environ.update(legacy_lock.marker(lock))
+
+
+def _left(kind: str, say: Callable[[str], None]) -> SystemExit:
+    say(
+        f"the process that asked for {PROJECT}:{kind} has exited:"
+        " a run still waiting for room leaves the queue"
+    )
+    return SystemExit(EXIT_NO_ROOM)
+
+
+def _line_unless_gone(stream: IO[bytes], asked: Watched) -> bytes | None:
+    """The next line of `stream`, or None once the process that asked is gone first.
+
+    A pipe on Windows has no read that gives up after a while, so a thread reads it.
+    The gate's waiter waits for this process alone, and it leaves once this one ends.
+    """
+
+    lines: list[bytes] = []
+    reader = threading.Thread(target=lambda: lines.append(stream.readline()), daemon=True)
+    reader.start()
+    while True:
+        reader.join(WATCH_SECONDS)
+        if not reader.is_alive():
+            return lines[0] if lines else b""
+        if asked.gone():
+            return None
+
+
+def _hold(
+    kind: str,
+    found: Gate,
+    lock: Path,
+    waiting: bool,
+    asked: Watched,
+    say: Callable[[str], None],
+) -> None:
+    """Take the lease and the place at the earlier lock for `hold_until_exit`, while `asked` is."""
+
     flag = "--wait" if waiting else "--no-wait"
     argv = [*found.argv, "hold", "--kind", kind, "--pid", str(os.getpid()), flag]
     lease: str | None = None
@@ -686,7 +730,10 @@ def hold_until_exit(
         say(f"the heavy-process gate cannot be started ({error}): running without a lease")
     else:
         assert holding.stdout is not None
-        answer = _answer(holding.stdout.readline())
+        line = _line_unless_gone(holding.stdout, asked)
+        if line is None:
+            raise _left(kind, say)
+        answer = _answer(line)
         if answer is None:
             say(f"the heavy-process gate failed (exit {holding.wait()}): running without a lease")
         elif not answer.get("admitted"):
@@ -709,12 +756,14 @@ def hold_until_exit(
                 path=lock,
                 wait=waiting,
                 say=say,
+                abandoned=asked.gone,
             )
         )
     except legacy_lock.BusyError as busy:
         raise SystemExit(_no_room(kind, busy, say)) from None
+    except legacy_lock.AbandonedError:
+        raise _left(kind, say) from None
     atexit.register(hold.close)
-    os.environ.update(legacy_lock.marker(lock))
 
 
 def _answer(line: bytes) -> dict[str, Any] | None:

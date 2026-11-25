@@ -393,32 +393,48 @@ class AbandonedWaitTests(GateCase):
     the run itself, is then killed alone, as a stop of a part of the tree kills it.
     """
 
-    def waiting(self) -> tuple[subprocess.Popen[bytes], int, Path]:
-        """A caller, the run it started, and the marker the command would leave."""
+    def started(self, *argv: str) -> tuple[subprocess.Popen[bytes], int]:
+        """A caller of `argv`, and the process id of what it started."""
 
-        marker = self.directory / "ran"
-        command = [sys.executable, "-c", f"open({str(marker)!r}, 'w').close()"]
         caller = subprocess.Popen(
-            [
-                *(sys.executable, "-c", CALLER, sys.executable, COMMAND, "run"),
-                *("--kind", "browser-targeted", "--wait"),
-                *(f"--lock={self.lock}", f"--gate={self.entry}", "--", *command),
-            ],
+            [sys.executable, "-c", CALLER, *argv],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
         )
         self.addCleanup(self._end, caller)
         assert caller.stdout is not None
-        run = int(caller.stdout.readline())
-        leases = self.state / "leases"
+        return caller, int(caller.stdout.readline())
+
+    def until(self, there: Callable[[], bool], what: str) -> None:
         deadline = time.monotonic() + DEADLINE_SECONDS
-        while not any(leases.glob("*.json")):
-            self.assertLess(time.monotonic(), deadline, "the gate never admitted the run")
+        while not there():
+            self.assertLess(time.monotonic(), deadline, what)
             time.sleep(0.05)
+
+    def waiting(self) -> tuple[subprocess.Popen[bytes], int, Path]:
+        """A caller, the run it started, and the marker the command would leave."""
+
+        marker = self.directory / "ran"
+        command = [sys.executable, "-c", f"open({str(marker)!r}, 'w').close()"]
+        caller, run = self.started(
+            *(sys.executable, COMMAND, "run", "--kind", "browser-targeted", "--wait"),
+            *(f"--lock={self.lock}", f"--gate={self.entry}", "--", *command),
+        )
+        self.until(lambda: any((self.state / "leases").glob("*.json")), "never admitted")
         # Long enough for the bridge under the lease to be waiting at the lock.
         time.sleep(1.0)
         return caller, run, marker
+
+    def holding(self) -> tuple[subprocess.Popen[bytes], int]:
+        """A caller and the whole suite it started, as it takes its lease while it loads."""
+
+        caller, suite = self.started(
+            sys.executable, "-c", HOLDING_SUITE, str(self.lock), str(self.entry), str(ROOT)
+        )
+        # Ended here if it never leaves, so that its hold ends too.
+        self.addCleanup(lambda: _running(suite) and os.kill(suite, signal.SIGTERM))
+        return caller, suite
 
     def _end(self, caller: subprocess.Popen[bytes]) -> None:
         caller.kill()
@@ -426,14 +442,31 @@ class AbandonedWaitTests(GateCase):
         assert caller.stdout is not None
         caller.stdout.close()
 
-    def assert_left(self, run: int, marker: Path) -> None:
-        leases = self.state / "leases"
+    def assert_left(self, run: int, marker: Path | None = None) -> None:
+        places = [self.state / "leases", self.state / "queue"]
         deadline = time.monotonic() + LEAVE_SECONDS
-        while _running(run) or any(leases.glob("*.json")):
+        while _running(run) or any(any(place.glob("*.json")) for place in places):
             if time.monotonic() > deadline:
                 self.fail(f"still waiting {LEAVE_SECONDS} s after its caller went")
             time.sleep(0.1)
-        self.assertFalse(marker.exists(), "the command ran for a caller that is gone")
+        if marker is not None:
+            self.assertFalse(marker.exists(), "the command ran for a caller that is gone")
+
+    def test_a_suite_waiting_for_its_hold_leaves_once_its_caller_is_killed(self) -> None:
+        (self.state / "stall").write_text("")
+        caller, suite = self.holding()
+        self.until(lambda: any((self.state / "queue").glob("*.json")), "never in the queue")
+        caller.kill()
+        self.assert_left(suite)
+
+    def test_a_suite_waiting_at_the_earlier_lock_leaves_once_its_caller_is_killed(self) -> None:
+        with earlier_whole_machine_run(self.lock):
+            caller, suite = self.holding()
+            self.until(lambda: any((self.state / "leases").glob("*.json")), "never admitted")
+            time.sleep(1.0)
+            caller.kill()
+            self.assert_left(suite)
+        self.assertEqual(([], []), legacy_lock.entries(self.lock, reclaim=True))
 
     def test_a_run_whose_caller_is_killed_leaves_the_queue_and_the_lease(self) -> None:
         with earlier_whole_machine_run(self.lock):
