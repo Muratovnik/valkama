@@ -98,24 +98,37 @@ function panel() {
 }
 
 /**
+ * The control went with the connection that came back, so the focus it held goes to the rail's
+ * own place, the entry on show; one still standing takes it back.
+ */
+function giveBack(to: HTMLElement | null | undefined) {
+  if (to?.isConnected) moveFocus(to)
+  else emit('settled')
+}
+
+/**
  * A refresh disables the control and the panel's Refresh while it reads, which drops focus
  * from the one pressed to the page; with the connection still lost, it takes focus back
  * (`useFocusThroughWait`). Focus leaving the panel closes it, so its Refresh gives focus to the
- * control that opened it, as Escape does. A connection that came back takes both away instead.
+ * control that opened it, as Escape does. A refresh that brought the connection back took both
+ * away, and the focus goes to the entry on show: the browser had already taken it off the
+ * disabled control as the connection came back, so only the wait knows it was there.
  */
 useFocusThroughWait(
   () => control.value,
   () => props.refreshing,
+  giveBack,
 )
 useFocusThroughWait(
   panel,
   () => props.refreshing,
-  () => moveFocus(control.value),
+  () => giveBack(control.value),
 )
 
 /**
  * The connection is back: the panel has nothing left to say and the control goes. Focus on
  * either would fall to the page's start, so it goes to the rail's own place, the entry on show.
+ * Focus a refresh's wait took off them is the wait's to give (`giveBack`).
  */
 watch(lost, (now) => {
   if (now) return
