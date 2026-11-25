@@ -19,8 +19,12 @@ import suite from '../../playwright.config.ts'
  * in the runner. A `.spec.ts` outside `web/` is a CommonJS script, and its `require` of a
  * module the run has already loaded as an ES module fails.
  *
+ * A probe runs under a lease at the heavy-process gate, as every browser run does
+ * (`.agents/rules/quality-gates.md`):
+ *
  *   VALKAMA_BROWSER_PORT=9530 VALKAMA_BROWSER_PROBES=../tmp/probe \
- *     npx playwright test --config tests/browser/probe.config.ts
+ *     python ../tests/heavy_gate.py run --kind browser-targeted --want 4 -- \
+ *     npx playwright test --config tests/browser/probe.config.ts '--workers={k}'
  */
 const named = process.env.VALKAMA_BROWSER_PROBES
 if (!named) throw new Error('VALKAMA_BROWSER_PROBES must name the directory of the probe specs')
