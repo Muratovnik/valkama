@@ -1554,10 +1554,11 @@ those in its debug log and not in the session.
 ### Which numbers become links
 
 A number becomes `[MAIN-12](http://127.0.0.1:8642/open/MAIN-12)`, the address an
-MCP answer's `url` field gives, only when `/open/MAIN-12` leads to a card: a
-project binds the space, and the store it names holds the item. So `UTF-8`,
-`SHA-256` and `MAIN-99999` stay as they are, and so does an item in a space no
-project binds.
+MCP answer's `url` field gives, only when `/open/MAIN-12` leads to a card: the
+project registry can be read, and a store here holds the item. Every space has a
+card route, whether or not a project binds it. So `UTF-8`, `SHA-256` and
+`MAIN-99999` stay as they are, and so does every number while the registry cannot
+be read.
 
 These stay as written, whatever they contain:
 
@@ -1635,8 +1636,8 @@ The list stands after a blank line, a `---` rule and a caption in italics,
 agent's own text, which may itself close with a list of items. What a line holds, one
 line per item in the order the items were first written:
 
-- the number, linked where a mention of it would be: an item in a space no project
-  binds is named without a link;
+- the number, linked where a mention of it would be: while the project registry
+  cannot be read, every item is named without a link;
 - the title on one line, cut to 80 characters with `…`, with its Markdown shown as
   written;
 - a dash and what was done, each thing a phrase that names the act, in this order

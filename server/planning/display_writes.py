@@ -24,8 +24,8 @@ an item is created with are part of "created", and the move a claim makes by
 starting an item is part of "claimed". A call that left no such row, one that only
 edited fields or attached refs, still says the item changed. A deleted
 item is left out, and so is one whose row cannot be read; nothing is guessed. A
-number is a link only where a mention of it would be: an item in a space no project
-binds is named without one, because its address leads to no card.
+number is a link only where a mention of it would be: while the project registry
+cannot be read, its address leads to no card and it is named without one.
 """
 
 from __future__ import annotations
