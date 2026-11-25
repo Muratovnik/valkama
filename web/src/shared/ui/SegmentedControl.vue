@@ -46,6 +46,10 @@
  * A segment's words stay on one line: a host that scrolls the row, as a card's sections, or that
  * lays its bar out by the row's whole width, as the Analytics periods, reads that width. Wrapped
  * for every row, the card's sections stopped overrunning the phone they scroll across.
+ * Where a wrapped row's column is narrower than a segment's words, as a space's key of eight
+ * letters is in Participation's scope choice on a phone, they end in an ellipsis by the one-line
+ * labels' rule and are whole in the segment's hint and its name: kept on one line and uncut, the
+ * words ran past their segment's edge. A host that draws the segment (`option`) keeps its own.
  *
  * A segment may say more than its label: the `option` slot draws what it holds, and `tile`
  * makes each a block of its own, its words at rest in the page's type, the row as many tiles
@@ -55,6 +59,7 @@
 import { computed, ref } from 'vue'
 
 import type { TabIds } from '@/shared/ui/tabIds.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import { useSegmentColumns } from '@/shared/ui/useSegmentColumns.ts'
 
 // The segment shape stays inline: naming it would have to be exported for the
@@ -86,10 +91,15 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{ 'update:modelValue': [value: T] }>()
-defineSlots<{
+const slots = defineSlots<{
   /** What a segment holds; its label by default. */
   option?: (scope: { chosen: boolean; option: { label: string; value: T } }) => unknown
 }>()
+
+/** The words a cut segment shows whole: its label where it draws it; a host's drawing keeps its own. */
+function wholeWords(option: { label: string }) {
+  return slots.option ? null : option.label
+}
 
 /** The segment the model is currently on, which the marks, the Tab stop and the keys ask about. */
 function isCurrent(option: { value: T }) {
@@ -197,6 +207,7 @@ defineExpose({ columnsAt })
       v-for="option in options"
       v-bind="segmentRole(option)"
       :key="option.value"
+      v-tooltip.clipped="wholeWords(option)"
       type="button"
       class="segmented-option"
       :class="{ active: isCurrent(option) }"
@@ -210,7 +221,7 @@ defineExpose({ columnsAt })
         name="option"
         :option="option"
         :chosen="isCurrent(option)"
-        >{{ option.label }}</slot
+        ><span class="segmented-words one-line">{{ option.label }}</span></slot
       >
     </button>
   </div>
@@ -271,6 +282,12 @@ defineExpose({ columnsAt })
      track can change radius without leaving this behind at six pixels. */
   border-radius: calc(var(--radius-control) - var(--space-half));
   cursor: pointer;
+}
+
+/* The words a segment draws by default, as wide as the segment's room: a column narrower than
+   them cuts them (`one-line`) instead of letting them run past the segment's edge. */
+.segmented-words {
+  display: block;
 }
 
 .segmented.size-compact {
