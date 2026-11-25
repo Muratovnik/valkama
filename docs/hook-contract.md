@@ -1184,6 +1184,8 @@ in the terminal it comes under the message's last lines.
 Done, the parser is fixed.
 
 ---
+*Written to Valkama*
+
 - [MAIN-12](http://127.0.0.1:8642/open/MAIN-12) «Fix the parser» — created, comment added
 - [MAIN-9](http://127.0.0.1:8642/open/MAIN-9) «Release notes» — moved to Done, steps ticked: 3, summary written
 - [MAIN-4](http://127.0.0.1:8642/open/MAIN-4) «Parser rewrite» — changed
@@ -1205,8 +1207,10 @@ When it comes: only on the batch with `final` true. A message whose earlier batc
 went unseen, or that ends inside an open fenced code block, gets no list, and what
 it would have shown comes with the next message.
 
-What a line holds, after a blank line and a `---` rule, one line per item in the
-order the items were first written:
+The list stands after a blank line, a `---` rule and a caption in italics,
+`Written to Valkama`: the caption says the list is the service's, not the end of the
+agent's own text, which may itself close with a list of items. What a line holds, one
+line per item in the order the items were first written:
 
 - the number, linked where a mention of it would be: an item in a space no project
   binds is named without a link;
