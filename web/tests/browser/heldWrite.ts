@@ -58,7 +58,7 @@ export async function focusedByKey(control: Locator) {
 }
 
 /** What has focus, by its id or its name: the same control read twice reads the same. */
-export const focusName = (page: Page) =>
+const focusName = (page: Page) =>
   page.evaluate(() => {
     const now = document.activeElement
     return !now || now === document.body
