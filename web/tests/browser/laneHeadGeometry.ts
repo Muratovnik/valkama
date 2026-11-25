@@ -63,23 +63,58 @@ export const overlaps = (one: Box, two: Box) =>
   one.top < two.bottom - 0.5 &&
   two.top < one.bottom - 0.5
 
+/** The parts a heading's rows are told by, each by its class. */
+export const ROW_PARTS = [
+  'lane-toggle',
+  'lane-state',
+  'lane-counts',
+  'lane-elsewhere',
+  'lane-actions',
+]
+
+/** Where the board is scrolled: to its first states, or to its middle ones, from the third on. */
+export type Scroll = 'start' | 'middle'
+
 /**
  * Waits until the headings have been drawn as the last scroll or width left them: a new width
  * reaches the board a frame before its headings, which are measured a frame later still, so it
- * waits until three frames running draw every heading alike.
+ * waits until three frames running draw every heading and each of its parts alike.
+ *
+ * Given a `scroll`, the locator is the board, and it is held there: scrolled to it again before
+ * each frame, and settled only while it stays at its aim and the aim has not moved. The third
+ * state stands where the columns are as wide as the width they were last measured at, which a new
+ * width reaches a frame later: aimed once, as the width was set, a walk that crossed a width where
+ * one more column fits scrolled to another state on the way up than on the way down.
  */
-export const settle = (locator: Locator) =>
-  locator.evaluate(async () => {
-    let drawn = ''
-    for (let same = 0, at = 0; same < 3 && at < 60; at += 1) {
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-      const now = [...document.querySelectorAll('.lane-head')]
-        .map((head) => `${head.className} ${JSON.stringify(head.getBoundingClientRect())}`)
-        .join('|')
-      same = now === drawn ? same + 1 : 0
-      drawn = now
-    }
-  })
+export const settle = (locator: Locator, scroll: Scroll | null = null) =>
+  locator.evaluate(
+    async (node, [where, names]) => {
+      const board = node as HTMLElement
+      const aim = () =>
+        where === 'start'
+          ? 0
+          : (board.querySelectorAll<HTMLElement>('.lanes-state')[2]?.offsetLeft ?? 0)
+      // Each heading by its classes, its box and the boxes of the parts its rows are told by.
+      const parts = names.map((name) => `.${name}`).join(', ')
+      let drawn = ''
+      for (let same = 0, at = 0; same < 3 && at < 60; at += 1) {
+        if (where) board.scrollLeft = aim()
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+        const heads = [...document.querySelectorAll('.lane-head')].map((head) =>
+          [
+            head.className,
+            ...[head, ...head.querySelectorAll(parts)].map((part) =>
+              JSON.stringify(part.getBoundingClientRect()),
+            ),
+          ].join(' '),
+        )
+        const now = [where ? `${board.scrollLeft} ${aim()}` : '', ...heads].join('|')
+        same = now === drawn ? same + 1 : 0
+        drawn = now
+      }
+    },
+    [scroll, ROW_PARTS] as const,
+  )
 
 export const sameBoxes = (one: Box[], two: Box[]) =>
   one.length === two.length &&

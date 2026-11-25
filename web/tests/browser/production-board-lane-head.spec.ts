@@ -32,6 +32,7 @@ import { openBoard, serve } from './boardPage.ts'
 import { baseOf, SWEEP, WIDTHS } from './laneHeadBase.ts'
 import type { Drawn } from './laneHeadBase.ts'
 import { settle } from './laneHeadGeometry.ts'
+import type { Scroll } from './laneHeadGeometry.ts'
 import { better, covered } from './laneHeadOthers.ts'
 import { readHeading, rowsFromTheEdge } from './laneHeadRows.ts'
 import type { Part, Reading } from './laneHeadRows.ts'
@@ -239,9 +240,6 @@ const LANES = 6
 /** The open lanes among them that stand a goal's actions: MAIN-401, MAIN-491 and MAIN-493. */
 const ACTING = 3
 
-/** Where the board is scrolled: to its first states, or to its middle ones. */
-type Scroll = 'start' | 'middle'
-
 /**
  * Every heading at `width`, with the board at `scroll`, and what is wrong with each, against
  * itself at rest and against the base: at rest only, or under the pointer and the keyboard too
@@ -265,11 +263,7 @@ async function readWidth(
   const insetUpTo = INSET_UP_TO[input]
   if (insetUpTo === undefined) throw new Error(`DESIGN.md names no inset width for ${input}`)
   await page.mouse.move(0, 0)
-  await board.evaluate((node: HTMLElement, where) => {
-    const states = node.querySelectorAll<HTMLElement>('.lanes-state')
-    node.scrollLeft = where === 'start' ? 0 : (states[2]?.offsetLeft ?? 0)
-  }, scroll)
-  await settle(board)
+  await settle(board, scroll)
   const heads = page.locator('.lane-head')
   const read = await heads.count()
   for (let index = 0; index < (await heads.count()); index += 1) {

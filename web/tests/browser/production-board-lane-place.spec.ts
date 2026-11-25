@@ -20,73 +20,54 @@ import type { Page } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
 import { boardRoute, openBoard, serve } from './boardPage.ts'
+import { ROW_PARTS, settle } from './laneHeadGeometry.ts'
+import type { Scroll } from './laneHeadGeometry.ts'
 import { serveWide } from './laneWideFixture.ts'
 import { test } from './test.ts'
 
 /** The narrowest and the widest board read, and the step between two readings. */
 const [NARROW, WIDE, STEP] = [320, 1440, 2]
 
-/** The parts a heading's rows are told by, each by its class. */
-const PARTS = ['lane-toggle', 'lane-state', 'lane-counts', 'lane-elsewhere', 'lane-actions']
-
 /**
  * Every heading as drawn: its place, its height in the sixty-fourths of a pixel layout works in, and the
  * parts on each of its rows, top to bottom; a part whose middle falls inside a row found already
- * stands on it. Runs in the page, and holds the board scrolled to its first states or its middle
- * ones while it reads.
+ * stands on it. Runs in the page, once the board has settled (`settle`).
  */
-const drawnHeads = async (board: HTMLElement, [where, names]: [string, string[]]) => {
-  // The third state stands where the columns are as wide as the width they were last measured at,
-  // which a new width reaches a frame later: aimed once, at the start, a walk that crossed a width
-  // where one more column fits scrolled to another state on the way up than on the way down.
-  const aim = () =>
-    where === 'start'
-      ? 0
-      : (board.querySelectorAll<HTMLElement>('.lanes-state')[2]?.offsetLeft ?? 0)
-  const read = () =>
-    [...board.querySelectorAll('.lane-head')].map((head) => {
-      const parts = [...head.querySelectorAll(names.map((name) => `.${name}`).join(', '))]
-        .filter((part) => !part.classList.contains('visually-hidden'))
-        .map((part) => ({
-          box: part.getBoundingClientRect(),
-          name: names.find((name) => part.classList.contains(name)) ?? '',
-        }))
-        .toSorted((one, two) => one.box.top - two.box.top)
-      const rows: { bottom: number; names: string[]; top: number }[] = []
-      for (const { box, name } of parts) {
-        const middle = (box.top + box.bottom) / 2
-        const row = rows.find(({ bottom, top }) => middle >= top - 0.5 && middle <= bottom + 0.5)
-        if (row) row.names.push(name)
-        else rows.push({ bottom: box.bottom, names: [name], top: box.top })
-      }
-      const name = head.querySelector('.lane-reference, .lane-title')?.textContent ?? ''
-      // Beside the title or tied to the last part, by the heading's class; else at the end.
-      const place =
-        ['crowded', 'tied'].filter((one) => head.classList.contains(one)).join(' ') || 'end'
-      const height = Math.round(head.getBoundingClientRect().height * 64)
-      return `${name} ${place} ${height}: ${rows.map((row) => row.names.join(' + ')).join(' / ')}`
-    })
-  // A new width reaches the board a frame before its headings, which are measured a frame later
-  // still: read until three frames running draw the same, with the board aimed again before each
-  // and still at its aim after it, so a state the columns moved from under the scroll is a change.
-  let drawn = ['']
-  let held = ''
-  for (let same = 0, at = 0; same < 3 && at < 60; at += 1) {
-    board.scrollLeft = aim()
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-    const now = read()
-    const scroll = `${board.scrollLeft} ${aim()}`
-    same = JSON.stringify(now) === JSON.stringify(drawn) && scroll === held ? same + 1 : 0
-    drawn = now
-    held = scroll
-  }
-  return drawn
+const drawnHeads = (board: HTMLElement, names: string[]) =>
+  [...board.querySelectorAll('.lane-head')].map((head) => {
+    const parts = [...head.querySelectorAll(names.map((name) => `.${name}`).join(', '))]
+      .filter((part) => !part.classList.contains('visually-hidden'))
+      .map((part) => ({
+        box: part.getBoundingClientRect(),
+        name: names.find((name) => part.classList.contains(name)) ?? '',
+      }))
+      .toSorted((one, two) => one.box.top - two.box.top)
+    const rows: { bottom: number; names: string[]; top: number }[] = []
+    for (const { box, name } of parts) {
+      const middle = (box.top + box.bottom) / 2
+      const row = rows.find(({ bottom, top }) => middle >= top - 0.5 && middle <= bottom + 0.5)
+      if (row) row.names.push(name)
+      else rows.push({ bottom: box.bottom, names: [name], top: box.top })
+    }
+    const name = head.querySelector('.lane-reference, .lane-title')?.textContent ?? ''
+    // Beside the title or tied to the last part, by the heading's class; else at the end.
+    const place =
+      ['crowded', 'tied'].filter((one) => head.classList.contains(one)).join(' ') || 'end'
+    const height = Math.round(head.getBoundingClientRect().height * 64)
+    return `${name} ${place} ${height}: ${rows.map((row) => row.names.join(' + ')).join(' / ')}`
+  })
+
+/** Every heading of the board with the board held at `where`, once it has settled there. */
+async function readBoard(page: Page, where: Scroll) {
+  const board = page.locator('.work-item-lanes')
+  await settle(board, where)
+  return board.evaluate(drawnHeads, ROW_PARTS)
 }
 
 /** The board at `width`, read as it is drawn there once it has settled. */
-async function readAt(page: Page, width: number, where: string) {
+async function readAt(page: Page, width: number, where: Scroll) {
   await page.setViewportSize({ width, height: 900 })
-  return page.locator('.work-item-lanes').evaluate(drawnHeads, [where, PARTS] as [string, string[]])
+  return readBoard(page, where)
 }
 
 /** What differs between two readings of one width, heading by heading. */
@@ -95,7 +76,7 @@ const departures = (width: number, how: string, one: string[], two: string[]) =>
     head === two[index] ? [] : [`${width}px ${how}: ${head} | ${two[index] ?? 'none'}`],
   )
 
-async function walk(page: Page, where: string) {
+async function walk(page: Page, where: Scroll) {
   const widths = Array.from({ length: (WIDE - NARROW) / STEP + 1 }, (_, at) => NARROW + STEP * at)
   const up = new Map<number, string[]>()
   for (const width of widths) up.set(width, await readAt(page, width, where))
@@ -128,7 +109,7 @@ for (const locale of ['en-US', 'ru-RU'])
     test.describe(`${locale}, ${finger ? 'where only a finger presses' : 'with a pointer'}`, () => {
       test.use(finger ? { locale, hasTouch: true, isMobile: true } : { locale })
 
-      for (const where of ['start', 'middle'])
+      for (const where of ['start', 'middle'] as const)
         test(`every lane heading draws the same at a width however the board got there, at its ${where === 'start' ? 'first' : 'middle'} states`, async ({
           page,
         }) => {
@@ -178,12 +159,11 @@ async function afterTheFont(page: Page, width: number) {
   // A font held back holds the page's load event back with it.
   await page.goto(boardRoute({ group: 'goal' }), { waitUntil: 'domcontentloaded' })
   await expect(page.locator('.lane-head').first()).toBeVisible()
-  const board = page.locator('.work-item-lanes')
-  await board.evaluate(drawnHeads, ['start', PARTS] as [string, string[]])
+  await readBoard(page, 'start')
   const early = await page.evaluate(() => document.fonts.check('500 14px "Inter Variable"'))
   release?.()
   await page.evaluate(() => document.fonts.ready)
-  const swapped = await board.evaluate(drawnHeads, ['start', PARTS] as [string, string[]])
+  const swapped = await readBoard(page, 'start')
   await readAt(page, width + 3, 'start')
   return { early, fresh: await readAt(page, width, 'start'), swapped }
 }
