@@ -1,10 +1,11 @@
 """What a running process is, asked of the system: its image, command line and start.
 
-Two readers rest on it. The launcher's ownership proof reads the owner of a
+Three readers rest on it. The launcher's ownership proof reads the owner of a
 listener -- its executable path, command line and creation time -- and that proof
 is what allows a process to be stopped. The hook watcher reads the arguments of
 the client that started it, to learn whether that client prints one turn and
-exits. Both read with the standard library's ctypes (the server imports nothing
+exits. A heavy run waiting at `tests/heavy_gate.py` reads who started it, and when,
+to leave once that process is gone. All read with the standard library's ctypes (the server imports nothing
 outside the standard library), in milliseconds.
 
 A process that cannot be read -- gone, or not readable by this user -- is reported
@@ -19,6 +20,7 @@ import os
 from datetime import UTC, datetime, timedelta
 
 _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+_PROCESS_BASIC_INFORMATION = 0
 _PROCESS_COMMAND_LINE_INFORMATION = 60
 _STATUS_INFO_LENGTH_MISMATCH = 0xC0000004
 _STATUS_BUFFER_TOO_SMALL = 0xC0000023
@@ -126,6 +128,41 @@ class Windows:
         finally:
             self.kernel32.CloseHandle(process)
         return row
+
+    def parent(self, pid: int) -> int | None:
+        """The id of the process that started `pid`, or None when `pid` cannot be read.
+
+        That process may have exited since, and its id passed to another one: a
+        caller tells the two apart by the start times `process` reads.
+        """
+        wintypes = self.wintypes
+
+        class BasicInformation(ctypes.Structure):
+            # PROCESS_BASIC_INFORMATION, field for field.
+            _fields_ = (
+                ("ExitStatus", wintypes.LONG),
+                ("PebBaseAddress", ctypes.c_void_p),
+                ("AffinityMask", ctypes.c_size_t),
+                ("BasePriority", wintypes.LONG),
+                ("UniqueProcessId", ctypes.c_size_t),
+                ("InheritedFromUniqueProcessId", ctypes.c_size_t),
+            )
+
+        process = self.kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not process:
+            return None
+        try:
+            found = BasicInformation()
+            status = self.ntdll.NtQueryInformationProcess(
+                process,
+                _PROCESS_BASIC_INFORMATION,
+                ctypes.addressof(found),
+                ctypes.sizeof(found),
+                None,
+            )
+        finally:
+            self.kernel32.CloseHandle(process)
+        return int(found.InheritedFromUniqueProcessId) if status == 0 else None
 
     def split(self, command_line: str) -> list[str]:
         """The arguments a command line holds, split by Windows' own rule for them."""

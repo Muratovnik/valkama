@@ -63,6 +63,18 @@ class WindowsTests(unittest.TestCase):
                     reader.process(pid),
                 )
 
+    def test_a_child_names_the_process_that_started_it(self) -> None:
+        reader = process_reads.Windows()
+        self.assertEqual(os.getppid(), reader.parent(os.getpid()))
+        child = subprocess.Popen([sys.executable, "-c", SLEEPER], stdin=subprocess.PIPE)
+        try:
+            self.assertEqual(os.getpid(), reader.parent(child.pid))
+        finally:
+            assert child.stdin is not None
+            child.stdin.close()
+            child.wait(timeout=30)
+        self.assertIsNone(reader.parent(0x7FFFFFF0))  # a pid that does not exist
+
     def test_a_command_line_splits_by_windows_rule(self) -> None:
         reader = process_reads.Windows()
         self.assertEqual(
