@@ -421,8 +421,9 @@ test('with reduced motion asked for, nothing in the charts moves on hover or foc
   await page.locator('[data-harness="ranked"] [data-key="core"]').hover()
   await page.locator('[data-harness="days"] .period-slot').nth(3).hover()
   await page.locator('[data-harness="hours"] .period-column').nth(12).focus()
-  // The product's answer to the request (`shell.css`) leaves every change a transition of
-  // 0.01ms, which nobody sees; anything longer is motion the reader asked not to have.
+  // The product's answer to the request (`shell.css`) leaves no change a transition and an
+  // animation an instant, 0.01ms, which nobody sees; anything longer is motion the reader asked
+  // not to have.
   const moving = await page.evaluate(() =>
     document
       .getAnimations()

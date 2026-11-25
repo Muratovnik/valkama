@@ -115,11 +115,13 @@ const SPACING = spacing()
  * a spinner turn three times as fast the first time it was tried.
  */
 /**
- * `0.01ms` is not a duration someone chose; it is how a stylesheet turns motion
- * off for a reader who asked for that, while still letting a transition fire so
- * `transitionend` arrives and nothing waits forever on an event that never came.
+ * `0s` is not a duration someone chose; it is how the shell turns transitions off
+ * for a reader who asked for less motion (`shell.css`). A transition of an instant
+ * (`0.01ms`) gave every property of every element one, begun at the value being
+ * left, so a control coming back from `visibility: hidden` refused the focus given
+ * it in the same task. Nothing in the app waits for a `transitionend`.
  */
-const MOTION = /^(?:var\(--duration-[a-z-]+\)|0\.01ms)$/
+const MOTION = /^(?:var\(--duration-[a-z-]+\)|0s)$/
 const TRANSITION =
   /^(?:none|(?:[\w-]+\s+var\(--duration-[a-z-]+\)\s+var\(--ease-[a-z-]+\))(?:\s*,\s*[\w-]+\s+var\(--duration-[a-z-]+\)\s+var\(--ease-[a-z-]+\))*)$/
 

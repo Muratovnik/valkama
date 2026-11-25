@@ -97,13 +97,25 @@
   cursor: grabbing;
 }
 
+/* Under a preference for less motion nothing changes by a transition: every value lands in
+   the frame that changes it. A transition of an instant instead (0.01ms) gave one to every
+   property of every element, since `transition-property` is `all` where nothing names it,
+   and each of those transitions began at the value being left. A control coming back from
+   `visibility: hidden` stood hidden for that instant and refused the focus a script gave it
+   in the same task, so focus fell to the page; a margin taking over from a centring moved
+   from nothing, and a measured width eased. No listener in the app waits for a transition's
+   end; Vue's Transition reads a duration of nothing and ends at once.
+   An animation still runs, for an instant and once: what shows by an animation is waited
+   for on its `animationend` (reka-ui's Presence), which an animation of an instant still
+   fires. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     /* stylelint-disable declaration-no-important -- a reader who asked for less
        motion is overruling every component, which is what !important is for */
-    transition-duration: 0.01ms !important;
+    transition-duration: 0s !important;
+    transition-delay: 0s !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
