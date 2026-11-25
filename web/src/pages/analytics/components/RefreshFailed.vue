@@ -61,8 +61,11 @@ const failed = computed(() => props.failed ?? standing.failed.value)
       size="inline"
       @click="emit('retry')"
     >
-      <span class="refresh-failed-words">{{ t('analytics.frame.refreshFailed') }}</span
-      ><span class="visually-hidden"> · {{ t('platform.actions.retry') }}</span>
+      <span class="refresh-failed-words">{{ t('analytics.frame.refreshFailed') }}</span><span
+        class="visually-hidden"
+      >
+        · {{ t('platform.actions.retry') }}</span
+      >
     </VButton>
     <template v-else>
       <span class="refresh-failed-words">{{ t('analytics.frame.refreshFailed') }} · </span>

@@ -1,6 +1,8 @@
-// The preset stays JavaScript on purpose. stylelint transpiles this file into a
-// temporary `.mjs` beside itself and then lets Node resolve what it imports, so
-// an imported `.ts` fails with ERR_UNKNOWN_FILE_EXTENSION before any rule runs.
+// The preset is JavaScript because stylelint 17 transpiled this file into a
+// temporary `.mjs` beside itself, where an imported `.ts` failed with
+// ERR_UNKNOWN_FILE_EXTENSION. Since 18 Node's own type stripping loads this file
+// and writes nothing beside it; the ignores of `stylelint.config.ts.*.mjs` stay
+// while a checkout's modules can still be stylelint 17.
 import propertyGroups from './stylelint-order-preset.js'
 import selectorList from './stylelint-selector-list.js'
 

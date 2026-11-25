@@ -222,8 +222,7 @@ onScopeDispose(() => markWatch?.disconnect())
         />
         <template v-else>
           <template v-if="whole && hint.words">
-            <span class="tooltip-words">{{ hint.words }}</span
-            >{{ apart }} </template
+            <span class="tooltip-words">{{ hint.words }}</span>{{ apart }} </template
           >{{ hint.text }}</template
         ><span
           v-if="hint.note"
