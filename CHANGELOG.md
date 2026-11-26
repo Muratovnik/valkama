@@ -13,6 +13,8 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+## [3.0.0](https://github.com/Muratovnik/valkama/compare/v2.9.0...v3.0.0) (2026-11-26)
+
 ### Highlights
 
 - Work has a model of its own. A work item is a task, a bug, an improvement, a goal or a
