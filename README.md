@@ -69,11 +69,13 @@ one, or the archive's), so uncommitted work never reaches a client session. Run
 publish newer commits. [Installation and setup](docs/guides/installation.md#what-the-launcher-pins)
 explains releases, going back to one and moving the clone.
 
-This release opens only a store at schema 24. It refuses the store Valkama 2.9 left,
+This release opens only a store at schema 25. It refuses the store Valkama 2.9 left,
 at schema 18, or 17 from a 2.9 build before 2.9.0, until you carry it over once with
 `valkama migrate work-model`, every session stopped at least three minutes
-before, since it refuses while a server may still hold the store. It also refuses
-to run on a Python whose SQLite is older than 3.47.1.
+before, since the migration refuses while a server may still hold the store. The
+migration also refuses to run on a Python whose SQLite is older than 3.47.1, or
+before `valkama projects upgrade` has carried the project registry Valkama 2.9 wrote
+to its new format.
 [Migrating a 2.9 store](docs/guides/store-upgrades.md#migrating-a-29-store) gives
 the order.
 
@@ -139,7 +141,7 @@ python valkama.py git-hook install
    ```
 
    Open `http://127.0.0.1:8642/`. You should see Work, Analytics, Agent decisions,
-   Volumes and Settings navigation and an empty Planning directory. Stop the server with `Ctrl+C` —
+   Volumes and Settings navigation and the All spaces page with no spaces yet. Stop the server with `Ctrl+C` —
    agents spawn their own copy and do not need this one running. On Windows the
    [desktop app](docs/guides/installation.md#the-desktop-app-windows) starts the
    server for you.

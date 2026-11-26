@@ -105,9 +105,13 @@ ends. The copy has no liveness file, so a dry run needs no server stopped. To go
 back to Valkama 2.9 after the migration, stop every process that holds the store,
 delete the `-wal` and `-shm` files beside it, put the `pre3.0` snapshot in place of
 the database and its `.images` folder in place of `images`, as
-[Restoring a snapshot](#restoring-a-snapshot) describes, and only then pin the 2.9
+[Restoring a snapshot](#restoring-a-snapshot) describes. Then, still with this
+release, run `valkama projects downgrade`: Valkama 2.9 cannot read the registry
+format `projects upgrade` wrote, and the downgrade returns the bytes it replaced
+([Project registry](configuration.md#project-registry)). Only then pin the 2.9
 release with `launcher install --revision <commit>`; everything written since the
-migration is lost. A 2.9 build refuses a store at 25.
+migration, and every registry change since the upgrade, is lost. A 2.9 build
+refuses a store at 25.
 
 The sections below describe the snapshots the earlier upgrades took and how to go
 back from them.

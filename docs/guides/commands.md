@@ -27,7 +27,7 @@ python valkama.py <command> [options]
 | `hook CLIENT EVENT` | record one client hook event from stdin without a running server; see [Client hooks](client-hooks.md) |
 | `statusline [--source=statusline\|mod] [--previous=<base64>]` | Claude Code's status line command: record the quota reading it is given; see [The status line command](client-hooks.md#the-status-line-command) |
 | `runtime` | print this checkout's backend and static identity |
-| `projects list\|add\|update\|remove\|bind\|check\|apply\|doctor\|rollback\|upgrade\|downgrade\|import\|map-items` | manage the local project inventory and its projection; `map-items` writes the file the work-model migration gives work items their projects by; see [Project registry](configuration.md#project-registry) |
+| `projects list\|add\|update\|remove\|bind\|unbind\|check\|apply\|doctor\|rollback\|upgrade\|downgrade\|import\|map-items` | manage the local project inventory and its projection; `map-items` writes the file the work-model migration gives work items their projects by; see [Project registry](configuration.md#project-registry) |
 | `config [--json]` | every setting, the layer it came from, and the value in use |
 | `setup [--json] [--apply]` | what this installation needs, and the exact command for each gap |
 | `adapter check --at URL \| --command ARGV \| --mcp ARGV \| --record FILE [--json]` | ask an adapter for its manifest, then probe it for the calls it should refuse |
