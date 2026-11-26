@@ -99,7 +99,6 @@ import re
 import shlex
 import shutil
 import sqlite3
-import stat
 import subprocess
 import sys
 import threading
@@ -831,19 +830,10 @@ def clear_home(home: Path) -> None:
 
 
 def remove_tree(path: Path) -> bool:
-    """Remove `path`, read-only files included; report whether it went.
+    """Remove `path`, read-only files included, as the profile tool removes its own;
+    report whether it went. A copied plugin holds Git objects, which Git writes
+    read-only."""
 
-    A copied plugin holds Git objects, which Git writes read-only, and Windows
-    refuses to delete those until they are made writable.
-    """
-
-    def writable(function: Callable[[str], object], name: str, _: object) -> None:
-        os.chmod(name, stat.S_IWRITE)
-        function(name)
-
-    with contextlib.suppress(OSError):
-        shutil.rmtree(path, onerror=writable)
-    # What is left is held by a process that just ended; that waits it out.
     return bool(_isolated().remove_tree(path))
 
 

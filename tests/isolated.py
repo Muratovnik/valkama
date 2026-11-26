@@ -322,12 +322,18 @@ def prepare_home(home: Path) -> None:
 
 
 def remove_tree(path: Path) -> bool:
-    """Remove `path`, waiting out a dead process's handles; report whether it went."""
+    """Remove `path`, read-only files included, waiting out a dead process's handles;
+    report whether it went.
+
+    Git writes its objects read-only, and Windows refuses to delete those until they
+    are made writable. The release module's handler clears the mark on the entry
+    itself only, never through a link, so nothing outside the tree changes.
+    """
 
     deadline = time.monotonic() + REMOVE_SECONDS
     while True:
         try:
-            shutil.rmtree(path)
+            shutil.rmtree(path, onerror=release._writable_and_again)
         except FileNotFoundError:
             return True
         except OSError:

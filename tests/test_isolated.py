@@ -18,6 +18,7 @@ import shutil
 import signal
 import socket
 import sqlite3
+import stat
 import subprocess
 import sys
 import tempfile
@@ -1854,6 +1855,40 @@ class ProfileTests(Workspace):
         code, said = quietly(isolated.gates, [], self.profile)
         self.assertEqual((1, True), (code, "a profile is in" in said), said)
         self.assertTrue(isolated.store_path(self.profile_home).is_file())
+
+
+class RemoveTreeTests(unittest.TestCase):
+    """A profile holds Git repositories, whose objects Git writes read-only."""
+
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory(prefix="vk-rm-", ignore_cleanup_errors=True)
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name).resolve()
+        # A refusal is waited out until the deadline: keep a failure short.
+        deadline = mock.patch.object(isolated, "REMOVE_SECONDS", 0.5)
+        deadline.start()
+        self.addCleanup(deadline.stop)
+
+    def test_a_read_only_file_goes_and_one_behind_a_link_keeps_its_mode(self) -> None:
+        tree = self.root / "profile"
+        objects = tree / "commit-probe" / ".git" / "objects" / "ab"
+        objects.mkdir(parents=True)
+        written = objects / "cdef"
+        written.write_bytes(b"object")
+        os.chmod(written, stat.S_IREAD)
+        outside = self.root / "outside"
+        outside.mkdir()
+        kept = outside / "kept.txt"
+        kept.write_text("outside", "utf-8")
+        os.chmod(kept, stat.S_IREAD)
+        self.addCleanup(os.chmod, kept, stat.S_IREAD | stat.S_IWRITE)
+        link_directory(tree / "into-outside", outside)
+
+        self.assertTrue(isolated.remove_tree(tree))
+
+        self.assertFalse(os.path.lexists(tree))
+        self.assertEqual("outside", kept.read_text("utf-8"))
+        self.assertFalse(os.stat(kept).st_mode & stat.S_IWRITE, "the mode changed through the link")
 
 
 class RecordedProcessTests(Workspace):
