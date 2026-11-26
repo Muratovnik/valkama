@@ -650,6 +650,22 @@ class View:
         moment = _parse_time(at)
         return moment is not None and moment > self.boundary and self.before_judging(at)
 
+    @property
+    def setup_last_event(self) -> int:
+        return int(self.record.session.get("setup_last_event") or 0)
+
+    def written_after_setup(self, call: object, at: object) -> bool:
+        """Whether a write is the session's, not its setup's: by the call that made it.
+
+        The store stamps a comment and a card's event to the second, so the setup's
+        last write and the session's first can share one; the calls are numbered.
+        A write no call made is judged by its time.
+        """
+
+        if isinstance(call, int):
+            return call > self.setup_last_event and self.before_judging(at)
+        return self.after_setup(at)
+
     def tools(self) -> Store:
         if self.store is None:
             raise UnsettledError("the session kept no store")
@@ -697,9 +713,14 @@ def _references(view: View) -> list[str]:
             "SELECT DISTINCT s.key || '-' || w.number, w.created_at FROM work_items w"
             " JOIN planning_spaces s ON s.planning_space_id = w.planning_space_id"
             " WHERE w.created_at >= ? OR w.work_item_id IN"
-            " (SELECT work_item_id FROM work_item_events WHERE created_at > ?)"
+            " (SELECT work_item_id FROM work_item_events"
+            "  WHERE call_id > ? OR (call_id IS NULL AND created_at > ?))"
             " ORDER BY w.created_at, w.number",
-            (start.strftime("%Y-%m-%dT%H:%M:%SZ"), view.boundary.strftime("%Y-%m-%dT%H:%M:%SZ")),
+            (
+                start.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                view.setup_last_event,
+                view.boundary.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            ),
         ).fetchall()
     return [str(row[0]) for row in rows]
 
@@ -724,9 +745,9 @@ def _comments(view: View, reference: str) -> list[dict[str, Any]]:
         after = int(found[-1]["id"])
     with view.recorded() as conn:
         sessions = {
-            int(row[0]): (row[1], row[2])
+            int(row[0]): (row[1], row[2], row[3])
             for row in conn.execute(
-                "SELECT c.id, x.session_id, x.agent_id FROM work_item_comments c"
+                "SELECT c.id, x.session_id, x.agent_id, c.call_id FROM work_item_comments c"
                 " LEFT JOIN execution_events x ON x.id = c.call_id"
                 " JOIN work_items w ON w.work_item_id = c.work_item_id"
                 " JOIN planning_spaces s ON s.planning_space_id = w.planning_space_id"
@@ -738,14 +759,14 @@ def _comments(view: View, reference: str) -> list[dict[str, Any]]:
     for comment in found:
         if not view.before_judging(comment.get("at")):
             continue
-        session, agent = sessions.get(int(comment["id"]), (None, None))
+        session, agent, call = sessions.get(int(comment["id"]), (None, None, None))
         report = comment.get("report") or {}
         body = "\n".join([str(comment.get("body") or ""), *map(str, report.values())]).strip()
         comments.append(
             {
                 "id": comment["id"],
                 "by": _role(view, session, agent),
-                "new": view.after_setup(comment.get("at")),
+                "new": view.written_after_setup(call, comment.get("at")),
                 "text": body,
                 "awaits_reply": bool(comment.get("awaits_reply")),
                 # The items it told by reference: their holders hear it as its own do.
@@ -763,9 +784,9 @@ def _requests(view: View, reference: str) -> list[dict[str, Any]]:
     # own `session_id` is what its asker passed, which a client's agent never does.
     with view.recorded() as conn:
         askers = {
-            str(row[0]): (row[1], row[2])
+            str(row[0]): (row[1], row[2], row[3])
             for row in conn.execute(
-                "SELECT e.detail, x.session_id, x.agent_id FROM work_item_events e"
+                "SELECT e.detail, x.session_id, x.agent_id, e.call_id FROM work_item_events e"
                 " LEFT JOIN execution_events x ON x.id = e.call_id"
                 " JOIN work_items w ON w.work_item_id = e.work_item_id"
                 " JOIN planning_spaces s ON s.planning_space_id = w.planning_space_id"
@@ -777,7 +798,7 @@ def _requests(view: View, reference: str) -> list[dict[str, Any]]:
     for request in answer.get("requests") or ():
         if not view.before_judging(request.get("created_at")):
             continue
-        session, agent = askers.get(str(request.get("request_id")), (None, None))
+        session, agent, call = askers.get(str(request.get("request_id")), (None, None, None))
         fields = [field for field in request.get("fields") or () if isinstance(field, Mapping)]
         options = [option for field in fields for option in field.get("options") or ()]
         answers = request.get("answers") or {}
@@ -791,7 +812,7 @@ def _requests(view: View, reference: str) -> list[dict[str, Any]]:
                 "prompt": request.get("prompt"),
                 "status": request.get("status"),
                 "by": _role(view, session, agent),
-                "new": view.after_setup(request.get("created_at")),
+                "new": view.written_after_setup(call, request.get("created_at")),
                 "addressed_to": [_role(view, request["addressee"])]
                 if request.get("addressee")
                 else [],
@@ -823,6 +844,41 @@ def _event_role(view: View, event: Mapping[str, Any]) -> Who:
     return _role(view, identity.get("session_id"), identity.get("agent_id"))
 
 
+def _with_novelty(
+    view: View, reference: str, events: Sequence[Mapping[str, Any]]
+) -> list[dict[str, Any]]:
+    """Each history event the read tool listed, with `new` from the call that wrote it.
+
+    The read tool names no event's id. It lists the newest events oldest first,
+    and the copy holds the recorded store's history and after it only what the
+    judge's own server wrote, which `before_judging` leaves out: the events listed
+    are therefore the last of the recorded rows `before_judging` keeps, in order.
+    """
+
+    with view.recorded() as conn:
+        rows = [
+            row
+            for row in conn.execute(
+                "SELECT e.action, e.created_at, e.call_id FROM work_item_events e"
+                " JOIN work_items w ON w.work_item_id = e.work_item_id"
+                " JOIN planning_spaces s ON s.planning_space_id = w.planning_space_id"
+                " WHERE s.key || '-' || w.number = ? ORDER BY e.id",
+                (reference,),
+            )
+            if view.before_judging(row[1])
+        ]
+    rows = rows[len(rows) - len(events) :]
+    if len(rows) != len(events) or any(
+        (action, at) != (event.get("action"), event.get("at"))
+        for (action, at, _), event in zip(rows, events, strict=False)
+    ):
+        raise UnsettledError(f"the history of {reference} is not the recorded store's")
+    return [
+        {**event, "new": view.written_after_setup(call, event.get("at"))}
+        for (_, _, call), event in zip(rows, events, strict=True)
+    ]
+
+
 def card(view: View, reference: str) -> dict[str, Any]:
     """One item's fields as a check names them, from the read tools' answers."""
 
@@ -830,7 +886,8 @@ def card(view: View, reference: str) -> dict[str, Any]:
     if reference in view.cards:
         return view.cards[reference]
     page = _page(view, reference)
-    events = [event for event in page.get("events") or () if view.before_judging(event.get("at"))]
+    listed = [event for event in page.get("events") or () if view.before_judging(event.get("at"))]
+    events = _with_novelty(view, str(page.get("reference") or reference), listed)
     state = page.get("state") or {}
     summary = page.get("summary") or {}
     requests = _requests(view, reference)
@@ -879,9 +936,9 @@ def card(view: View, reference: str) -> dict[str, Any]:
         if closing and page.get("open") is False
         else None,
         "created_by": _event_role(view, created) if created else None,
-        "new": created is not None and view.after_setup(created.get("at")),
+        "new": created is not None and created["new"],
         "seeded": created is not None
-        and not view.after_setup(created.get("at"))
+        and not created["new"]
         and _event_role(view, created) == "setup",
         "_events": events,
         "_requests": requests,
@@ -994,7 +1051,7 @@ def _check_writes(view: View, check: Mapping[str, Any]) -> Outcome:
         writes.extend(
             {"by": _event_role(view, event), "item": reference, "action": event.get("action")}
             for event in fields["_events"]
-            if view.after_setup(event.get("at"))
+            if event["new"]
         )
         writes.extend(
             {"by": comment["by"], "item": reference, "action": "commented"}
