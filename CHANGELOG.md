@@ -13,7 +13,7 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
-## [3.0.0](https://github.com/Muratovnik/valkama/compare/v2.9.0...v3.0.0) (2026-11-26)
+## [3.0.0](https://github.com/Muratovnik/valkama/compare/v2.9.0...v3.0.0) (2026-11-27)
 
 ### Highlights
 
