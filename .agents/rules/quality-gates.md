@@ -168,8 +168,8 @@ module by module, what `tests/affected.py` reaches, so a whole suite is carried
 by a rerun of the modules a change reaches; a command in `web/` reads `web/` but
 `web/dist` and every file a source there names, as `DESIGN.md` is by the token
 check `npm test` runs; the browser suite reads `web/` but `web/dist`, `server/`
-and `valkama.py`; the vendored `.github/relkit.pyz` touches the release audit and
-the test modules that name it; a path outside `web/`, `server/`, `tests/`, `docs/`,
+and `valkama.py`; the vendored `.github/relkit.pyz` touches the release audit,
+the test modules that name it and the coverage report; a path outside `web/`, `server/`, `tests/`, `docs/`,
 `.agents/`, `valkama.py`, `.github/relkit.pyz` and the Markdown files at the top
 touches every step. A touched step
 counts from a record where it is untouched, and is refused, naming it and the

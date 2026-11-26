@@ -347,9 +347,10 @@ class PlacementTests(ChainCase):
             0,
             "",
         )
+        report: Step = ("report", [sys.executable, "-m", "coverage", "report"], "", 0, "")
         self.write(".github/relkit.pyz", "0.36.0\n")
         self.commit("build: vendor release-kit 0.36.0")
-        full = self.record("full", [TYPOS, SUBJECTS, audit, UNIT, LINT, BROWSER])
+        full = self.record("full", [TYPOS, SUBJECTS, audit, UNIT, report, LINT, BROWSER])
         self.write(".github/relkit.pyz", "0.37.0\n")
         self.commit("build: update release-kit to 0.37.0")
 
@@ -359,12 +360,14 @@ class PlacementTests(ChainCase):
         self.assertNotIn("no rule places", said)
         self.assertIn("step audit reads every file or commit", said)
         self.assertIn("step unit ran tests.test_docs, which names .github/relkit.pyz", said)
+        self.assertIn("step report reads tests.test_docs, which names .github/relkit.pyz", said)
         self.assertNotIn("tests.test_app", said)
         self.assertNotIn("npm-run-lint", said)
         self.assertNotIn("browser-specs", said)
-        # The control: the audit and the module that names the file, run again, complete it.
+        # The control: the audit, the module that names the file and the report that reads
+        # it, run again, complete the chain.
         docs: Step = ("docs", [sys.executable, "-m", "unittest", "tests.test_docs"], "", 0, "")
-        again = self.record("again", [TYPOS, SUBJECTS, audit, docs])
+        again = self.record("again", [TYPOS, SUBJECTS, audit, docs, report])
         self.assertEqual(run_record.PASSED, self.judged(again, full)[0])
 
     def test_a_record_at_a_commit_head_does_not_descend_from_is_refused(self) -> None:

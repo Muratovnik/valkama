@@ -36,7 +36,8 @@ otherwise, naming the step and the path. What a step reads, conservatively:
   the scripts those run, so a touched one of them needs no record of its own;
 - the vendored Release Kit, `.github/relkit.pyz`, is run by the release audit
   alone, and a test module that names it is reached as any module naming a file
-  is, so an update of it leaves the other steps as true as they were;
+  is, so an update of it needs again the audit, those modules and `coverage
+  report`, which reads them, and leaves the other steps as true as they were;
 - a path outside `web/`, `server/`, `tests/`, `docs/`, `.agents/`, `valkama.py`,
   `.github/relkit.pyz` and the Markdown files at the top is not placed, and is
   an input of every step.
