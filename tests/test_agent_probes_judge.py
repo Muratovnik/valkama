@@ -11,6 +11,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import shutil
 import sqlite3
 import subprocess
 import tempfile
@@ -36,6 +37,36 @@ def report_of(out: Path) -> dict[str, Any]:
 def probe_of(report: dict[str, Any], client: str, probe: str) -> dict[str, Any]:
     session = next(item for item in report["sessions"] if item["client"] == client)
     return next(item for item in session["probes"] if item["probe"] == probe)
+
+
+#: The times of the writes a recorded store holds, as table and column; each starts
+#: with its second. The calls' own times stay: the setup's last one is the second.
+STAMPS = (
+    ("work_items", "created_at"),
+    ("work_item_events", "created_at"),
+    ("work_item_comments", "created_at"),
+    ("work_item_requests", "created_at"),
+)
+
+
+def stamp_in_one_second(record: agent_probes_judge.Record) -> None:
+    """Move every write of the setup and of the session into the second the setup ended in.
+
+    Each time keeps what it has below the second, so a question stamped to the
+    microsecond stays so.
+    """
+
+    with contextlib.closing(sqlite3.connect(record.directory / "store.sqlite3")) as conn, conn:
+        (ended,) = conn.execute(
+            "SELECT received_at FROM execution_events WHERE id = ?",
+            (record.session["setup_last_event"],),
+        ).fetchone()
+        second = str(ended)[: len("2000-01-01T00:00:00")]
+        for table, column in STAMPS:
+            conn.execute(
+                f"UPDATE {table} SET {column} = ? || substr({column}, ?)",
+                (second, len(second) + 1),
+            )
 
 
 class JudgedRunTests(RunCase):
@@ -86,6 +117,34 @@ class JudgedRunTests(RunCase):
                 ((kind, evidence),) = self.failing(client, "fails")[:1]
                 self.assertEqual("item", kind)
                 self.assertIn('"category": "active"', evidence)
+
+    # The store stamps a comment and a card's event to the second, so a session that
+    # writes within the second its setup ended in leaves writes no clock tells apart
+    # from the setup's: the call behind each write does.
+    def test_writes_in_the_second_the_setup_ended_in_are_told_apart_by_their_calls(self) -> None:
+        copy = Path(self.directory.name) / "one-second"
+        shutil.copytree(self.out, copy)
+        entry = next(item for item in self.report["sessions"] if item["client"] == "codex")
+        record = agent_probes_judge.Record.read(copy / entry["record"])
+        stamp_in_one_second(record)
+        (scenario,) = (
+            item for item in agent_probes.load_cases(JUDGED, None) if item.id == entry["scenario"]
+        )
+
+        judged = agent_probes_judge.judge_session(
+            record, scenario, copy / agent_probes_judge.WORK, copy / agent_probes_judge.REVIEW
+        )
+
+        cards = next(probe for probe in judged["probes"] if probe["probe"] == "cards")
+        # The registry names the workspace where the run made it, which the copy is not.
+        failing = [
+            (check["check"], check["evidence"])
+            for check in cards["checks"]
+            if check["result"] != PASSED and check["check"] != "registry"
+        ]
+        # The finding, the comment, the question and the writes are the session's; the
+        # two seeded items stay the setup's.
+        self.assertEqual([], failing)
 
     # Requirement 2: the checks of each client's own record.
     def test_record_checks_read_calls_order_edits_answer_and_subagents_of_both_clients(
