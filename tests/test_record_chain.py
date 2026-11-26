@@ -83,6 +83,7 @@ REACHES = {
     "server/app.py": {"tests.test_app": "imports server.app"},
     "tests/test_app.py": {"tests.test_app": "changed: tests/test_app.py"},
     "docs/rules.md": {"tests.test_docs": "names docs/rules.md"},
+    ".github/relkit.pyz": {"tests.test_docs": "names .github/relkit.pyz"},
 }
 
 
@@ -335,6 +336,36 @@ class PlacementTests(ChainCase):
             said,
         )
         self.assertIn("step unit ran tests.test_app, which pyproject.toml, which no rule", said)
+
+    def test_an_update_of_the_vendored_release_kit_needs_again_only_the_audit_and_its_namers(
+        self,
+    ) -> None:
+        audit: Step = (
+            "audit",
+            [sys.executable, ".github/relkit.pyz", "audit", "--history"],
+            "",
+            0,
+            "",
+        )
+        self.write(".github/relkit.pyz", "0.36.0\n")
+        self.commit("build: vendor release-kit 0.36.0")
+        full = self.record("full", [TYPOS, SUBJECTS, audit, UNIT, LINT, BROWSER])
+        self.write(".github/relkit.pyz", "0.37.0\n")
+        self.commit("build: update release-kit to 0.37.0")
+
+        code, said = self.judged(self.record("small", [TYPOS, SUBJECTS]), full)
+
+        self.assertEqual(run_record.REFUSED, code, said)
+        self.assertNotIn("no rule places", said)
+        self.assertIn("step audit reads every file or commit", said)
+        self.assertIn("step unit ran tests.test_docs, which names .github/relkit.pyz", said)
+        self.assertNotIn("tests.test_app", said)
+        self.assertNotIn("npm-run-lint", said)
+        self.assertNotIn("browser-specs", said)
+        # The control: the audit and the module that names the file, run again, complete it.
+        docs: Step = ("docs", [sys.executable, "-m", "unittest", "tests.test_docs"], "", 0, "")
+        again = self.record("again", [TYPOS, SUBJECTS, audit, docs])
+        self.assertEqual(run_record.PASSED, self.judged(again, full)[0])
 
     def test_a_record_at_a_commit_head_does_not_descend_from_is_refused(self) -> None:
         self.write("docs/guides/use.md", "how to use it\n")

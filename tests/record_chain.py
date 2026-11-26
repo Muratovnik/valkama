@@ -34,8 +34,12 @@ otherwise, naming the step and the path. What a step reads, conservatively:
   them its sources read (`BROWSER_READS`). An untouched, passed `npm test` in
   `web/` covers the `npm run NAME` steps its `test` script runs, expanded through
   the scripts those run, so a touched one of them needs no record of its own;
-- a path outside `web/`, `server/`, `tests/`, `docs/`, `.agents/`, `valkama.py`
-  and the Markdown files at the top is not placed, and is an input of every step.
+- the vendored Release Kit, `.github/relkit.pyz`, is run by the release audit
+  alone, and a test module that names it is reached as any module naming a file
+  is, so an update of it leaves the other steps as true as they were;
+- a path outside `web/`, `server/`, `tests/`, `docs/`, `.agents/`, `valkama.py`,
+  `.github/relkit.pyz` and the Markdown files at the top is not placed, and is
+  an input of every step.
 
 The same step is the same command in the same directory, by its words after the
 program, and for the browser runner also by the specs its list file named when
@@ -66,8 +70,9 @@ SEMGREP = "semgrep"
 WEB = "web"
 BROWSER = "browser"
 
-#: Directories whose every path is placed, and the paths at the top that are.
+#: Directories whose every path is placed, and the files outside them that are.
 PLACED_DIRECTORIES = ("web/", "server/", "tests/", "docs/", ".agents/")
+PLACED_FILES = ("valkama.py", ".github/relkit.pyz")
 WEB_BUILD = "web/dist/"
 #: Files outside `web/` and `server/` the browser suite reads: the server its
 #: configuration starts. `tests/test_record_chain.py` holds every path a browser
@@ -88,7 +93,7 @@ def placed(path: str) -> bool:
     top = "/" not in path
     return (
         path.startswith(PLACED_DIRECTORIES)
-        or path == "valkama.py"
+        or path in PLACED_FILES
         or (top and path.endswith(".md"))
     )
 
