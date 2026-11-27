@@ -11,11 +11,33 @@ jobs:
   # Hosted jobs are not run while this repository is private. Each job skips itself
   # unless its event proves the repository public; a scheduled event never does.
   # relkit.toml declares hosted_ci = "public-only", and its audit holds every job to it.
+  # The history audit reads every commit, a long step of its own on the hosted runner,
+  # so it runs beside the tests rather than ahead of them in one job.
+  audit:
+    if: ${{ github.event.repository && !github.event.repository.private }}
+    name: Publication audit
+    runs-on: windows-2025
+    timeout-minutes: 40
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.15"
+      - name: Publication audit
+        run: python .github/relkit.pyz audit --history
+
   python:
     if: ${{ github.event.repository && !github.event.repository.private }}
     name: Python quality and tests
     runs-on: windows-2025
-    timeout-minutes: 30
+    # A guard against a hung run, sized above the suite's own time on the four-core
+    # hosted runner, where `tests/parallel.py` runs two processes at once.
+    timeout-minutes: 50
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -38,15 +60,6 @@ jobs:
           python-version: "3.15"
           cache: pip
           cache-dependency-path: requirements-dev.txt
-      - name: Publication audit
-        run: python .github/relkit.pyz audit --history
-      # A diagnostic readout, here and before the tests: the tests once failed to start
-      # their first process with "the paging file is too small" (WinError 1455).
-      - name: Memory after the publication audit
-        run: |
-          Get-CimInstance Win32_OperatingSystem | Format-List FreePhysicalMemory, TotalVisibleMemorySize, FreeVirtualMemory, TotalVirtualMemorySize
-          Get-CimInstance Win32_PageFileUsage | Format-List Name, AllocatedBaseSize, CurrentUsage, PeakUsage
-          Get-Process | Sort-Object PagedMemorySize64 -Descending | Select-Object -First 12 Name, Id, @{n = 'CommitMB'; e = { [int]($_.PagedMemorySize64 / 1MB) } }, @{n = 'WorkingSetMB'; e = { [int]($_.WorkingSet64 / 1MB) } } | Format-Table -AutoSize
       - name: Install pinned development tools
         run: python -m pip install -r requirements-dev.txt
       - name: Install pinned semgrep in its own environment
@@ -70,12 +83,12 @@ jobs:
           $env:PATH = "$PWD/.venv-semgrep/Scripts;$env:PATH"
           semgrep scan --config p/python --config p/security-audit --metrics off --error server valkama.py
       - name: Memory before the tests
-        run: |
-          Get-CimInstance Win32_OperatingSystem | Format-List FreePhysicalMemory, TotalVisibleMemorySize, FreeVirtualMemory, TotalVirtualMemorySize
-          Get-CimInstance Win32_PageFileUsage | Format-List Name, AllocatedBaseSize, CurrentUsage, PeakUsage
-          Get-Process | Sort-Object PagedMemorySize64 -Descending | Select-Object -First 12 Name, Id, @{n = 'CommitMB'; e = { [int]($_.PagedMemorySize64 / 1MB) } }, @{n = 'WorkingSetMB'; e = { [int]($_.WorkingSet64 / 1MB) } } | Format-Table -AutoSize
+        run: ./.github/memory-readout.ps1 -Title "Memory before the tests"
       - name: Python tests under coverage
         run: python tests/parallel.py --coverage
+      - name: Memory after the tests
+        if: ${{ always() }}
+        run: ./.github/memory-readout.ps1 -Title "Memory after the tests"
       - name: Coverage ratchet
         run: python -m coverage report
 
