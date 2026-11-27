@@ -42,7 +42,7 @@ from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from unittest import mock
 
-from tests import heavy_gate
+from tests import heavy_gate, heavy_gate_double
 from tests.worktree import link_directory
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -547,6 +547,77 @@ class ReleaseToolchainTests(unittest.TestCase):
         self.assertTrue(profile.is_relative_to(self.temporary), profile)
         for name in ("VALKAMA_DB", "USERPROFILE", "HOME", "LOCALAPPDATA", "APPDATA"):
             self.assertTrue(Path(environment[name]).is_relative_to(profile), name)
+
+    # -- the wait at the heavy-process gate -----------------------------------
+
+    def agent_check(self, wait: str | None) -> list:
+        """The calls of a check run in an agent's session, `HEAVY_GATE_WAIT` set to `wait`."""
+
+        environment = {
+            name: value
+            for name, value in os.environ.items()
+            if name not in (*heavy_gate.AGENT_VARIABLES, heavy_gate.WAIT_VARIABLE)
+        }
+        environment["CLAUDECODE"] = "1"
+        if wait is not None:
+            environment[heavy_gate.WAIT_VARIABLE] = wait
+        with mock.patch.dict(os.environ, environment, clear=True):
+            return self.checked_commands(make_checkout(self.root / f"checkout-{wait}"))
+
+    @staticmethod
+    def suite_call(calls: list) -> object:
+        [suite] = [call for call in calls if "tests/parallel.py" in call.args[0]]
+        return suite
+
+    def test_in_an_agent_session_every_stage_waits_at_the_gate_unless_the_caller_chose(
+        self,
+    ) -> None:
+        # The suite is the stage the gate refused with 75, after every stage before it
+        # had run: a long run that cannot be asked again decides to wait before its first.
+        self.assertEqual(heavy_gate.WAIT_VARIABLE, release.WAIT_VARIABLE)
+        calls = self.agent_check(None)
+        self.assertGreater(len(calls), 10)
+        for call in calls:
+            self.assertEqual("1", call.kwargs["env"].get(heavy_gate.WAIT_VARIABLE), call.args[0])
+        self.assertTrue(heavy_gate.waits(None, self.suite_call(calls).kwargs["env"]))
+        for chosen in ("0", "1"):
+            with self.subTest(chosen=chosen):
+                calls = self.agent_check(chosen)
+                for call in calls:
+                    self.assertEqual(chosen, call.kwargs["env"][heavy_gate.WAIT_VARIABLE])
+
+    def test_the_suite_the_check_starts_asks_a_busy_gate_to_wait_for_room(self) -> None:
+        # Its environment, given to the gate's client as the runner inside gives it.
+        state = self.root / "gate"
+        entry = heavy_gate_double.write_entry_point(state)
+        flags = {}
+        for wait in (None, "0"):
+            suite = self.suite_call(self.agent_check(wait))
+            done = _real_run(
+                (
+                    sys.executable,
+                    str(ROOT / "tests" / "heavy_gate.py"),
+                    "run",
+                    "--kind",
+                    release.UNITTEST_PARALLEL,
+                    "--lock",
+                    str(self.root / "earlier.lock"),
+                    "--gate",
+                    str(entry),
+                    "--",
+                    sys.executable,
+                    "-c",
+                    "pass",
+                ),
+                cwd=ROOT,
+                env=suite.kwargs["env"],
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(0, done.returncode, done.stderr)
+            *_, call = heavy_gate_double.calls(state)
+            flags[wait] = [flag for flag in call[: call.index("--")] if "wait" in flag]
+        self.assertEqual({None: ["--wait"], "0": ["--no-wait"]}, flags)
 
     def test_a_failed_install_stops_the_check_before_any_other_stage(self) -> None:
         stages = FakeStages(self.outside(), fail=("ci",))

@@ -68,6 +68,9 @@ DIST_PACKAGES = ("desktop", "windows")
 #: Names the checkout to `tests/heavy_gate.py` (its `ROOT_VARIABLE`) for the npm
 #: stages, whose copy of the sources is in no repository and so has no gate rules.
 HEAVY_GATE_ROOT = "VALKAMA_HEAVY_GATE_ROOT"
+#: Whether a run that finds no room at the heavy-process gate waits for it: `1` waits,
+#: `0` does not, and anything else leaves it to the gate (`tests/heavy_gate.py`).
+WAIT_VARIABLE = "HEAVY_GATE_WAIT"
 SKIP_DIRS = frozenset(
     {".git", ".cache", ".private", ".state", "tmp", "node_modules", "release", "__pycache__"}
 )
@@ -645,7 +648,8 @@ def check(
     `npm ci` runs ahead of the Python stages, though only the npm stages need it:
     a registry that cannot be reached then costs a minute and not the whole suite.
     Every npm stage runs in `npm_copy`, never in the checkout; the Python stages
-    run in the checkout.
+    run in the checkout. Whether a stage waits at the heavy-process gate is
+    decided before the first one, by `gate_wait`.
     """
 
     interpreter = interpreter or running_interpreter()
@@ -655,10 +659,36 @@ def check(
         interpreter, pins(requirements), own_environments() if own is None else own
     )
     require_version(version())
-    base = tool_environment(interpreter, os.environ)
+    base, said = gate_wait(tool_environment(interpreter, os.environ))
+    sys.stdout.write(f"{said}\n")
     with npm_copy(ROOT) as copy:
         sys.stdout.write(f"release check: the npm stages run in a copy of the sources, {copy}\n")
         _run_stages(_stages(interpreter, tools, copy), base)
+
+
+def gate_wait(base: Mapping[str, str]) -> tuple[dict[str, str], str]:
+    """`base` for every stage, deciding whether one waits at the heavy-process gate; what to say.
+
+    The gate does not wait in an agent's session unless told to, so a stage that
+    finds no room exits 75. That is right for one short run, which is asked again,
+    and wrong for a stage after minutes of others, whose refusal throws them all
+    away: the suite, which takes its lease late, once did that to a whole release.
+    So the check, one long run nobody watches, waits, unless its caller chose.
+    """
+
+    environment = dict(base)
+    chosen = environment.get(WAIT_VARIABLE)
+    if chosen == "0":
+        return environment, (
+            f"release check: {WAIT_VARIABLE}=0, so a stage that finds no room at the"
+            " heavy-process gate fails the check"
+        )
+    environment[WAIT_VARIABLE] = "1"
+    because = "as its caller set" if chosen == "1" else "as a long run does"
+    return environment, (
+        "release check: a stage that finds no room at the heavy-process gate waits for it"
+        f" ({WAIT_VARIABLE}=1, {because})"
+    )
 
 
 def _stages(

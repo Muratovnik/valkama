@@ -256,7 +256,10 @@ Its stages are the gates `python tests/isolated.py gates` runs, from the one lis
 `STAGES` in `windows/release.py`, less the commit-subject check and the history
 audit, which only `gates` runs, and with the installs and the price comparison
 first; the unittest suite runs through `tests/parallel.py`, several
-modules at once, in a throwaway profile.
+modules at once, in a throwaway profile. A stage that finds no room at the
+machine's heavy-process gate waits for it, even in an agent's session, where the
+gate would otherwise refuse at once: `check` sets `HEAVY_GATE_WAIT=1` for its
+stages before the first one, unless the caller set `HEAVY_GATE_WAIT=0`.
 `build` needs npm and no Python tool, and `smoke` runs the
 server, which needs only the standard library. The web build that `check` runs
 in the copy replaces `web/dist` in the checkout; commit it only when `web/src`

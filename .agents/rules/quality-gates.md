@@ -200,7 +200,10 @@ the 8 workers it wants or the count the caller gave; `browser-suite`,
 `browser-targeted`, one spec or a probe. The gate admits a run by what earlier
 runs of its kind and size used, beside others while the machine has room.
 In an agent's session a run that finds no room exits 75 at once and says why;
-`HEAVY_GATE_WAIT=1` makes it wait instead, saying why every minute. Its leases
+`HEAVY_GATE_WAIT=1` makes it wait instead, saying why every minute.
+`windows/release.py check` sets that for all its stages before the first one,
+unless its caller set `HEAVY_GATE_WAIT=0`: a refusal after minutes of stages
+throws them all away. Its leases
 are the OS's: they go with a run that dies. `heavy-gate mode serial` lets one
 heavy run in at a time across the machine, and `heavy-gate mode measured` goes
 back. Where no gate is installed, the run goes direct and says so. The gate's
