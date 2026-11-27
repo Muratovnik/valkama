@@ -394,24 +394,11 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 warn_unused_configs = true
 
-# What is left of the typing backlog, with what each module owed the day mypy
-# was adopted. Fourteen of the seventeen have come off since, so thirty-five of
-# the thirty-eight files are checked, including every data and wire owner and
-# all three surfaces. Removing a name from this list is the ratchet; a module
-# not named here — including every new one — is checked already. Card #306 owns
-# emptying it.
-#
-# What remains is a different kind of work from the fourteen. Those needed an
-# annotation on an inferred container, a narrowing the checker could not see, or
-# a protocol where a seam had been left as `object`. These take
-# `Mapping[str, object]` payloads and index them, so every fix is a decision
-# about what the payload is allowed to be — worth making deliberately rather
-# than in a sweep.
-#
-# The list is longer than it was and covers less: splitting the improvements
-# store and the dashboard projection moved code out from under two entries, and
-# the modules it moved into are checked. `server.analytics.*` had to become five
-# names for that to be true, because a wildcard would have adopted them.
+# Every module `files` names, and every module one of them imports, is checked
+# with no exemption: the `[[tool.mypy.overrides]]` list that held the typing
+# backlog emptied when the last modules on it were deleted. A list that returns
+# is a ratchet to empty, never to grow, and a module absent from it is checked.
+# The test modules, `tests/test_*.py`, are not named in `files`.
 
 # Branch coverage of the server, measured by the suite that already exists. The
 # floor is a ratchet: it is the number the suite actually reaches, so a change
