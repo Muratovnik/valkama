@@ -85,6 +85,9 @@ jobs:
       - name: Memory before the tests
         run: ./.github/memory-readout.ps1 -Title "Memory before the tests"
       - name: Python tests under coverage
+        # Below the job's limit, so that a suite that runs too long fails as this step,
+        # and the readout after it still runs, rather than the whole job being cancelled.
+        timeout-minutes: 42
         run: python tests/parallel.py --coverage
       - name: Memory after the tests
         if: ${{ always() }}
