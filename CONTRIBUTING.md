@@ -314,6 +314,12 @@ Fixes and Performance Improvements carries a commit link on its first line, its
 label the start of the hash. `release prepare` then refuses a link to a commit
 outside the release.
 
+Until its version is tagged, `tests/test_changelog_entry.py` holds the entry, and
+`[Unreleased]`, to two more rules. A line written by hand is at most 90 characters;
+a heading, a table row, a lone link and a line the draft wrote are exempt. Every
+`feat`, `perf` and breaking commit on the first-parent line since `v<prev>` keeps
+its link, unless a revert in the same range names it. A dropped `fix` needs none.
+
 ## Reporting a bug
 
 Include what you ran, what happened, and what you expected. For anything
