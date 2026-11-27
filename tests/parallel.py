@@ -22,7 +22,11 @@ The run takes a lease at the machine's heavy-process gate, through
 `tests/heavy_gate.py`, as the kind `KIND` sized by its modules and wanting `--jobs`
 processes at once, and runs as many as the share K the gate gives; unless a holder
 started it, as `tests/isolated.py gates` does, whose lease gives it K the same way.
-In an agent's session a run that finds no room exits 75 at once, saying why;
+The run the gate starts is told so by `--gated` and takes no lease again. Where no
+gate is installed (CI, a fresh clone) `tests/heavy_gate.py` starts that run
+directly, with no lease and no mark of one, and it runs the `--jobs` asked; without
+the flag it would ask for a lease again, and each run would start the next until
+the machine ran out of memory. In an agent's session a run that finds no room exits 75 at once, saying why;
 `HEAVY_GATE_WAIT=1` makes it wait. `--coverage` runs every process
 under `coverage run --parallel-mode` and combines their data at the end, into
 the data file `coverage report` reads.
@@ -67,6 +71,9 @@ DEFAULT_JOBS = 8
 HELD_VARIABLE = "VALKAMA_HEAVY_TEST_LOCK_HELD"
 #: The share of processes the gate gave the lease this run is under.
 K_VARIABLE = "HEAVY_GATE_K"
+#: The flag of the run `tests/heavy_gate.py` starts, at the gate or directly where
+#: there is none: that run takes no lease again.
+GATED = "--gated"
 #: The last run's seconds for each module, which orders the next run.
 DURATIONS = ROOT / ".cache" / "test-durations.json"
 #: How often the caller looks at its workers.
@@ -427,7 +434,8 @@ def gate_command(argv: Sequence[str], modules: int, jobs: int) -> list[str]:
     gate = str(ROOT / "tests" / "heavy_gate.py")
     return [
         *(sys.executable, gate, "run", "--kind", KIND, "--size", str(modules)),
-        *("--want", str(jobs), "--", sys.executable, str(Path(__file__).resolve()), *argv),
+        *("--want", str(jobs), "--", sys.executable, str(Path(__file__).resolve())),
+        *(GATED, *argv),
     ]
 
 
@@ -448,6 +456,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument("--coverage", action="store_true", help="measure every process")
     parser.add_argument("--worker", type=Path, metavar="REPORT", help=argparse.SUPPRESS)
+    parser.add_argument(GATED, action="store_true", help=argparse.SUPPRESS)
     arguments = list(sys.argv[1:] if argv is None else argv)
     options = parser.parse_args(arguments)
     if options.worker is not None:
@@ -458,7 +467,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("--jobs is a whole number from 1")
     modules = list(dict.fromkeys(options.modules)) or whole_suite()
     jobs = min(options.jobs, len(modules))
-    if HELD_VARIABLE not in os.environ:
+    if not options.gated and HELD_VARIABLE not in os.environ:
         return subprocess.run(gate_command(arguments, len(modules), jobs), check=False).returncode
     jobs = min(granted_jobs(jobs), len(modules))
     if options.coverage:

@@ -281,9 +281,34 @@ class GateTests(unittest.TestCase):
         self.assertEqual("1", options[options.index("--size") + 1])
         self.assertEqual("3", options[options.index("--want") + 1])
         self.assertEqual(
-            [sys.executable, str(ROOT / "tests" / "parallel.py"), "--jobs", "3", "tests.test_a"],
+            [
+                *(sys.executable, str(ROOT / "tests" / "parallel.py"), parallel.GATED),
+                *("--jobs", "3", "tests.test_a"),
+            ],
             command[command.index("--") + 1 :],
         )
+
+    def test_the_run_its_gate_command_starts_runs_its_modules_and_asks_for_no_lease(self) -> None:
+        # Where no gate is installed, `tests/heavy_gate.py` starts that run directly, with
+        # neither the mark of a holder nor a share K: asking for a lease again there would
+        # start a run that asks again, until the machine ran out of memory.
+        argv = ["--jobs", "2", "tests.test_a", "tests.test_b"]
+        command = parallel.gate_command(argv, 2, 2)
+        started_by_gate = command[command.index("--") + 3 :]
+        environment = {
+            name: value
+            for name, value in os.environ.items()
+            if name not in (parallel.HELD_VARIABLE, parallel.K_VARIABLE)
+        }
+        with (
+            mock.patch.dict(os.environ, environment, clear=True),
+            mock.patch.object(parallel.subprocess, "run") as started,
+            mock.patch.object(parallel, "run", return_value=0) as ran,
+        ):
+            self.assertEqual(0, parallel.main(started_by_gate))
+        started.assert_not_called()
+        self.assertEqual(["tests.test_a", "tests.test_b"], ran.call_args.args[0])
+        self.assertEqual(2, ran.call_args.args[1])
 
     def test_a_run_under_a_lease_runs_the_share_its_gate_gave(self) -> None:
         self.assertEqual(3, parallel.granted_jobs(8, {"HEAVY_GATE_K": "3"}))
