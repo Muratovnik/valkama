@@ -255,7 +255,8 @@ class RunCase(unittest.TestCase):
     def run_probes(cls, *arguments: str) -> None:
         cls.directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         cls.addClassCleanup(cls.directory.cleanup)
-        base = Path(cls.directory.name)
+        # Resolved, as the runner resolves what it writes: TEMP may be in the 8.3 form.
+        base = Path(cls.directory.name).resolve()
         cls.user, cls.home, cls.out = base / "user", base / "home", base / "out"
         cls.paths = make_user(cls.user)
         # The run's output lies in a project of its own, as it does in the user's

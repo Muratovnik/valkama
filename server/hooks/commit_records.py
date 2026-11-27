@@ -170,11 +170,17 @@ def registry_roots(
 
 
 def _same_path(path: str) -> str:
-    return os.path.normcase(os.path.normpath(os.path.abspath(path)))
+    """One spelling of a path, as `git_worktrees.canonical` gives it, without importing it.
+
+    `realpath` spells an existing path as the disk does: Git prints a root in its long
+    form, and a registry may hold it in the 8.3 short form (`LONG-N~1` for `long-name`).
+    """
+    return os.path.normcase(os.path.realpath(os.path.abspath(path)))
 
 
 def project_of(root: str, projects: Iterable[tuple[str, str]]) -> str | None:
-    """The registered project whose root is exactly `root`, without case on Windows."""
+    """The registered project whose root is `root`, without case on Windows and in
+    whichever form of its names, long or 8.3, either side holds it."""
 
     wanted = _same_path(root)
     for project_id, canonical_root in projects:
