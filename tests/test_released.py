@@ -432,6 +432,16 @@ class ReadOnlyTests(ReleasedTestCase):
         self.conn.execute(f"PRAGMA user_version = {store.STORE_SCHEMA_VERSION}")
         self.conn.commit()
 
+    def test_a_store_older_than_this_build_is_refused_and_left_as_it_was(self) -> None:
+        # Refused by name, as a newer one is, rather than ending in a traceback.
+        self.conn.execute("PRAGMA user_version = 1")
+        self.conn.commit()
+        with self.assertRaisesRegex(SystemExit, r"^released: this store is at schema 1"):
+            self.report()
+        self.assertEqual(1, self.conn.execute("PRAGMA user_version").fetchone()[0])
+        self.conn.execute(f"PRAGMA user_version = {store.STORE_SCHEMA_VERSION}")
+        self.conn.commit()
+
 
 class RefusalTests(ReleasedTestCase):
     def test_what_cannot_be_read_as_asked_exits_non_zero_with_the_reason(self) -> None:
