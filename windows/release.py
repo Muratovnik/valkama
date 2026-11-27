@@ -32,6 +32,14 @@ which imports only the standard library.
 `prices` is a stage of `check`: it compares the server's price table with
 LiteLLM's public price list, so a wrong or missing price is caught before a
 release. The server itself makes no network call, so the comparison lives here.
+
+`scope` is the first stage of `check`, and can be run on its own before
+`relkit release prepare`: it refuses while an open bug is bound to the version in
+`VERSION` (`valkama released --before-prepare`). It asks the installed Valkama, not
+this checkout's code: the installed release reads the planning store at that
+store's own schema, while a checkout may be a build of another one, which would
+refuse the store rather than read it. Only the release runs it: the gates and the
+hosted jobs have no planning store.
 """
 
 from __future__ import annotations
@@ -85,6 +93,10 @@ _SCRIPT_SUFFIXES = (".exe",) if sys.platform == "win32" else ("",)
 
 class ToolchainError(RuntimeError):
     """This environment cannot run the check, and the message says why; nothing has run yet."""
+
+
+class ScopeError(RuntimeError):
+    """The scope stage has nothing to ask the planning store with, and the message says why."""
 
 
 @dataclass(frozen=True)
@@ -172,11 +184,14 @@ class Stage:
 UNITTEST_PARALLEL = "unittest-parallel"
 
 #: Every stage, in the order both runners run them. The `gates` stages are the list
-#: in `AGENTS.md`, which `tests/test_isolated.py` compares. `check` installs the
-#: lockfiles' modules first, a registry that cannot be reached costing seconds and
-#: not the whole suite, and compares prices next for the same reason. The two steps
-#: that read the commits, the subjects and the history audit, are the gates' alone.
+#: in `AGENTS.md`, which `tests/test_isolated.py` compares. `check` asks first
+#: whether an open bug is bound to the version, since a bound bug makes every later
+#: stage wasted, and the answer takes seconds. It then installs the lockfiles'
+#: modules, a registry that cannot be reached costing seconds and not the whole
+#: suite, and compares prices next for the same reason. The two steps that read the
+#: commits, the subjects and the history audit, are the gates' alone.
 STAGES = (
+    Stage("scope", "python", "python windows/release.py scope", runners=frozenset({CHECK})),
     Stage("web-ci", "web", "npm ci", "web", runners=frozenset({CHECK})),
     Stage("desktop-ci", "desktop", "npm ci", "desktop", runners=frozenset({CHECK})),
     Stage("prices", "python", "python windows/release.py prices", runners=frozenset({CHECK})),
@@ -645,8 +660,10 @@ def check(
 
     The toolchain is verified against the pins before anything else, so a
     wrong interpreter is refused in one message instead of one stage at a time.
-    `npm ci` runs ahead of the Python stages, though only the npm stages need it:
-    a registry that cannot be reached then costs a minute and not the whole suite.
+    `scope` runs first, since an open bug bound to the version makes every later
+    stage wasted. `npm ci` runs ahead of the other Python stages, though only the
+    npm stages need it: a registry that cannot be reached then costs a minute and
+    not the whole suite.
     Every npm stage runs in `npm_copy`, never in the checkout; the Python stages
     run in the checkout. Whether a stage waits at the heavy-process gate is
     decided before the first one, by `gate_wait`.
@@ -742,6 +759,54 @@ def _run_stages(stages: list[tuple[str, tuple[str, ...], Path]], shared: dict[st
             publish_web_build(cwd / "dist", ROOT / "web" / "dist")
         else:
             subprocess.run(command, cwd=cwd, env=base, check=True)
+
+
+#: The product's name in a release label: a bug bound to version X carries `valkama-X`.
+PRODUCT = "valkama"
+
+
+def installed_valkama() -> str:
+    """The installed `valkama` command: where `launcher install` puts it, else on `PATH`.
+
+    `server/launcher.py` owns that place; it cannot be loaded from its file here,
+    since it imports the rest of the server package.
+    """
+
+    local = os.environ.get("LOCALAPPDATA")
+    if local:
+        command = Path(local) / "Valkama" / "bin" / "valkama.cmd"
+        if command.is_file():
+            return str(command)
+    found = shutil.which("valkama")
+    if found is None:
+        raise ScopeError(
+            "release scope: no installed Valkama to read the planning store with;"
+            " install it with `python valkama.py launcher install`"
+        )
+    return found
+
+
+def scope(release_version: str) -> int:
+    """Ask the installed Valkama whether an open bug is bound to `release_version`.
+
+    Its answer is the stage's: it names each bound bug, or what it could not find,
+    and its exit status is this one.
+    """
+
+    command = [
+        installed_valkama(),
+        "released",
+        "--before-prepare",
+        "--repo",
+        str(ROOT),
+        "--product",
+        PRODUCT,
+        "--version",
+        release_version,
+    ]
+    sys.stdout.write(f"release scope: {' '.join(command)}\n")
+    sys.stdout.flush()
+    return subprocess.run(command, check=False).returncode
 
 
 #: LiteLLM's public price list (BerriAI/litellm, MIT). The check reads it to compare
@@ -1198,7 +1263,7 @@ def smoke(assets: Path, expected: str, work_dir: Path, commit: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("check", "prices", "build", "smoke"))
+    parser.add_argument("action", choices=("check", "scope", "prices", "build", "smoke"))
     parser.add_argument("--assets", type=Path)
     parser.add_argument("--version")
     parser.add_argument("--work-dir", type=Path)
@@ -1209,6 +1274,12 @@ def main() -> None:
             check()
         except ToolchainError as error:
             sys.exit(str(error))
+    elif args.action == "scope":
+        try:
+            status = scope(args.version or version())
+        except ScopeError as error:
+            sys.exit(str(error))
+        sys.exit(status)
     elif args.action == "prices":
         try:
             lines = check_prices()
