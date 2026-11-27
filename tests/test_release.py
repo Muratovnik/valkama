@@ -472,7 +472,7 @@ class ReleaseToolchainTests(unittest.TestCase):
     def test_check_runs_each_python_stage_from_the_interpreters_environment(self) -> None:
         calls = self.checked_commands()
         python_stages = [call for call in calls if call.args[0][0] != release.NPM]
-        self.assertEqual(10, len(python_stages))
+        self.assertEqual(11, len(python_stages))
         for call in calls:
             command = call.args[0]
             # semgrep alone comes from its environment of its own, and runs with
@@ -506,8 +506,9 @@ class ReleaseToolchainTests(unittest.TestCase):
             npm,
         )
         self.assertEqual(self.temporary, copy.parent.resolve())
-        # Ahead of the Python stages too: a release once ran 1102 s and then failed here.
-        self.assertEqual([release.NPM, release.NPM], [command[0] for command, _ in stages[:2]])
+        # Ahead of the other Python stages too: a release once ran 1102 s and then failed
+        # here. Only the scope question comes before them.
+        self.assertEqual([release.NPM, release.NPM], [command[0] for command, _ in stages[1:3]])
 
     def test_the_npm_stages_name_their_checkout_to_the_heavy_process_gate(self) -> None:
         # The copy they run in is in no repository, where the gate finds no rules.
@@ -525,12 +526,28 @@ class ReleaseToolchainTests(unittest.TestCase):
         # A price source that cannot be reached is a network failure like a registry's,
         # so it is met before the suite rather than after it.
         checkout = make_checkout(self.root / "checkout")
-        third = self.checked_commands(checkout)[2]
-        command, cwd = third.args[0], third.kwargs["cwd"]
+        fourth = self.checked_commands(checkout)[3]
+        command, cwd = fourth.args[0], fourth.kwargs["cwd"]
         self.assertEqual(
             (str(self.environment.executable), "windows/release.py", "prices"), command
         )
         self.assertEqual(checkout, cwd)
+
+    def test_check_asks_whether_a_bug_is_bound_to_the_version_before_any_other_stage(
+        self,
+    ) -> None:
+        # A bound bug makes every later stage wasted, so its answer comes first.
+        checkout = make_checkout(self.root / "checkout")
+        first = self.checked_commands(checkout)[0]
+        self.assertEqual(
+            (str(self.environment.executable), "windows/release.py", "scope"), first.args[0]
+        )
+        self.assertEqual(checkout, first.kwargs["cwd"])
+
+    def test_the_gates_never_ask_the_planning_store(self) -> None:
+        # The gates and the hosted jobs run with no planning store: only a release asks.
+        self.assertIn("scope", [stage.name for stage in release.runner_stages(release.CHECK)])
+        self.assertNotIn("scope", [stage.name for stage in release.runner_stages(release.GATES)])
 
     def test_the_suite_runs_in_several_processes_in_a_profile_of_its_own(self) -> None:
         # The release once ran it in one process while the gates ran it in several.
@@ -623,7 +640,9 @@ class ReleaseToolchainTests(unittest.TestCase):
         stages = FakeStages(self.outside(), fail=("ci",))
         with self.assertRaises(subprocess.CalledProcessError):
             self.checked(make_checkout(self.root / "checkout"), stages)
-        self.assertEqual(1, len(stages.calls))
+        # The scope question, then the failed install, and nothing after it.
+        self.assertEqual(2, len(stages.calls))
+        self.assertEqual((release.NPM, "ci"), stages.calls[-1].args[0])
         self.assertEqual([], list(self.temporary.iterdir()))
 
     def test_the_checkouts_own_modules_come_through_the_npm_stages_unchanged(self) -> None:
@@ -985,6 +1004,85 @@ class ReleasePriceTests(unittest.TestCase):
 
 #: A made-up commit id of the full length Git writes.
 COMMIT = "0123456789abcdef0123456789abcdef01234567"
+
+
+class ReleaseScopeTests(unittest.TestCase):
+    """The scope stage asks the installed Valkama about the version, and nothing else.
+
+    No Valkama runs here: the process is a stand-in, and the installed command is a
+    file in a throwaway `LOCALAPPDATA`, so no planning store is ever opened.
+    """
+
+    def setUp(self) -> None:
+        home = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(home.cleanup)
+        self.local = Path(home.name)
+        patch = mock.patch.dict(os.environ, {"LOCALAPPDATA": str(self.local)})
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def install(self) -> Path:
+        command = self.local / "Valkama" / "bin" / "valkama.cmd"
+        command.parent.mkdir(parents=True)
+        command.write_bytes(b"@echo off\r\n")
+        return command
+
+    def stage(self, *arguments: str, status: int = 0, on_path: str | None = None) -> tuple:
+        """What `release.py scope` exits with, and each command it started."""
+
+        ran = mock.Mock(return_value=subprocess.CompletedProcess([], status))
+        with (
+            mock.patch.object(release.subprocess, "run", ran),
+            mock.patch.object(release.shutil, "which", return_value=on_path),
+            mock.patch.object(release, "version", return_value="4.5.6"),
+            mock.patch.object(release.sys, "argv", ["release.py", "scope", *arguments]),
+            mock.patch.object(release.sys, "stdout", io.StringIO()),
+            self.assertRaises(SystemExit) as stopped,
+        ):
+            release.main()
+        return stopped.exception.code, [call.args[0] for call in ran.call_args_list]
+
+    def test_the_installed_command_is_asked_about_the_version_in_the_checkout(self) -> None:
+        command = self.install()
+        status, started = self.stage("--version", "1.2.3", on_path="elsewhere/valkama")
+        self.assertEqual(0, status)
+        self.assertEqual(
+            [
+                [
+                    str(command),
+                    "released",
+                    "--before-prepare",
+                    "--repo",
+                    str(release.ROOT),
+                    "--product",
+                    "valkama",
+                    "--version",
+                    "1.2.3",
+                ]
+            ],
+            started,
+        )
+
+    def test_the_version_is_the_one_in_the_version_file_unless_one_is_named(self) -> None:
+        self.install()
+        _status, [command] = self.stage()
+        self.assertEqual("4.5.6", command[-1])
+
+    def test_a_refusal_of_the_installed_command_is_the_stages(self) -> None:
+        self.install()
+        status, _started = self.stage(status=1)
+        self.assertEqual(1, status)
+
+    def test_without_the_launchers_command_the_one_on_path_is_asked(self) -> None:
+        _status, [command] = self.stage(on_path="elsewhere/valkama")
+        self.assertEqual("elsewhere/valkama", command[0])
+
+    def test_with_no_installed_valkama_the_stage_refuses_and_runs_nothing(self) -> None:
+        status, started = self.stage()
+        self.assertEqual([], started)
+        self.assertIsInstance(status, str)
+        self.assertIn("no installed Valkama", str(status))
+        self.assertIn("launcher install", str(status))
 
 
 class SourceArchiveTests(unittest.TestCase):

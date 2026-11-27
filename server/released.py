@@ -24,19 +24,29 @@ compared in steps, and the answer names the step that found it:
 Only the commits of the checkout's own registered project are compared, and the
 ones attached with no repository, by their hash; a commit of another project
 lives elsewhere, so a subject here would be a coincidence.
+
+Before a release is prepared, the same command answers a second question: which
+open bugs are bound to the version about to ship (`bound_bugs`). A bug is bound by
+the label `<product>-<version>`, or by standing under an open goal or stage that
+carries it, and a person moves it to a later version by changing that label. The
+answer refuses while one is bound, because preparing the release first would
+spend the whole check on a candidate the bug keeps from shipping.
 """
 
 from __future__ import annotations
 
+import json
 import os
+import re
 import sqlite3
 import subprocess
 from dataclasses import dataclass
 
 from . import git_worktrees, processes, store
-from .planning import item_tree, states
+from .planning import item_tree, model, states
 from .planning import service as planning_service
 from .projects import project_registry, scopes
+from .store_identity.metadata import read_store_metadata
 
 # A whole range's patches are read at once, so this is not the few seconds one
 # lookup gets.
@@ -160,7 +170,7 @@ def _patch_ids(repository: str, *selection: str, stdin: bytes | None = None) -> 
     return {commit: patch for patch, commit in pairs}
 
 
-def _project(repository: str) -> str | None:
+def _project(repository: str, listing: project_registry.RegistryResult) -> dict | None:
     """The registered project whose root is this checkout, or the checkout it is linked to.
 
     A linked worktree is the repository of its checkout: the directory it happens
@@ -171,8 +181,8 @@ def _project(repository: str) -> str | None:
     common = _git(repository, "rev-parse", "--git-common-dir").strip()
     checkout = os.path.dirname(os.path.normpath(os.path.join(repository, common)))
     projects = {
-        git_worktrees.canonical(str(project["canonical_root"])): str(project["project_id"])
-        for project in project_registry.read_registry()["projects"]
+        git_worktrees.canonical(str(project["canonical_root"])): project
+        for project in listing["projects"]
     }
     roots = (git_worktrees.canonical(root) for root in (top, checkout))
     return next((projects[root] for root in roots if root in projects), None)
@@ -276,7 +286,8 @@ def released_items(
     planning_space = planning_service.get_planning_space(conn, space)
     key = str(planning_space["key"])
     rows = _open_commits(conn, str(planning_space["planning_space_id"]))
-    project = _project(repository)
+    holder = _project(repository, project_registry.read_registry())
+    project = None if holder is None else str(holder["project_id"])
     own = [row for row in rows if row["project_id"] in (None, project)]
     release = _read_release(repository, revisions, {str(row["hash"]) for row in own})
     # An accepted open goal or stage is named by what it derives, not by its service state.
@@ -376,4 +387,151 @@ def render(report: dict) -> str:
             lines.append(f"  {_shown(match)}  {match['step']}: {words}")
         if others:
             lines.append(f"  no match: {', '.join(_shown(pair) for pair in others)}")
+    return "\n".join(lines)
+
+
+# -- before prepare: the open bugs a release is bound to ---------------------------
+
+#: A release version: its numeric core, then an optional pre-release or build suffix.
+_VERSION = re.compile(r"(\d+(?:\.\d+)*)(?:[-+][0-9A-Za-z.+-]*)?")
+
+#: The open bugs of one space bound to a release label: by carrying it, or by standing
+#: at any depth under an open goal or stage that carries it. A bug under several such
+#: containers names the one with the lowest number. `UNION` keeps the descent finite
+#: in a damaged store whose parents form a cycle.
+_BOUND = (
+    "WITH RECURSIVE under(id, container) AS ("
+    " SELECT g.work_item_id, g.number FROM work_items g"
+    " JOIN workflow_states gs ON gs.state_id = g.state_id"
+    " WHERE g.planning_space_id = ? AND g.kind = ?"
+    " AND gs.category NOT IN ('completed', 'cancelled')"
+    " AND EXISTS (SELECT 1 FROM json_each(g.labels) WHERE value = ?)"
+    " UNION SELECT w.work_item_id, u.container FROM under u"
+    " JOIN work_items w ON w.parent_id = u.id)"
+    " SELECT i.number, i.title, i.labels, s.key, s.name, s.category, s.is_terminal,"
+    " (SELECT MIN(u.container) FROM under u WHERE u.id = i.work_item_id) AS container"
+    " FROM work_items i JOIN workflow_states s ON s.state_id = i.state_id"
+    " WHERE i.planning_space_id = ? AND i.kind = 'bug'"
+    " AND s.category NOT IN ('completed', 'cancelled')"
+    " AND (EXISTS (SELECT 1 FROM json_each(i.labels) WHERE value = ?)"
+    " OR i.work_item_id IN (SELECT id FROM under))"
+    " ORDER BY i.number"
+)
+
+
+def _version_core(text: str) -> tuple[int, ...] | None:
+    """The numbers of a version, compared as numbers, or None when it is not one."""
+
+    matched = _VERSION.fullmatch(text)
+    return None if matched is None else tuple(int(part) for part in matched[1].split("."))
+
+
+def checkout_space(conn: sqlite3.Connection, repository: str) -> tuple[str, str]:
+    """The project whose root is this checkout and the key of its space in this store.
+
+    The space is the one the project registry binds the project to; nothing is
+    guessed from a name. Each thing that is not there is a refusal naming it.
+    """
+
+    listing = project_registry.read_registry()
+    if listing["status"] != "available":
+        raise ReleasedError(f"{listing['reason']}: the checkout's planning space cannot be found")
+    found = _project(repository, listing)
+    if found is None:
+        raise ReleasedError(
+            f"{repository} is no registered project's root: register it with"
+            " `valkama projects add`, or name the space with --space"
+        )
+    project = str(found["project_id"])
+    data_scope_id = str(read_store_metadata(conn)["data_scope_id"])
+    space = project_registry.home_space(found, data_scope_id)
+    if space is None:
+        raise ReleasedError(
+            f"project {project} is bound to no planning space of this store: bind it with"
+            f" `valkama projects bind {project} --space KEY`, or name the space with --space"
+        )
+    return project, space
+
+
+def bound_bugs(
+    conn: sqlite3.Connection,
+    *,
+    repository: str,
+    product: str,
+    version: str,
+    space: str | None = None,
+) -> dict:
+    """The open bugs bound to the release `version` of `product`, which keep it from prepare.
+
+    A bug is bound by the label `<product>-<version>`, or by standing at any depth
+    under an open goal or stage that carries it. One under such a goal that carries
+    the label of a later version of the product has been moved there, and is
+    listed apart; one that keeps the release's own label is bound whatever else it
+    carries. A task or an improvement is never bound. `space` defaults to the one
+    the checkout's project is bound to (`checkout_space`).
+    """
+
+    release = _version_core(version)
+    if release is None:
+        raise ReleasedError(f"{version!r} is not a version; name one such as 1.2.0")
+    project = None
+    if space is None:
+        project, space = checkout_space(conn, repository)
+    planning_space = planning_service.get_planning_space(conn, space)
+    key = str(planning_space["key"])
+    label = f"{product}-{version}"
+    space_id = str(planning_space["planning_space_id"])
+    rows = conn.execute(_BOUND, (space_id, model.CONTAINER_KIND, label, space_id, label)).fetchall()
+    bound: list[dict] = []
+    moved: list[dict] = []
+    for row in rows:
+        labels = [str(value) for value in json.loads(row["labels"])]
+        later = [
+            value
+            for value in labels
+            if value.startswith(f"{product}-")
+            and (core := _version_core(value[len(product) + 1 :])) is not None
+            and core > release
+        ]
+        public = states.public_state(row)
+        item = {
+            "reference": model.human_id(key, int(row["number"])),
+            "title": row["title"],
+            "state": None if public is None else public["name"],
+            "under": None
+            if row["container"] is None
+            else model.human_id(key, int(row["container"])),
+        }
+        if label not in labels and later:
+            moved.append({**item, "labels": later})
+        else:
+            bound.append(item)
+    return {
+        "space": key,
+        "project": project,
+        "product": product,
+        "label": label,
+        "bound": bound,
+        "moved": moved,
+    }
+
+
+def render_bound(report: dict) -> str:
+    """The answer for a person: what keeps the release from prepare, or that nothing does."""
+
+    label, space = report["label"], report["space"]
+    lines = [f"No open bug of {space} is bound to {label}."]
+    if report["bound"]:
+        lines = [
+            f"{len(report['bound'])} open bug(s) of {space} are bound to {label}, so the"
+            " release is not prepared. Fix and close each, or move it to a later version by"
+            f" giving it that version's label, {report['product']}-<version>.",
+        ]
+    for bug in report["bound"]:
+        why = f"label {label}" if bug["under"] is None else f"under {bug['under']}"
+        lines.append(f"  {bug['reference']} [{bug['state']}] {bug['title']} ({why})")
+    if report["moved"]:
+        lines.append("Moved to a later version by their label:")
+    for bug in report["moved"]:
+        lines.append(f"  {bug['reference']} {bug['title']} ({', '.join(bug['labels'])})")
     return "\n".join(lines)

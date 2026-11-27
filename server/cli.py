@@ -13,6 +13,8 @@
   summary [--space KEY]    short planning-space report for session hooks
   released --space --repo --range
                            open work items whose commits a release range took in
+  released --before-prepare --repo --product --version
+                           refuses while an open bug is bound to that version
   scopes | attach | detach attachable database files, federated at read time
   migrate work-model       carry a store Valkama 2.9 left to the work model, once
                            (--item-projects names the file `projects map-items`
@@ -759,21 +761,55 @@ def _quota_import_main(options: argparse.Namespace) -> None:
     print(json.dumps(report.as_dict(), ensure_ascii=False, indent=1))
 
 
-def _released_main(options: argparse.Namespace) -> None:
-    """Print the open items a release range took commits from; a refusal exits non-zero."""
+#: Each mode of `released` and the options it cannot go without.
+_RELEASED_NEEDS = {True: ("product", "version"), False: ("space", "revisions")}
+#: What a store `released` cannot read is refused as: it is never brought up.
+_STORE_REFUSALS = (
+    store.StoreTooNewError,
+    store.StoreTooOldError,
+    store.WorkModelMigrationRequiredError,
+)
 
+
+def _released_main(options: argparse.Namespace) -> None:
+    """Print the open items a release range took commits from, or with `--before-prepare`
+    the open bugs bound to the version about to ship; a refusal exits non-zero, and so
+    does a bound bug."""
+
+    missing = [
+        "--range" if name == "revisions" else f"--{name}"
+        for name in _RELEASED_NEEDS[options.before_prepare]
+        if getattr(options, name) is None
+    ]
+    if missing:
+        mode = "--before-prepare" if options.before_prepare else "a range"
+        raise SystemExit(f"released: {mode} needs {' and '.join(missing)}")
     try:
         with contextlib.closing(released.open_store()) as conn:
-            report = released.released_items(
-                conn, space=options.space, repository=options.repo, revisions=options.revisions
-            )
-    except (ValueError, store.StoreTooNewError, sqlite3.Error) as error:
+            if options.before_prepare:
+                report = released.bound_bugs(
+                    conn,
+                    repository=options.repo,
+                    product=options.product,
+                    version=options.version,
+                    space=options.space,
+                )
+            else:
+                report = released.released_items(
+                    conn, space=options.space, repository=options.repo, revisions=options.revisions
+                )
+    except (ValueError, *_STORE_REFUSALS, sqlite3.Error) as error:
         raise SystemExit(f"released: {error}") from error
-    print(
-        json.dumps(report, ensure_ascii=False, indent=1)
-        if options.json
-        else released.render(report)
-    )
+    refused = options.before_prepare and bool(report["bound"])
+    if options.json:
+        print(json.dumps(report, ensure_ascii=False, indent=1))
+    else:
+        text = (released.render_bound if options.before_prepare else released.render)(report)
+        if refused:
+            raise SystemExit(text)
+        print(text)
+    if refused:
+        raise SystemExit(1)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -869,13 +905,28 @@ def main(argv: list[str] | None = None) -> None:
     summary.add_argument("--space", default=None)
     released_cmd = commands.add_parser(
         "released",
-        help="list open work items whose commits a release range took in; changes nothing",
+        help="list open work items whose commits a release range took in, or with"
+        " --before-prepare refuse while an open bug is bound to the version; changes nothing",
     )
-    released_cmd.add_argument("--space", required=True, metavar="KEY")
+    released_cmd.add_argument(
+        "--space",
+        metavar="KEY",
+        help="needed with --range; before prepare, the checkout's project's space by default",
+    )
     released_cmd.add_argument("--repo", required=True, metavar="PATH", help="the release checkout")
     released_cmd.add_argument(
-        "--range", required=True, dest="revisions", metavar="A..B", help="such as v1.0.0..v1.1.0"
+        "--range", dest="revisions", metavar="A..B", help="such as v1.0.0..v1.1.0"
     )
+    released_cmd.add_argument(
+        "--before-prepare",
+        action="store_true",
+        help="refuse while an open bug carries <product>-<version> or stands under a goal"
+        " or stage that does",
+    )
+    released_cmd.add_argument(
+        "--product", metavar="NAME", help="the label's prefix, before prepare"
+    )
+    released_cmd.add_argument("--version", metavar="X.Y.Z", help="the version, before prepare")
     released_cmd.add_argument("--json", action="store_true")
     scopes_cmd = commands.add_parser(
         "scopes", help="list attached database scopes and their planning spaces"

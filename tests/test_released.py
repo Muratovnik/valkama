@@ -25,7 +25,8 @@ from unittest import mock
 from server import cli, processes, released, store
 from server.planning import commits, service
 from server.projects import project_registry
-from tests.registry_fixtures import project_entry, registry_bytes
+from server.store_identity.refs import planning_space_entity
+from tests.registry_fixtures import project_entry, registry_bytes, space_entry
 
 SPACE = "MAIN"
 #: The registered project whose root is the release checkout.
@@ -55,13 +56,20 @@ class ReleasedTestCase(unittest.TestCase):
         service.create_planning_space(self.conn, name="Command Line", key=SPACE)
         self.conn.commit()
         self.repo = self.repository("product")
-        # The registry as each read finds it: a test may register more, or less.
+        # The registry as each read finds it: a test may register more, or less, and
+        # bind a project to a space of this store by naming it in `bound`.
         self.projects = {PROJECT: self.repo}
+        self.bound: dict[str, str] = {}
         registry = mock.patch.object(
             project_registry,
             "_read_registry_bytes",
             side_effect=lambda: registry_bytes(
-                [project_entry(name, root) for name, root in self.projects.items()]
+                [
+                    space_entry(self.conn, name, root, self.bound[name])
+                    if name in self.bound
+                    else project_entry(name, root)
+                    for name, root in self.projects.items()
+                ]
             ),
         )
         registry.start()
@@ -171,6 +179,17 @@ class ReleasedTestCase(unittest.TestCase):
     def found(self, reference: str, report: dict | None = None) -> dict | None:
         items = (report or self.report())["items"]
         return next((item for item in items if item["reference"] == reference), None)
+
+    def fingerprint(self) -> tuple:
+        store_bytes = []
+        for suffix in ("", "-wal"):
+            with open(self.database + suffix, "rb") as handle:
+                store_bytes.append(hashlib.sha256(handle.read()).hexdigest())
+        rows = self.conn.execute(
+            "SELECT number, revision, state_id, updated_at FROM work_items ORDER BY number"
+        ).fetchall()
+        events = self.conn.execute("SELECT COUNT(*) FROM work_item_events").fetchone()[0]
+        return (store_bytes, [tuple(row) for row in rows], events)
 
     def only_match(self, reference: str, report: dict | None = None) -> dict:
         item = self.found(reference, report)
@@ -385,17 +404,6 @@ class ListTests(ReleasedTestCase):
 
 
 class ReadOnlyTests(ReleasedTestCase):
-    def fingerprint(self) -> tuple:
-        store_bytes = []
-        for suffix in ("", "-wal"):
-            with open(self.database + suffix, "rb") as handle:
-                store_bytes.append(hashlib.sha256(handle.read()).hexdigest())
-        rows = self.conn.execute(
-            "SELECT number, revision, state_id, updated_at FROM work_items ORDER BY number"
-        ).fetchall()
-        events = self.conn.execute("SELECT COUNT(*) FROM work_item_events").fetchone()[0]
-        return (store_bytes, [tuple(row) for row in rows], events)
-
     def test_no_write_reaches_the_store_or_the_repository(self) -> None:
         commit = self.commit(self.repo, "feat: in the range")
         branch_commit, _integrated = self.carried("feat: carried over")
@@ -424,6 +432,16 @@ class ReadOnlyTests(ReleasedTestCase):
         self.conn.execute(f"PRAGMA user_version = {store.STORE_SCHEMA_VERSION}")
         self.conn.commit()
 
+    def test_a_store_older_than_this_build_is_refused_and_left_as_it_was(self) -> None:
+        # Refused by name, as a newer one is, rather than ending in a traceback.
+        self.conn.execute("PRAGMA user_version = 1")
+        self.conn.commit()
+        with self.assertRaisesRegex(SystemExit, r"^released: this store is at schema 1"):
+            self.report()
+        self.assertEqual(1, self.conn.execute("PRAGMA user_version").fetchone()[0])
+        self.conn.execute(f"PRAGMA user_version = {store.STORE_SCHEMA_VERSION}")
+        self.conn.commit()
+
 
 class RefusalTests(ReleasedTestCase):
     def test_what_cannot_be_read_as_asked_exits_non_zero_with_the_reason(self) -> None:
@@ -440,6 +458,249 @@ class RefusalTests(ReleasedTestCase):
                 arguments[option] = value
                 # `=` because argparse would otherwise read `--output=x..y` as an option.
                 cli.main(["released", *(f"{key}={val}" for key, val in arguments.items())])
+
+
+#: The release the mode before prepare is asked about, and the label that binds a bug to it.
+PRODUCT = "widget"
+RELEASE = "1.2.0"
+LABEL = f"{PRODUCT}-{RELEASE}"
+
+
+class BeforePrepareTestCase(ReleasedTestCase):
+    """The release checkout's project is bound to the space the work is filed in."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.bound[PROJECT] = SPACE
+
+    def work(
+        self,
+        title: str,
+        *,
+        kind: str = "bug",
+        labels: tuple[str, ...] = (),
+        parent: str | None = None,
+        space: str = SPACE,
+    ) -> str:
+        created = service.create_work_item(
+            self.conn,
+            space=space,
+            title=title,
+            kind=kind,
+            labels=list(labels),
+            parent=parent,
+            acceptance="assignment",
+        )
+        self.conn.commit()
+        return str(created["reference"])
+
+    def relabel(self, reference: str, *labels: str) -> None:
+        service.update_work_item(self.conn, reference, labels=list(labels))
+        self.conn.commit()
+
+    def before_prepare(self, *extra: str, version: str = RELEASE) -> tuple[int, str]:
+        """The exit status of the mode and everything it wrote, to either stream."""
+
+        out, err = io.StringIO(), io.StringIO()
+        status = 0
+        arguments = ["--repo", self.repo, "--product", PRODUCT, "--version", version, *extra]
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            try:
+                cli.main(["released", "--before-prepare", *arguments])
+            except SystemExit as stopped:
+                if isinstance(stopped.code, str):
+                    err.write(stopped.code)
+                    status = 1
+                else:
+                    status = int(stopped.code or 0)
+        return status, out.getvalue() + err.getvalue()
+
+    def assert_refused_naming(self, *bugs: tuple[str, str]) -> str:
+        """A refusal naming each bug by its reference and its title."""
+
+        status, said = self.before_prepare()
+        self.assertNotEqual(0, status, said)
+        for reference, title in bugs:
+            self.assertIn(f"{reference} ", said)
+            self.assertIn(title, said)
+        return said
+
+    def assert_passes(self) -> str:
+        status, said = self.before_prepare()
+        self.assertEqual(0, status, said)
+        return said
+
+
+class BoundBugTests(BeforePrepareTestCase):
+    def test_an_open_bug_with_the_release_label_refuses_naming_it(self) -> None:
+        bug = self.work("the export drops a row", labels=(LABEL, "export"))
+        other = self.work("the import hangs", labels=(LABEL,))
+        self.assert_refused_naming((bug, "the export drops a row"), (other, "the import hangs"))
+
+    def test_a_bug_at_any_depth_under_an_open_goal_with_the_label_refuses(self) -> None:
+        goal = self.work("Release 1.2.0", kind="goal", labels=(LABEL,))
+        stage = self.work("Fixes", kind="stage", parent=goal)
+        inner = self.work("Inner fixes", kind="stage", parent=stage)
+        deep = self.work("a deep bug with no label", parent=inner)
+        near = self.work("a bug right under the goal", parent=goal)
+        said = self.assert_refused_naming(
+            (deep, "a deep bug with no label"), (near, "a bug right under the goal")
+        )
+        self.assertIn(goal, said)
+
+    def test_a_bug_under_a_goal_without_the_label_is_not_bound(self) -> None:
+        goal = self.work("Some later goal", kind="goal", labels=(f"{PRODUCT}-1.3.0",))
+        self.work("a bug of that goal", parent=goal)
+        self.assert_passes()
+
+    def test_a_bug_relabelled_to_a_later_version_passes(self) -> None:
+        bug = self.work("moved by its label", labels=(LABEL,))
+        self.assert_refused_naming((bug, "moved by its label"))
+        self.relabel(bug, f"{PRODUCT}-1.2.1")
+        self.assert_passes()
+
+    def test_a_bug_under_the_goal_labelled_for_a_later_version_passes(self) -> None:
+        goal = self.work("Release 1.2.0", kind="goal", labels=(LABEL,))
+        bug = self.work("put off to the next minor", parent=goal)
+        self.assert_refused_naming((bug, "put off to the next minor"))
+        # 1.10 is later than 1.2: versions compare by number, not as text.
+        self.relabel(bug, f"{PRODUCT}-1.10.0")
+        self.assert_passes()
+
+    def test_a_bug_under_the_goal_labelled_for_an_earlier_version_is_still_bound(self) -> None:
+        goal = self.work("Release 1.2.0", kind="goal", labels=(LABEL,))
+        bug = self.work("left over from 1.1", parent=goal, labels=(f"{PRODUCT}-1.1.0",))
+        self.assert_refused_naming((bug, "left over from 1.1"))
+
+    def test_a_bug_keeping_the_release_label_beside_a_later_one_is_still_bound(self) -> None:
+        bug = self.work("labelled twice", labels=(LABEL, f"{PRODUCT}-1.3.0"))
+        self.assert_refused_naming((bug, "labelled twice"))
+
+    def test_a_closed_bug_passes(self) -> None:
+        bug = self.work("fixed already", labels=(LABEL,))
+        self.assert_refused_naming((bug, "fixed already"))
+        self.close_item(bug)
+        self.assert_passes()
+
+    def test_tasks_improvements_and_the_goal_itself_are_not_counted(self) -> None:
+        goal = self.work("Release 1.2.0", kind="goal", labels=(LABEL,))
+        self.work("a task with the label", kind="task", labels=(LABEL,))
+        self.work("an improvement with the label", kind="improvement", labels=(LABEL,))
+        self.work("a task under the goal", kind="task", parent=goal)
+        self.work("an improvement under the goal", kind="improvement", parent=goal)
+        self.assert_passes()
+        # The control: the same goal with a bug under it refuses.
+        bug = self.work("a bug under the goal", parent=goal)
+        self.assert_refused_naming((bug, "a bug under the goal"))
+
+    def test_another_products_label_or_a_shorter_version_is_not_the_release(self) -> None:
+        self.work("another product's bug", labels=(f"gadget-{RELEASE}",))
+        self.work("labelled with the minor alone", labels=(f"{PRODUCT}-1.2",))
+        self.work("labelled with the version alone", labels=(RELEASE,))
+        self.assert_passes()
+
+    def test_a_bug_of_another_space_counts_only_once_the_checkout_is_bound_there(self) -> None:
+        service.create_planning_space(self.conn, name="Elsewhere", key="ELSE")
+        self.conn.commit()
+        bug = self.work("a bug of the other space", labels=(LABEL,), space="ELSE")
+        self.assert_passes()
+        self.bound[PROJECT] = "ELSE"
+        self.assert_refused_naming((bug, "a bug of the other space"))
+
+    def test_a_space_named_is_read_instead_of_the_bound_one(self) -> None:
+        service.create_planning_space(self.conn, name="Elsewhere", key="ELSE")
+        self.conn.commit()
+        bug = self.work("a bug of the other space", labels=(LABEL,), space="ELSE")
+        status, said = self.before_prepare("--space", "ELSE")
+        self.assertNotEqual(0, status, said)
+        self.assertIn(bug, said)
+
+    def test_the_json_answer_lists_the_bound_bugs_and_still_refuses(self) -> None:
+        goal = self.work("Release 1.2.0", kind="goal", labels=(LABEL,))
+        labelled = self.work("labelled", labels=(LABEL,))
+        under = self.work("under the goal", parent=goal)
+        moved = self.work("moved on", labels=(f"{PRODUCT}-1.3.0",), parent=goal)
+        status, said = self.before_prepare("--json")
+        self.assertNotEqual(0, status)
+        report = json.loads(said)
+        self.assertEqual(
+            (SPACE, PROJECT, LABEL), (report["space"], report["project"], report["label"])
+        )
+        self.assertEqual(
+            [(labelled, "labelled", None), (under, "under the goal", goal)],
+            [(bug["reference"], bug["title"], bug["under"]) for bug in report["bound"]],
+        )
+        self.assertEqual([moved], [bug["reference"] for bug in report["moved"]])
+
+    def test_the_mode_writes_nothing_to_the_store(self) -> None:
+        self.work("a bound bug", labels=(LABEL,))
+        self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        before = self.fingerprint()
+        status, _said = self.before_prepare()
+        self.assertNotEqual(0, status)
+        self.assertEqual(before, self.fingerprint())
+
+
+class BeforePrepareRefusalTests(BeforePrepareTestCase):
+    """Whatever the mode cannot find is a refusal naming it, never a pass."""
+
+    def assert_refused_with(self, reason: str, *extra: str, version: str = RELEASE) -> None:
+        status, said = self.before_prepare(*extra, version=version)
+        self.assertNotEqual(0, status, said)
+        self.assertIn(reason, said)
+
+    def test_no_store_is_refused_naming_its_path(self) -> None:
+        missing = os.path.join(self.home.name, "absent.sqlite3")
+        with mock.patch.dict(os.environ, {"VALKAMA_DB": missing}):
+            self.assert_refused_with(missing)
+
+    def test_no_registry_is_refused(self) -> None:
+        with mock.patch.object(
+            project_registry, "_read_registry_bytes", side_effect=FileNotFoundError
+        ):
+            self.assert_refused_with("project registry is absent")
+
+    def test_a_checkout_no_project_is_registered_at_is_refused(self) -> None:
+        del self.projects[PROJECT]
+        self.assert_refused_with(f"{self.repo} is no registered project's root")
+
+    def test_a_project_bound_to_no_space_is_refused(self) -> None:
+        del self.bound[PROJECT]
+        self.assert_refused_with(f"project {PROJECT} is bound to no planning space of this store")
+
+    def test_a_project_bound_to_a_space_of_another_store_is_refused(self) -> None:
+        elsewhere = project_entry(PROJECT, self.repo)
+        elsewhere["planning_binding"] = planning_space_entity(
+            {"data_scope_id": "00000000-0000-4000-8000-000000000000", "space_key": SPACE}
+        )
+        with mock.patch.object(
+            project_registry, "_read_registry_bytes", return_value=registry_bytes([elsewhere])
+        ):
+            self.assert_refused_with(
+                f"project {PROJECT} is bound to no planning space of this store"
+            )
+
+    def test_an_unknown_space_named_is_refused(self) -> None:
+        self.assert_refused_with("no planning space", "--space", "NOPE")
+
+    def test_a_version_that_is_not_one_is_refused(self) -> None:
+        self.assert_refused_with("not a version", version="next")
+
+    def test_the_mode_needs_the_product_and_the_version(self) -> None:
+        for missing in ("--product", "--version"):
+            arguments = {"--repo": self.repo, "--product": PRODUCT, "--version": RELEASE}
+            del arguments[missing]
+            with self.subTest(missing), self.assertRaisesRegex(SystemExit, missing):
+                cli.main(
+                    ["released", "--before-prepare", *(f"{k}={v}" for k, v in arguments.items())]
+                )
+
+    def test_the_range_mode_still_needs_the_space_and_the_range(self) -> None:
+        for missing in ("--space", "--range"):
+            arguments = {"--space": SPACE, "--repo": self.repo, "--range": "start..main"}
+            del arguments[missing]
+            with self.subTest(missing), self.assertRaisesRegex(SystemExit, missing):
+                cli.main(["released", *(f"{k}={v}" for k, v in arguments.items())])
 
 
 if __name__ == "__main__":

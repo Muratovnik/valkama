@@ -136,9 +136,9 @@ if something is missing, file a task under it. Unconfirmed, the owner is asked
 ([work model](references/work-model.md#goals-and-stages)).
 Converting, dividing, moving out and putting off work: [work model](references/work-model.md#goals-and-stages).
 
-**Closing a release.** Before closing the release's goal, check its open items
-with `valkama released`, as
-[the tool reference](references/tools.md#closing-a-release) says.
+**Releasing.** Before preparing a release, and before closing its goal, run
+`valkama released` as [the tool reference](references/tools.md#preparing-a-release)
+says: an open bug labelled `<product>-<version>` holds that release back.
 
 **Not done.** Work that is not needed, duplicated or superseded closes in the
 cancelled state. It needs the summary, which starts with why (`Not needed:`,

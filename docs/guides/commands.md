@@ -23,6 +23,7 @@ python valkama.py <command> [options]
 | `skill install\|status\|uninstall [--client claude\|codex]... [--launcher-directory DIR] [--force]` | install, inspect or remove the Valkama skill where each client finds it; `--force` is for `install` and `uninstall`; see [`SERVICE.md`](../../SERVICE.md#install-the-skill) |
 | `summary [--space KEY]` | a short Planning-space report, meant for session hooks |
 | `released --space KEY --repo PATH --range A..B [--json]` | list the open work items whose attached commits went into a release range; see [`released`](#released) |
+| `released --before-prepare --repo PATH --product NAME --version X.Y.Z [--space KEY] [--json]` | refuse while an open bug is bound to that release; see [`released --before-prepare`](#released---before-prepare) |
 | `git-hook install\|status\|uninstall [--json] [--launcher-directory DIR]` | install, inspect or remove Valkama's Git commit hook in the global Git configuration; see [The Git commit hook](client-hooks.md#the-git-commit-hook) |
 | `hook CLIENT EVENT` | record one client hook event from stdin without a running server; see [Client hooks](client-hooks.md) |
 | `statusline [--source=statusline\|mod] [--previous=<base64>]` | Claude Code's status line command: record the quota reading it is given; see [The status line command](client-hooks.md#the-status-line-command) |
@@ -58,6 +59,26 @@ project registered at `--repo` are compared, and those attached with no
 repository by their hash. A hint to check by hand when closing a release: partly
 released work shows too, an item with no attached commit cannot, and it changes
 neither the store nor the repository.
+
+## `released --before-prepare`
+
+`released --before-prepare --repo PATH --product NAME --version X.Y.Z` lists the
+open bugs bound to that release and exits non-zero while there is one, naming
+each by reference and title. A bug is bound by the label `NAME-X.Y.Z`, or by
+standing, at any depth, under an open goal or stage that carries that label.
+Tasks and improvements are never bound. A bug under such a goal or stage that
+carries the label of a later version of the product, such as `NAME-1.3.0` when
+the release is 1.2.0, has been moved there: it is listed apart and does not refuse. One that keeps the
+release's own label stays bound whatever else it carries. Versions compare by
+number, so `1.10.0` is later than `1.2.0`.
+
+The space is the one the project registry binds the project registered at
+`--repo` to (see [Project registry](configuration.md#project-registry)), unless
+`--space` names one. Each thing it cannot find is a refusal that names it, never a
+pass: the store, the registry, a project registered at the checkout, or a space
+of this store that project is bound to. It reads the store through a read-only
+connection and changes nothing. `--json` prints the answer, with `bound` and
+`moved`, and still exits non-zero while a bug is bound.
 
 ## `export`
 
