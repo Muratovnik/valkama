@@ -45,6 +45,7 @@ import json
 import math
 import os
 import re
+import shlex
 import shutil
 import stat
 import subprocess
@@ -67,6 +68,9 @@ DIST_PACKAGES = ("desktop", "windows")
 #: Names the checkout to `tests/heavy_gate.py` (its `ROOT_VARIABLE`) for the npm
 #: stages, whose copy of the sources is in no repository and so has no gate rules.
 HEAVY_GATE_ROOT = "VALKAMA_HEAVY_GATE_ROOT"
+#: Whether a run that finds no room at the heavy-process gate waits for it: `1` waits,
+#: `0` does not, and anything else leaves it to the gate (`tests/heavy_gate.py`).
+WAIT_VARIABLE = "HEAVY_GATE_WAIT"
 SKIP_DIRS = frozenset(
     {".git", ".cache", ".private", ".state", "tmp", "node_modules", "release", "__pycache__"}
 )
@@ -129,6 +133,102 @@ TOOLS: dict[str, Tool] = {
     "semgrep": Tool("semgrep", script="semgrep", environment=SEMGREP_ENVIRONMENT),
     "coverage": Tool("coverage", module="coverage"),
 }
+
+#: The two runners of the stages: `tests/isolated.py gates`, the integrator's run of
+#: the list in `AGENTS.md`, and `check`, which Release Kit runs before a release.
+GATES = "gates"
+CHECK = "check"
+
+
+@dataclass(frozen=True)
+class Stage:
+    """One stage of the gates, declared once in `STAGES` for both runners.
+
+    `command` is spelled as `AGENTS.md` spells it, and `stage_argv` resolves its
+    program. `directory` is where it runs, relative to the checkout; `check`
+    runs an npm stage there in its copy of the sources. `resource` is the kind
+    of run the machine's heavy-process gate holds for the whole stage, as
+    `.heavy-gate.toml` declares it: none for a light stage, nor for one such as
+    `npm test` whose command takes a lease for a part of itself. `runners` names
+    which runners run it.
+    """
+
+    name: str
+    group: str
+    command: str
+    directory: str = "."
+    #: It reads the commits of the checkout, so a directory without them refuses it.
+    needs_history: bool = False
+    resource: str | None = None
+    runners: frozenset[str] = frozenset({GATES, CHECK})
+
+    @property
+    def needs_modules(self) -> bool:
+        return self.command.startswith("npm ")
+
+
+#: The kind of run `tests/parallel.py` is at the heavy-process gate (its `KIND`).
+#: Spelled here: importing the `tests` package moves the environment it runs in.
+UNITTEST_PARALLEL = "unittest-parallel"
+
+#: Every stage, in the order both runners run them. The `gates` stages are the list
+#: in `AGENTS.md`, which `tests/test_isolated.py` compares. `check` installs the
+#: lockfiles' modules first, a registry that cannot be reached costing seconds and
+#: not the whole suite, and compares prices next for the same reason. The two steps
+#: that read the commits, the subjects and the history audit, are the gates' alone.
+STAGES = (
+    Stage("web-ci", "web", "npm ci", "web", runners=frozenset({CHECK})),
+    Stage("desktop-ci", "desktop", "npm ci", "desktop", runners=frozenset({CHECK})),
+    Stage("prices", "python", "python windows/release.py prices", runners=frozenset({CHECK})),
+    Stage("ruff", "python", "python -m ruff check ."),
+    Stage("format", "python", "python -m ruff format --check ."),
+    Stage(
+        "subjects",
+        "python",
+        "python tests/commit_subjects.py",
+        needs_history=True,
+        runners=frozenset({GATES}),
+    ),
+    Stage(
+        "relkit", "python", "python .github/relkit.pyz audit --history", runners=frozenset({GATES})
+    ),
+    Stage("typos", "python", "typos"),
+    Stage(
+        "vulture",
+        "python",
+        "vulture server tests valkama.py vulture_whitelist.py --min-confidence 60",
+    ),
+    Stage("mypy", "python", "mypy"),
+    Stage("lint-imports", "python", "lint-imports --cache-dir .cache/import-linter"),
+    Stage(
+        "semgrep",
+        "python",
+        "semgrep scan --config p/python --config p/security-audit --metrics off --error"
+        " server valkama.py",
+    ),
+    Stage("unittest", "python", "python tests/parallel.py --coverage", resource=UNITTEST_PARALLEL),
+    Stage("coverage", "python", "python -m coverage report"),
+    Stage("web-test", "web", "npm test", "web"),
+    Stage("web-build", "web", "npm run build", "web"),
+    Stage("desktop-test", "desktop", "npm test", "desktop"),
+)
+
+
+def runner_stages(runner: str) -> tuple[Stage, ...]:
+    """The stages `runner` runs, in their order, read from `STAGES` when asked."""
+
+    return tuple(stage for stage in STAGES if runner in stage.runners)
+
+
+def stage_argv(command: str, python: str, tools: Mapping[str, tuple[str, ...]]) -> list[str]:
+    """A stage's command as a process starts it: `python` and `npm` as named, a tool as resolved."""
+
+    program, *arguments = shlex.split(command)
+    if program == "python":
+        return [python, *arguments]
+    if program == "npm":
+        return [NPM, *arguments]
+    return [*tools[program], *arguments]
 
 
 @dataclass(frozen=True)
@@ -548,7 +648,8 @@ def check(
     `npm ci` runs ahead of the Python stages, though only the npm stages need it:
     a registry that cannot be reached then costs a minute and not the whole suite.
     Every npm stage runs in `npm_copy`, never in the checkout; the Python stages
-    run in the checkout.
+    run in the checkout. Whether a stage waits at the heavy-process gate is
+    decided before the first one, by `gate_wait`.
     """
 
     interpreter = interpreter or running_interpreter()
@@ -558,77 +659,58 @@ def check(
         interpreter, pins(requirements), own_environments() if own is None else own
     )
     require_version(version())
-    base = tool_environment(interpreter, os.environ)
+    base, said = gate_wait(tool_environment(interpreter, os.environ))
+    sys.stdout.write(f"{said}\n")
     with npm_copy(ROOT) as copy:
         sys.stdout.write(f"release check: the npm stages run in a copy of the sources, {copy}\n")
         _run_stages(_stages(interpreter, tools, copy), base)
 
 
+def gate_wait(base: Mapping[str, str]) -> tuple[dict[str, str], str]:
+    """`base` for every stage, deciding whether one waits at the heavy-process gate; what to say.
+
+    The gate does not wait in an agent's session unless told to, so a stage that
+    finds no room exits 75. That is right for one short run, which is asked again,
+    and wrong for a stage after minutes of others, whose refusal throws them all
+    away: the suite, which takes its lease late, once did that to a whole release.
+    So the check, one long run nobody watches, waits, unless its caller chose.
+    """
+
+    environment = dict(base)
+    chosen = environment.get(WAIT_VARIABLE)
+    if chosen == "0":
+        return environment, (
+            f"release check: {WAIT_VARIABLE}=0, so a stage that finds no room at the"
+            " heavy-process gate fails the check"
+        )
+    environment[WAIT_VARIABLE] = "1"
+    because = "as its caller set" if chosen == "1" else "as a long run does"
+    return environment, (
+        "release check: a stage that finds no room at the heavy-process gate waits for it"
+        f" ({WAIT_VARIABLE}=1, {because})"
+    )
+
+
 def _stages(
     interpreter: Interpreter, tools: Mapping[str, tuple[str, ...]], copy: Path
 ) -> list[tuple[str, tuple[str, ...], Path]]:
-    """Each stage of `check`: its name, its command and where it runs.
+    """Each stage of `check`, from `STAGES`: its name, its command and where it runs.
 
     The npm stages run in `copy`, the Python stages in the checkout. The web
     build is the one npm stage whose output leaves the copy: `_run_stages` puts it
     in the checkout's `web/dist`.
     """
 
+    python = str(interpreter.executable)
     return [
-        # Into the copy: `npm ci` empties the tree it installs into, and the
-        # checkout's may be the one other worktrees link theirs to.
-        *(("npm", (NPM, "ci"), copy / package) for package in NPM_PACKAGES),
-        # Early for the reason `npm ci` is: a source that cannot be reached costs
-        # seconds, not the whole suite.
         (
-            "prices",
-            (str(interpreter.executable), str(ROOT / "windows" / "release.py"), "prices"),
-            ROOT,
-        ),
-        ("ruff", (*tools["ruff"], "check", "."), ROOT),
-        ("ruff", (*tools["ruff"], "format", "--check", "."), ROOT),
-        ("typos", tools["typos"], ROOT),
-        (
-            "vulture",
-            (
-                *tools["vulture"],
-                "server",
-                "tests",
-                "valkama.py",
-                "vulture_whitelist.py",
-                "--min-confidence",
-                "60",
-            ),
-            ROOT,
-        ),
-        ("mypy", tools["mypy"], ROOT),
-        ("lint-imports", (*tools["lint-imports"], "--cache-dir", ".cache/import-linter"), ROOT),
-        (
-            "semgrep",
-            (
-                *tools["semgrep"],
-                "scan",
-                "--config",
-                "p/python",
-                "--config",
-                "p/security-audit",
-                "--metrics",
-                "off",
-                "--error",
-                "server",
-                "valkama.py",
-            ),
-            ROOT,
-        ),
-        (
-            "coverage run",
-            (*tools["coverage"], "run", "-m", "unittest", "discover", "-s", ".", "-p", "test_*.py"),
-            ROOT,
-        ),
-        ("coverage", (*tools["coverage"], "report"), ROOT),
-        ("npm", (NPM, "test"), copy / "web"),
-        ("web build", (NPM, "run", "build"), copy / "web"),
-        ("npm", (NPM, "test"), copy / "desktop"),
+            stage.name,
+            tuple(stage_argv(stage.command, python, tools)),
+            # Into the copy: `npm ci` empties the tree it installs into, and the
+            # checkout's may be the one other worktrees link theirs to.
+            (copy if stage.needs_modules else ROOT) / stage.directory,
+        )
+        for stage in runner_stages(CHECK)
     ]
 
 
@@ -641,7 +723,8 @@ def _run_stages(stages: list[tuple[str, tuple[str, ...], Path]], shared: dict[st
             # The copy is in no repository, so the heavy-process gate finds no rules there.
             base[HEAVY_GATE_ROOT] = str(ROOT)
         # Gate output is not parsed; inherit pipes to preserve the tool's text.
-        if stage == "coverage run":
+        if stage == "unittest":
+            # The suite in a profile of its own, as `gates` runs every stage.
             with tempfile.TemporaryDirectory(prefix="valkama-check-", dir=task_parent()) as task:
                 environment = isolated_environment(Path(task) / "user-state", base)
                 environment["GIT_CEILING_DIRECTORIES"] = task
@@ -652,7 +735,7 @@ def _run_stages(stages: list[tuple[str, tuple[str, ...], Path]], shared: dict[st
             with tempfile.TemporaryDirectory(prefix="sg-", dir=task_parent()) as task:
                 environment = {**base, "TEMP": task, "TMP": task, "TMPDIR": task}
                 subprocess.run(command, cwd=cwd, env=environment, check=True)
-        elif stage == "web build":
+        elif stage == "web-build":
             subprocess.run(command, cwd=cwd, env=base, check=True)
             # The build wrote the copy's `dist`; the checkout's is the one served,
             # committed and compared by Release Kit after the checks.

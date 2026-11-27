@@ -468,7 +468,70 @@ class GateTests(Workspace):
             else:
                 listed.append((line, directory.as_posix()))
 
-        self.assertEqual(listed, [(s.command, s.directory) for s in isolated.GATE_STEPS])
+        self.assertEqual(listed, [(s.command, s.directory) for s in isolated.gate_steps()])
+
+    def check_stages(self) -> list[tuple[str, tuple[str, ...], Path]]:
+        """The stages `windows/release.py check` would run here, none of them started."""
+
+        release = isolated.release
+        tools = {name: (name,) for name in release.TOOLS}
+        python = Path(sys.executable)
+        interpreter = release.Interpreter(python, python.parent, lambda _distribution: None)
+        return release._stages(interpreter, tools, self.root / "copy")
+
+    def gate_argv(self) -> dict[str, tuple[str, ...]]:
+        tools = {name: (name,) for name in isolated.release.TOOLS}
+        return {
+            step.name: tuple(isolated.release.stage_argv(step.command, sys.executable, tools))
+            for step in isolated.gate_steps()
+        }
+
+    def test_the_release_check_and_the_gates_build_their_stages_from_one_list(self) -> None:
+        # They were two lists once, and the release ran the suite in one process
+        # while the gates ran it in several.
+        check = {name: command for name, command, _cwd in self.check_stages()}
+        gates = self.gate_argv()
+        shared = set(check) & set(gates)
+        self.assertGreater(len(shared), 10)
+        for name in shared:
+            with self.subTest(stage=name):
+                self.assertEqual(gates[name], check[name])
+        self.assertEqual(
+            (sys.executable, "tests/parallel.py", "--coverage"), check["unittest"], "the drift"
+        )
+        # What each runs of its own is what the list marks for it alone.
+        release = isolated.release
+        self.assertEqual(
+            {s.name for s in release.STAGES if s.runners == {release.CHECK}}, set(check) - shared
+        )
+        self.assertEqual(
+            {s.name for s in release.STAGES if s.runners == {release.GATES}}, set(gates) - shared
+        )
+
+        # The control: a stage added to the list, and one changed there, reach both.
+        added = release.Stage("added", "python", 'python -c "pass"')
+        changed = tuple(
+            release.Stage(s.name, s.group, f"{s.command} --precision 1", s.directory)
+            if s.name == "coverage"
+            else s
+            for s in release.STAGES
+        )
+        with mock.patch.object(release, "STAGES", (*changed, added)):
+            check = {name: command for name, command, _cwd in self.check_stages()}
+            gates = self.gate_argv()
+            selected = isolated.select_steps(None, owner=False)
+        expected = (sys.executable, "-m", "coverage", "report", "--precision", "1")
+        self.assertEqual(expected, check["coverage"])
+        self.assertEqual(expected, gates["coverage"])
+        self.assertEqual((sys.executable, "-c", "pass"), check["added"])
+        self.assertEqual((sys.executable, "-c", "pass"), gates["added"])
+        self.assertEqual("added", selected[-1].name)
+
+    def test_the_one_kind_of_run_a_stage_is_held_as_is_the_parallel_runners(self) -> None:
+        # `gates` sizes a held step's lease by the processes `tests/parallel.py` wants.
+        declared = {s.resource for s in isolated.release.STAGES} - {None}
+        self.assertEqual({parallel.KIND}, declared)
+        self.assertEqual(parallel.KIND, isolated.release.UNITTEST_PARALLEL)
 
     def test_the_subject_step_is_refused_where_there_is_no_history_and_never_passes(self) -> None:
         snapshot = self.root / "snapshot"
@@ -495,19 +558,19 @@ class GateTests(Workspace):
         self.assertNotIn("failed:", said)
         self.assertNotIn("steps passed", said)
         self.assertEqual(
-            ["subjects"], [step.name for step in isolated.GATE_STEPS if step.needs_history]
+            ["subjects"], [step.name for step in isolated.gate_steps() if step.needs_history]
         )
 
     def test_every_step_resolves_to_a_program(self) -> None:
         tools = {name: (name,) for name in ("typos", "vulture", "mypy", "lint-imports", "semgrep")}
-        for step in isolated.GATE_STEPS:
+        for step in isolated.gate_steps():
             with self.subTest(step=step.name):
-                self.assertTrue(isolated._argv(step.command, tools))
-        unittest_step = next(s for s in isolated.GATE_STEPS if s.name == "unittest")
+                self.assertTrue(isolated.release.stage_argv(step.command, sys.executable, tools))
+        unittest_step = next(s for s in isolated.gate_steps() if s.name == "unittest")
         # The suite's runner, run by this interpreter as a script, measuring its processes.
         self.assertEqual(
             [sys.executable, "tests/parallel.py", "--coverage"],
-            isolated._argv(unittest_step.command, tools),
+            isolated.release.stage_argv(unittest_step.command, sys.executable, tools),
         )
 
     def test_selection_is_by_step_or_group_and_owner_reaches_only_the_audit(self) -> None:
@@ -517,7 +580,7 @@ class GateTests(Workspace):
         self.assertEqual(
             ["ruff", "mypy"], [s.name for s in isolated.select_steps(["mypy", "ruff"], owner=False)]
         )
-        self.assertEqual(len(isolated.GATE_STEPS), len(isolated.select_steps(None, owner=False)))
+        self.assertEqual(len(isolated.gate_steps()), len(isolated.select_steps(None, owner=False)))
 
         owned = [
             s.command for s in isolated.select_steps(None, owner=True) if "--owner" in s.command
@@ -548,7 +611,7 @@ class GateTests(Workspace):
 
     def run_command_with_steps(self, *steps: isolated.Step) -> tuple[int, str]:
         with (
-            mock.patch.object(isolated, "GATE_STEPS", steps),
+            mock.patch.object(isolated.release, "STAGES", steps),
             mock.patch.object(isolated.release, "require_toolchain", return_value={}),
         ):
             return quietly(isolated.main, ["gates", "--out", str(self.out)])
@@ -646,11 +709,13 @@ class HeavyGateTests(Workspace):
         self.assertIn("web-test", repeated)
 
     def test_of_the_whole_list_only_the_unittest_step_takes_a_lease(self) -> None:
-        gated = [run.name for run in self.gate_runs("python", "web", "desktop") if run.gated]
+        gated = [run.name for run in self.gate_runs("python", "web", "desktop") if run.resource]
         self.assertEqual(["unittest"], gated)
 
     def test_a_selection_without_the_unittest_step_takes_none(self) -> None:
-        self.assertEqual([], [run.name for run in self.gate_runs("coverage", "web") if run.gated])
+        self.assertEqual(
+            [], [run.name for run in self.gate_runs("coverage", "web") if run.resource]
+        )
 
     def gates(self, runs: list[isolated.Run], environment: dict[str, str] | None = None) -> int:
         code, _ = quietly(
@@ -673,7 +738,7 @@ class HeavyGateTests(Workspace):
             "unittest",
             [sys.executable, "-c", f"open({str(marker)!r}, 'w').close()"],
             ROOT,
-            gated=True,
+            resource=parallel.KIND,
         )
         self.assertEqual(0, self.gates([self.run_python("light", "print(1)"), heavy]))
 
@@ -706,7 +771,7 @@ class HeavyGateTests(Workspace):
             "unittest",
             [sys.executable, "-c", f"open({str(marker)!r}, 'w').close()"],
             ROOT,
-            gated=True,
+            resource=parallel.KIND,
         )
         (self.state / "refuse").write_text("")
         self.assertEqual(1, self.gates([heavy], {**os.environ, "CLAUDECODE": "1"}))
@@ -725,7 +790,9 @@ class HeavyGateTests(Workspace):
             f"heavy_gate.hold_until_exit('unittest-suite', lock=Path({str(self.lock)!r}),"
             f" gate={self.entry!r}); print('in')"
         )
-        return isolated.Run("unittest", [sys.executable, "-c", source], ROOT, gated=True)
+        return isolated.Run(
+            "unittest", [sys.executable, "-c", source], ROOT, resource=parallel.KIND
+        )
 
     def test_the_suite_inside_the_gated_step_takes_no_lease_of_its_own(self) -> None:
         self.assertEqual(0, self.gates([self.suite_step()]))
@@ -944,7 +1011,7 @@ class ModulesStepTests(ModulesCase):
         (checkout / "requirements-dev.txt").write_text("", encoding="utf-8")
         with (
             mock.patch.object(isolated, "ROOT", checkout),
-            mock.patch.object(isolated, "GATE_STEPS", steps),
+            mock.patch.object(isolated.release, "STAGES", steps),
             mock.patch.object(isolated.release, "NPM", sys.executable),
             mock.patch.object(isolated.release, "require_toolchain", return_value={}),
         ):
@@ -1025,7 +1092,7 @@ class ModulesStepTests(ModulesCase):
     def test_every_npm_step_of_the_list_is_held_to_its_modules_and_no_other_is(self) -> None:
         self.assertEqual(
             {"web-test", "web-build", "desktop-test"},
-            {step.name for step in isolated.GATE_STEPS if step.needs_modules},
+            {step.name for step in isolated.gate_steps() if step.needs_modules},
         )
 
     def test_the_python_half_does_not_read_the_modules(self) -> None:

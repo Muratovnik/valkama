@@ -145,6 +145,9 @@ semgrep installs on the Python of `.venv` again, its pin can move back into
 venv in one call: only the child sees the redirected `HOME`, `USERPROFILE`,
 `LOCALAPPDATA`, `APPDATA` and `VALKAMA_DB`, and every step's exit code counts.
 `--only python` is the Python half; `--owner` is the audit with the owner policy.
+Its steps and the stages of `windows/release.py check` are one list, `STAGES` in
+`windows/release.py`, each stage marked with the runners that run it: change a
+gate there, and the `AGENTS.md` list with it, never in one runner alone.
 A report cites its `DIR/record.json`, which `python tests/run_record.py check`
 refuses for another tree or state, and, given `--require NAME`, for having no
 step of that name; a step that `run` records takes the name of its command's
@@ -197,7 +200,10 @@ the 8 workers it wants or the count the caller gave; `browser-suite`,
 `browser-targeted`, one spec or a probe. The gate admits a run by what earlier
 runs of its kind and size used, beside others while the machine has room.
 In an agent's session a run that finds no room exits 75 at once and says why;
-`HEAVY_GATE_WAIT=1` makes it wait instead, saying why every minute. Its leases
+`HEAVY_GATE_WAIT=1` makes it wait instead, saying why every minute.
+`windows/release.py check` sets that for all its stages before the first one,
+unless its caller set `HEAVY_GATE_WAIT=0`: a refusal after minutes of stages
+throws them all away. Its leases
 are the OS's: they go with a run that dies. `heavy-gate mode serial` lets one
 heavy run in at a time across the machine, and `heavy-gate mode measured` goes
 back. Where no gate is installed, the run goes direct and says so. The gate's

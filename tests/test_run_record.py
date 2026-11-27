@@ -552,10 +552,12 @@ class CountTests(unittest.TestCase):
                 if step.name.endswith("test") or runs.search(step.command)
             }
 
-        self.assertEqual(test_steps(isolated.GATE_STEPS), set(run_record.TEST_COUNTS))
+        self.assertEqual(test_steps(isolated.gate_steps()), set(run_record.TEST_COUNTS))
         # The control: a test step added to the list without a count is one this sees.
         added = isolated.Step("browser-test", "web", "npm run test:browser:allowed", "web")
-        self.assertNotEqual(test_steps((*isolated.GATE_STEPS, added)), set(run_record.TEST_COUNTS))
+        self.assertNotEqual(
+            test_steps((*isolated.gate_steps(), added)), set(run_record.TEST_COUNTS)
+        )
 
 
 class ToolVersionTests(unittest.TestCase):
@@ -661,7 +663,7 @@ class GatesRecordTests(unittest.TestCase):
             isolated.Step("bad", "python", 'python -c "raise SystemExit(5)"'),
         )
         with (
-            mock.patch.object(isolated, "GATE_STEPS", steps),
+            mock.patch.object(isolated.release, "STAGES", steps),
             mock.patch.object(isolated.release, "require_toolchain", return_value={}),
             contextlib.redirect_stdout(io.StringIO()) as said,
         ):
@@ -715,7 +717,7 @@ class GatesRecordTests(unittest.TestCase):
         steps = (isolated.Step("only", "python", 'python -c "pass"'),)
         warning = "warning: a stand-in for a result directory the tree sees"
         with (
-            mock.patch.object(isolated, "GATE_STEPS", steps),
+            mock.patch.object(isolated.release, "STAGES", steps),
             mock.patch.object(isolated.release, "require_toolchain", return_value={}),
             mock.patch.object(run_record, "placement_warning", return_value=warning) as placed,
             contextlib.redirect_stdout(io.StringIO()) as said,

@@ -10,6 +10,11 @@ and nothing under `server/` imports this file. It stands on its own beside the
 tests because everything it runs is what a change is checked with. Run it with
 the interpreter of the environment built from `requirements-dev.txt`.
 
+The steps of `gates` are the stages `windows/release.py` declares in `STAGES` for
+this runner. `check`, which Release Kit runs before a release, builds its stages
+from the same list, so the two cannot drift apart: they once did, and the release
+ran the whole suite in one process while the gates ran it in several at once.
+
 Each rule here is a way a hand-written wrapper went wrong:
 
 - The redirect goes to the child and never to the caller's shell. A redirected
@@ -96,7 +101,6 @@ import subprocess
 import sys
 import time
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
 from pathlib import Path
 from typing import NamedTuple
 
@@ -174,50 +178,14 @@ class ServeError(RuntimeError):
     """The server did not come up; the message says what to read."""
 
 
-@dataclass(frozen=True)
-class Step:
-    """One gate, spelled as the repository instructions spell it."""
-
-    name: str
-    group: str
-    command: str
-    directory: str = "."
-    #: It reads the commits of the checkout, so a directory without them refuses it.
-    needs_history: bool = False
-    #: It runs under a lease at the machine's heavy-process gate.
-    gated: bool = False
-
-    @property
-    def needs_modules(self) -> bool:
-        return self.command.startswith("npm ")
+#: One gate step: a stage of the list `windows/release.py check` builds its stages from too.
+Step = release.Stage
 
 
-#: The list in `AGENTS.md`, in its order; `tests/test_isolated.py` compares them.
-GATE_STEPS = (
-    Step("ruff", "python", "python -m ruff check ."),
-    Step("format", "python", "python -m ruff format --check ."),
-    Step("subjects", "python", "python tests/commit_subjects.py", needs_history=True),
-    Step("relkit", "python", "python .github/relkit.pyz audit --history"),
-    Step("typos", "python", "typos"),
-    Step(
-        "vulture",
-        "python",
-        "vulture server tests valkama.py vulture_whitelist.py --min-confidence 60",
-    ),
-    Step("mypy", "python", "mypy"),
-    Step("lint-imports", "python", "lint-imports --cache-dir .cache/import-linter"),
-    Step(
-        "semgrep",
-        "python",
-        "semgrep scan --config p/python --config p/security-audit --metrics off --error"
-        " server valkama.py",
-    ),
-    Step("unittest", "python", "python tests/parallel.py --coverage", gated=True),
-    Step("coverage", "python", "python -m coverage report"),
-    Step("web-test", "web", "npm test", "web"),
-    Step("web-build", "web", "npm run build", "web"),
-    Step("desktop-test", "desktop", "npm test", "desktop"),
-)
+def gate_steps() -> tuple[Step, ...]:
+    """The stages `gates` runs, read from `release.STAGES` when asked: the list in `AGENTS.md`."""
+
+    return release.runner_stages(release.GATES)
 
 
 class Run(NamedTuple):
@@ -228,7 +196,8 @@ class Run(NamedTuple):
     cwd: Path
     needs_modules: bool = False
     needs_history: bool = False
-    gated: bool = False
+    #: The kind of run it is held as at the machine's heavy-process gate, if it is held.
+    resource: str | None = None
 
 
 def _say(line: str) -> None:
@@ -541,13 +510,15 @@ def run_gates(
                 steps.append(run_record.step(run.name, run.argv, run.cwd, log, None))
                 continue
             executed = run
-            if run.gated:
+            if run.resource is not None:
                 report(
                     f"{run.name:<14} runs under the heavy-process gate as"
-                    f" {heavy_gate.PROJECT}:{parallel.KIND}; what it says is in {log}"
+                    f" {heavy_gate.PROJECT}:{run.resource}; what it says is in {log}"
                 )
+                # The one kind a stage declares is the parallel runner's, which
+                # runs the share of the processes it wants by default.
                 argv = heavy_gate.gated_command(
-                    parallel.KIND, run.argv, want=parallel.default_jobs(), lock=lock, gate=gate
+                    run.resource, run.argv, want=parallel.default_jobs(), lock=lock, gate=gate
                 )
                 executed = run._replace(argv=argv)
             code = _run_step(executed, log, environment)
@@ -574,7 +545,9 @@ def select_steps(only: Sequence[str] | None, *, owner: bool) -> list[Step]:
 
     wanted = set(only) if only is not None else None
     chosen = [
-        step for step in GATE_STEPS if wanted is None or step.name in wanted or step.group in wanted
+        step
+        for step in gate_steps()
+        if wanted is None or step.name in wanted or step.group in wanted
     ]
     if owner:
         chosen = [
@@ -584,15 +557,6 @@ def select_steps(only: Sequence[str] | None, *, owner: bool) -> list[Step]:
             for step in chosen
         ]
     return chosen
-
-
-def _argv(command: str, tools: Mapping[str, tuple[str, ...]]) -> list[str]:
-    program, *arguments = shlex.split(command)
-    if program == "python":
-        return [sys.executable, *arguments]
-    if program == "npm":
-        return [release.NPM, *arguments]
-    return [*tools[program], *arguments]
 
 
 def _tools_started(steps: Sequence[Step]) -> set[str]:
@@ -634,11 +598,11 @@ def gates(steps: Sequence[Step], out: Path) -> int:
     runs = [
         Run(
             step.name,
-            _argv(step.command, tools),
+            release.stage_argv(step.command, sys.executable, tools),
             ROOT / step.directory,
             step.needs_modules,
             step.needs_history,
-            step.gated,
+            step.resource,
         )
         for step in steps
     ]
@@ -1414,7 +1378,8 @@ def _parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(
         dest="command", required=True, metavar="{gates,serve,profile,stop}"
     )
-    names = sorted({step.name for step in GATE_STEPS} | {step.group for step in GATE_STEPS})
+    steps = gate_steps()
+    names = sorted({step.name for step in steps} | {step.group for step in steps})
 
     gates_command = commands.add_parser("gates", help="run the gates of the repository")
     gates_command.add_argument(
