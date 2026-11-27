@@ -15,7 +15,7 @@ import time
 from collections.abc import Callable
 from typing import NamedTuple
 
-from . import housekeeping, launcher, static_assets
+from . import housekeeping, launcher, static_assets, store_lock
 from .alerts import emit as alert_emit
 from .hooks import pairs as call_pairs
 from .ops import configuration, tray
@@ -602,7 +602,13 @@ def _report(line: str) -> None:
 
 def mcp_main() -> None:
     """Own the stdio session and its database handle."""
-    conn = connect()
+    try:
+        conn = connect()
+    except store_lock.LockTimeoutError as error:
+        # Another process is bringing the store up. Said in its own exit status,
+        # which is all a session's MCP front sees, so the front can try again.
+        _report(f"{error}; the store is busy, so this server did not start")
+        raise SystemExit(store_lock.BUSY_EXIT_STATUS) from error
     loops: list[housekeeping.Background] = []
     try:
         # Before the first request, and bounded: a lease that lapsed while no

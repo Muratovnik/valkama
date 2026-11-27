@@ -75,6 +75,16 @@ def unlock(handle: BinaryIO) -> None:
 # front gives a release to start, so this lock, not the front, names what was waited for.
 BRING_UP_WAIT_SECONDS = 60.0
 
+#: How a process that gave up waiting for the lock exits, where its exit is all its
+#: starter sees: 75, `EX_TEMPFAIL` in `sysexits.h`, which Windows' `os` does not
+#: define. It says the failure may pass, so the starter may try again; a session's
+#: MCP front does.
+BUSY_EXIT_STATUS = 75
+
+
+class LockTimeoutError(RuntimeError):
+    """Another process held the lock for longer than this one would wait."""
+
 
 @contextmanager
 def migration_lock(path: str, *, timeout: float = BRING_UP_WAIT_SECONDS) -> Iterator[None]:
@@ -85,7 +95,7 @@ def migration_lock(path: str, *, timeout: float = BRING_UP_WAIT_SECONDS) -> Iter
     with open(lock_path, "a+b") as handle:
         while not try_lock(handle):
             if time.monotonic() >= deadline:
-                raise RuntimeError("timed out waiting for the store migration lock")
+                raise LockTimeoutError("timed out waiting for the store migration lock")
             time.sleep(0.05)
         try:
             yield
