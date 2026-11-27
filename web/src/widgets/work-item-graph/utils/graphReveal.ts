@@ -1,10 +1,11 @@
 /**
  * Where the camera goes to bring the target the keyboard reached into sight, at the
- * zoom the operator chose. A target already in view, `margin` clear of the field's
- * edges, leaves the camera where it is; any other is centred. Along an axis the target
- * is longer than the field — a root's header on a phone, a tall frame — centring would
- * cut both its ends, so there its start stands at the margin, as it is read, and it
- * counts as in view once it stands there.
+ * zoom the operator chose. Each axis is its own: along one where the target is in view,
+ * `margin` clear of the field's edges, the camera stays; along any other the target is
+ * centred. Along an axis the target is longer than the field — a root's header on a
+ * phone — centring would cut both its ends, so there it is in view while its start
+ * stands in the field's first half, and is otherwise brought there, its start at the
+ * margin, as it is read.
  */
 
 import type { ViewportTransform } from '@vue-flow/core'
@@ -22,17 +23,14 @@ interface Axis {
   start: number
 }
 
-/** The camera's offset along one axis, and whether it moved. */
-function revealAxis(axis: Axis, zoom: number, margin: number): { moved: boolean; offset: number } {
+/** The camera's offset along one axis: where it stands, when the target is in view along it. */
+function revealAxis(axis: Axis, zoom: number, margin: number): number {
   const shown = axis.start * zoom + axis.offset
   const length = axis.length * zoom
-  if (length > axis.span - 2 * margin) {
-    const offset = margin - axis.start * zoom
-    return { moved: Math.abs(shown - margin) >= 0.5, offset }
-  }
+  if (length > axis.span - 2 * margin)
+    return shown >= margin && shown <= axis.span / 2 ? axis.offset : margin - axis.start * zoom
   const inView = shown >= margin && shown + length <= axis.span - margin
-  const centred = axis.span / 2 - (axis.start + axis.length / 2) * zoom
-  return { moved: !inView, offset: centred }
+  return inView ? axis.offset : axis.span / 2 - (axis.start + axis.length / 2) * zoom
 }
 
 /** The camera that brings `target` into sight, or null when it is already there. */
@@ -53,5 +51,5 @@ export function revealView(
     zoom,
     margin,
   )
-  return x.moved || y.moved ? { x: x.offset, y: y.offset, zoom } : null
+  return x === camera.x && y === camera.y ? null : { x, y, zoom }
 }

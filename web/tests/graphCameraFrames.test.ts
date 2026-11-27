@@ -17,7 +17,7 @@ import {
   headerOnScreen,
 } from '@/widgets/work-item-graph/utils/graphCamera.ts'
 import { layout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
-import type { GraphLayoutEngine } from '@/widgets/work-item-graph/utils/graphLayout.ts'
+import type { GraphLayout, GraphLayoutEngine } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import {
   foldTarget,
   frameTarget,
@@ -186,7 +186,19 @@ for (const [what, fold] of [
   })
 }
 
-test('a fold that leaves the camera past the whole view comes up to it with its header held', async () => {
+/** The drawing's edges on the screen under a camera: its frames and cards, as they are drawn. */
+function drawnOnScreen(graph: GraphLayout, camera: { x: number; y: number; zoom: number }) {
+  const boxes = [...graph.frames, ...graph.nodes]
+  const at = (value: number, offset: number) => value * camera.zoom + offset
+  return {
+    left: at(Math.min(...boxes.map((box) => box.x)), camera.x),
+    top: at(Math.min(...boxes.map((box) => box.y)), camera.y),
+    right: at(Math.max(...boxes.map((box) => box.x + box.width)), camera.x),
+    bottom: at(Math.max(...boxes.map((box) => box.y + box.height)), camera.y),
+  }
+}
+
+test('a fold that leaves the camera past the whole view comes up to it, the drawing whole in the field', async () => {
   const frameId = goals[1].work_item_id
   const before = await space()
   const after = await space({ [frameId]: true })
@@ -195,6 +207,35 @@ test('a fold that leaves the camera past the whole view comes up to it with its 
   const camera = { x: 300, y: 200, zoom: whole.zoom / 2 }
   const screen = headerOnScreen(before, frameId, camera)
   assert.ok(screen)
+  const moved = graphCameraMove('toggled', after, { camera, dimensions, held: { frameId, screen } })
+  assert.ok(moved)
+  assert.equal(moved.zoom, whole.zoom)
+  // Held where it stood, the header would leave the drawing cut at the field's edge.
+  const held = headerOnScreen(after, frameId, { ...camera, zoom: whole.zoom })
+  assert.ok(held)
+  const cut = drawnOnScreen(after, {
+    x: camera.x + screen.x - held.x,
+    y: camera.y + screen.y - held.y,
+    zoom: whole.zoom,
+  })
+  assert.ok(
+    cut.left < 0 || cut.top < 0 || cut.right > dimensions.width || cut.bottom > dimensions.height,
+  )
+  // The drawing fits at that zoom, so it stands whole in the field.
+  const shown = drawnOnScreen(after, moved)
+  assert.ok(shown.left >= 0 && shown.right <= dimensions.width, JSON.stringify(shown))
+  assert.ok(shown.top >= 0 && shown.bottom <= dimensions.height, JSON.stringify(shown))
+})
+
+test('a fold past the whole view keeps its header where it stood when the drawing stands whole there', async () => {
+  const frameId = goals[1].work_item_id
+  const after = await space({ [frameId]: true })
+  const whole = graphWholeView(after, dimensions)
+  assert.ok(whole)
+  // The header was pressed where the whole view draws it: held there, nothing is cut.
+  const screen = headerOnScreen(after, frameId, whole)
+  assert.ok(screen)
+  const camera = { x: 300, y: 200, zoom: whole.zoom / 2 }
   const moved = graphCameraMove('toggled', after, { camera, dimensions, held: { frameId, screen } })
   assert.ok(moved)
   assert.equal(moved.zoom, whole.zoom)

@@ -54,6 +54,10 @@ const past = (prefix: string, from: number, parent?: string) =>
     item(`${prefix}${index}`, from + index, parent ? { parent } : {}),
   )
 
+/** The frames a whole space of these items draws, in their order. */
+const spaceFrames = (items: WorkItemBrief[]) =>
+  frameProjection({ items, links: [], showDone: false }).frames.map((frame) => frame.id)
+
 const frameOf = (projected: ReturnType<typeof projectChain>, id: string) =>
   projected.frames.find((frame) => frame.id === id)
 const cardIds = (frame: { cards: WorkItemBrief[] } | undefined) =>
@@ -144,5 +148,14 @@ describe('a chain whose root holds work', () => {
     expect(projectChain().unread).toEqual([])
     // Control: over a whole space the same link names a space the read did not read.
     expect(projectChain({ chainRootId: null }).unread).toEqual([''])
+  })
+
+  it('gives the band, and no goal, the frames drawn inside it, whatever order the items come in', () => {
+    // Over a whole space: a closed goal holding an open stage with no open work under it.
+    const goal = item('closed-goal', 80, { goal: true, state: 'done' })
+    const stage = item('open-stage', 81, { goal: true, parent: 'closed-goal' })
+    expect(spaceFrames([goal, stage])).toEqual(spaceFrames([stage, goal]))
+    // Only the band of found work is drawn for a frame drawn inside it.
+    expect(spaceFrames([goal, stage])).not.toContain('closed-goal')
   })
 })

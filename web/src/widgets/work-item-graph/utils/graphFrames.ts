@@ -96,6 +96,11 @@ type ProjectedEdge = Omit<RoutedEdge, 'points'>
 export interface FrameProjection {
   /** Every card drawn, in reading order. */
   cards: WorkItemBrief[]
+  /**
+   * What the field would draw were every frame open, its cards and its frames: what a fold
+   * can hide, whose place the key keeps.
+   */
+  drawable: { cards: string[]; frames: string[] }
   edges: ProjectedEdge[]
   /** The drawn frames, each after the frame it stands in, in reading order. */
   frames: ProjectedFrame[]
@@ -180,6 +185,19 @@ function frameTree(items: readonly WorkItemBrief[], chainRootId: string | null) 
 type FrameTree = ReturnType<typeof frameTree>
 
 /**
+ * Whether what a frame holds draws it: under a filter, something the filter found;
+ * without one, open work, an open goal, or anything in «All».
+ */
+const holdsShown = (
+  input: FrameProjectionInput,
+  goal: WorkItemBrief | null,
+  visible: readonly WorkItemBrief[],
+) =>
+  input.shown
+    ? visible.length > 0
+    : visible.some((item) => open(item)) || input.showDone || (goal !== null && open(goal))
+
+/**
  * Every frame the field could draw, folded or open, with the cards each draws.
  * Under a filter only a frame the filter found something in is drawn, as a
  * board lane is; without one, a frame with open work, an open goal, and in
@@ -190,7 +208,6 @@ function frameCandidates(
   tree: FrameTree,
   drawable: (item: WorkItemBrief) => boolean,
 ): Map<string, ProjectedFrame> {
-  const filtered = Boolean(input.shown)
   const ids = [
     ...tree.frames.keys(),
     ...[NO_PARENT_FRAME, FOUND_FRAME].filter((id) => tree.members.has(id) || tree.holders.has(id)),
@@ -207,14 +224,9 @@ function frameCandidates(
     // closed switch leaves of it, and open until the operator folds it.
     const root = id === input.chainRootId
     // The band of found work comes after the goals: one drawn inside it draws it too.
-    const holdsDrawn = [...candidates.values()].some((frame) => frame.parentId === id)
-    const wanted =
-      root ||
-      holdsDrawn ||
-      (filtered
-        ? visible.length > 0
-        : openWork > 0 || input.showDone || (goal !== null && open(goal)))
-    if (!wanted) continue
+    const holdsDrawn =
+      id === FOUND_FRAME && [...candidates.values()].some((frame) => frame.parentId === id)
+    if (!root && !holdsDrawn && !holdsShown(input, goal, visible)) continue
     // A frame holding more open work than `FOLD_ABOVE`, the count the list's
     // tree folds by too, starts folded, and so does a goal holding none: the
     // field opens on the links of the goals in between, and a large frame shows
@@ -343,7 +355,15 @@ export function frameProjection(input: FrameProjectionInput): FrameProjection {
   const edges = drawnLines(input.links, endOf)
   // A chain's items are the chain alone: a link to work outside it is left out, not unread.
   const unread = chain ? [] : unreadSpaces(input.links, byId)
-  return { frames, cards, edges, key: structureKey(input.showDone, frames, edges), unread }
+  const unfolded = [...candidates.values()].filter((frame) =>
+    tree.lineage(frame.id).every((at) => candidates.has(at)),
+  )
+  const couldDraw = {
+    cards: unfolded.flatMap((frame) => frame.cards.map((item) => item.work_item_id)),
+    frames: unfolded.map((frame) => frame.id),
+  }
+  const key = structureKey(input.showDone, frames, edges)
+  return { frames, cards, drawable: couldDraw, edges, key, unread }
 }
 
 /**

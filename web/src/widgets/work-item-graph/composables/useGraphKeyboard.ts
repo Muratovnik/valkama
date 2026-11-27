@@ -27,6 +27,7 @@ import {
   frameTarget,
   graphWalk,
   isGraphWalkKey,
+  sightBox,
   walkTargets,
 } from '@/widgets/work-item-graph/utils/graphWalk.ts'
 import type { Box, WalkTarget } from '@/widgets/work-item-graph/utils/graphWalk.ts'
@@ -37,6 +38,8 @@ const HANDOVER_MS = 2000
 interface KeyboardInput {
   /** The target the camera is placed around, which the keyboard enters on. */
   anchorId: Ref<string | null>
+  /** What the host asked the field to show, which focus takes on arrival; null for nothing. */
+  arrivalId: Ref<string | null>
   /** The frame the field's nodes are drawn in. */
   canvas: Readonly<Ref<HTMLElement | null>>
   /** The camera has framed the field. */
@@ -149,7 +152,7 @@ export function useGraphKeyboard(input: KeyboardInput) {
   async function focusNode(id: string): Promise<boolean> {
     standOn(id)
     const node = placedNode(id)
-    if (node) input.reveal(node)
+    if (node) input.reveal(sightBox(node))
     await nextTick()
     const button = nodeButton(id)
     // The camera placed it; the browser must not scroll the flow's clipped box to it too.
@@ -182,7 +185,7 @@ export function useGraphKeyboard(input: KeyboardInput) {
     }
     standOn(id)
     const node = placedNode(id)
-    if (node && nodeButton(id)?.matches(':focus-visible')) input.reveal(node, 0)
+    if (node && nodeButton(id)?.matches(':focus-visible')) input.reveal(sightBox(node), 0)
     const placed = placing === id
     placing = null
     return !placed
@@ -219,7 +222,8 @@ export function useGraphKeyboard(input: KeyboardInput) {
   }
 
   watch([asked, input.fitted, input.placed], async () => {
-    const anchor = input.anchorId.value
+    // What was asked for, not what the camera stood on before it moved there.
+    const anchor = input.arrivalId.value ?? input.anchorId.value
     if (!asked.value || !input.fitted.value || anchor === null) return
     asked.value = false
     await nextTick()

@@ -33,6 +33,7 @@ import type { ViewportTransform } from '@vue-flow/core'
 import {
   graphAnchor,
   graphCameraMove,
+  graphChosen,
   graphWholeView,
   headerOnScreen,
 } from '@/widgets/work-item-graph/utils/graphCamera.ts'
@@ -192,6 +193,12 @@ export function useGraphCamera(input: CameraInput) {
     return whole?.zoom ?? last ?? GRAPH_ZOOM_MIN
   })
 
+  const anchorOptions = () => ({
+    branch: input.branch(),
+    selectedId: input.selectedId(),
+    rootId: input.rootId(),
+  })
+
   /** «Fit whole graph»: set outright, so the limit, which is only as new as the last draw, cannot hold it. */
   function fitWhole() {
     const placed = input.placed.value
@@ -217,15 +224,19 @@ export function useGraphCamera(input: CameraInput) {
     anchorId: computed(() => {
       const placed = input.placed.value
       if (!placed) return null
-      const options = {
-        branch: input.branch(),
-        selectedId: input.selectedId(),
-        rootId: input.rootId(),
-      }
       const sight = fitted.value
         ? { camera: viewport.value, dimensions: dimensions.value, overview: overview.value }
         : null
-      return graphAnchor(placed, options, sight)?.id ?? null
+      return graphAnchor(placed, anchorOptions(), sight)?.id ?? null
+    }),
+    /**
+     * The target focus takes when the field arrives where the host asked: what was asked
+     * for (`graphChosen`), else the target the keyboard enters on.
+     */
+    arrivalId: computed(() => {
+      const placed = input.placed.value
+      const chosen = placed ? graphChosen(placed, anchorOptions(), overview.value) : undefined
+      return chosen?.id ?? null
     }),
     far,
     fitWhole,

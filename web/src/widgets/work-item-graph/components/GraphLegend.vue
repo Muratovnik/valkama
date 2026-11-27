@@ -11,7 +11,10 @@
  *
  * It names only what the field draws. «Done» is the one entry the closed switch
  * adds, so while the chain has closed members its place is kept, unseen, before
- * the others: the switch never moves a word of the key. Each group's entry is a
+ * the others: the switch never moves a word of the key. A fold hides cards, and with
+ * them groups, signs and lines, so the places of those the field would draw were every
+ * frame open are kept unseen too (`kept`, `keptSigns`, `keepEdges`), and a fold moves no
+ * word of the key and no row of its strip either. Each group's entry is a
  * `SemanticState` of the `work-item-chain-group` dimension, and says its group in
  * `data-state`.
  *
@@ -47,6 +50,12 @@ const props = defineProps<{
    * card's chain section and the board's column say it; null keeps the group's word.
    */
   names: Readonly<Record<ChainGroup, string | null>>
+  /** A link the field would draw were every frame open: the lines' place is kept. */
+  keepEdges?: boolean
+  /** The groups whose place is kept beside those drawn, in the order the key runs. */
+  kept?: readonly ChainGroup[]
+  /** The signs whose place is kept beside those drawn, in the order the key names them. */
+  keptSigns?: readonly LiveSign[]
   /** Some live work on the field moves, so its line is drawn. */
   moving?: boolean
   /** The sessions' signs the cards on the field draw, in the order the key names them. */
@@ -65,18 +74,29 @@ const unreadWords = computed(() =>
 /** Done leads, as on the card's map: what is finished, then what is under way, then ahead. */
 const entries = computed(() => {
   const shown = new Set(props.groups)
-  const open = props.groups.filter((group) => group !== 'done')
+  const places = props.kept ?? props.groups
+  const open = places.filter((group) => group !== 'done')
   const done =
-    shown.has('done') || props.keepDone
+    shown.has('done') || places.includes('done') || props.keepDone
       ? [{ group: 'done' as const, shown: shown.has('done') }]
       : []
-  return [...done, ...open.map((group) => ({ group, shown: true }))]
+  return [...done, ...open.map((group) => ({ group, shown: shown.has(group) }))]
 })
+
+/** The signs named, each with whether a drawn card shows it or only its place is kept. */
+const signEntries = computed(() => {
+  const shown = new Set(props.signs ?? [])
+  return (props.keptSigns ?? props.signs ?? []).map((sign) => ({ sign, shown: shown.has(sign) }))
+})
+/** The lines' place is kept while a fold hides every line the field would draw. */
+const edgesHeld = computed(() => !props.hasEdges && Boolean(props.keepEdges))
 </script>
 
 <template>
   <div
-    v-if="entries.length || hasEdges || moving || signs?.length || unreadWords.length"
+    v-if="
+      entries.length || hasEdges || edgesHeld || moving || signEntries.length || unreadWords.length
+    "
     class="graph-legend"
   >
     <span
@@ -95,15 +115,17 @@ const entries = computed(() => {
       :state="entry.group"
       :label="names[entry.group] ?? t(`workItem.chain.group.${entry.group}`)"
     />
-    <template v-if="hasEdges">
+    <template v-if="hasEdges || edgesHeld">
       <span
         class="graph-legend-item"
         aria-hidden="true"
+        :class="{ held: edgesHeld }"
         ><i class="stroke solid" />{{ t('graph.edgeBlocks') }}</span
       >
       <span
         class="graph-legend-item"
         aria-hidden="true"
+        :class="{ held: edgesHeld }"
         ><i class="stroke dashed" />{{ t('graph.edgeDiscovered') }}</span
       >
     </template>
@@ -114,15 +136,16 @@ const entries = computed(() => {
       ><i class="stroke live" />{{ t('graph.edgeLive') }}</span
     >
     <span
-      v-for="sign in signs"
-      :key="sign"
+      v-for="entry in signEntries"
+      :key="entry.sign"
       class="graph-legend-item graph-legend-sign"
       aria-hidden="true"
-      :data-sign="sign"
+      :class="{ held: !entry.shown }"
+      :data-sign="entry.sign"
       ><SessionSign
-        :sign="sign"
+        :sign="entry.sign"
         still
-      />{{ t(`graph.legendSign.${sign}`) }}</span
+      />{{ t(`graph.legendSign.${entry.sign}`) }}</span
     >
   </div>
 </template>
@@ -141,8 +164,9 @@ const entries = computed(() => {
   border-radius: var(--radius-status);
 }
 
-/* Kept, not drawn: the place «Done» takes when the closed members are shown. */
-.graph-legend-state.held {
+/* Kept, not drawn: the place «Done» takes when the closed members are shown, and
+   the place of what a fold hides. */
+.held {
   visibility: hidden;
 }
 

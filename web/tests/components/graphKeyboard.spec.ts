@@ -1,11 +1,12 @@
 /**
  * The field's one Tab stop when frames fold: the target the keyboard stood on
  * while it is drawn, the fold of the frame that hid it once a fold took it off
- * the field, and the camera's anchor otherwise.
+ * the field, and the camera's anchor otherwise. And where focus lands when the
+ * card hands the field over: on what it asked to see.
  */
 import { effectScope, nextTick, ref } from 'vue'
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { useGraphKeyboard } from '@/widgets/work-item-graph/composables/useGraphKeyboard.ts'
 import type { PlacedFrame } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
@@ -56,7 +57,9 @@ function field(outer: boolean, inner: boolean): GraphLayout {
   return { frames, nodes, edges: [], width: 700, height: 500 }
 }
 
-function keyboard(anchor = foldTarget('O')) {
+type KeyboardInput = Parameters<typeof useGraphKeyboard>[0]
+
+function keyboard(anchor = foldTarget('O'), host: Partial<KeyboardInput> = {}) {
   const placed = ref<GraphLayout | null>(field(false, false))
   const overview = ref(false)
   const scope = effectScope()
@@ -64,12 +67,14 @@ function keyboard(anchor = foldTarget('O')) {
   const keys = scope.run(() =>
     useGraphKeyboard({
       anchorId: ref(anchor),
+      arrivalId: ref(null),
       canvas: ref(null),
       fitted: ref(true),
       overview,
       placed,
       focusRequest: () => {},
       reveal: () => {},
+      ...host,
     }),
   )
   if (!keys) throw new Error('Keyboard scope did not start')
@@ -141,4 +146,52 @@ describe('the Tab stop as frames fold', () => {
     await nextTick()
     expect(keys.isTabStop(foldTarget('O'))).toBe(true)
   })
+})
+
+describe('the field the card hands over', () => {
+  const canvases: HTMLElement[] = []
+  afterEach(() => {
+    for (const canvas of canvases.splice(0)) canvas.remove()
+  })
+
+  /** The field's targets drawn as buttons the keyboard can take, in the page. */
+  function canvasOf(ids: readonly string[]) {
+    const canvas = document.createElement('div')
+    for (const id of ids) {
+      const button = document.createElement('button')
+      button.dataset.walkTarget = id
+      canvas.append(button)
+    }
+    document.body.append(canvas)
+    canvases.push(canvas)
+    return canvas
+  }
+
+  for (const [what, arrival, lands] of [
+    // The camera still stands where it stood before it moved to the card's branch.
+    [
+      'gives focus to what the card asked to see, not the target the camera stood on',
+      'card',
+      'card',
+    ],
+    ['gives focus to the camera’s anchor when the card asked for nothing', null, foldTarget('O')],
+  ] as const) {
+    it(what, async () => {
+      const request = ref(0)
+      const revealed: number[] = []
+      keyboard(foldTarget('O'), {
+        arrivalId: ref(arrival),
+        canvas: ref(canvasOf([foldTarget('O'), 'card'])),
+        focusRequest: () => request.value,
+        reveal: (box) => revealed.push(box.x),
+      })
+      request.value = 1
+      await vi.waitFor(() => {
+        const focused = document.activeElement
+        expect(focused instanceof HTMLElement && focused.dataset.walkTarget).toBe(lands)
+      })
+      // The camera is sent to the target focus took, and to no other.
+      expect(revealed).toEqual([lands === 'card' ? 16 : 0])
+    })
+  }
 })

@@ -198,6 +198,27 @@ const cardTarget = (node: PlacedNode): WalkTarget => ({
 })
 
 /**
+ * What the operator asked to see, as a target: the first work of the branch the card
+ * chose, or the header of the frame folded over it, then the open card's item, then a
+ * chain's root. Focus takes it when the field arrives where it was asked to
+ * (`graphAnchor` reads where the camera stands instead, which a camera still moving
+ * there does not yet say). None when nothing was asked for.
+ */
+export function graphChosen(
+  graph: GraphLayout,
+  options: AnchorOptions = {},
+  overview = false,
+): WalkTarget | undefined {
+  const [head] = branchWork(graph, options)
+  const holder = branchHolder(graph, options)
+  const selected = graph.nodes.find((node) => node.work_item_id === options.selectedId)
+  const root = graph.nodes.find((node) => node.work_item_id === options.rootId)
+  const card = head ?? selected ?? root
+  const held = holder ? headerTarget(holder, overview) : undefined
+  return held ?? (card ? cardTarget(card) : undefined)
+}
+
+/**
  * The target a field is placed around, and the one the keyboard enters it on:
  * the first work of the branch the card chose, or the header of the frame
  * folded over it, then the open card's item,
@@ -218,13 +239,7 @@ export function graphAnchor(
   options: AnchorOptions = {},
   sight: { camera: ViewportTransform; dimensions: Dimensions; overview?: boolean } | null = null,
 ): WalkTarget | undefined {
-  const [head] = branchWork(graph, options)
-  const holder = branchHolder(graph, options)
-  const selected = graph.nodes.find((node) => node.work_item_id === options.selectedId)
-  const root = graph.nodes.find((node) => node.work_item_id === options.rootId)
-  const card = head ?? selected ?? root
-  const held = holder ? headerTarget(holder, sight?.overview) : undefined
-  const chosen = held ?? (card ? cardTarget(card) : undefined)
+  const chosen = graphChosen(graph, options, sight?.overview)
   const targets = walkTargets(graph, { overview: sight?.overview }).sort(readingOrder)
   if (sight) {
     const inSight = (target: WalkTarget) => seen(target, sight.camera, sight.dimensions)
@@ -447,19 +462,50 @@ function panOnto(
 }
 
 /**
+ * A camera moved, along each axis the drawing fits at its zoom, only as far as brings
+ * the whole drawing into the field: a header held where it stood would otherwise leave
+ * a frame beside it cut at the field's edge, when the fold shrank the drawing.
+ */
+function keptWhole(
+  camera: ViewportTransform,
+  graph: GraphLayout,
+  dimensions: Dimensions,
+): ViewportTransform {
+  const { padding } = graphFitViewOptions()
+  const { left, top, right, bottom } = extent(drawing(graph))
+  const axis = (offset: number, [start, end]: number[], size: number, gaps: string[]) => {
+    const [gapStart, gapEnd] = gaps.map((gap) => pixels(gap))
+    // Its start no nearer the field's start than the gap, its end no nearer the field's end.
+    return (end - start) * camera.zoom > size - gapStart - gapEnd
+      ? offset
+      : Math.max(
+          gapStart - start * camera.zoom,
+          Math.min(size - gapEnd - end * camera.zoom, offset),
+        )
+  }
+  return {
+    x: axis(camera.x, [left, right], dimensions.width, [padding.left, padding.right]),
+    y: axis(camera.y, [top, bottom], dimensions.height, [padding.top, padding.bottom]),
+    zoom: camera.zoom,
+  }
+}
+
+/**
  * Where the camera goes, or null to leave it where the operator put it.
  *
  * The camera is the operator's. The field places it when a scope opens, by
  * the opening frame (`graphCameraView`); a refresh never moves it; a frame the
  * operator folded or opened keeps its header where it stood on the screen, so
- * what was pressed does not move from under the hand, at the same zoom; and a
- * new queue, search or switch — or a field that changed size — moves it only
- * when not one drawn box is left in sight, and then only across, at the zoom
- * the operator chose. The explicit «Fit whole graph» is the one way to change
- * the zoom besides the operator's own and one more: a camera the new drawing or
- * the new size leaves past the whole view (`graphWholeView`) comes up to it, with
- * a pressed header still held, since the camera does not stand further out than
- * that. A refresh leaves even that one where it is, until the operator next moves.
+ * what was pressed does not move from under the hand, at the same zoom — save as
+ * far as brings a drawing that fits at that zoom whole into the field
+ * (`keptWhole`); and a new queue, search or switch — or a field that changed
+ * size — moves it only when not one drawn box is left in sight, and then only
+ * across, at the zoom the operator chose. The explicit «Fit whole graph» is the
+ * one way to change the zoom besides the operator's own and one more: a camera the
+ * new drawing or the new size leaves past the whole view (`graphWholeView`) comes
+ * up to it, with a pressed header held as above, since the camera does not stand
+ * further out than that. A refresh leaves even that one where it is, until the
+ * operator next moves.
  */
 export function graphCameraMove(
   cause: GraphCameraCause,
@@ -477,11 +523,12 @@ export function graphCameraMove(
     const zoom = past ? whole.zoom : camera.zoom
     const now = headerOnScreen(graph, field.held.frameId, { ...camera, zoom })
     if (!now) return past ? whole : null
-    return {
+    const held = {
       x: camera.x + field.held.screen.x - now.x,
       y: camera.y + field.held.screen.y - now.y,
       zoom,
     }
+    return keptWhole(held, graph, dimensions)
   }
   if (past) return whole
   // A frame's own centre can be empty ground, and its fold button alone at the

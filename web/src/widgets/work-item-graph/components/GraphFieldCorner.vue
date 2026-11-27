@@ -29,6 +29,12 @@ defineProps<{
   readyCount: number
   /** The sessions' signs the cards on the field draw. */
   signs: readonly LiveSign[]
+  /** A link a fold hides: the lines' place is kept. */
+  keepEdges?: boolean
+  /** The groups whose place the key keeps beside those drawn. */
+  kept?: readonly ChainGroup[]
+  /** The signs whose place the key keeps beside those drawn. */
+  keptSigns?: readonly LiveSign[]
   /** The spaces whose links the read could not read, by key. */
   unread?: readonly string[]
 }>()
@@ -44,6 +50,9 @@ const { t } = useI18n()
     :names="names"
     :has-edges="hasEdges"
     :keep-done="keepDone"
+    :keep-edges="keepEdges"
+    :kept="kept"
+    :kept-signs="keptSigns"
     :moving="moving"
     :signs="signs"
     :unread="unread"

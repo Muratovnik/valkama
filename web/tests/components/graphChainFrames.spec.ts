@@ -22,6 +22,7 @@ import {
   item,
   items,
   known,
+  OPEN,
   openGraph,
 } from '../fixtures/graphChainScope.ts'
 
@@ -115,6 +116,34 @@ describe('a chain grown from a goal, drawn in frames', () => {
     await drawn(graph)
     expect(named()).toEqual(['Done', 'Ready'])
   })
+
+  it('keeps in its key the place of what a fold hides, so folding the root moves no word', async () => {
+    const deferred = { ...OPEN, state_id: 'deferred', key: 'deferred', name: 'Deferred' }
+    const graph = openGoalChain({
+      items: items.map((entry) =>
+        entry.reference === 'MAIN-3'
+          ? { ...entry, state: { ...deferred, category: 'deferred' as const } }
+          : entry,
+      ),
+      live: { [id(3)]: { state: 'held' } },
+    })
+    expect(await drawn(graph)).toEqual(['MAIN-3', 'MAIN-4'])
+    const key = '.graph-canvas .graph-legend'
+    const places = () => graph.findAll(`${key} > *`).map((entry) => entry.text())
+    const named = () => graph.findAll(`${key} > :not(.held)`).map((entry) => entry.text())
+    const open = places()
+    // Open, 3 draws its group and its session's sign, and the key names both.
+    expect(named()).toEqual(open)
+    expect(open).toContain('Deferred')
+    expect(graph.findAll(`${key} [data-sign]`)).toHaveLength(1)
+    await graph.get('button[aria-label^="Collapse goal MAIN-1"]').trigger('click')
+    expect(await drawn(graph)).toEqual(['MAIN-4'])
+    // Folded, 3 is not drawn: its words keep their places, unseen.
+    expect(places()).toEqual(open)
+    expect(named()).not.toContain('Deferred')
+    expect(graph.findAll(`${key} .held[data-sign]`)).toHaveLength(1)
+  })
+
   it('marks the frame of the branch the card chose, and keeps the branch when that frame is folded over it', async () => {
     // 3 is filed under stage 9 of the root; the card chose that stage's branch.
     const staged = [
