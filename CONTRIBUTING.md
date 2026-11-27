@@ -252,6 +252,11 @@ what the lockfiles pin and needs the network or an npm cache. It installs into a
 temporary copy of the sources and runs every npm stage there, never in the checkout:
 `npm ci` empties the tree it installs into, and other worktrees may link their
 `node_modules` to the checkout's. The checkout's own `node_modules` is left as it is.
+Its stages are the gates `python tests/isolated.py gates` runs, from the one list
+`STAGES` in `windows/release.py`, less the commit-subject check and the history
+audit, which only `gates` runs, and with the installs and the price comparison
+first; the unittest suite runs through `tests/parallel.py`, several
+modules at once, in a throwaway profile.
 `build` needs npm and no Python tool, and `smoke` runs the
 server, which needs only the standard library. The web build that `check` runs
 in the copy replaces `web/dist` in the checkout; commit it only when `web/src`

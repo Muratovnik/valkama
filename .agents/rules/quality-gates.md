@@ -145,6 +145,9 @@ semgrep installs on the Python of `.venv` again, its pin can move back into
 venv in one call: only the child sees the redirected `HOME`, `USERPROFILE`,
 `LOCALAPPDATA`, `APPDATA` and `VALKAMA_DB`, and every step's exit code counts.
 `--only python` is the Python half; `--owner` is the audit with the owner policy.
+Its steps and the stages of `windows/release.py check` are one list, `STAGES` in
+`windows/release.py`, each stage marked with the runners that run it: change a
+gate there, and the `AGENTS.md` list with it, never in one runner alone.
 A report cites its `DIR/record.json`, which `python tests/run_record.py check`
 refuses for another tree or state, and, given `--require NAME`, for having no
 step of that name; a step that `run` records takes the name of its command's

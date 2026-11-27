@@ -528,10 +528,25 @@ class ReleaseToolchainTests(unittest.TestCase):
         third = self.checked_commands(checkout)[2]
         command, cwd = third.args[0], third.kwargs["cwd"]
         self.assertEqual(
-            (str(self.environment.executable), str(checkout / "windows" / "release.py"), "prices"),
-            command,
+            (str(self.environment.executable), "windows/release.py", "prices"), command
         )
         self.assertEqual(checkout, cwd)
+
+    def test_the_suite_runs_in_several_processes_in_a_profile_of_its_own(self) -> None:
+        # The release once ran it in one process while the gates ran it in several.
+        checkout = make_checkout(self.root / "checkout")
+        [suite] = [
+            call for call in self.checked_commands(checkout) if "tests/parallel.py" in call.args[0]
+        ]
+        self.assertEqual(
+            (str(self.environment.executable), "tests/parallel.py", "--coverage"), suite.args[0]
+        )
+        self.assertEqual(checkout, suite.kwargs["cwd"])
+        environment = suite.kwargs["env"]
+        profile = Path(environment["GIT_CEILING_DIRECTORIES"])
+        self.assertTrue(profile.is_relative_to(self.temporary), profile)
+        for name in ("VALKAMA_DB", "USERPROFILE", "HOME", "LOCALAPPDATA", "APPDATA"):
+            self.assertTrue(Path(environment[name]).is_relative_to(profile), name)
 
     def test_a_failed_install_stops_the_check_before_any_other_stage(self) -> None:
         stages = FakeStages(self.outside(), fail=("ci",))
