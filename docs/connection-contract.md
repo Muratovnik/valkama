@@ -5777,6 +5777,12 @@ cannot start either, which is the case when the failed one migrated the store
 first, the request is answered with a JSON-RPC error that carries the store's
 refusal, and the front exits.
 
+A fault of the front's own while it follows the launcher costs that one
+attempt and not the session: it is reported on stderr, once while it repeats,
+the request goes on to the backend the session has, and the next poll or
+request tries again. A fault while the new release starts stops that release
+and counts as its failure to start, as above.
+
 A backend that exits mid-session ends the session's server the same way: the
 request it held is answered with an error, never resent, and the front exits
 with status 1, which leaves restarting the server to the client.

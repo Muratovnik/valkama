@@ -479,6 +479,70 @@ class FailureTests(FrontTestCase):
         self.assertEqual(1, len(self.events("call-start")), "the call was sent again")
 
 
+class UnexpectedFailureTests(FrontTestCase):
+    """A fault the switch does not anticipate costs one attempt, never the session."""
+
+    def flaky(self, front: Front, name: str, error: Exception) -> None:
+        """Make `front.<name>` raise `error` on its first call and work after it."""
+
+        real = getattr(front, name)
+        raised: list[Exception] = []
+
+        def once(*args: object) -> object:
+            if not raised:
+                raised.append(error)
+                raise error
+            return real(*args)
+
+        setattr(front, name, once)
+
+    def test_the_watcher_outlives_a_fault_and_follows_the_next_pin(self) -> None:
+        old, new = self.release("old"), self.release("new")
+        front = self.front(old)
+        self.flaky(front, "follow_pin", RuntimeError("the manifest read went wrong"))
+        self.pin = new
+        stop = threading.Event()
+        watcher = threading.Thread(target=front.watch, args=(stop, 0.05))
+        watcher.start()
+        self.addCleanup(watcher.join)
+        self.addCleanup(stop.set)
+
+        switched = wait_until(lambda: self.events("start", "new"))
+
+        self.assertTrue(switched, "the watcher stopped at the fault")
+        self.assertTrue(watcher.is_alive())
+        faults = [report for report in self.reports if "the manifest read went wrong" in report]
+        self.assertEqual(1, len(faults), self.reports)
+        self.assertIn("RuntimeError", faults[0])
+        stop.set()
+        watcher.join(timeout=10)
+        self.assertEqual("new", self.payload(self.call(front))["release"])
+
+    def test_a_request_is_still_answered_when_following_the_pin_fails(self) -> None:
+        front = self.front(self.release("old"))
+        self.flaky(front, "follow_pin", RuntimeError("the manifest read went wrong"))
+        self.pin = self.release("new")
+
+        answer = self.call(front)
+        later = self.call(front)
+
+        self.assertEqual("old", self.payload(answer)["release"])
+        self.assertEqual("new", self.payload(later)["release"])
+
+    def test_a_fault_in_starting_the_next_release_brings_the_previous_one_back(self) -> None:
+        front = self.front(self.release("good"))
+        # The first call is the next release's `server/discover` answer.
+        self.flaky(front, "_learn_versions", AttributeError("no supportedVersions here"))
+
+        self.switch(front, self.release("next"))
+        answer = self.call(front)
+
+        self.assertEqual("good", self.payload(answer)["release"])
+        self.assertIn("no supportedVersions here", answer["result"]["content"][1]["text"])
+        (started,) = self.events("start", "next")
+        self.assertTrue(wait_until(lambda: not alive(started["pid"])), "the failed start ran on")
+
+
 class TransportTests(FrontTestCase):
     def test_closing_the_session_stops_the_backend_and_everything_it_started(self) -> None:
         front = self.front(self.release("stubborn", ignore_eof=True, child=True))

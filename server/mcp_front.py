@@ -40,6 +40,7 @@ import queue
 import subprocess
 import sys
 import threading
+import traceback
 from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import IO, BinaryIO, NamedTuple
@@ -145,6 +146,14 @@ def _frame(raw: bytes) -> dict | None:
 def _encode(message: Mapping[str, object]) -> bytes:
     # bytes, not text: Windows text stdout would turn \n into \r\n
     return (json.dumps(message, ensure_ascii=False) + "\n").encode("utf-8")
+
+
+def _describe(error: BaseException) -> str:
+    """An unanticipated fault in one line: its type, its message and where it was raised."""
+
+    frames = traceback.extract_tb(error.__traceback__)
+    where = f" at {Path(frames[-1].filename).name}:{frames[-1].lineno}" if frames else ""
+    return f"{type(error).__name__}: {error}{where}"
 
 
 def _move_icon(pin: Pin) -> None:
@@ -399,6 +408,8 @@ class Front:
         self._refused: Pin | None = None
         self._lost: str | None = None
         self._warning: str | None = None
+        # The last fault following the pin met, so a repeating one is reported once.
+        self._fault: str | None = None
         # What the client established: its handshake, if it made one, and
         # whether it said the handshake was done.
         self._handshake: dict | None = None
@@ -461,7 +472,7 @@ class Front:
         while not stop.wait(interval):
             with self._lock:
                 if self._backend is not None:
-                    self.follow_pin()
+                    self._follow()
 
     # --- one client line ------------------------------------------------------
 
@@ -483,7 +494,7 @@ class Front:
                 return True
             try:
                 if self._backend is not None:
-                    self.follow_pin()
+                    self._follow()
                 if self._backend is None:
                     raise SessionLostError(self._lost or "no release is running")
                 self._relay(self._backend, raw, message, method, params)
@@ -657,6 +668,26 @@ class Front:
 
     # --- switching ------------------------------------------------------------
 
+    def _follow(self) -> None:
+        """Follow the pin, and survive a fault in doing so.
+
+        The watcher thread and every request come through here. A fault the
+        switch does not anticipate costs this one attempt: it is reported, once
+        while it repeats, and the next poll or request tries again. Uncaught, it
+        ended the watcher, and an idle session stopped following the launcher
+        without a word on stderr but a thread's traceback.
+        """
+
+        try:
+            self.follow_pin()
+        except Exception as error:  # noqa: BLE001 -- one attempt fails, never the session
+            fault = _describe(error)
+            if fault != self._fault:
+                self._report(f"following the launcher failed, and is tried again: {fault}")
+            self._fault = fault
+        else:
+            self._fault = None
+
     def follow_pin(self) -> None:
         """Switch to the release the launcher names, if it names another one.
 
@@ -728,13 +759,21 @@ class Front:
                 self._ask(backend, "initialize", self._handshake)
                 if self._initialized:
                     backend.send(_encode({"jsonrpc": "2.0", "method": "notifications/initialized"}))
-        except (BackendExitedError, TimeoutError) as error:
-            if not backend.stop(self._stop_timeout):
+        except Exception as error:
+            # A fault other than the release's own two is the front's, and the
+            # release is stopped for it all the same: a start that failed must
+            # leave the previous release a store no process of this session holds.
+            stopped = backend.stop(self._stop_timeout)
+            # Read after the stop, which is when `tail` holds the release's last word.
+            if isinstance(error, (BackendExitedError, TimeoutError)):
+                reason = backend.tail() or str(error)
+            else:
+                reason = _describe(error)
+            if not stopped:
                 raise BackendStuckError(
-                    f"release {pin.label} did not answer and did not exit:"
-                    f" {backend.tail() or error}"
+                    f"release {pin.label} did not answer and did not exit: {reason}"
                 ) from error
-            raise BackendFailedError(backend.tail() or str(error)) from error
+            raise BackendFailedError(reason) from error
         return backend
 
     def _stop_backend(self) -> bool:
