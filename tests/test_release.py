@@ -972,6 +972,18 @@ class SourceArchiveTests(unittest.TestCase):
                 self.assertIn("--commit", said.getvalue())
 
 
+class SmokeMcpTests(unittest.TestCase):
+    def test_the_smokes_mcp_requests_pass_against_the_checkouts_server(self) -> None:
+        # The smoke runs only in a release; its space request kept an argument 3.0
+        # retired, and the first release smoke after that refused it.
+        with tempfile.TemporaryDirectory(prefix="vk-smoke-", ignore_cleanup_errors=True) as work:
+            state = Path(work) / "user-state"
+            reported = release.smoke_mcp(
+                ROOT, state, release.isolated_environment(state), release.version()
+            )
+        self.assertTrue(reported.startswith(release.version() + "+"), reported)
+
+
 #: A Release Kit snapshot as build reads it: committed files and no Git. The desktop
 #: build reads its package, the NSIS include inside it and the icon beside it.
 SNAPSHOT = {

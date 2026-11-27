@@ -951,6 +951,80 @@ def build(assets: Path, expected: str, work_dir: Path, commit: str) -> None:
     (assets / "SHA256SUMS").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def smoke_mcp(source: Path, state: Path, environment: dict[str, str], expected: str) -> str:
+    """The version the MCP server of the sources in `source` reports, both handshakes checked.
+
+    It creates a space with a Unicode name through the planning tools and reads it
+    back, in the store under `state`. The suite runs it on the checkout as well, so
+    a request the tools no longer take fails a test instead of the release smoke.
+    """
+
+    meta = {"io.modelcontextprotocol/protocolVersion": "2026-07-28"}
+    label = "Проверка 漢字"
+    messages = [
+        {"jsonrpc": "2.0", "id": 1, "method": "server/discover", "params": {"_meta": meta}},
+        {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {"_meta": meta}},
+        {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "_meta": meta,
+                "name": "create_planning_space",
+                "arguments": {"name": label, "key": "REL"},
+            },
+        },
+        {
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {"_meta": meta, "name": "list_planning_spaces", "arguments": {}},
+        },
+    ]
+    request = (
+        b"\n".join(json.dumps(message, ensure_ascii=False).encode("utf-8") for message in messages)
+        + b"\n"
+    )
+    output = run(
+        sys.executable, "valkama.py", "mcp", cwd=source, env=environment, input_bytes=request
+    )
+    answers = [json.loads(line) for line in output.decode("utf-8", errors="strict").splitlines()]
+    if [answer.get("id") for answer in answers] != [1, 2, 3, 4]:
+        raise ValueError("MCP did not answer every release smoke request")
+    reported = answers[0]["result"]["_meta"]["io.modelcontextprotocol/serverInfo"]["version"]
+    if not reported.startswith(expected + "+"):
+        raise ValueError("MCP release version differs from candidate")
+    if not any(tool["name"] == "create_planning_space" for tool in answers[1]["result"]["tools"]):
+        raise ValueError("MCP tool catalogue is incomplete")
+    for answer in answers[2:]:
+        if answer["result"].get("isError"):
+            raise ValueError(f"MCP call failed: {answer['result']}")
+    if label not in json.dumps(answers[3], ensure_ascii=False):
+        raise ValueError("Unicode Planning name did not survive MCP write and read")
+    if not (state / "valkama.sqlite3").is_file():
+        raise ValueError("MCP did not use the isolated smoke store")
+    legacy = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {"protocolVersion": "2025-11-25"},
+    }
+    legacy_output = run(
+        sys.executable,
+        "valkama.py",
+        "mcp",
+        cwd=source,
+        env=environment,
+        input_bytes=json.dumps(legacy).encode("utf-8") + b"\n",
+    )
+    legacy_answer = json.loads(legacy_output.decode("utf-8", errors="strict"))
+    if legacy_answer["result"]["protocolVersion"] != "2025-11-25":
+        raise ValueError("legacy MCP handshake differs from the release contract")
+    if not legacy_answer["result"]["serverInfo"]["version"].startswith(expected + "+"):
+        raise ValueError("legacy MCP release version differs from candidate")
+    return reported
+
+
 def smoke(assets: Path, expected: str, work_dir: Path, commit: str) -> None:
     require_version(expected)
     record = source_archive()
@@ -1033,69 +1107,7 @@ def smoke(assets: Path, expected: str, work_dir: Path, commit: str) -> None:
     ).hexdigest()
     if runtime["static"]["sha256"] != static_digest:
         raise ValueError("CLI runtime static digest differs from archived UI bytes")
-    meta = {"io.modelcontextprotocol/protocolVersion": "2026-07-28"}
-    label = "Проверка 漢字"
-    messages = [
-        {"jsonrpc": "2.0", "id": 1, "method": "server/discover", "params": {"_meta": meta}},
-        {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {"_meta": meta}},
-        {
-            "jsonrpc": "2.0",
-            "id": 3,
-            "method": "tools/call",
-            "params": {
-                "_meta": meta,
-                "name": "create_planning_space",
-                "arguments": {"project_id": "release", "name": label, "key": "REL"},
-            },
-        },
-        {
-            "jsonrpc": "2.0",
-            "id": 4,
-            "method": "tools/call",
-            "params": {"_meta": meta, "name": "list_planning_spaces", "arguments": {}},
-        },
-    ]
-    request = (
-        b"\n".join(json.dumps(message, ensure_ascii=False).encode("utf-8") for message in messages)
-        + b"\n"
-    )
-    output = run(
-        sys.executable, "valkama.py", "mcp", cwd=extracted, env=environment, input_bytes=request
-    )
-    answers = [json.loads(line) for line in output.decode("utf-8", errors="strict").splitlines()]
-    if [answer.get("id") for answer in answers] != [1, 2, 3, 4]:
-        raise ValueError("MCP did not answer every release smoke request")
-    reported = answers[0]["result"]["_meta"]["io.modelcontextprotocol/serverInfo"]["version"]
-    if not reported.startswith(expected + "+"):
-        raise ValueError("MCP release version differs from candidate")
-    if not any(tool["name"] == "create_planning_space" for tool in answers[1]["result"]["tools"]):
-        raise ValueError("MCP tool catalogue is incomplete")
-    for answer in answers[2:]:
-        if answer["result"].get("isError"):
-            raise ValueError(f"MCP call failed: {answer['result']}")
-    if label not in json.dumps(answers[3], ensure_ascii=False):
-        raise ValueError("Unicode Planning name did not survive MCP write and read")
-    if not (state / "valkama.sqlite3").is_file():
-        raise ValueError("MCP did not use the isolated smoke store")
-    legacy = {
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "initialize",
-        "params": {"protocolVersion": "2025-11-25"},
-    }
-    legacy_output = run(
-        sys.executable,
-        "valkama.py",
-        "mcp",
-        cwd=extracted,
-        env=environment,
-        input_bytes=json.dumps(legacy).encode("utf-8") + b"\n",
-    )
-    legacy_answer = json.loads(legacy_output.decode("utf-8", errors="strict"))
-    if legacy_answer["result"]["protocolVersion"] != "2025-11-25":
-        raise ValueError("legacy MCP handshake differs from the release contract")
-    if not legacy_answer["result"]["serverInfo"]["version"].startswith(expected + "+"):
-        raise ValueError("legacy MCP release version differs from candidate")
+    reported = smoke_mcp(extracted, state, environment, expected)
     sys.stdout.write(
         f"release smoke: source CLI/MCP, Unicode and {reported}; installer structure verified\n"
     )
