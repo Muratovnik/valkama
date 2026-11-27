@@ -121,7 +121,10 @@ class LogTests(unittest.TestCase):
         on_demand._log("said")
         self.assertIn("said", _log_file(self.home).read_text(encoding="utf-8"))
         self.assertFalse((self.home / ".valkama").exists())
-        self.assertEqual(launcher.default_releases().parent, Path(on_demand.log_path()).parent)
+        # `default_releases` resolves, which spells an 8.3 short TEMP in its long form.
+        self.assertEqual(
+            launcher.default_releases().parent, Path(on_demand.log_path()).parent.resolve()
+        )
 
     def test_a_long_log_moves_aside(self) -> None:
         log = _log_file(self.home)

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -16,11 +17,46 @@ from unittest import mock
 from server.hooks import commit_records, git_hook
 from server.projects import project_registry
 
-from .commit_fixtures import CALL, CLAUDE, CODEX, PROJECT, CommitPlace
+from .commit_fixtures import CALL, CLAUDE, CODEX, PROJECT, CommitPlace, short_form
 
 
 def _read(path: Path) -> dict:
     return json.loads(path.read_bytes().decode("utf-8"))
+
+
+def _as_git_prints(path: Path) -> str:
+    """A root as Git prints it: in its long form, though TEMP may name it in the 8.3 one."""
+
+    return path.resolve().as_posix()
+
+
+class ProjectOfTests(unittest.TestCase):
+    """Which registered project a root Git printed is, whichever spelling the registry holds."""
+
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name).resolve() / "a-repository-with-a-long-name"
+        self.root.mkdir()
+
+    def test_a_root_registered_by_its_short_names_is_the_root_git_prints(self) -> None:
+        registered = short_form(self.root)
+        if registered == str(self.root):
+            self.skipTest("this volume keeps no 8.3 short names")
+        self.assertEqual(
+            "alpha", commit_records.project_of(str(self.root), [("alpha", registered)])
+        )
+        # And the other way round: a hook started under a short TEMP.
+        self.assertEqual(
+            "alpha", commit_records.project_of(registered, [("alpha", str(self.root))])
+        )
+
+    def test_another_directory_is_another_project(self) -> None:
+        sibling = self.root.parent / "a-repository-with-a-long-name-too"
+        sibling.mkdir()
+        self.assertIsNone(
+            commit_records.project_of(str(sibling), [("alpha", short_form(self.root))])
+        )
 
 
 class SessionTests(unittest.TestCase):
@@ -102,7 +138,7 @@ class RepositoryTests(unittest.TestCase):
                 "event": "post-commit",
                 "rewrite": None,
                 "rewritten": [],
-                "root": str(place.repository).replace("\\", "/"),
+                "root": _as_git_prints(place.repository),
                 "project_id": PROJECT,
                 "claude": {"session_id": CLAUDE},
                 "codex": None,
@@ -132,7 +168,7 @@ class RepositoryTests(unittest.TestCase):
         place.commit(linked, "in-the-worktree", environ=self.claude)
         [path] = place.beside_the_store()
         record = _read(path)
-        self.assertEqual(str(place.repository).replace("\\", "/"), record["root"])
+        self.assertEqual(_as_git_prints(place.repository), record["root"])
         self.assertEqual(place.head(linked), record["commits"][0]["hash"])
 
     def test_a_commit_inside_a_rebase_is_not_recorded(self) -> None:

@@ -1439,7 +1439,8 @@ def generate() -> dict[str, str]:
     """Every fixture as the server answers now, by file name, as the file's text."""
 
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
-        root = Path(directory)
+        # Resolved, as `documents` resolves a root: TEMP may be in the 8.3 form.
+        root = Path(directory).resolve()
         environment = {
             "VALKAMA_DB": str(root / "store.sqlite3"),
             "HOME": str(root),

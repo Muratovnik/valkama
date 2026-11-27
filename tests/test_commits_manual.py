@@ -32,10 +32,14 @@ FIELDS = (
 
 
 class ManualCase(RuleCase):
-    def made(self, name: str) -> str:
-        """A commit in R made outside any session, which no hook reports."""
+    def made(self, name: str, *, committed: str | None = None) -> str:
+        """A commit in R made outside any session, which no hook reports, at the committer
+        time `committed` when it is given."""
 
-        self.place.commit(self.place.repository, name)
+        environ = (
+            None if committed is None else {**self.place.environ, "GIT_COMMITTER_DATE": committed}
+        )
+        self.place.commit(self.place.repository, name, environ=environ)
         return self.place.head()
 
     def batch(self, reference: str, *entries: dict) -> dict:
@@ -82,7 +86,9 @@ class ManualCase(RuleCase):
 class AttachTests(ManualCase):
     def test_a_start_of_a_hash_attaches_a_commit_no_session_made(self) -> None:
         t1 = self.task("By hand")
-        commit = self.made("outside")
+        # In the zone of UTC, whatever the machine's: Git 2.56 prints it as Z, and a Git
+        # that prints +00:00 is as strict.
+        commit = self.made("outside", committed="2026-01-02T03:04:05 +0000")
         applied = self.batch(t1, {"repository": PROJECT, "hash": commit[:9].upper()})
         self.assertEqual(
             {"attached": [{"repository": PROJECT, "hash": commit}], "removed": [], "unchanged": 0},
@@ -93,7 +99,7 @@ class AttachTests(ManualCase):
             "SELECT project_id, subject, session_id, agent_id, client, committed_at FROM commits"
         ).fetchone()
         self.assertEqual((PROJECT, "feat: outside", None, None, None), tuple(row)[:5])
-        self.assertRegex(str(row[5]), r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d[+-]\d\d:\d\d$")
+        self.assertIn(row[5], ("2026-01-02T03:04:05Z", "2026-01-02T03:04:05+00:00"))
         self.assertEqual([(PROJECT, "commits")], self.projects(t1))
         self.assertEqual([("commit_attached", f"{PROJECT} {commit}")], self.events(t1))
         self.assertEqual([], self.waiting(), "a commit no session made is never waiting")

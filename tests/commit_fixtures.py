@@ -37,10 +37,28 @@ CODEX = "019a3c2e-7777-7c11-9e0f-2f4b6d8a1c3e"
 CALL = "call_7Hq2vX"
 
 
-def _respelled(path: Path) -> str:
-    """`path` as a registry may hold it: on Windows, in other case than Git prints it."""
+def short_form(path: Path) -> str:
+    """`path` in its 8.3 short form (`LONG-N~1` for `long-name`) where the volume keeps
+    one, and as it is elsewhere; Git prints the long form of the same directory."""
 
-    return str(path).upper() if os.name == "nt" else str(path)
+    if os.name != "nt":
+        return str(path)
+    import ctypes
+    from ctypes import wintypes
+
+    shorten = ctypes.WinDLL("kernel32", use_last_error=True).GetShortPathNameW
+    shorten.argtypes = [wintypes.LPCWSTR, wintypes.LPWSTR, wintypes.DWORD]
+    shorten.restype = wintypes.DWORD
+    buffer = ctypes.create_unicode_buffer(32768)
+    size = shorten(str(path), buffer, len(buffer))
+    return buffer.value if 0 < size < len(buffer) else str(path)
+
+
+def _respelled(path: Path) -> str:
+    """`path` as a registry may hold it: on Windows in its short form where the volume
+    keeps one, and in other case than Git prints it."""
+
+    return short_form(path).upper() if os.name == "nt" else str(path)
 
 
 class CommitPlace:
@@ -80,7 +98,8 @@ class CommitPlace:
         )
         with mock.patch.dict(os.environ, {"VALKAMA_DB": str(self.store)}):
             store.connect().close()
-        # Registered by another spelling than Git's: backslashes, and the case changed.
+        # Registered by another spelling than Git's: backslashes, the case changed and,
+        # where the volume keeps them, the 8.3 short names.
         (self.local / "Valkama" / "projects.json").write_bytes(
             registry_bytes([project_entry(PROJECT, _respelled(self.repository))])
         )
