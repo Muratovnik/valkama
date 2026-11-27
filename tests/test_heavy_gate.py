@@ -30,6 +30,9 @@ from tests.test_legacy_lock import DEADLINE_SECONDS, earlier_whole_machine_run
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMAND = str(ROOT / "tests" / "heavy_gate.py")
+#: The CPUs of the machine these tests stand on, more than any profile here asks for: the
+#: gate counts no more cores than the machine has, and a runner may have four.
+MACHINE_CPUS = 16
 
 #: Prints, as one JSON line, what a command under a lease sees: its arguments, K, the
 #: lease, the earlier branches' lock's mark, the runs going at the lock at argv[1], and
@@ -60,9 +63,15 @@ class GateCase(unittest.TestCase):
         self.lock = self.directory / "heavy.lock"
         self.state = self.directory / "gate"
         self.entry = heavy_gate_double.write_entry_point(self.state)
+        # The machine is one of MACHINE_CPUS: here, and in the Python processes these runs
+        # start (the bridge under a lease, the suite), which read `PYTHON_CPU_COUNT` as
+        # their `cpu_count` from Python 3.13.
+        cpus = mock.patch.object(os, "cpu_count", return_value=MACHINE_CPUS)
+        cpus.start()
+        self.addCleanup(cpus.stop)
         # The suite runs under the real gate's lease and the real lock's mark; these runs
         # are not its children, and no agent session decides whether they wait.
-        environment = mock.patch.dict(os.environ)
+        environment = mock.patch.dict(os.environ, {"PYTHON_CPU_COUNT": str(MACHINE_CPUS)})
         environment.start()
         self.addCleanup(environment.stop)
         for name in (
@@ -334,8 +343,12 @@ class LeaseCpusTests(GateCase):
     def test_a_lease_counts_its_profiles_cores_rounded_up(self) -> None:
         self.assertEqual(7, heavy_gate.lease_cpus(self.state, self.lease({"cores_total": 6.1})))
 
+    def test_a_lease_counts_no_more_cores_than_the_machine_has(self) -> None:
+        with mock.patch.object(os, "cpu_count", return_value=4):
+            self.assertEqual(4, heavy_gate.lease_cpus(self.state, self.lease({"cores_total": 6.1})))
+
     def test_a_whole_machine_lease_no_lease_or_an_unreadable_one_counts_the_machine(self) -> None:
-        machine = os.cpu_count() or 1
+        machine = MACHINE_CPUS
         whole = self.lease({"cores_total": 3.0, "whole_machine": True})
         self.assertEqual(machine, heavy_gate.lease_cpus(self.state, whole))
         self.assertEqual(

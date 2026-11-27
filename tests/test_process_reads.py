@@ -11,6 +11,7 @@ import os
 import subprocess
 import sys
 import unittest
+from unittest import mock
 
 from server import process_reads
 
@@ -55,13 +56,19 @@ class ArgumentsTests(unittest.TestCase):
 @unittest.skipUnless(os.name == "nt", "the process calls are Windows'")
 class WindowsTests(unittest.TestCase):
     def test_a_process_that_cannot_be_read_is_reported_blank_not_guessed(self) -> None:
+        def blank(pid: int) -> dict[str, object]:
+            return {"pid": pid, "command_line": "", "executable_path": "", "identity_token": ""}
+
         reader = process_reads.Windows()
-        for pid in (4, 0x7FFFFFF0):  # the System process; a pid that does not exist
-            with self.subTest(pid=pid):
-                self.assertEqual(
-                    {"pid": pid, "command_line": "", "executable_path": "", "identity_token": ""},
-                    reader.process(pid),
-                )
+        self.assertEqual(blank(0x7FFFFFF0), reader.process(0x7FFFFFF0))  # a pid that does not exist
+        # One this user may not open. Which processes those are depends on the rights the
+        # test runs with (an elevated one may read the System process's start), so the
+        # system's refusal is stood in for, on this process, which is readable.
+        own = os.getpid()
+        self.assertNotEqual(blank(own), reader.process(own), "control: it reads itself")
+        with mock.patch.object(reader.kernel32, "OpenProcess", return_value=None) as opened:
+            self.assertEqual(blank(own), reader.process(own))
+        opened.assert_called_once_with(process_reads._PROCESS_QUERY_LIMITED_INFORMATION, False, own)
 
     def test_a_child_names_the_process_that_started_it(self) -> None:
         reader = process_reads.Windows()

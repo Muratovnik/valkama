@@ -143,7 +143,10 @@ class ListAndAttachTests(ApiCase):
             {name: newest[name] for name in FIELDS[:3] + FIELDS[5:8]},
         )
         self.assertRegex(newest["subject"], r"^feat: c\d+$")
-        self.assertRegex(newest["committed_at"], r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d[+-]\d\d:\d\d$")
+        # Git prints the zone of UTC as Z, and any other as +hh:mm.
+        self.assertRegex(
+            newest["committed_at"], r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(Z|[+-]\d\d:\d\d)$"
+        )
         self.assertRegex(newest["reported_at"], r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d")
 
         task = self.task("Takes it")
