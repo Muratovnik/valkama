@@ -68,6 +68,14 @@ describe('the camera revealing a target', () => {
     expect(revealView(wide, inHalf, field, margin)).toBeNull()
   })
 
+  it('leaves a target that fits only without the margin where a reveal with the margin stood it', () => {
+    // 380 of 390: past the room 16 clear of each edge keeps, within the field itself.
+    const near = box(1000, 900, 380, 80)
+    const stood = revealView(near, at, field, margin)
+    expect(stood).toEqual({ x: margin - 1000, y: 600 / 2 - 940, zoom: 1 })
+    expect(stood && revealView(near, stood, field, 0)).toBeNull()
+  })
+
   it('brings a target longer than the field to its start once that start leaves the first half', () => {
     const wide = box(1000, 900, 640, 80)
     const y = 600 / 2 - 940

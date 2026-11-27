@@ -200,22 +200,27 @@ const cardTarget = (node: PlacedNode): WalkTarget => ({
 /**
  * What the operator asked to see, as a target: the first work of the branch the card
  * chose, or the header of the frame folded over it, then the open card's item, then a
- * chain's root. Focus takes it when the field arrives where it was asked to
- * (`graphAnchor` reads where the camera stands instead, which a camera still moving
- * there does not yet say). None when nothing was asked for.
+ * chain's root — each its card, or its frame's header where the field draws it as a
+ * frame, as a chain drawn in frames draws its root. Focus takes it when the field
+ * arrives where it was asked to (`graphAnchor` reads where the camera stands instead,
+ * which a camera still moving there does not yet say). None when nothing was asked for.
  */
 export function graphChosen(
   graph: GraphLayout,
   options: AnchorOptions = {},
   overview = false,
 ): WalkTarget | undefined {
-  const [head] = branchWork(graph, options)
   const holder = branchHolder(graph, options)
-  const selected = graph.nodes.find((node) => node.work_item_id === options.selectedId)
-  const root = graph.nodes.find((node) => node.work_item_id === options.rootId)
-  const card = head ?? selected ?? root
-  const held = holder ? headerTarget(holder, overview) : undefined
-  return held ?? (card ? cardTarget(card) : undefined)
+  if (holder) return headerTarget(holder, overview)
+  const [head] = branchWork(graph, options)
+  if (head) return cardTarget(head)
+  for (const id of [options.selectedId, options.rootId]) {
+    const card = graph.nodes.find((node) => node.work_item_id === id)
+    if (card) return cardTarget(card)
+    const frame = graph.frames.find((entry) => entry.id === id)
+    if (frame) return headerTarget(frame, overview)
+  }
+  return undefined
 }
 
 /**

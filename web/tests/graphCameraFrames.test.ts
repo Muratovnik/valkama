@@ -13,6 +13,7 @@ import {
   graphAnchor,
   graphCameraMove,
   graphCameraView,
+  graphChosen,
   graphWholeView,
   headerOnScreen,
 } from '@/widgets/work-item-graph/utils/graphCamera.ts'
@@ -61,6 +62,23 @@ test('a field of frames too large to read opens on its first header at the top-l
   assert.ok(Math.abs(first.y * camera.zoom + camera.y - 36) < 0.5)
   // In sight at the top-left, it is where the keyboard enters too.
   assert.equal(graphAnchor(placed, {}, { camera, dimensions })?.id, first.id)
+})
+
+test('what was asked for is its frame’s header where the field draws it as a frame, a card where a card', async () => {
+  const placed = await space()
+  const goal = goals[0].work_item_id
+  assert.ok(placed.frames.some((frame) => frame.id === goal))
+  assert.ok(!placed.nodes.some((node) => node.work_item_id === goal))
+  // The open card's item, or a chain's root, drawn as a frame: its goal's button.
+  assert.equal(graphChosen(placed, { selectedId: goal })?.id, frameTarget(goal))
+  assert.equal(graphChosen(placed, { rootId: goal })?.id, frameTarget(goal))
+  // A card asked for comes before the root's frame; nothing asked for is nothing.
+  const [card] = placed.nodes
+  assert.equal(
+    graphChosen(placed, { selectedId: card.work_item_id, rootId: goal })?.id,
+    card.work_item_id,
+  )
+  assert.equal(graphChosen(placed), undefined)
 })
 
 test('the keyboard enters on a target wholly in sight before one the field’s edge cuts', () => {

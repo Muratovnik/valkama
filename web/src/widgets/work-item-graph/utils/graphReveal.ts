@@ -5,11 +5,14 @@
  * centred. Along an axis the target is longer than the field — a root's header on a
  * phone — centring would cut both its ends, so there it is in view while its start
  * stands in the field's first half, and is otherwise brought there, its start at the
- * margin, as it is read.
+ * margin, as it is read. What is longer is read against the room the field keeps for
+ * a reveal, `FRAME_GAP` clear of each edge, whatever the margin: a target stood at its
+ * start by one reveal is not centred by the next, made with a smaller margin.
  */
 
 import type { ViewportTransform } from '@vue-flow/core'
 
+import { FRAME_GAP } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import type { Box } from '@/widgets/work-item-graph/utils/graphWalk.ts'
 
 interface Axis {
@@ -27,7 +30,7 @@ interface Axis {
 function revealAxis(axis: Axis, zoom: number, margin: number): number {
   const shown = axis.start * zoom + axis.offset
   const length = axis.length * zoom
-  if (length > axis.span - 2 * margin)
+  if (length > axis.span - 2 * Math.max(margin, FRAME_GAP))
     return shown >= margin && shown <= axis.span / 2 ? axis.offset : margin - axis.start * zoom
   const inView = shown >= margin && shown + length <= axis.span - margin
   return inView ? axis.offset : axis.span / 2 - (axis.start + axis.length / 2) * zoom
