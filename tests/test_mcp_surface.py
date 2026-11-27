@@ -33,7 +33,7 @@ from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from server import housekeeping, mcp_surface, store, transcripts
+from server import housekeeping, mcp_surface, store, store_lock, transcripts
 from server.hooks import entry as hook_entry
 from server.hooks import normalize, spool
 from server.hooks import pairs as call_pairs
@@ -141,6 +141,33 @@ class McpSurfaceTestCase(unittest.TestCase):
         ):
             mcp_surface.mcp_main()
         connection.close.assert_called_once_with()
+
+    def test_a_store_another_process_is_bringing_up_ends_the_server_as_busy(self) -> None:
+        # The status is what a session's front reads to try the start again.
+        patient = store_lock.migration_lock
+        held, done = threading.Event(), threading.Event()
+
+        def hold() -> None:
+            with patient(store.db_path()):
+                held.set()
+                done.wait(10)
+
+        holder = threading.Thread(target=hold)
+        holder.start()
+        self.addCleanup(holder.join, 10)
+        self.addCleanup(done.set)
+        self.assertTrue(held.wait(10))
+        with (
+            mock.patch.object(
+                store_lock, "migration_lock", lambda path: patient(path, timeout=0.05)
+            ),
+            mock.patch.object(sys, "stderr", io.StringIO()) as stderr,
+            self.assertRaises(SystemExit) as ended,
+        ):
+            mcp_surface.mcp_main()
+
+        self.assertEqual(store_lock.BUSY_EXIT_STATUS, ended.exception.code)
+        self.assertIn("timed out waiting for the store migration lock", stderr.getvalue())
 
 
 class StartUpMaintenanceTests(McpSurfaceTestCase):

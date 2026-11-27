@@ -102,8 +102,23 @@ def answer(raw: bytes, message: dict) -> dict | None:
     return None
 
 
+def busy() -> bool:
+    """Whether this start finds the store busy, as the first `busy_starts` of them do."""
+
+    records = [json.loads(line) for line in Path(CONFIG["log"]).read_text("utf-8").splitlines()]
+    starts = [
+        record for record in records if (record["event"], record["release"]) == ("start", NAME)
+    ]
+    return len(starts) <= int(CONFIG.get("busy_starts", 0))
+
+
 def serve() -> None:
     log("start")
+    if busy():
+        # What a release does when another process holds the store's bring-up lock.
+        log("busy")
+        sys.stderr.write("timed out waiting for the store migration lock\n")
+        raise SystemExit(75)
     open_store()
     if CONFIG.get("exit_on_start"):
         log("crashed")

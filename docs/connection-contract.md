@@ -5777,6 +5777,13 @@ cannot start either, which is the case when the failed one migrated the store
 first, the request is answered with a JSON-RPC error that carries the store's
 refusal, and the front exits.
 
+One failure passes by itself: a release that waited a minute for the store's
+bring-up lock while another process held it exits with status 75, and the
+front tries that release again 10 seconds later, up to three times, without
+waiting for the launcher to name another one. Its warning says so, once; a
+release still refused after the third try gets the usual warning and waits
+for another pin like any other.
+
 A fault of the front's own while it follows the launcher costs that one
 attempt and not the session: it is reported on stderr, once while it repeats,
 the request goes on to the backend the session has, and the next poll or

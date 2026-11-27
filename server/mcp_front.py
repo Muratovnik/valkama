@@ -40,12 +40,13 @@ import queue
 import subprocess
 import sys
 import threading
+import time
 import traceback
 from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import IO, BinaryIO, NamedTuple
 
-from . import launcher, processes
+from . import launcher, processes, store_lock
 from .ops import tray
 
 PROTOCOL_VERSION_KEY = "io.modelcontextprotocol/protocolVersion"
@@ -64,6 +65,12 @@ PREFLIGHT_TIMEOUT = 60.0
 STOP_TIMEOUT = 5.0
 #: How often an idle session looks at the launcher manifest.
 POLL_SECONDS = 2.0
+#: How long after a release found the store busy the switch to it is tried again,
+#: and how many times. A retry comes only after the previous release has opened
+#: the store again, so the holder has most likely finished by then; each attempt
+#: that still meets it busy holds the session for up to two lock waits.
+BUSY_RETRY_SECONDS = 10.0
+BUSY_RETRIES = 3
 
 # Without a console window: a client may start this front with none, and a
 # console child of such a process gets a window of its own.
@@ -83,6 +90,15 @@ SWITCH_FAILED_WARNING = (
     " which helps if the failure has passed; otherwise `launcher install"
     " --revision` with a release that starts reaches this session too."
 )
+# Appended instead when the release said the store was busy: another process was
+# bringing it up, and that passes, so the session tries again on its own.
+SWITCH_BUSY_WARNING = (
+    "WARNING: the Valkama launcher now pins release {revision}, and this session"
+    " could not switch to it yet: {reason}. Another process was bringing the store"
+    " up. This session keeps answering from the release it had and tries the switch"
+    " again by itself in a few seconds; nothing needs doing unless a later answer"
+    " says it gave up."
+)
 
 
 class Pin(NamedTuple):
@@ -98,7 +114,15 @@ class Pin(NamedTuple):
 
 
 class BackendFailedError(RuntimeError):
-    """A release did not start: it would not run, or it exited before answering."""
+    """A release did not start: it would not run, or it exited before answering.
+
+    `busy` when it said, by its exit status, that the store was busy: a failure
+    that passes, so the start is worth trying again.
+    """
+
+    def __init__(self, reason: str, *, busy: bool = False) -> None:
+        super().__init__(reason)
+        self.busy = busy
 
 
 class BackendStuckError(BackendFailedError):
@@ -385,6 +409,7 @@ class Front:
         read_pin: Callable[[], Pin | None],
         start_timeout: float = START_TIMEOUT,
         stop_timeout: float = STOP_TIMEOUT,
+        busy_retry_seconds: float = BUSY_RETRY_SECONDS,
         echo: Callable[[bytes], None] = _echo,
         report: Callable[[str], None] = _report,
         on_switch: Callable[[Pin], None] = _move_icon,
@@ -393,6 +418,7 @@ class Front:
         self._read_pin = read_pin
         self._start_timeout = start_timeout
         self._stop_timeout = stop_timeout
+        self._busy_retry_seconds = busy_retry_seconds
         self._echo = echo
         self._report = report
         self._on_switch = on_switch
@@ -404,8 +430,12 @@ class Front:
         self._backend: Backend | None = None
         self._pin: Pin | None = None
         # The release a switch failed on. It is tried again only once the
-        # launcher has named another one, not on every request.
+        # launcher has named another one, not on every request -- or, when it
+        # found the store busy, once `_retry_at` (monotonic) has come, at most
+        # BUSY_RETRIES times.
         self._refused: Pin | None = None
+        self._retry_at: float | None = None
+        self._busy_refusals = 0
         self._lost: str | None = None
         self._warning: str | None = None
         # The last fault following the pin met, so a repeating one is reported once.
@@ -695,14 +725,21 @@ class Front:
         """
 
         pin = self._read_pin()
-        if pin is None or pin == self._refused:
+        if pin is None or (pin == self._refused and not self._retry_due()):
             return
         if pin == self._pin:
             # The launcher names the release this session runs again, so a
             # warning about a switch away from it no longer says anything true.
-            self._refused = self._warning = None
+            self._withdraw_refusal()
             return
         self._switch(pin)
+
+    def _retry_due(self) -> bool:
+        return self._retry_at is not None and time.monotonic() >= self._retry_at
+
+    def _withdraw_refusal(self) -> None:
+        self._refused = self._warning = self._retry_at = None
+        self._busy_refusals = 0
 
     def _switch(self, pin: Pin) -> None:
         problem = preflight(pin)
@@ -720,7 +757,7 @@ class Front:
         try:
             self._backend = self._launch(pin)
         except BackendFailedError as failure:
-            self._refuse(pin, str(failure))
+            self._refuse(pin, str(failure), busy=failure.busy)
             if previous is None or isinstance(failure, BackendStuckError):
                 self._lost = str(failure)
                 return
@@ -730,7 +767,7 @@ class Front:
                 self._lost = f"{previous.label} could not start again either: {again}"
             return
         self._pin = pin
-        self._refused = self._warning = None
+        self._withdraw_refusal()
         self._report(f"this session now runs release {pin.label}")
         self._announce()
         self._on_switch(pin)
@@ -739,10 +776,19 @@ class Front:
     def _label(pin: Pin | None) -> str:
         return pin.label if pin is not None else "nothing"
 
-    def _refuse(self, pin: Pin, reason: str) -> None:
+    def _refuse(self, pin: Pin, reason: str, *, busy: bool = False) -> None:
+        retried = pin == self._refused and self._retry_at is not None
+        self._busy_refusals = self._busy_refusals + 1 if retried and busy else int(busy)
         self._refused = pin
-        self._warning = SWITCH_FAILED_WARNING.format(revision=pin.label, reason=reason)
-        self._report(f"stayed on {self._label(self._pin)}: {reason}")
+        again = busy and self._busy_refusals <= BUSY_RETRIES
+        self._retry_at = time.monotonic() + self._busy_retry_seconds if again else None
+        # The client hears that the session tries again once, not at every try,
+        # and hears again only when it has given up.
+        if not (again and retried):
+            warning = SWITCH_BUSY_WARNING if again else SWITCH_FAILED_WARNING
+            self._warning = warning.format(revision=pin.label, reason=reason)
+        later = f", and tries it again in {self._busy_retry_seconds:g} s" if again else ""
+        self._report(f"stayed on {self._label(self._pin)}: {reason}{later}")
 
     def _launch(self, pin: Pin) -> Backend:
         """Start a release and bring it to where the client already is."""
@@ -773,7 +819,8 @@ class Front:
                 raise BackendStuckError(
                     f"release {pin.label} did not answer and did not exit: {reason}"
                 ) from error
-            raise BackendFailedError(reason) from error
+            busy = backend.process.returncode == store_lock.BUSY_EXIT_STATUS
+            raise BackendFailedError(reason, busy=busy) from error
         return backend
 
     def _stop_backend(self) -> bool:

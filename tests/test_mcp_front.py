@@ -85,13 +85,14 @@ class FrontTestCase(unittest.TestCase):
         (directory / "fake.json").write_text(json.dumps(settings), encoding="utf-8")
         return Pin(sys.executable, str(directory / "valkama.py"), name)
 
-    def front(self, pin: Pin) -> Front:
+    def front(self, pin: Pin, *, busy_retry_seconds: float = mcp_front.BUSY_RETRY_SECONDS) -> Front:
         self.pin = pin
         front = Front(
             self.out,
             read_pin=lambda: self.pin,
             start_timeout=20.0,
             stop_timeout=1.0,
+            busy_retry_seconds=busy_retry_seconds,
             echo=self.stderr.append,
             report=self.reports.append,
             on_switch=self.moved.append,
@@ -477,6 +478,65 @@ class FailureTests(FrontTestCase):
         self.assertEqual(7, answer["id"])
         self.assertEqual(-32603, answer["error"]["code"])
         self.assertEqual(1, len(self.events("call-start")), "the call was sent again")
+
+
+class BusyStoreTests(FrontTestCase):
+    """A release that found the store busy is tried again without another pin."""
+
+    def test_a_switch_that_found_the_store_busy_is_tried_again_by_itself(self) -> None:
+        front = self.front(self.release("good"), busy_retry_seconds=0.0)
+        busy = self.release("busy", busy_starts=1)
+
+        self.switch(front, busy)
+        self.assertEqual([], self.moved)
+        # The launcher still names the same release: nothing but the retry moves it.
+        answer = self.call(front)
+
+        self.assertEqual("busy", self.payload(answer)["release"], "the session stayed behind")
+        self.assertEqual(1, len(answer["result"]["content"]), "the warning outlived its cause")
+        self.assertEqual(2, len(self.events("start", "busy")))
+        self.assertEqual([busy], self.moved)
+
+    def test_the_client_hears_that_it_is_tried_again_and_the_retry_waits_its_time(self) -> None:
+        front = self.front(self.release("good"), busy_retry_seconds=60.0)
+        busy = self.release("busy", busy_starts=1)
+
+        self.switch(front, busy)
+        warned = self.call(front)
+        self.switch(front, busy)
+
+        self.assertEqual("good", self.payload(warned)["release"])
+        warning = warned["result"]["content"][1]["text"]
+        self.assertIn("migration lock", warning)
+        self.assertIn("tries the switch again by itself", warning)
+        self.assertEqual(1, len(self.events("start", "busy")), "tried again before its time")
+
+    def test_a_store_that_stays_busy_is_given_up_with_the_usual_warning(self) -> None:
+        front = self.front(self.release("good"), busy_retry_seconds=0.0)
+        busy = self.release("busy", busy_starts=99)
+
+        self.switch(front, busy)
+        first = self.call(front)
+        answers = [self.call(front) for _ in range(mcp_front.BUSY_RETRIES + 2)]
+
+        starts = 1 + mcp_front.BUSY_RETRIES
+        self.assertEqual(starts, len(self.events("start", "busy")))
+        self.assertIn("by itself", first["result"]["content"][1]["text"])
+        warnings = [answer["result"]["content"][1:] for answer in answers]
+        # Quiet while it tries again, then the warning of a release it gave up on, once.
+        given_up = [blocks for blocks in warnings if blocks]
+        self.assertEqual(1, len(given_up), warnings)
+        self.assertIn("tries again only when the launcher pins another", given_up[0][0]["text"])
+        self.assertTrue(all(self.payload(answer)["release"] == "good" for answer in answers))
+
+    def test_a_release_that_failed_for_another_reason_waits_for_another_pin(self) -> None:
+        front = self.front(self.release("good"), busy_retry_seconds=0.0)
+
+        self.switch(front, self.release("crashing", exit_on_start=True))
+        for _ in range(3):
+            self.call(front)
+
+        self.assertEqual(1, len(self.events("start", "crashing")))
 
 
 class UnexpectedFailureTests(FrontTestCase):
