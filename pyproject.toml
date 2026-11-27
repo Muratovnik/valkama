@@ -14,7 +14,9 @@
 line-length = 100
 target-version = "py311"
 cache-dir = ".cache/ruff"
-exclude = [
+# Beside Ruff's own list, which `exclude` would replace: that list keeps out `.git`,
+# where Release Kit leaves a failed release's work directory, sources and all.
+extend-exclude = [
   "web",
   "desktop",
   "**/node_modules",
