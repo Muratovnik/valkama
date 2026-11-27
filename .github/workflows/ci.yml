@@ -40,6 +40,13 @@ jobs:
           cache-dependency-path: requirements-dev.txt
       - name: Publication audit
         run: python .github/relkit.pyz audit --history
+      # A diagnostic readout, here and before the tests: the tests once failed to start
+      # their first process with "the paging file is too small" (WinError 1455).
+      - name: Memory after the publication audit
+        run: |
+          Get-CimInstance Win32_OperatingSystem | Format-List FreePhysicalMemory, TotalVisibleMemorySize, FreeVirtualMemory, TotalVirtualMemorySize
+          Get-CimInstance Win32_PageFileUsage | Format-List Name, AllocatedBaseSize, CurrentUsage, PeakUsage
+          Get-Process | Sort-Object PagedMemorySize64 -Descending | Select-Object -First 12 Name, Id, @{n = 'CommitMB'; e = { [int]($_.PagedMemorySize64 / 1MB) } }, @{n = 'WorkingSetMB'; e = { [int]($_.WorkingSet64 / 1MB) } } | Format-Table -AutoSize
       - name: Install pinned development tools
         run: python -m pip install -r requirements-dev.txt
       - name: Install pinned semgrep in its own environment
@@ -62,6 +69,11 @@ jobs:
         run: |
           $env:PATH = "$PWD/.venv-semgrep/Scripts;$env:PATH"
           semgrep scan --config p/python --config p/security-audit --metrics off --error server valkama.py
+      - name: Memory before the tests
+        run: |
+          Get-CimInstance Win32_OperatingSystem | Format-List FreePhysicalMemory, TotalVisibleMemorySize, FreeVirtualMemory, TotalVirtualMemorySize
+          Get-CimInstance Win32_PageFileUsage | Format-List Name, AllocatedBaseSize, CurrentUsage, PeakUsage
+          Get-Process | Sort-Object PagedMemorySize64 -Descending | Select-Object -First 12 Name, Id, @{n = 'CommitMB'; e = { [int]($_.PagedMemorySize64 / 1MB) } }, @{n = 'WorkingSetMB'; e = { [int]($_.WorkingSet64 / 1MB) } } | Format-Table -AutoSize
       - name: Python tests under coverage
         run: python tests/parallel.py --coverage
       - name: Coverage ratchet
