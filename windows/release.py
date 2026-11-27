@@ -64,6 +64,9 @@ NPM = "npm.cmd" if sys.platform == "win32" else "npm"
 NPM_PACKAGES = ("web", "desktop")
 #: The top-level directories `npm run dist` reads, which build copies as siblings.
 DIST_PACKAGES = ("desktop", "windows")
+#: Names the checkout to `tests/heavy_gate.py` (its `ROOT_VARIABLE`) for the npm
+#: stages, whose copy of the sources is in no repository and so has no gate rules.
+HEAVY_GATE_ROOT = "VALKAMA_HEAVY_GATE_ROOT"
 SKIP_DIRS = frozenset(
     {".git", ".cache", ".private", ".state", "tmp", "node_modules", "release", "__pycache__"}
 )
@@ -634,6 +637,9 @@ def _run_stages(stages: list[tuple[str, tuple[str, ...], Path]], shared: dict[st
         sys.stdout.write(f"release check: {' '.join(command)}\n")
         sys.stdout.flush()
         base = program_environment(command, shared)
+        if command[0] == NPM:
+            # The copy is in no repository, so the heavy-process gate finds no rules there.
+            base[HEAVY_GATE_ROOT] = str(ROOT)
         # Gate output is not parsed; inherit pipes to preserve the tool's text.
         if stage == "coverage run":
             with tempfile.TemporaryDirectory(prefix="valkama-check-", dir=task_parent()) as task:

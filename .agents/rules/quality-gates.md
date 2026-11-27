@@ -202,6 +202,11 @@ are the OS's: they go with a run that dies. `heavy-gate mode serial` lets one
 heavy run in at a time across the machine, and `heavy-gate mode measured` goes
 back. Where no gate is installed, the run goes direct and says so. The gate's
 hook refuses a heavy command started outside it, naming the command to run.
+The gate reads the kinds from the repository it starts in, so in a copy of the
+sources outside every repository it knows none and refuses a command naming
+`{k}`. `windows/release.py check` runs its npm stages in such a copy and names
+the checkout in `VALKAMA_HEAVY_GATE_ROOT`; `tests/heavy_gate.py run` then starts
+the gate there and the command in the copy.
 Targeted runs take no lease — a unittest module, subpackage, `-p` or `-k`,
 Vitest given files or `-t` — nor do the light gate steps, and `npm test` with no
 Python says so and runs without one. What a holder starts runs under its lease:

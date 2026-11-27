@@ -42,6 +42,7 @@ from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from unittest import mock
 
+from tests import heavy_gate
 from tests.worktree import link_directory
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -507,6 +508,18 @@ class ReleaseToolchainTests(unittest.TestCase):
         self.assertEqual(self.temporary, copy.parent.resolve())
         # Ahead of the Python stages too: a release once ran 1102 s and then failed here.
         self.assertEqual([release.NPM, release.NPM], [command[0] for command, _ in stages[:2]])
+
+    def test_the_npm_stages_name_their_checkout_to_the_heavy_process_gate(self) -> None:
+        # The copy they run in is in no repository, where the gate finds no rules.
+        checkout = make_checkout(self.root / "checkout")
+        calls = self.checked_commands(checkout)
+        self.assertEqual(heavy_gate.ROOT_VARIABLE, release.HEAVY_GATE_ROOT)
+        for call in calls:
+            named = call.kwargs["env"].get(release.HEAVY_GATE_ROOT)
+            if call.args[0][0] == release.NPM:
+                self.assertEqual(str(checkout), named, call.args[0])
+            else:
+                self.assertIsNone(named, call.args[0])
 
     def test_check_compares_prices_right_after_the_installs(self) -> None:
         # A price source that cannot be reached is a network failure like a registry's,

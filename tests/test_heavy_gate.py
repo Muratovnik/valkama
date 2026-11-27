@@ -8,6 +8,7 @@ of the real gate and at the real lock, which it takes as it loads.
 
 from __future__ import annotations
 
+import contextlib
 import io
 import json
 import math
@@ -31,7 +32,8 @@ ROOT = Path(__file__).resolve().parents[1]
 COMMAND = str(ROOT / "tests" / "heavy_gate.py")
 
 #: Prints, as one JSON line, what a command under a lease sees: its arguments, K, the
-#: lease, the earlier branches' lock's mark, and the runs going at the lock at argv[1].
+#: lease, the earlier branches' lock's mark, the runs going at the lock at argv[1], and
+#: its working directory.
 OBSERVER = """\
 import json, os, sys
 sys.path.insert(0, sys.argv[2])
@@ -44,6 +46,7 @@ print(json.dumps({
     "lease": os.environ.get("HEAVY_GATE_LEASE"),
     "mark": os.environ.get("VALKAMA_HEAVY_TEST_LOCK_HELD"),
     "going": [[entry.cpus, entry.lease] for entry in going],
+    "cwd": os.getcwd(),
 }))
 sys.exit(int(os.environ.get("OBSERVER_EXIT", "0")))
 """
@@ -68,6 +71,7 @@ class GateCase(unittest.TestCase):
             heavy_gate.K_VARIABLE,
             heavy_gate.WAIT_VARIABLE,
             heavy_gate.GATE_VARIABLE,
+            heavy_gate.ROOT_VARIABLE,
             *heavy_gate.AGENT_VARIABLES,
         ):
             os.environ.pop(name, None)
@@ -92,7 +96,9 @@ class GateCase(unittest.TestCase):
         with (
             mock.patch.object(subprocess, "call", call),
             # The gate's command, which `run` waits for while its caller is there.
-            mock.patch.object(heavy_gate, "_until_gone", lambda argv, *_rest: call(argv)),
+            mock.patch.object(
+                heavy_gate, "_until_gone", lambda argv, *_rest, cwd=None: call(argv, cwd=cwd)
+            ),
         ):
             code = heavy_gate.run(kind, command, say=self.said.append, **options)  # type: ignore[arg-type]
         return code, json.loads(out.read_text()) if out.is_file() else {}
@@ -262,6 +268,25 @@ class GateRunTests(GateCase):
         before = call[: call.index("--")]
         self.assertEqual("40", before[before.index("--size") + 1])
         self.assertEqual("5", before[before.index("--want") + 1])
+        self.assertEqual([os.getcwd()], heavy_gate_double.started_in(self.state))
+        self.assertEqual(os.getcwd(), seen["cwd"])
+
+    def test_in_a_copy_of_the_sources_the_gate_starts_in_their_checkout(self) -> None:
+        # The gate reads its kinds from the repository it starts in, and a copy is in
+        # none: there it refused `{k}`, the first release check through it failing so.
+        checkout, copy = self.directory / "checkout", self.directory / "copy"
+        checkout.mkdir()
+        copy.mkdir()
+        with (
+            mock.patch.dict(os.environ, {heavy_gate.ROOT_VARIABLE: str(checkout)}),
+            contextlib.chdir(copy),
+        ):
+            code, seen = self.observed("vitest-suite", "--maxWorkers={k}", want=3, wait=True)
+        self.assertEqual(0, code)
+        self.assertEqual(["--maxWorkers=3"], seen["args"])
+        [started] = heavy_gate_double.started_in(self.state)
+        self.assertEqual(checkout.resolve(), Path(started).resolve())
+        self.assertEqual(copy.resolve(), Path(seen["cwd"]).resolve())
 
     def test_earlier_branches_see_the_run_at_their_lock_with_its_profiles_cores(self) -> None:
         _code, seen = self.observed("browser-suite", wait=True)

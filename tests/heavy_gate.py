@@ -37,6 +37,13 @@ then in the profile Windows set at logon, never through `USERPROFILE`, which
 `tests/isolated.py gates` moves for what it starts. `VALKAMA_HEAVY_GATE`, for tests
 only, names another `heavy-gate.json` to use.
 
+The gate reads the kinds from the `.heavy-gate.toml` of the repository it starts
+in, and a copy of the sources outside every repository has none, so there it
+knows no kind and refuses a COMMAND that names `{k}`. `windows/release.py check`
+runs its npm stages in such a copy and names the checkout it copied in
+`VALKAMA_HEAVY_GATE_ROOT`: `run` then starts the gate in that checkout and
+COMMAND where it was asked to run, under the same lease.
+
 An agent's session does not wait by default, as the gate's own commands do not:
 a run that finds no room exits 75 at once. `--wait` or `HEAVY_GATE_WAIT=1` waits;
 `--no-wait` or `HEAVY_GATE_WAIT=0` does not.
@@ -89,6 +96,8 @@ ENTRY_POINT = "heavy-gate.json"
 INSTALLED = Path(".agent-host-runtime") / "bin" / ENTRY_POINT
 #: For tests only: the `heavy-gate.json` to use instead of the installed one.
 GATE_VARIABLE = "VALKAMA_HEAVY_GATE"
+#: The checkout whose rules a run in a Git-free copy of its sources goes by.
+ROOT_VARIABLE = "VALKAMA_HEAVY_GATE_ROOT"
 #: The gate's exit codes and variables, from its contract.
 EXIT_NO_ROOM = 75
 EXIT_USAGE = 64
@@ -502,15 +511,22 @@ def caller(pid: int | None = None) -> int:
     return parent
 
 
-def _until_gone(argv: Sequence[str], asked: Watched, kind: str, say: Callable[[str], None]) -> int:
+def _until_gone(
+    argv: Sequence[str],
+    asked: Watched,
+    kind: str,
+    say: Callable[[str], None],
+    cwd: str | None = None,
+) -> int:
     """`argv`'s exit code, or 75 once the process that asked for the run is gone first.
 
     The gate's waiter and the bridge each wait for the process above them, so this
     process ending is what lets a run still waiting for room leave the queue; a run
-    already going goes on under its lease.
+    already going goes on under its lease. `cwd` is where the gate starts, which
+    decides whose rules it reads.
     """
 
-    child = subprocess.Popen(argv)
+    child = subprocess.Popen(argv, cwd=cwd)
     try:
         while True:
             try:
@@ -618,6 +634,8 @@ def run(
         )
     flag = "--wait" if waiting else "--no-wait"
     started = _started(os.getpid())
+    # A copy of the sources is in no repository: the gate goes by its checkout's rules.
+    rules_root = os.environ.get(ROOT_VARIABLE) or None
     argv = [
         *found.argv,
         *("run", "--kind", kind, flag),
@@ -625,12 +643,13 @@ def run(
         *(("--want", str(want)) if want is not None else ()),
         *(("--pid", str(pid)) if pid is not None else ()),
         *("--", sys.executable, str(HERE), "bridge", "--kind", kind, flag),
+        *(("--cwd", os.getcwd()) if rules_root else ()),
         *("--owner", f"{os.getpid()}@{started}"),
         *("--state", str(found.state), "--lock", str(lock), "--", *command),
     ]
     try:
         with Watched(caller(pid), before=started) as asked:
-            return _until_gone(argv, asked, kind, say)
+            return _until_gone(argv, asked, kind, say, cwd=rules_root)
     except OSError as error:
         say(f"the heavy-process gate cannot be started ({error}): running without it")
         return run_direct(kind, command, want, say=say)
@@ -891,6 +910,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     inner.add_argument("--wait", action="store_true")
     inner.add_argument("--no-wait", dest="wait", action="store_false")
     inner.add_argument("--owner", type=_owner, action="append", default=[])
+    inner.add_argument(
+        "--cwd", type=Path, help="where COMMAND runs, when the gate starts elsewhere"
+    )
     inner.add_argument("argv", nargs=argparse.REMAINDER)
     for sub in (running, asked, inner):
         # Stand-ins for a test: the earlier branches' lock and the gate's entry point.
@@ -906,6 +928,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not command:
         parser.error("name the command to run after --")
     if options.command == "bridge":
+        if options.cwd is not None:
+            os.chdir(options.cwd)
         lock = options.lock or legacy_lock.lock_path()
         return bridge(
             options.kind,

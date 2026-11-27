@@ -12,7 +12,8 @@ passes on its exit code; `hold` answers its JSON line and stays until P exits;
 `status --json` lists the leases. A file `refuse` in DIR makes `run` and `hold`
 answer no room, with exit code 75. A file `stall` makes a `hold` that waits wait
 for good, as an entry in `DIR/queue`, until P exits. Every call appends its arguments to
-`DIR/calls.jsonl`, for a test to read. `write_entry_point` writes the
+`DIR/calls.jsonl` and its working directory to `DIR/cwds.jsonl`, for a test to
+read. `write_entry_point` writes the
 `heavy-gate.json` that points at it, as the installer writes the real one.
 """
 
@@ -51,6 +52,18 @@ def calls(directory: Path) -> list[list[str]]:
     """The arguments of every call the double at `directory` was given, in order."""
 
     path = directory / "calls.jsonl"
+    if not path.is_file():
+        return []
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+
+def started_in(directory: Path) -> list[str]:
+    """The working directory of every call the double at `directory` was given, in order.
+
+    The real gate reads its rules from the repository of that directory.
+    """
+
+    path = directory / "cwds.jsonl"
     if not path.is_file():
         return []
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
@@ -116,6 +129,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     state.mkdir(parents=True, exist_ok=True)
     with (state / "calls.jsonl").open("a", encoding="utf-8") as log:
         log.write(json.dumps(arguments[2:]) + "\n")
+    with (state / "cwds.jsonl").open("a", encoding="utf-8") as log:
+        log.write(json.dumps(os.getcwd()) + "\n")
     if options.verb == "status":
         leases = [
             json.loads(path.read_text(encoding="utf-8"))
