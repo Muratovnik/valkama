@@ -44,7 +44,7 @@ import type {
 } from '@/widgets/work-item-graph/utils/graphCamera.ts'
 import { FRAME_GAP, GRAPH_ZOOM_MIN } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import type { GraphLayout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
-import { nodeCentre } from '@/widgets/work-item-graph/utils/graphWalk.ts'
+import { revealView } from '@/widgets/work-item-graph/utils/graphReveal.ts'
 import type { Box } from '@/widgets/work-item-graph/utils/graphWalk.ts'
 import { fieldZoomFloor } from '@/widgets/work-item-graph/utils/graphZoomFloor.ts'
 
@@ -140,27 +140,10 @@ export function useGraphCamera(input: CameraInput) {
     })
   }
 
-  /**
-   * Bring one target into sight when the keyboard reaches it, at the zoom the
-   * operator chose: a target already in view, `margin` clear of the flow's
-   * edges, leaves the camera where it is; any other is centred.
-   */
+  /** Bring one target into sight when the keyboard reaches it (`revealView`). */
   function reveal(node: Box, margin = FRAME_GAP) {
-    const { x, y, zoom } = viewport.value
-    const { width, height } = dimensions.value
-    const left = node.x * zoom + x
-    const top = node.y * zoom + y
-    const inView =
-      left >= margin &&
-      top >= margin &&
-      left + node.width * zoom <= width - margin &&
-      top + node.height * zoom <= height - margin
-    if (inView) return
-    const centre = nodeCentre(node)
-    void setViewport(
-      { x: width / 2 - centre.x * zoom, y: height / 2 - centre.y * zoom, zoom },
-      { duration: 0 },
-    )
+    const target = revealView(node, viewport.value, dimensions.value, margin)
+    if (target) void setViewport(target, { duration: 0 })
   }
 
   /** A different scope: the camera it held for the last one means nothing here. */

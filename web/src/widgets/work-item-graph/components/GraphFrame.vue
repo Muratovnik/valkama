@@ -167,10 +167,11 @@ function onGround() {
   }
 
   /* The branch the card chose, as its cards are marked: an edge in the selection
-     accent, inside the frame so no neighbour's air is taken. */
+     accent, just outside the frame, where neither its header's ground nor its
+     progress line covers it; the air round every frame is wider than the ring. */
   &.marked {
     outline: 1px solid var(--color-accent);
-    outline-offset: -1px;
+    outline-offset: 2px;
   }
 }
 

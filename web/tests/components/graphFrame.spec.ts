@@ -50,7 +50,7 @@ function frame(overrides: Partial<PlacedFrame> = {}): PlacedFrame {
 }
 
 function header(
-  props: { frame: PlacedFrame; far?: boolean; overview?: boolean },
+  props: { frame: PlacedFrame; far?: boolean; overview?: boolean; root?: boolean },
   locale: 'en' | 'ru' = 'en',
 ) {
   return mount(GraphFrame, {
@@ -183,6 +183,20 @@ describe("a frame's header", () => {
     moved.unmount()
     const resting = header({ frame: frame({ goal: { ...GOAL, state: boardItem(1).state } }) })
     expect(resting.find('.graph-frame-state').exists()).toBe(false)
+  })
+
+  it('writes a goal’s reference on its first line and its title once, and marks only a chain’s root', () => {
+    for (const root of [false, true]) {
+      const wrapper = header({ frame: frame(), root })
+      expect(wrapper.get('.graph-frame-reference').text()).toBe('MAIN-12')
+      expect(wrapper.findAll('.graph-frame-title').map((title) => title.text())).toEqual([
+        'Frames on the graph',
+      ])
+      expect(wrapper.findAll('.graph-frame-root').map((mark) => mark.text())).toEqual(
+        root ? ['root'] : [],
+      )
+      wrapper.unmount()
+    }
   })
 
   it('zoomed out, keeps the reference and the edge and drops the words', () => {

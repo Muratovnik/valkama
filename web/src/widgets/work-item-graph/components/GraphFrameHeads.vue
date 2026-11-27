@@ -21,8 +21,14 @@ import type { MeasuredHeaders } from '@/widgets/work-item-graph/composables/useG
 import type { FrameProjection } from '@/widgets/work-item-graph/utils/graphFrames.ts'
 import { FOLDED_WIDTH } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 
-const { projection } = defineProps<{ projection: FrameProjection }>()
+const { projection, rootId = null } = defineProps<{
+  projection: FrameProjection
+  /** The chain's root, whose header carries the root mark and is measured with it. */
+  rootId?: string | null
+}>()
 const emit = defineEmits<{ measured: [headers: MeasuredHeaders] }>()
+
+const isRoot = (frame: { id: string }) => frame.id === rootId
 
 const shelf = useTemplateRef<HTMLElement>('shelf')
 
@@ -57,6 +63,7 @@ useResizeObserver(shelf, measure)
         v-for="frame in projection.frames"
         :key="frame.id"
         :frame="{ ...frame, folded: frame.foldable }"
+        :root="isRoot(frame)"
         measure
       />
     </div>

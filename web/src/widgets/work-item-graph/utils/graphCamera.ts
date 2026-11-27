@@ -168,14 +168,18 @@ function branchWork(graph: GraphLayout, options: AnchorOptions): PlacedNode[] {
   return work.length ? work : drawn
 }
 
+/** The frame the branch is drawn in: its goal's or stage's, holding its work, or found work's. */
+function branchFrame(graph: GraphLayout, options: AnchorOptions): PlacedFrame | undefined {
+  const id = options.branch?.frameId
+  return id ? graph.frames.find((frame) => frame.id === id) : undefined
+}
+
 /**
  * The frame that holds the branch where the field draws none of its cards: a stage
  * folded over its work, say. Its header is then what there is of the branch to see.
  */
 function branchHolder(graph: GraphLayout, options: AnchorOptions): PlacedFrame | undefined {
-  const id = options.branch?.frameId
-  const holds = id && !branchWork(graph, options).length
-  return holds ? graph.frames.find((frame) => frame.id === id) : undefined
+  return branchWork(graph, options).length ? undefined : branchFrame(graph, options)
 }
 
 /** The header button the keyboard enters a frame on: its goal's, else its fold. */
@@ -328,8 +332,8 @@ function openingView(graph: GraphLayout, dimensions: GraphFieldSize): ViewportTr
 }
 
 /**
- * Where the camera starts: the branch the card chose, from its beginning, or the
- * frame folded over it; else
+ * Where the camera starts: the branch the card chose — its frame from the header, open
+ * or folded over its work, or without one its work from its beginning; else
  * the whole field when it reads at that size and no card is open; else the
  * open card's item or the chain's root with its direct links; else the field
  * from its beginning, its first target at the top-left. Every framing but the
@@ -341,10 +345,8 @@ export function graphCameraView(
   options: AnchorOptions = {},
 ): ViewportTransform | null {
   if (!drawing(graph).length || !dimensions.width || !dimensions.height) return null
-  const branch = branchWork(graph, options)
-  const holder = branchHolder(graph, options)
-  // A holder is there only while no card of the branch is drawn.
-  const held = holder ? [holder] : branch
+  const frame = branchFrame(graph, options)
+  const held = frame ? [frame] : branchWork(graph, options)
   if (held.length) return keptOnDrawing(beginningView(held, dimensions), graph, dimensions)
   const whole = fitNodes(drawing(graph), dimensions)
   const selected = graph.nodes.some((node) => node.work_item_id === options.selectedId)

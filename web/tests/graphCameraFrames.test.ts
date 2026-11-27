@@ -281,7 +281,7 @@ test('a branch whose frame is folded over its work is framed and entered on that
   assert.notEqual(graphAnchor(placed, { branch: bare })?.id, frameTarget(goalId))
 })
 
-test('a branch with a card drawn is entered on its card, not on its frame', async () => {
+test('a branch with a card drawn is entered on its card, and framed from its frame’s header', async () => {
   // The goal the lone link stands in starts open, its cards drawn.
   const goalId = goals[1].work_item_id
   const placed = await space()
@@ -289,4 +289,24 @@ test('a branch with a card drawn is entered on its card, not on its frame', asyn
   assert.ok(card)
   const branch = { headId: goalId, ids: new Set([card.work_item_id]), frameId: goalId }
   assert.equal(graphAnchor(placed, { branch })?.id, card.work_item_id)
+  const camera = graphCameraView(placed, dimensions, { branch })
+  assert.ok(camera)
+  // The frame begins at the field's start, its header at the top-left and as wide as it reads.
+  const frame = placed.frames.find((each) => each.id === goalId)
+  assert.ok(frame)
+  const shown = {
+    left: frame.x * camera.zoom + camera.x,
+    top: frame.y * camera.zoom + camera.y,
+    right: (frame.x + frame.width) * camera.zoom + camera.x,
+  }
+  assert.ok(shown.left >= 0 && shown.left < 64, JSON.stringify(shown))
+  assert.ok(shown.top >= 0 && shown.top < 64, JSON.stringify(shown))
+  assert.ok(shown.right <= dimensions.width, JSON.stringify(shown))
+  assert.ok(camera.zoom >= 0.75, String(camera.zoom))
+  // Control: a branch of the same card with no frame of its own is framed on the card.
+  const loose = graphCameraView(placed, dimensions, {
+    branch: { headId: null, ids: new Set([card.work_item_id]) },
+  })
+  assert.ok(loose)
+  assert.notDeepEqual(loose, camera)
 })

@@ -48,6 +48,12 @@ function projectChain(options: Partial<FrameProjectionInput> = {}) {
   })
 }
 
+/** One more item than a frame holds before it starts folded, numbered from `from`. */
+const past = (prefix: string, from: number, parent?: string) =>
+  Array.from({ length: FOLD_ABOVE + 1 }, (_, index) =>
+    item(`${prefix}${index}`, from + index, parent ? { parent } : {}),
+  )
+
 const frameOf = (projected: ReturnType<typeof projectChain>, id: string) =>
   projected.frames.find((frame) => frame.id === id)
 const cardIds = (frame: { cards: WorkItemBrief[] } | undefined) =>
@@ -80,22 +86,52 @@ describe('a chain whose root holds work', () => {
     ])
   })
 
-  it('starts the root open however much it holds, while a stage past the threshold folds', () => {
-    const many = Array.from({ length: FOLD_ABOVE + 1 }, (_, index) =>
-      item(`s${index}`, 300 + index, { parent: 'stage' }),
-    )
-    const items = [...chainItems(), ...many]
+  it('starts the root and its stages open however much they hold, the found band by the threshold', () => {
+    const items = [...chainItems(), ...past('s', 300, 'stage'), ...past('f', 400)]
     const folded = (options: Partial<FrameProjectionInput> = {}) =>
       projectChain({ items, ...options }).frames.map((frame) => [frame.id, frame.folded])
     expect(folded()).toEqual([
       ['root', false],
-      ['stage', true],
-      [FOUND_FRAME, false],
+      ['stage', false],
+      [FOUND_FRAME, true],
     ])
-    // Control: over the whole space the same goal holds too much and starts folded.
+    // Control: over the whole space the same goal and stage hold too much and start folded.
     expect(folded({ chainRootId: null })[0]).toEqual(['root', true])
+    expect(folded({ chainRootId: null, choices: { root: false } })[1]).toEqual(['stage', true])
     // A choice the operator made still outranks the default.
-    expect(folded({ choices: { root: true } })[0]).toEqual(['root', true])
+    expect(folded({ choices: { stage: true } })[1]).toEqual(['stage', true])
+    expect(folded({ choices: { root: true } })).toEqual([
+      ['root', true],
+      [FOUND_FRAME, true],
+    ])
+  })
+
+  it('stands a goal found on the way, with its stage and work, in the band of found work', () => {
+    const items = [
+      ...chainItems(),
+      item('found-goal', 70, { goal: true }),
+      item('found-stage', 71, { goal: true, parent: 'found-goal' }),
+      item('found-task', 72, { parent: 'found-stage' }),
+    ]
+    const projected = projectChain({ items })
+    // Each frame is read after the frame it stands in, though the band is no goal.
+    expect(projected.frames.map((frame) => [frame.id, frame.parentId])).toEqual([
+      ['root', null],
+      ['stage', 'root'],
+      [FOUND_FRAME, null],
+      ['found-goal', FOUND_FRAME],
+      ['found-stage', 'found-goal'],
+    ])
+    expect(cardIds(frameOf(projected, 'found-stage'))).toEqual(['found-task'])
+    expect(frameOf(projected, FOUND_FRAME)?.members).toEqual([
+      'found-elsewhere',
+      'found-loose',
+      'found-task',
+    ])
+    expect(frameOf(projected, 'root')?.members).not.toContain('found-task')
+    // Control: over the whole space the found goal stands on its own, beside the root.
+    const space = projectChain({ items, chainRootId: null })
+    expect(frameOf(space, 'found-goal')?.parentId).toBeNull()
   })
 
   it('draws the root when a filter finds nothing in it', () => {

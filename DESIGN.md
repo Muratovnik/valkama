@@ -2588,20 +2588,24 @@ from the ground moves the field. A card in
 a frame does not name its goal, since the frame does.
 
 A chain grown from a goal or a stage stands in frames too, drawn from its own items
-alone: the root is the outermost frame, drawn whatever its work and open at first
-however much it holds, and its stages are frames inside it that fold by the rule
-below. A member whose parent is not of the chain — work found on the way, filed under
-another goal or under none — stands in a band of its own after the root, «Найдено в
-цепочке» (`found`), and not under «Без цели», since some of it has a goal; its cards
-keep the chip that names that goal. The root's header carries the mark its card had,
+alone: the root is the outermost frame, drawn whatever its work, and it and the stages
+inside it are open at first however much they hold, since a chain folded into headers
+shows nothing of what it grew into; the band below folds by the rule below. A member
+whose parent is not of the chain — work found on the way, filed under another goal or
+under none, and a goal found on the way with all it holds — stands in a band of its own
+after the root, «Найдено в цепочке» (`found`), and not under «Без цели», since some of
+it has a goal; its cards keep the chip that names that goal. The root's header carries the mark its card had,
 «корень», and its accessible name says «корень цепочки». A chain reads no other space,
 so its key never says a link was not read. Beside the groups its cards are marked by,
 a framed chain's key names the parts the frames' edges draw of what is finished, under
 review, under way or blocked; a frame's «ahead» is ready, untriaged and deferred work
 together, which no one word of the chain's key names, so only the cards drawn name
 those. A branch the card chose is edged in the selection accent here too, its cards
-and the frame of its goal; where that frame is folded over the branch's work, the
-frame is what the camera frames and the keyboard enters on, by its header. Work of
+and the frame of its goal, that frame's edge standing just outside it, where neither
+its header's ground nor its progress line covers it. The camera frames that frame from
+its header, whole where it reads, as a branch's work is framed; the keyboard enters on
+the branch's first card, or by the frame's header where the frame is folded over the
+branch's work. Work of
 the branch filed under no goal of the chain stands in the band of found work, which
 stands for the branch so only while none of its cards is drawn, since the band holds
 other work as well. A chain grown from a task holds no work to frame and keeps its flat drawing,
@@ -2657,7 +2661,9 @@ placed, Tab from outside lands on the open card's item or the chosen branch's wo
 when it is in sight, else on the first header button or card in sight as the field
 is read, and only with nothing in sight on that card or the field's first target,
 which the press then brings into view; the camera does not move for a target
-already in sight.
+already in sight. A target out of sight is centred, except along a side it is longer
+than the field, a wide header on a phone, where its start stands at the field's edge,
+as it is read, and the next press leaves it there.
 
 A header says how its work stands in words, a number beside each word and never
 rounded to «99+»: «8 из 21 выполнено», then how many are in review, in progress and

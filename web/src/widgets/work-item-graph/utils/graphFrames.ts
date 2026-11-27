@@ -29,11 +29,12 @@
  * open and closed, whatever is drawn or a filter lets through.
  *
  * A chain whose root holds work is drawn the same way from the chain's own items
- * (`chainRootId`): the root is the outer frame, and it starts open however much it
- * holds, because a chain folded into one header shows nothing of what it grew into.
- * A member whose parent the chain does not hold — work found on the way, filed under
- * another goal or under none — stands in the frame of found work (`FOUND_FRAME`), so
- * no frame counts work that is not its own. A link to work outside the chain is not
+ * (`chainRootId`): the root is the outer frame, and it and the stages in it start open
+ * however much they hold, because a chain folded into headers shows nothing of what it
+ * grew into. A member whose parent the chain does not hold — work found on the way,
+ * filed under another goal or under none, a goal found on the way with all it holds —
+ * stands in the frame of found work (`FOUND_FRAME`), so no frame counts work that is
+ * not its own. A link to work outside the chain is not
  * drawn, as the flat drawing never drew one, and names no space the read could not read.
  */
 
@@ -131,9 +132,11 @@ function progressOf(members: readonly WorkItemBrief[]): FrameProgress {
 /**
  * The space read as a tree of frames: who stands in which, and what is under each.
  * In a chain, work whose parent is not among the items stands in the frame of found
- * work rather than under no goal.
+ * work rather than under no goal, and so does a goal found on the way, with all it holds:
+ * everything found reads as one group, and only the root stands outside it.
  */
-function frameTree(items: readonly WorkItemBrief[], chain: boolean) {
+function frameTree(items: readonly WorkItemBrief[], chainRootId: string | null) {
+  const chain = chainRootId !== null
   const parentless = chain ? FOUND_FRAME : NO_PARENT_FRAME
   const frames = new Map(
     items.filter((item) => isFrame(item)).map((item) => [item.work_item_id, item]),
@@ -148,15 +151,20 @@ function frameTree(items: readonly WorkItemBrief[], chain: boolean) {
   /** The frame an item stands in: its goal, the work under none or found, or its own space's. */
   const home = (item: WorkItemBrief) =>
     item.other_space ? spaceFrameId(item.other_space.key) : (parentOf(item) ?? parentless)
+  /** The frame a goal's frame stands in: its parent's, or in a chain the band of found work. */
+  const frameParent = (goal: WorkItemBrief) =>
+    parentOf(goal) ?? (chain && goal.work_item_id !== chainRootId ? FOUND_FRAME : null)
   const lineage = (frameId: string): string[] => {
     const chain: string[] = []
     for (let at: string | null = frameId; at !== null && !chain.includes(at);) {
       chain.push(at)
       const goal = frames.get(at)
-      at = goal ? parentOf(goal) : null
+      at = goal ? frameParent(goal) : null
     }
     return chain
   }
+  /** The frames other frames stand in. */
+  const holders = new Set([...frames.values()].map((goal) => frameParent(goal)))
   const members = new Map<string, WorkItemBrief[]>()
   for (const item of [...items].sort(byNumber)) {
     if (isFrame(item)) continue
@@ -166,7 +174,7 @@ function frameTree(items: readonly WorkItemBrief[], chain: boolean) {
       else members.set(frameId, [item])
     }
   }
-  return { frames, home, lineage, members, parentOf, spaces }
+  return { frameParent, frames, holders, home, lineage, members, spaces }
 }
 
 type FrameTree = ReturnType<typeof frameTree>
@@ -185,7 +193,7 @@ function frameCandidates(
   const filtered = Boolean(input.shown)
   const ids = [
     ...tree.frames.keys(),
-    ...[NO_PARENT_FRAME, FOUND_FRAME].filter((id) => tree.members.has(id)),
+    ...[NO_PARENT_FRAME, FOUND_FRAME].filter((id) => tree.members.has(id) || tree.holders.has(id)),
     ...tree.spaces.keys(),
   ]
   const candidates = new Map<string, ProjectedFrame>()
@@ -198,8 +206,11 @@ function frameCandidates(
     // A chain's root is what the field is about: drawn whatever a filter or the
     // closed switch leaves of it, and open until the operator folds it.
     const root = id === input.chainRootId
+    // The band of found work comes after the goals: one drawn inside it draws it too.
+    const holdsDrawn = [...candidates.values()].some((frame) => frame.parentId === id)
     const wanted =
       root ||
+      holdsDrawn ||
       (filtered
         ? visible.length > 0
         : openWork > 0 || input.showDone || (goal !== null && open(goal)))
@@ -211,13 +222,16 @@ function frameCandidates(
     // summarise, so in «All» it folds only past that many drawn cards, and a
     // space with a few finished items draws them. Another space's frame is no goal
     // either, and folds by the same rule.
+    // In a chain a goal or stage is what the operator asked to see, so it starts open
+    // however much it holds; the band of found work folds as any frame does.
+    const large = openWork > FOLD_ABOVE && !(input.chainRootId && goal)
     const idle = goal !== null || visible.length === 0 || visible.length > FOLD_ABOVE
-    const defaultFolded = !root && (openWork > FOLD_ABOVE || (openWork === 0 && idle))
+    const defaultFolded = !root && (large || (openWork === 0 && idle))
     candidates.set(id, {
       id,
       goal,
       space,
-      parentId: goal ? tree.parentOf(goal) : null,
+      parentId: goal ? tree.frameParent(goal) : null,
       defaultFolded,
       folded: input.choices?.[id] ?? defaultFolded,
       foldable: true,
@@ -287,7 +301,7 @@ function strongerKind(left: PlanningEdge['kind'], right: PlanningEdge['kind']) {
 /** The frames, which of them are drawn and folded, the cards each draws, and the lines. */
 export function frameProjection(input: FrameProjectionInput): FrameProjection {
   const chain = Boolean(input.chainRootId)
-  const tree = frameTree(input.items, chain)
+  const tree = frameTree(input.items, input.chainRootId ?? null)
   const shown = input.shown ?? null
   const drawable = (item: WorkItemBrief) =>
     (input.showDone || open(item)) && (shown === null || shown.has(item.work_item_id))
@@ -304,7 +318,9 @@ export function frameProjection(input: FrameProjectionInput): FrameProjection {
       .slice(1)
       .every((at) => !candidates.get(at)?.folded)
 
-  const frames = [...candidates.values()].filter((frame) => drawnFrame(frame.id)).sort(frameOrder)
+  const frames = holdersFirst(
+    [...candidates.values()].filter((frame) => drawnFrame(frame.id)).sort(frameOrder),
+  )
   const cards = frames.filter((frame) => !frame.folded).flatMap((frame) => frame.cards)
   const drawnCards = new Set(cards.map((item) => item.work_item_id))
   const drawnFrames = new Set(frames.map((frame) => frame.id))
@@ -365,6 +381,33 @@ function frameOrder(left: ProjectedFrame, right: ProjectedFrame): number {
     (left.goal?.number ?? 0) - (right.goal?.number ?? 0) ||
     (left.space?.key ?? '').localeCompare(right.space?.key ?? '')
   )
+}
+
+/**
+ * The frames in their order, except that one read before the frame it stands in waits
+ * for it and follows it: a goal found on the way stands in the band of found work, which
+ * is read after the goals.
+ */
+function holdersFirst(sorted: readonly ProjectedFrame[]): ProjectedFrame[] {
+  const drawn = new Set(sorted.map((frame) => frame.id))
+  const read = new Set<string>()
+  const waiting = new Map<string, ProjectedFrame[]>()
+  const ordered: ProjectedFrame[] = []
+  const take = (frame: ProjectedFrame) => {
+    ordered.push(frame)
+    read.add(frame.id)
+    const held = waiting.get(frame.id) ?? []
+    waiting.delete(frame.id)
+    for (const next of held) take(next)
+  }
+  for (const frame of sorted) {
+    const holder = frame.parentId
+    if (holder !== null && drawn.has(holder) && !read.has(holder))
+      waiting.set(holder, [...(waiting.get(holder) ?? []), frame])
+    else take(frame)
+  }
+  // Goals that stand in each other in a loop hold no frame read first: read them as sorted.
+  return [...ordered, ...sorted.filter((frame) => !read.has(frame.id))]
 }
 
 function linkOrder(left: { from: string; to: string }, right: { from: string; to: string }) {

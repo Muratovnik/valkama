@@ -209,7 +209,6 @@ const liveOf = (node: PlacedNode) => live.value[node.work_item_id] ?? null
  * except a chain's found work, whose goal stands outside the chain and no frame names.
  */
 const isFramed = (node: PlacedNode) => frameById.value.has(node.frameId)
-const namedByFrame = (node: PlacedNode) => isFramed(node) && node.frameId !== FOUND_FRAME
 
 const { inChain, isChainRoot, isRecessed, legend, nodeChainGroup, parentReference, referenceById } =
   useGraphNodeMarks({
@@ -223,11 +222,15 @@ const { inChain, isChainRoot, isRecessed, legend, nodeChainGroup, parentReferenc
 
 /** The goal chip, on a card no frame round it names. */
 function chipFor(node: PlacedNode): string | undefined {
-  return namedByFrame(node) ? undefined : parentReference(node)
+  return isFramed(node) && node.frameId !== FOUND_FRAME ? undefined : parentReference(node)
 }
 
-/** The frame of the chain's root: the field's outer frame, marked as its card was. */
-const isRootFrame = (frame: PlacedFrame) => inChain.value && frame.id === props.scopeRootId
+/**
+ * The chain's root while the field is narrowed to a chain. Its frame is the field's outer
+ * frame, and its header carries the root mark, as its card did.
+ */
+const chainRootId = computed(() => (inChain.value ? props.scopeRootId : null))
+const isRootFrame = (frame: PlacedFrame) => frame.id === chainRootId.value
 
 // Vue Flow owns the camera and all viewport math. The store is keyed so the
 // controls in the strip below and this field share one camera instance.
@@ -246,7 +249,7 @@ const {
   branch: () => branchFrame.value,
   flowId: GRAPH_FLOW_ID,
   placed,
-  rootId: () => (inChain.value ? props.scopeRootId : null),
+  rootId: () => chainRootId.value,
   selectedId: () => props.selectedId ?? null,
   scopes: [
     () => props.space,
@@ -467,6 +470,7 @@ function toggleFrame(frameId: string) {
       <GraphFrameHeads
         v-if="projected"
         :projection="projected"
+        :root-id="chainRootId"
         @measured="measure"
       />
     </div>

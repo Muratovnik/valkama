@@ -116,11 +116,6 @@ useResizeObserver(
         >{{ goal.reference }}</span
       >
       <span
-        v-if="goal && root && !overview"
-        class="graph-frame-root"
-        >{{ t('graph.rootMark') }}</span
-      >
-      <span
         v-else
         ref="name"
         v-work-item-title="title"
@@ -128,6 +123,11 @@ useResizeObserver(
         class="graph-frame-title"
         :class="{ 'one-line': overview }"
       />
+      <span
+        v-if="goal && root && !overview"
+        class="graph-frame-root"
+        >{{ t('graph.rootMark') }}</span
+      >
     </template>
     <SemanticState
       v-if="goal && stateShown && !overview"
