@@ -1,10 +1,11 @@
 /* What a frame on the graph says, in both languages: a goal's, a stage's, the work under no
-   goal's and another space's. */
+   goal's, a chain's found work's and another space's. */
 
 export const graphFrameMessages = {
   en: {
     frame: {
       noGoal: 'No goal',
+      found: 'Found in the chain',
       goal: 'Goal {reference} “{title}”',
       stage: 'Stage {reference} “{title}”',
       foldGoal: 'Collapse goal {reference} “{title}”',
@@ -13,6 +14,8 @@ export const graphFrameMessages = {
       unfoldStage: 'Expand stage {reference} “{title}”',
       foldNone: 'Collapse the work under no goal',
       unfoldNone: 'Expand the work under no goal',
+      foldFound: 'Collapse the work found in the chain',
+      unfoldFound: 'Expand the work found in the chain',
       foldSpace: 'Collapse the work of space {key} · {name}',
       unfoldSpace: 'Expand the work of space {key} · {name}',
       doneOf: '{done} of {total} done',
@@ -31,6 +34,7 @@ export const graphFrameMessages = {
   ru: {
     frame: {
       noGoal: 'Без цели',
+      found: 'Найдено в цепочке',
       goal: 'Цель {reference} «{title}»',
       stage: 'Этап {reference} «{title}»',
       foldGoal: 'Свернуть цель {reference} «{title}»',
@@ -39,6 +43,8 @@ export const graphFrameMessages = {
       unfoldStage: 'Развернуть этап {reference} «{title}»',
       foldNone: 'Свернуть работу без цели',
       unfoldNone: 'Развернуть работу без цели',
+      foldFound: 'Свернуть работу, найденную в цепочке',
+      unfoldFound: 'Развернуть работу, найденную в цепочке',
       foldSpace: 'Свернуть работу пространства {key} · {name}',
       unfoldSpace: 'Развернуть работу пространства {key} · {name}',
       doneOf: '{done} из {total} выполнено',

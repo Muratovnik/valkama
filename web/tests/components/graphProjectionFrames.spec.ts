@@ -321,3 +321,75 @@ describe('folding a frame', () => {
     first.scope.stop()
   })
 })
+
+/** The node a layout request places under this id, at any depth; undefined when it has none. */
+function nodeIn(node: ElkNode, id: string): ElkNode | undefined {
+  if (node.id === id) return node
+  for (const child of node.children ?? []) {
+    const found = nodeIn(child, id)
+    if (found) return found
+  }
+  return undefined
+}
+
+/** The field narrowed to the chain of `root`, whose members are `members`. */
+function openChain(root: string, members: string[], nodes = space()) {
+  const scope = effectScope()
+  scopes.push(scope)
+  const input = reactive({
+    nodes,
+    edges: links,
+    scopeRootId: root,
+    members,
+    open: true,
+    scopeKind: 'chain' as const,
+    space: 'space-1',
+    version: 1,
+    live: {} as Record<string, LiveWork>,
+  })
+  const projection = scope.run(() => useGraphProjection(() => input))
+  if (!projection) throw new Error('Projection scope did not start')
+  return { input, projection, scope }
+}
+
+describe('a chain', () => {
+  beforeEach(() => {
+    runs.length = 0
+    localStorage.clear()
+  })
+
+  it('grown from a goal is laid out in frames: the goal round its work, found work apart', async () => {
+    // c, under no goal, was found on the way: the chain holds it, its goal does not.
+    const { projection, scope } = openChain('goal-1', ['a', 'b', 'c'])
+    await settle()
+    const graph = runs.at(-1)?.graph
+    if (!graph) throw new Error('No layout was asked for')
+    expect(leaves(nodeIn(graph, 'goal-1') ?? { id: '' }).sort()).toEqual(['a', 'b'])
+    expect(leaves(nodeIn(graph, 'found') ?? { id: '' })).toEqual(['c'])
+    expect(projection.projected.value?.frames.map((frame) => frame.id)).toEqual(['goal-1', 'found'])
+    scope.stop()
+  })
+
+  it('keeps its folds apart from the whole space’s', async () => {
+    const { projection, scope } = openChain('goal-1', ['a', 'b'])
+    await settle()
+    projection.toggle('goal-1')
+    await settle()
+    expect(projection.folded('goal-1')).toBe(true)
+    expect(localStorage.getItem('valkama-graph-chain-frames')).toContain('goal-1')
+    expect(localStorage.getItem('valkama-graph-frames') ?? '').not.toContain('goal-1')
+    scope.stop()
+  })
+
+  it('grown from a task is laid out flat, as before', async () => {
+    // a's chain: c was found from it. A task holds no goal to frame its chain.
+    const { projection, scope } = openChain('a', ['c'])
+    await settle()
+    const graph = runs.at(-1)?.graph
+    if (!graph) throw new Error('No layout was asked for')
+    expect(projection.projected.value).toBeNull()
+    expect(nodeIn(graph, 'found')).toBeUndefined()
+    expect(leaves(graph).sort()).toEqual(['a', 'c'])
+    scope.stop()
+  })
+})

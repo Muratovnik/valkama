@@ -18,7 +18,12 @@ import {
 } from '@/widgets/work-item-graph/utils/graphCamera.ts'
 import { layout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import type { GraphLayoutEngine } from '@/widgets/work-item-graph/utils/graphLayout.ts'
-import { foldTarget, readingOrder, walkTargets } from '@/widgets/work-item-graph/utils/graphWalk.ts'
+import {
+  foldTarget,
+  frameTarget,
+  readingOrder,
+  walkTargets,
+} from '@/widgets/work-item-graph/utils/graphWalk.ts'
 
 import { broadSpace } from './fixtures/graphSpaces.ts'
 
@@ -254,4 +259,34 @@ test('zoomed out to the overview, the keyboard enters on a target the overview d
     { camera: { ...camera, zoom: 0.75 }, dimensions, overview: false },
   )
   assert.match(reading?.id ?? '', /:fold$/u)
+})
+
+test('a branch whose frame is folded over its work is framed and entered on that frame’s header', async () => {
+  // The largest goal starts folded: none of its cards is drawn.
+  const goalId = goals[0].work_item_id
+  const placed = await space()
+  const folded = placed.frames.find((frame) => frame.id === goalId)
+  assert.ok(folded?.folded)
+  assert.equal(placed.nodes.filter((node) => node.frameId === goalId).length, 0)
+  const branch = { headId: goalId, ids: new Set<string>(), frameId: goalId }
+  assert.equal(graphAnchor(placed, { branch })?.id, frameTarget(goalId))
+  const camera = graphCameraView(placed, dimensions, { branch })
+  assert.ok(camera)
+  const screen = headerOnScreen(placed, goalId, camera)
+  assert.ok(screen)
+  assert.ok(screen.x >= 0 && screen.x < dimensions.width, JSON.stringify(screen))
+  assert.ok(screen.y >= 0 && screen.y < dimensions.height, JSON.stringify(screen))
+  // Without the frame the branch has nothing on the field to enter on.
+  const bare = { headId: goalId, ids: new Set<string>() }
+  assert.notEqual(graphAnchor(placed, { branch: bare })?.id, frameTarget(goalId))
+})
+
+test('a branch with a card drawn is entered on its card, not on its frame', async () => {
+  // The goal the lone link stands in starts open, its cards drawn.
+  const goalId = goals[1].work_item_id
+  const placed = await space()
+  const [card] = placed.nodes.filter((node) => node.frameId === goalId).sort(readingOrder)
+  assert.ok(card)
+  const branch = { headId: goalId, ids: new Set([card.work_item_id]), frameId: goalId }
+  assert.equal(graphAnchor(placed, { branch })?.id, card.work_item_id)
 })

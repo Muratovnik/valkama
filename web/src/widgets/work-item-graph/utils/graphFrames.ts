@@ -27,10 +27,19 @@
  *
  * The counts of a frame describe its goal, not the view: every item under it,
  * open and closed, whatever is drawn or a filter lets through.
+ *
+ * A chain whose root holds work is drawn the same way from the chain's own items
+ * (`chainRootId`): the root is the outer frame, and it starts open however much it
+ * holds, because a chain folded into one header shows nothing of what it grew into.
+ * A member whose parent the chain does not hold — work found on the way, filed under
+ * another goal or under none — stands in the frame of found work (`FOUND_FRAME`), so
+ * no frame counts work that is not its own. A link to work outside the chain is not
+ * drawn, as the flat drawing never drew one, and names no space the read could not read.
  */
 
 import {
   drawnEnds,
+  FOUND_FRAME,
   NO_PARENT_FRAME,
   spaceFrameId,
 } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
@@ -52,6 +61,8 @@ export interface FrameProjectionInput {
   links: readonly PlanningEdge[]
   /** Whether finished work is drawn as cards. */
   showDone: boolean
+  /** The chain's root when `items` are one chain's: its root and its members. */
+  chainRootId?: string | null
   /** What the operator chose against each frame's default: true is folded. */
   choices?: Readonly<Record<string, boolean>>
   /** The items a queue or a search lets through; null when nothing narrows. */
@@ -117,8 +128,13 @@ function progressOf(members: readonly WorkItemBrief[]): FrameProgress {
   return progress
 }
 
-/** The space read as a tree of frames: who stands in which, and what is under each. */
-function frameTree(items: readonly WorkItemBrief[]) {
+/**
+ * The space read as a tree of frames: who stands in which, and what is under each.
+ * In a chain, work whose parent is not among the items stands in the frame of found
+ * work rather than under no goal.
+ */
+function frameTree(items: readonly WorkItemBrief[], chain: boolean) {
+  const parentless = chain ? FOUND_FRAME : NO_PARENT_FRAME
   const frames = new Map(
     items.filter((item) => isFrame(item)).map((item) => [item.work_item_id, item]),
   )
@@ -129,9 +145,9 @@ function frameTree(items: readonly WorkItemBrief[]) {
     !item.other_space && item.parent_id !== null && frames.has(item.parent_id)
       ? item.parent_id
       : null
-  /** The frame an item stands in: its goal, the work under none, or its own space's. */
+  /** The frame an item stands in: its goal, the work under none or found, or its own space's. */
   const home = (item: WorkItemBrief) =>
-    item.other_space ? spaceFrameId(item.other_space.key) : (parentOf(item) ?? NO_PARENT_FRAME)
+    item.other_space ? spaceFrameId(item.other_space.key) : (parentOf(item) ?? parentless)
   const lineage = (frameId: string): string[] => {
     const chain: string[] = []
     for (let at: string | null = frameId; at !== null && !chain.includes(at);) {
@@ -159,7 +175,7 @@ type FrameTree = ReturnType<typeof frameTree>
  * Every frame the field could draw, folded or open, with the cards each draws.
  * Under a filter only a frame the filter found something in is drawn, as a
  * board lane is; without one, a frame with open work, an open goal, and in
- * «All» every goal.
+ * «All» every goal. A chain's root is drawn either way.
  */
 function frameCandidates(
   input: FrameProjectionInput,
@@ -169,7 +185,7 @@ function frameCandidates(
   const filtered = Boolean(input.shown)
   const ids = [
     ...tree.frames.keys(),
-    ...(tree.members.has(NO_PARENT_FRAME) ? [NO_PARENT_FRAME] : []),
+    ...[NO_PARENT_FRAME, FOUND_FRAME].filter((id) => tree.members.has(id)),
     ...tree.spaces.keys(),
   ]
   const candidates = new Map<string, ProjectedFrame>()
@@ -179,9 +195,14 @@ function frameCandidates(
     const members = tree.members.get(id) ?? []
     const visible = members.filter((item) => drawable(item))
     const openWork = visible.filter((item) => open(item)).length
-    const wanted = filtered
-      ? visible.length > 0
-      : openWork > 0 || input.showDone || (goal !== null && open(goal))
+    // A chain's root is what the field is about: drawn whatever a filter or the
+    // closed switch leaves of it, and open until the operator folds it.
+    const root = id === input.chainRootId
+    const wanted =
+      root ||
+      (filtered
+        ? visible.length > 0
+        : openWork > 0 || input.showDone || (goal !== null && open(goal)))
     if (!wanted) continue
     // A frame holding more open work than `FOLD_ABOVE`, the count the list's
     // tree folds by too, starts folded, and so does a goal holding none: the
@@ -191,7 +212,7 @@ function frameCandidates(
     // space with a few finished items draws them. Another space's frame is no goal
     // either, and folds by the same rule.
     const idle = goal !== null || visible.length === 0 || visible.length > FOLD_ABOVE
-    const defaultFolded = openWork > FOLD_ABOVE || (openWork === 0 && idle)
+    const defaultFolded = !root && (openWork > FOLD_ABOVE || (openWork === 0 && idle))
     candidates.set(id, {
       id,
       goal,
@@ -265,7 +286,8 @@ function strongerKind(left: PlanningEdge['kind'], right: PlanningEdge['kind']) {
 
 /** The frames, which of them are drawn and folded, the cards each draws, and the lines. */
 export function frameProjection(input: FrameProjectionInput): FrameProjection {
-  const tree = frameTree(input.items)
+  const chain = Boolean(input.chainRootId)
+  const tree = frameTree(input.items, chain)
   const shown = input.shown ?? null
   const drawable = (item: WorkItemBrief) =>
     (input.showDone || open(item)) && (shown === null || shown.has(item.work_item_id))
@@ -303,7 +325,8 @@ export function frameProjection(input: FrameProjectionInput): FrameProjection {
   }
 
   const edges = drawnLines(input.links, endOf)
-  const unread = unreadSpaces(input.links, byId)
+  // A chain's items are the chain alone: a link to work outside it is left out, not unread.
+  const unread = chain ? [] : unreadSpaces(input.links, byId)
   return { frames, cards, edges, key: structureKey(input.showDone, frames, edges), unread }
 }
 
@@ -328,7 +351,10 @@ function unreadSpaces(
 const spaceKeyOf = (reference: string | undefined) =>
   reference?.includes('-') ? reference.slice(0, reference.lastIndexOf('-')) : ''
 
-/** Goals in the order the space numbers them, then the work under none, then each other space by key. */
+/**
+ * Goals in the order the space numbers them, then the work under none or a chain's found
+ * work, then each other space by key.
+ */
 function frameOrder(left: ProjectedFrame, right: ProjectedFrame): number {
   const place = (frame: ProjectedFrame) => {
     if (frame.goal) return 0

@@ -217,7 +217,9 @@ function chainNodes(source: GraphSource, scope: GraphScope, showDone: boolean): 
  * still counts.
  *
  * A chain is the exception to the container rule: its root and its goals are
- * the shape of the chain, so they are drawn as nodes — see `chainNodes`.
+ * the shape of the chain, so they count as nodes — see `chainNodes`. A chain
+ * whose root holds work is drawn in frames (`graphFrames`) and only counted
+ * here; a chain grown from a task is drawn flat from these nodes.
  */
 export function workNodes(
   source: GraphSource,

@@ -44,7 +44,8 @@ import {
 import { useGraphNodeMarks } from '@/widgets/work-item-graph/composables/useGraphNodeMarks.ts'
 import { useGraphProjection } from '@/widgets/work-item-graph/composables/useGraphProjection.ts'
 import type { OtherSpaceEnds } from '@/widgets/work-item-graph/composables/useGraphProjection.ts'
-import { GRAPH_FLOW_ID } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+import { drawnBranch } from '@/widgets/work-item-graph/utils/graphCamera.ts'
+import { FOUND_FRAME, GRAPH_FLOW_ID } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type {
   LiveWork,
   PlacedFrame,
@@ -141,16 +142,12 @@ const emptyKind = computed(() => {
 
 const readyIdSet = computed(() => new Set(ready.value.map((node) => node.work_item_id)))
 
-/** The branch as drawn: framed whole and kept lit. None while nothing of it is on the field. */
-const branchFrame = computed(() => {
-  const branch = props.branch
-  if (!branch || !placed.value) return null
-  const wanted = new Set(branch.head === null ? branch.members : [branch.head, ...branch.members])
-  const ids = new Set(
-    placed.value.nodes.map((node) => node.work_item_id).filter((id) => wanted.has(id)),
-  )
-  return ids.size ? { headId: branch.head, ids } : null
-})
+/** The branch as drawn: framed whole and kept lit. */
+const branchFrame = computed(() =>
+  props.branch && placed.value ? drawnBranch(props.branch, placed.value) : null,
+)
+/** Whether a frame is the branch's: its goal's, or the band its work stands in. */
+const isBranchFrame = (frame: PlacedFrame) => branchFrame.value?.frameId === frame.id
 /** Whether a node is in the branch the card chose. */
 const inBranch = (node: PlacedNode) => branchFrame.value?.ids.has(node.work_item_id) ?? false
 const branchChip = computed(() => (branchFrame.value ? (props.branch?.reference ?? null) : null))
@@ -207,8 +204,12 @@ const liveSigns = computed(() =>
 )
 const liveOf = (node: PlacedNode) => live.value[node.work_item_id] ?? null
 
-/** A card standing in a drawn frame: the frame names its goal, so the card does not. */
+/**
+ * A card standing in a drawn frame: the frame names its goal, so the card does not —
+ * except a chain's found work, whose goal stands outside the chain and no frame names.
+ */
 const isFramed = (node: PlacedNode) => frameById.value.has(node.frameId)
+const namedByFrame = (node: PlacedNode) => isFramed(node) && node.frameId !== FOUND_FRAME
 
 const { inChain, isChainRoot, isRecessed, legend, nodeChainGroup, parentReference, referenceById } =
   useGraphNodeMarks({
@@ -222,8 +223,11 @@ const { inChain, isChainRoot, isRecessed, legend, nodeChainGroup, parentReferenc
 
 /** The goal chip, on a card no frame round it names. */
 function chipFor(node: PlacedNode): string | undefined {
-  return isFramed(node) ? undefined : parentReference(node)
+  return namedByFrame(node) ? undefined : parentReference(node)
 }
+
+/** The frame of the chain's root: the field's outer frame, marked as its card was. */
+const isRootFrame = (frame: PlacedFrame) => inChain.value && frame.id === props.scopeRootId
 
 // Vue Flow owns the camera and all viewport math. The store is keyed so the
 // controls in the strip below and this field share one camera instance.
@@ -427,6 +431,8 @@ function toggleFrame(frameId: string) {
             :frame="frame"
             :far="far"
             :overview="overview"
+            :root="isRootFrame(frame)"
+            :marked="isBranchFrame(frame)"
             :tab-stop="frameStop(frame)"
             :working="workingIn(frame)"
             :still="still"

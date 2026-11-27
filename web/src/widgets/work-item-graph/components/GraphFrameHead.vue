@@ -41,6 +41,7 @@ const {
   height = null,
   measure = false,
   overview = false,
+  root = false,
   still = false,
   tabStop = null,
   working = 0,
@@ -54,6 +55,8 @@ const {
   measure?: boolean
   /** The field is zoomed out past reading: the header is the reference and the edge. */
   overview?: boolean
+  /** Its goal is the root of the chain the field is narrowed to. */
+  root?: boolean
   /** The field's motion does not run, so the working sign holds still. */
   still?: boolean
   /** The walk target that takes Tab, when it is one of this frame's. */
@@ -79,6 +82,7 @@ const {
   far: () => far,
   frame: () => frame,
   overview: () => overview,
+  root: () => root,
   working: () => working,
 })
 
@@ -195,6 +199,7 @@ function onOpenBlur() {
         :goal="goal"
         :named="referenceShown"
         :overview="overview"
+        :root="root"
         :still="still"
         :title="title"
         :working="working"

@@ -86,10 +86,19 @@ export function useGraphNodeMarks(input: MarkInput) {
     return inChain.value ? chainGroup(node) : undefined
   }
 
-  /** The chain groups the field draws, which is what its legend names, in the card's map's order. */
+  /**
+   * The chain groups the field draws, which is what its legend names, in the card's map's
+   * order: the cards' marks, and the parts a frame's edge draws of what is done, under way
+   * or stopped, which a folded frame draws with no card to mark them. A frame's «ahead» is
+   * ready, untriaged and deferred work together, three of the cards' groups, so no one word
+   * of the chain's key names it and only the cards drawn do.
+   */
   const chainLegend = computed(() => {
     if (!inChain.value || !input.placed.value) return []
-    const present = new Set(input.placed.value.nodes.map((node) => chainGroup(node)))
+    const present = new Set<ChainGroup>(input.placed.value.nodes.map((node) => chainGroup(node)))
+    for (const frame of input.placed.value.frames)
+      for (const [part, group] of FRAME_PARTS)
+        if (part !== 'ahead' && frame.progress[part]) present.add(group)
     return CHAIN_PROGRESS_ORDER.filter((group) => present.has(group))
   })
 

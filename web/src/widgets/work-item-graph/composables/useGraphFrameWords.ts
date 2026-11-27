@@ -1,39 +1,47 @@
 /**
  * What a frame's header says in words: what its buttons are called, what a fold
- * hides, and the name of a frame no goal heads — the work under no goal, or another
- * space's work, named as the list's group and the board's lane of that space are. The
- * buttons' names say what the header shows, so the keyboard and the eye are told one
- * thing at every zoom.
+ * hides, and the name of a frame no goal heads — the work under no goal, a chain's
+ * found work, or another space's work, named as the list's group and the board's lane
+ * of that space are. The buttons' names say what the header shows, so the keyboard and
+ * the eye are told one thing at every zoom.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { countedGroups } from '@/widgets/work-item-graph/utils/graphFrames.ts'
-import { NO_PARENT_FRAME } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+import { FOUND_FRAME, NO_PARENT_FRAME } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { FrameHead } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 
 interface FrameWordsInput {
   far: () => boolean
   frame: () => FrameHead
   overview: () => boolean
+  /** Its goal is the root of the chain the field is narrowed to. */
+  root?: () => boolean
   working: () => number
 }
 
 export function useGraphFrameWords(input: FrameWordsInput) {
   const { t } = useI18n()
 
-  /** The goal to open; the work under no goal has none. */
-  const goal = computed(() => (input.frame().id === NO_PARENT_FRAME ? null : input.frame().goal))
+  /** The goal to open; the work under no goal and a chain's found work have none. */
+  const goal = computed(() => {
+    const { goal: head, id } = input.frame()
+    return id === NO_PARENT_FRAME || id === FOUND_FRAME ? null : head
+  })
+  /** The frame holds a chain's work whose parent the chain does not hold. */
+  const found = computed(() => input.frame().id === FOUND_FRAME)
   /** A frame says which it is: a stage stands under a parent, a goal under none. */
   const isStage = computed(() => goal.value?.kind === 'stage')
   const named = computed(() =>
     goal.value ? { reference: goal.value.reference, title: goal.value.title } : null,
   )
-  /** The frame's name: its goal's title, another space's key and name, or no goal. */
+  /** The frame's name: its goal's title, another space's key and name, found work, or no goal. */
   const name = computed(() => {
     const { space } = input.frame()
     if (goal.value) return goal.value.title
-    return space ? t('workItem.grouped.space', space) : t('graph.frame.noGoal')
+    if (space) return t('workItem.grouped.space', space)
+    return found.value ? t('graph.frame.found') : t('graph.frame.noGoal')
   })
 
   /**
@@ -81,6 +89,7 @@ export function useGraphFrameWords(input: FrameWordsInput) {
     let action = t(`graph.frame.${verb}None`)
     if (named.value) action = t(`graph.frame.${verb}${kind}`, named.value)
     else if (space) action = t(`graph.frame.${verb}Space`, space)
+    else if (found.value) action = t(`graph.frame.${verb}Found`)
     return [action, ...insideWhole.value, ...(named.value ? [] : live.value)].join(' · ')
   })
 
@@ -89,13 +98,14 @@ export function useGraphFrameWords(input: FrameWordsInput) {
     const { progress } = input.frame()
     const kind = isStage.value ? 'stage' : 'goal'
     const head = named.value ? t(`graph.frame.${kind}`, named.value) : name.value
+    const root = named.value && input.root?.() ? [t('graph.rootLabel')] : []
     const { done, total } = progress
     const standing = total ? t('graph.frame.doneOf', { done, total }) : t('graph.frame.noTasks')
     const groups = countedGroups(progress).map(({ group, count }) => {
       const word = t(`graph.frame.${group}`, count)
       return `${count} ${word}`
     })
-    return [head, standing, ...groups, ...insideWhole.value, ...live.value].join(' · ')
+    return [head, ...root, standing, ...groups, ...insideWhole.value, ...live.value].join(' · ')
   })
 
   return { goal, foldLabel, inside, insideShown, name, openLabel }

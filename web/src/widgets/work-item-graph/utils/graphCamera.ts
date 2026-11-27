@@ -6,8 +6,8 @@
 import { getTransformForBounds } from '@vue-flow/core'
 import type { Dimensions, ViewportTransform } from '@vue-flow/core'
 
-import { NODE_HEIGHT } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
-import type { PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+import { FOUND_FRAME, NODE_HEIGHT } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+import type { PlacedFrame, PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import { GRAPH_ZOOM_MIN, graphFitViewOptions } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import type { GraphLayout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import {
@@ -122,6 +122,30 @@ export function graphWholeView(
 export interface GraphBranchFrame {
   headId: string | null
   ids: ReadonlySet<string>
+  /**
+   * In a chain drawn in frames, the frame of the goal that heads it, or the band of found
+   * work where its work stands when none of its cards is drawn: framed and entered then.
+   */
+  frameId?: string | null
+}
+
+/**
+ * The branch the card chose as the field draws it: its cards, and in frames the frame of its
+ * goal. Work filed under no goal of the chain stands in the band of found work, which stands
+ * for the branch only while none of its cards is drawn, since it holds other work as well.
+ * None while nothing of it is on the field.
+ */
+export function drawnBranch(
+  branch: { head: string | null; members: readonly string[] },
+  graph: Pick<GraphLayout, 'frames' | 'nodes'>,
+): GraphBranchFrame | null {
+  const wanted = new Set(branch.head === null ? branch.members : [branch.head, ...branch.members])
+  const ids = new Set(graph.nodes.map((node) => node.work_item_id).filter((id) => wanted.has(id)))
+  const framed = new Set(graph.frames.map((frame) => frame.id))
+  const head = branch.head !== null && framed.has(branch.head) ? branch.head : null
+  const band = !ids.size && branch.head === null && framed.has(FOUND_FRAME)
+  const frameId = head ?? (band ? FOUND_FRAME : null)
+  return ids.size || frameId ? { headId: branch.head, ids, frameId } : null
 }
 
 interface AnchorOptions {
@@ -144,6 +168,21 @@ function branchWork(graph: GraphLayout, options: AnchorOptions): PlacedNode[] {
   return work.length ? work : drawn
 }
 
+/**
+ * The frame that holds the branch where the field draws none of its cards: a stage
+ * folded over its work, say. Its header is then what there is of the branch to see.
+ */
+function branchHolder(graph: GraphLayout, options: AnchorOptions): PlacedFrame | undefined {
+  const id = options.branch?.frameId
+  const holds = id && !branchWork(graph, options).length
+  return holds ? graph.frames.find((frame) => frame.id === id) : undefined
+}
+
+/** The header button the keyboard enters a frame on: its goal's, else its fold. */
+function headerTarget(frame: PlacedFrame, overview = false): WalkTarget | undefined {
+  return walkTargets({ frames: [frame], nodes: [] }, { overview }).at(-1)
+}
+
 /** The keyboard's target for a card. */
 const cardTarget = (node: PlacedNode): WalkTarget => ({
   id: node.work_item_id,
@@ -156,7 +195,8 @@ const cardTarget = (node: PlacedNode): WalkTarget => ({
 
 /**
  * The target a field is placed around, and the one the keyboard enters it on:
- * the first work of the branch the card chose, then the open card's item,
+ * the first work of the branch the card chose, or the header of the frame
+ * folded over it, then the open card's item,
  * then — for a chain — the root the chain grew from, so a reload or a link
  * lands on the same place the card's «Show on graph» does; else the field's
  * first target as it is read, a frame's header or a card.
@@ -175,10 +215,12 @@ export function graphAnchor(
   sight: { camera: ViewportTransform; dimensions: Dimensions; overview?: boolean } | null = null,
 ): WalkTarget | undefined {
   const [head] = branchWork(graph, options)
+  const holder = branchHolder(graph, options)
   const selected = graph.nodes.find((node) => node.work_item_id === options.selectedId)
   const root = graph.nodes.find((node) => node.work_item_id === options.rootId)
   const card = head ?? selected ?? root
-  const chosen = card ? cardTarget(card) : undefined
+  const held = holder ? headerTarget(holder, sight?.overview) : undefined
+  const chosen = held ?? (card ? cardTarget(card) : undefined)
   const targets = walkTargets(graph, { overview: sight?.overview }).sort(readingOrder)
   if (sight) {
     const inSight = (target: WalkTarget) => seen(target, sight.camera, sight.dimensions)
@@ -286,7 +328,8 @@ function openingView(graph: GraphLayout, dimensions: GraphFieldSize): ViewportTr
 }
 
 /**
- * Where the camera starts: the branch the card chose, from its beginning; else
+ * Where the camera starts: the branch the card chose, from its beginning, or the
+ * frame folded over it; else
  * the whole field when it reads at that size and no card is open; else the
  * open card's item or the chain's root with its direct links; else the field
  * from its beginning, its first target at the top-left. Every framing but the
@@ -299,7 +342,10 @@ export function graphCameraView(
 ): ViewportTransform | null {
   if (!drawing(graph).length || !dimensions.width || !dimensions.height) return null
   const branch = branchWork(graph, options)
-  if (branch.length) return keptOnDrawing(beginningView(branch, dimensions), graph, dimensions)
+  const holder = branchHolder(graph, options)
+  // A holder is there only while no card of the branch is drawn.
+  const held = holder ? [holder] : branch
+  if (held.length) return keptOnDrawing(beginningView(held, dimensions), graph, dimensions)
   const whole = fitNodes(drawing(graph), dimensions)
   const selected = graph.nodes.some((node) => node.work_item_id === options.selectedId)
   if (!selected && whole.zoom >= readingOf(dimensions)) return whole

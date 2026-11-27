@@ -14,55 +14,14 @@ import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
 import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { FOLD_ABOVE } from '@/shared/lib/treeRows.ts'
 
+import { item, lines, link, STATES } from './fixtures/graphFrameItems.ts'
 import { broadSpace } from './fixtures/graphSpaces.ts'
-
-const STATES = {
-  todo: { state_id: 'todo', key: 'todo', name: 'Todo', category: 'ready', is_terminal: false },
-  dev: { state_id: 'dev', key: 'dev', name: 'Dev', category: 'active', is_terminal: false },
-  done: { state_id: 'done', key: 'done', name: 'Done', category: 'completed', is_terminal: true },
-} as const
 
 const ids = {
   E1: 'e1', // open goal: a1, a2, and the nested goal E4
   E2: 'e2', // open goal: b1, b2 (finished), b3
   E3: 'e3', // finished goal still holding c1
   E4: 'e4', // goal inside E1, holding d1
-}
-
-function item(
-  id: string,
-  number: number,
-  options: { goal?: boolean; parent?: string; state?: keyof typeof STATES } = {},
-): WorkItemBrief {
-  return {
-    work_item_id: id,
-    planning_space_id: 'space',
-    reference: `MAIN-${number}`,
-    number,
-    title: `Item ${number}`,
-    kind: options.goal ? 'goal' : 'task',
-    priority: 'medium',
-    state: STATES[options.state ?? 'todo'],
-    claim_ref: '',
-    claim_state: null,
-    parent_id: options.parent ?? null,
-    open: !STATES[options.state ?? 'todo'].is_terminal,
-    container_state: null,
-    acceptance: null,
-    started_at: null,
-    waits_for: [],
-    workable: true,
-    withheld: [],
-    lapsed_claim: null,
-    labels: [],
-    projects: [],
-    source: '',
-    checklist: [],
-    revision: 0,
-    created_at: '2026-10-01T10:00:00Z',
-    updated_at: '2026-10-01T10:00:00Z',
-    comment_count: 0,
-  }
 }
 
 function space(): WorkItemBrief[] {
@@ -84,18 +43,9 @@ function space(): WorkItemBrief[] {
   return items.map((entry) => ({ ...entry, container: parents.has(entry.work_item_id) }))
 }
 
-const link = (from: string, to: string, kind: PlanningEdge['kind'] = 'discovered-from') => ({
-  from,
-  to,
-  kind,
-})
-
 function project(links: PlanningEdge[], options: Partial<FrameProjectionInput> = {}) {
   return frameProjection({ items: space(), links, showDone: false, ...options })
 }
-
-const lines = (projected: ReturnType<typeof project>) =>
-  projected.edges.map((edge) => [edge.source, edge.target, edge.kind, edge.links.length])
 
 describe('lines between what is drawn', () => {
   it.each([

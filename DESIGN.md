@@ -2585,9 +2585,29 @@ finds, so the ground of an open frame with a goal opens that goal too and the po
 says so. It is the pointer's shortcut: the keyboard has the header's button and no new
 stop, a card on the ground and a frame inside a frame answer for themselves, and a drag
 from the ground moves the field. A card in
-a frame does not name its goal, since the frame does. A chain has no frames: it
-keeps its flat drawing, its root and its goals as nodes, because its progress is
-the card's map and not the field's.
+a frame does not name its goal, since the frame does.
+
+A chain grown from a goal or a stage stands in frames too, drawn from its own items
+alone: the root is the outermost frame, drawn whatever its work and open at first
+however much it holds, and its stages are frames inside it that fold by the rule
+below. A member whose parent is not of the chain — work found on the way, filed under
+another goal or under none — stands in a band of its own after the root, «Найдено в
+цепочке» (`found`), and not under «Без цели», since some of it has a goal; its cards
+keep the chip that names that goal. The root's header carries the mark its card had,
+«корень», and its accessible name says «корень цепочки». A chain reads no other space,
+so its key never says a link was not read. Beside the groups its cards are marked by,
+a framed chain's key names the parts the frames' edges draw of what is finished, under
+review, under way or blocked; a frame's «ahead» is ready, untriaged and deferred work
+together, which no one word of the chain's key names, so only the cards drawn name
+those. A branch the card chose is edged in the selection accent here too, its cards
+and the frame of its goal; where that frame is folded over the branch's work, the
+frame is what the camera frames and the keyboard enters on, by its header. Work of
+the branch filed under no goal of the chain stands in the band of found work, which
+stands for the branch so only while none of its cards is drawn, since the band holds
+other work as well. A chain grown from a task holds no work to frame and keeps its flat drawing,
+its root a card among the rest. Before, a chain had no frames at all, and a goal's
+chain drew the goal, its stages and its tasks as cards side by side, with nothing
+to say which held which.
 
 A frame starts folded by its structure alone — how much open work it holds — and
 never by who is working on it, or every agent's turn would lay the field out again.
@@ -2598,7 +2618,8 @@ a few finished items draws them. Every frame between those starts open, so the
 links of its work are seen at once. What the operator chooses for a frame, folded or
 open, outranks that default and is kept per space in this browser (`localStorage`,
 `valkama-graph-frames`), apart from the board's folded lanes, which start from other
-defaults; outside a filter a choice that matches the frame's default is forgotten,
+defaults, and apart from the choices made in a chain (`valkama-graph-chain-frames`),
+so a goal folded on the whole space still opens as a chain's root; outside a filter a choice that matches the frame's default is forgotten,
 so a frame left alone follows its work again. Folding or opening a frame lays the
 field out again, and the camera follows across, at the operator's zoom, so the
 frame's header stays where it stood on the screen and what was pressed does not

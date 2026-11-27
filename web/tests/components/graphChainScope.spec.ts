@@ -1,21 +1,35 @@
 /**
  * The graph field scoped to a chain, and the whole-space field that draws
  * every open item in its frame: what is drawn, how closed work reads, and the
- * controls that change either.
+ * controls that change either. A chain grown from a goal, drawn in frames, has
+ * a spec of its own.
  */
 import { ref } from 'vue'
-import { createI18n } from 'vue-i18n'
 
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises } from '@vue/test-utils'
 import ELK from 'elkjs/lib/elk.bundled.js'
 import { describe, expect, it, vi } from 'vitest'
 
+import GraphFrame from '@/widgets/work-item-graph/components/GraphFrame.vue'
 import GraphLegend from '@/widgets/work-item-graph/components/GraphLegend.vue'
 import GraphNodeCard from '@/widgets/work-item-graph/components/GraphNodeCard.vue'
-import GraphView from '@/widgets/work-item-graph/components/GraphView.vue'
 
-import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
-import { messages } from '@/shared/i18n/index.ts'
+import type { PlanningEdge } from '@/shared/api/planningModel.ts'
+
+import {
+  chain,
+  DONE,
+  drawn,
+  flowLines,
+  id,
+  items,
+  known,
+  OPEN,
+  openGraph,
+  openTaskChain,
+  taskEdges,
+  taskItems,
+} from '../fixtures/graphChainScope.ts'
 
 const dimensions = ref({ width: 1200, height: 680 })
 const viewport = ref({ x: 0, y: 0, zoom: 1 })
@@ -39,120 +53,6 @@ vi.mock('@/widgets/work-item-graph/utils/graphLayoutEngine.ts', () => ({
     return { layout: elk.layout.bind(elk), terminateWorker: vi.fn() }
   },
 }))
-
-const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
-const OPEN: NonNullable<WorkItemBrief['state']> = {
-  state_id: 'ready',
-  key: 'ready',
-  name: 'Ready',
-  category: 'ready',
-  is_terminal: false,
-}
-const DONE: NonNullable<WorkItemBrief['state']> = {
-  state_id: 'done',
-  key: 'done',
-  name: 'Done',
-  category: 'completed',
-  is_terminal: true,
-}
-
-function item(n: number, overrides: Partial<WorkItemBrief> = {}): WorkItemBrief {
-  return {
-    work_item_id: id(n),
-    planning_space_id: 'space-1',
-    reference: `MAIN-${n}`,
-    number: n,
-    title: `item ${n}`,
-    kind: 'task',
-    priority: 'medium',
-    state: OPEN,
-    claim_ref: '',
-    claim_state: null,
-    parent_id: null,
-    open: !(overrides.state ?? OPEN).is_terminal,
-    container_state: null,
-    acceptance: null,
-    started_at: null,
-    waits_for: [],
-    workable: false,
-    withheld: ['not_ready'],
-    lapsed_claim: null,
-    labels: [],
-    projects: [],
-    source: '',
-    checklist: [],
-    revision: 0,
-    created_at: '2026-10-22T10:00:00Z',
-    updated_at: '2026-10-22T10:00:00Z',
-    comment_count: 0,
-    ...overrides,
-  }
-}
-
-// Root 1 (a goal) with children 2 (done) and 3; 4 discovered from 2; 5 and 6
-// linked to each other outside the chain; 7 and 8 linked to nothing.
-const items = [
-  item(1, { kind: 'goal' }),
-  item(2, { parent_id: id(1), state: DONE }),
-  item(3, { parent_id: id(1) }),
-  item(4),
-  item(5),
-  item(6),
-  item(7),
-  item(8),
-]
-const spaceEdges: PlanningEdge[] = [
-  { from: id(4), to: id(2), kind: 'discovered-from' },
-  { from: id(5), to: id(6), kind: 'blocks' },
-]
-
-/** The state a link names for its source: open in review, or finished. */
-const known = (open: boolean) => ({
-  state_name: open ? 'Review' : 'Done',
-  state_category: open ? ('review' as const) : ('completed' as const),
-  is_terminal: !open,
-  state_unavailable: null,
-})
-
-/** Vue Flow, reduced to the cards it would draw. */
-const flowStub = {
-  name: 'VueFlow',
-  props: ['nodes', 'edges'],
-  emits: ['init'],
-  mounted(this: { $emit: (event: 'init') => void }) {
-    this.$emit('init')
-  },
-  template:
-    '<div><div v-for="node in nodes" :key="node.id"><slot name="node-card" :data="node.data" /></div><slot /></div>',
-}
-
-function openGraph(props: Record<string, unknown> = {}) {
-  return mount(GraphView, {
-    props: {
-      items,
-      edges: spaceEdges,
-      scopeRootId: null,
-      open: true,
-      scopeKind: 'all',
-      space: 'space-1',
-      version: 1,
-      ...props,
-    },
-    global: {
-      plugins: [createI18n({ legacy: false, locale: 'en', messages })],
-      stubs: { VueFlow: flowStub, Controls: true, Background: true, Handle: true },
-    },
-  })
-}
-
-async function drawn(graph: ReturnType<typeof openGraph>) {
-  await vi.waitFor(() => expect(graph.attributes('aria-busy')).toBeUndefined())
-  await flushPromises()
-  return graph
-    .findAllComponents(GraphNodeCard)
-    .map((card) => card.props('node').reference)
-    .sort((left, right) => left.localeCompare(right))
-}
 
 describe('the whole-space graph and the items no link touches', () => {
   it('draws every open item in its frame, with no switch to leave the unlinked out', async () => {
@@ -228,13 +128,11 @@ describe('the whole-space graph and the items no link touches', () => {
   })
 })
 
-describe('the graph scoped to one chain', () => {
-  const chain = { members: [id(2), id(3), id(4)], reference: 'MAIN-1', total: 3 }
-  const chainEdges: PlanningEdge[] = [{ from: id(4), to: id(2), kind: 'discovered-from' }]
-
+describe('a chain grown from a task, drawn flat', () => {
   it('draws the root and the open members, and the closed ones only when the switch is thrown', async () => {
-    const graph = openGraph({ scopeKind: 'chain', scopeRootId: id(1), chain, edges: chainEdges })
+    const graph = openTaskChain()
     expect(await drawn(graph)).toEqual(['MAIN-1', 'MAIN-3', 'MAIN-4'])
+    expect(graph.findAllComponents(GraphFrame)).toHaveLength(0)
     // One switch, and it is the closed one: a chain has no unlinked toggle and
     // no open/all filter.
     const toggle = graph.get('[role="switch"]')
@@ -259,13 +157,7 @@ describe('the graph scoped to one chain', () => {
   })
 
   it('takes the closed switch from its host, and hands a change back rather than keeping it', async () => {
-    const graph = openGraph({
-      scopeKind: 'chain',
-      scopeRootId: id(1),
-      chain,
-      edges: chainEdges,
-      showClosed: true,
-    })
+    const graph = openTaskChain({ showClosed: true })
     // An address that says closed draws the closed members from the start.
     expect(await drawn(graph)).toEqual(['MAIN-1', 'MAIN-2', 'MAIN-3', 'MAIN-4'])
     await graph.get('[role="switch"]').trigger('click')
@@ -275,16 +167,10 @@ describe('the graph scoped to one chain', () => {
   })
 
   it('marks the root with a word and in its accessible name, closed or not', async () => {
-    const closedRoot = items.map((entry) =>
+    const closedRoot = taskItems.map((entry) =>
       entry.reference === 'MAIN-1' ? { ...entry, open: false, state: DONE } : entry,
     )
-    const graph = openGraph({
-      scopeKind: 'chain',
-      scopeRootId: id(1),
-      chain,
-      edges: chainEdges,
-      items: closedRoot,
-    })
+    const graph = openTaskChain({ items: closedRoot })
     expect(await drawn(graph)).toEqual(['MAIN-1', 'MAIN-3', 'MAIN-4'])
     const cards = graph.findAllComponents(GraphNodeCard)
     const root = cards.find((entry) => entry.props('node').reference === 'MAIN-1')
@@ -297,6 +183,105 @@ describe('the graph scoped to one chain', () => {
     const others = cards.filter((entry) => entry.props('node').reference !== 'MAIN-1')
     expect(others.map((entry) => entry.find('.flow-node-root').exists())).toEqual([false, false])
   })
+
+  it('says what a member waits on outside the chain, and draws no link to work it does not draw', async () => {
+    // 3 is blocked by 5, of this space but not of the chain; 4 by an item of
+    // another space; the root by a finished item of another space.
+    const edges: PlanningEdge[] = [
+      ...taskEdges,
+      { from: id(5), to: id(3), kind: 'blocks', reference: 'MAIN-5', ...known(true) },
+      { from: id(9001), to: id(4), kind: 'blocks', reference: 'OTH-7', ...known(true) },
+      { from: id(9002), to: id(1), kind: 'blocks', reference: 'OTH-8', ...known(false) },
+    ]
+    const graph = openTaskChain({ edges, showClosed: true })
+    expect(await drawn(graph)).toEqual(['MAIN-1', 'MAIN-2', 'MAIN-3', 'MAIN-4'])
+    const cards = graph.findAllComponents(GraphNodeCard)
+    const waiting = (reference: string) =>
+      cards.find((entry) => entry.props('node').reference === reference)?.props('waitingOn')
+    expect([waiting('MAIN-3'), waiting('MAIN-4'), waiting('MAIN-1')]).toEqual([
+      'MAIN-5',
+      'OTH-7',
+      null,
+    ])
+    // Only the links between two drawn nodes are drawn: each from the work the
+    // other was found on.
+    expect(flowLines(graph)).toEqual([
+      [id(1), id(2)],
+      [id(1), id(3)],
+      [id(2), id(4)],
+    ])
+  })
+
+  it('names in its legend the groups it draws, and keeps the place of the one the switch adds', async () => {
+    const graph = openTaskChain()
+    await drawn(graph)
+    const key = '.graph-canvas .graph-legend-state'
+    const named = () => graph.findAll(`${key}:not(.held)`).map((entry) => entry.text())
+    const places = () => graph.findAll(key).map((entry) => entry.text())
+    // Every open member is in the one queued state, so the key says its name,
+    // as the board's column and the card's chain section do.
+    expect(named()).toEqual(['Ready'])
+    // «Done» is not drawn, so it is not named; its place is kept, marked held, so
+    // throwing the switch moves no word of the key. The held mark is what this
+    // reads: that it leaves the place unseen is the stylesheet's, which this DOM
+    // does not apply.
+    expect(places()).toEqual(['Done', 'Ready'])
+    expect(graph.get(`${key}.held`).text()).toBe('Done')
+    await graph.get('[role="switch"]').trigger('click')
+    await drawn(graph)
+    expect(named()).toEqual(['Done', 'Ready'])
+    expect(places()).toEqual(['Done', 'Ready'])
+    // The key lies on the field. The bar's options hold the same key for a
+    // narrow workspace only, where the field's corner gives way to the count;
+    // which one shows is the container's call (the browser spec at 390).
+    expect(graph.find('.graph-canvas .graph-legend').exists()).toBe(true)
+    expect(graph.get('.graph-bar .graph-options .graph-legend').text()).toBe(
+      graph.get('.graph-canvas .graph-legend').text(),
+    )
+  })
+
+  it('keeps the group’s own word in its legend where the members span several states', async () => {
+    const waiting = { ...OPEN, state_id: 'waiting', key: 'waiting', name: 'Waiting' }
+    const queued = { ...OPEN, state_id: 'queued', key: 'queued', name: 'Queued' }
+    const legendOf = async (states: Record<string, typeof OPEN>) => {
+      const staged = taskItems.map((entry) =>
+        states[entry.work_item_id] ? { ...entry, state: states[entry.work_item_id] } : entry,
+      )
+      const graph = openTaskChain({ items: staged })
+      await drawn(graph)
+      return graph
+        .findAll('.graph-canvas .graph-legend-state:not(.held)')
+        .map((entry) => entry.text())
+    }
+    // Two ready states among the members: neither names the group.
+    expect(await legendOf({ [id(3)]: waiting, [id(4)]: queued })).toEqual(['Ready'])
+    // One state they share names it.
+    expect(await legendOf({ [id(3)]: queued, [id(4)]: queued })).toEqual(['Queued'])
+  })
+
+  it('orders its legend as the card’s map runs a lane: finished, under way with review first, then ahead', async () => {
+    const dev = { ...OPEN, state_id: 'dev', key: 'dev', name: 'Dev', category: 'active' }
+    const review = {
+      ...OPEN,
+      state_id: 'review',
+      key: 'review',
+      name: 'Review',
+      category: 'review',
+    }
+    const staged = taskItems.map((entry) => {
+      if (entry.work_item_id === id(3)) return { ...entry, state: dev }
+      return entry.work_item_id === id(4) ? { ...entry, state: review } : entry
+    })
+    const graph = openTaskChain({ items: staged })
+    await drawn(graph)
+    const named = graph.findAll('.graph-canvas .graph-legend-state:not(.held)')
+    // The root's card is the ready one.
+    expect(named.map((entry) => entry.text())).toEqual(['Review', 'In progress', 'Ready'])
+  })
+})
+
+describe('the graph scoped to one chain', () => {
+  const chainEdges: PlanningEdge[] = [{ from: id(4), to: id(2), kind: 'discovered-from' }]
 
   it('leaves out the origin chip that would only repeat the root, and keeps any other', async () => {
     // 3 is filed under the root itself; 4 under a goal outside the chain.
@@ -329,109 +314,6 @@ describe('the graph scoped to one chain', () => {
     expect(graph.emitted('exit-chain')).toHaveLength(1)
   })
 
-  it('says what a member waits on outside the chain, and draws no link to work it does not draw', async () => {
-    // 3 is blocked by 5, of this space but not of the chain; 4 by an item of
-    // another space; the root by a finished item of another space.
-    const edges: PlanningEdge[] = [
-      ...chainEdges,
-      { from: id(5), to: id(3), kind: 'blocks', reference: 'MAIN-5', ...known(true) },
-      { from: id(9001), to: id(4), kind: 'blocks', reference: 'OTH-7', ...known(true) },
-      { from: id(9002), to: id(1), kind: 'blocks', reference: 'OTH-8', ...known(false) },
-    ]
-    const graph = openGraph({
-      scopeKind: 'chain',
-      scopeRootId: id(1),
-      chain,
-      edges,
-      showClosed: true,
-    })
-    expect(await drawn(graph)).toEqual(['MAIN-1', 'MAIN-2', 'MAIN-3', 'MAIN-4'])
-    const cards = graph.findAllComponents(GraphNodeCard)
-    const waiting = (reference: string) =>
-      cards.find((entry) => entry.props('node').reference === reference)?.props('waitingOn')
-    expect([waiting('MAIN-3'), waiting('MAIN-4'), waiting('MAIN-1')]).toEqual([
-      'MAIN-5',
-      'OTH-7',
-      null,
-    ])
-    // Only the link between two drawn nodes is drawn: from 2 to 4, which was discovered from it.
-    const flowEdges = graph.findComponent({ name: 'VueFlow' }).props('edges') as {
-      source: string
-      target: string
-    }[]
-    expect(flowEdges.map((edge) => [edge.source, edge.target])).toEqual([[id(2), id(4)]])
-  })
-
-  it('names in its legend the groups it draws, and keeps the place of the one the switch adds', async () => {
-    const graph = openGraph({ scopeKind: 'chain', scopeRootId: id(1), chain, edges: chainEdges })
-    await drawn(graph)
-    const key = '.graph-canvas .graph-legend-state'
-    const named = () => graph.findAll(`${key}:not(.held)`).map((entry) => entry.text())
-    const places = () => graph.findAll(key).map((entry) => entry.text())
-    // Every open member is in the one queued state, so the key says its name,
-    // as the board's column and the card's chain section do.
-    expect(named()).toEqual(['Ready'])
-    // «Done» is not drawn, so it is not named; its place is kept, marked held, so
-    // throwing the switch moves no word of the key. The held mark is what this
-    // reads: that it leaves the place unseen is the stylesheet's, which this DOM
-    // does not apply.
-    expect(places()).toEqual(['Done', 'Ready'])
-    expect(graph.get(`${key}.held`).text()).toBe('Done')
-    await graph.get('[role="switch"]').trigger('click')
-    await drawn(graph)
-    expect(named()).toEqual(['Done', 'Ready'])
-    expect(places()).toEqual(['Done', 'Ready'])
-    // The key lies on the field. The bar's options hold the same key for a
-    // narrow workspace only, where the field's corner gives way to the count;
-    // which one shows is the container's call (the browser spec at 390).
-    expect(graph.find('.graph-canvas .graph-legend').exists()).toBe(true)
-    expect(graph.get('.graph-bar .graph-options .graph-legend').text()).toBe(
-      graph.get('.graph-canvas .graph-legend').text(),
-    )
-  })
-
-  it('keeps the group’s own word in its legend where the members span several states', async () => {
-    const ready = { ...OPEN, state_id: 'ready', key: 'ready', name: 'Ready' }
-    const mixed = items.map((entry) =>
-      entry.work_item_id === id(4) ? { ...entry, state: ready } : entry,
-    )
-    const graph = openGraph({
-      scopeKind: 'chain',
-      scopeRootId: id(1),
-      chain,
-      edges: chainEdges,
-      items: mixed,
-    })
-    await drawn(graph)
-    const named = graph.findAll('.graph-canvas .graph-legend-state:not(.held)')
-    expect(named.map((entry) => entry.text())).toEqual(['Ready'])
-  })
-
-  it('orders its legend as the card’s map runs a lane: finished, under way with review first, then ahead', async () => {
-    const dev = { ...OPEN, state_id: 'dev', key: 'dev', name: 'Dev', category: 'active' }
-    const review = {
-      ...OPEN,
-      state_id: 'review',
-      key: 'review',
-      name: 'Review',
-      category: 'review',
-    }
-    const staged = items.map((entry) => {
-      if (entry.work_item_id === id(3)) return { ...entry, state: dev }
-      return entry.work_item_id === id(4) ? { ...entry, state: review } : entry
-    })
-    const graph = openGraph({
-      scopeKind: 'chain',
-      scopeRootId: id(1),
-      chain,
-      edges: chainEdges,
-      items: staged,
-    })
-    await drawn(graph)
-    const named = graph.findAll('.graph-canvas .graph-legend-state:not(.held)')
-    expect(named.map((entry) => entry.text())).toEqual(['Review', 'In progress', 'Ready'])
-  })
-
   it('draws each node as its colour and reference once the field is zoomed out past reading', async () => {
     const graph = openGraph({ scopeKind: 'chain', scopeRootId: id(1), chain, edges: chainEdges })
     await drawn(graph)
@@ -439,6 +321,7 @@ describe('the graph scoped to one chain', () => {
     viewport.value = { x: 0, y: 0, zoom: 0.3 }
     await flushPromises()
     const cards = graph.findAllComponents(GraphNodeCard)
+    expect(cards).toHaveLength(2)
     expect(cards.every((card) => card.props('overview'))).toBe(true)
     const card = cards.find((entry) => entry.props('node').reference === 'MAIN-3')
     expect(card?.get('.flow-node-overview').text()).toBe('MAIN-3')
