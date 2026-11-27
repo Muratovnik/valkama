@@ -30,6 +30,10 @@ hooks it names: a targeted run of a module whose test forgot its own file would
 write Valkama's hooks into the caller's, and a test's commit made inside an agent's
 shell would run the hooks installed there. `tests/isolated.py gates` gives its
 children a file of the throwaway profile; this covers every other test process.
+
+That file also turns `core.autocrlf` off, which outranks the host's system file.
+A hosted Windows runner turns it on there, and then `git archive` and a checkout of
+a test's own repository hand back CRLF for the LF the test committed.
 """
 
 from __future__ import annotations
@@ -76,6 +80,9 @@ os.environ["LOCALAPPDATA"] = SUITE_LOCAL_APP_DATA
 #: What of the caller's global Git configuration a test process keeps: who commits,
 #: and the repositories it marked safe to work in.
 CARRIED_GIT_SETTINGS = ("user.name", "user.email", "safe.directory")
+#: What the suite's file sets whatever the host sets: a repository a test makes holds
+#: the bytes the test wrote.
+SUITE_GIT_SETTINGS = "[core]\n\tautocrlf = false\n"
 #: The global Git file every test process reads and writes in place of the caller's.
 SUITE_GIT_CONFIG = os.path.join(_SUITE_ROOT, "gitconfig")
 
@@ -114,7 +121,7 @@ def _carried_git_settings() -> str:
 
 
 with open(SUITE_GIT_CONFIG, "w", encoding="utf-8", newline="\n") as _file:
-    _file.write(_carried_git_settings())
+    _file.write(_carried_git_settings() + SUITE_GIT_SETTINGS)
 os.environ["GIT_CONFIG_GLOBAL"] = SUITE_GIT_CONFIG
 # A test must never put an icon in the tray or reach a real user runtime root.
 os.environ.setdefault("VALKAMA_NO_TRAY", "1")

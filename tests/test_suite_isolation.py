@@ -166,6 +166,28 @@ print(json.dumps({
 }))
 """
 
+#: Run in a fresh process that imports the package: commits an LF file to a new
+#: repository and writes out the bytes `git archive` gives back for it.
+ARCHIVED_ENTRY = """
+import io, subprocess, sys, tarfile
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import tests
+
+repository = Path(sys.argv[2])
+
+def git(*arguments):
+    return subprocess.run(["git", *arguments], cwd=repository, capture_output=True, check=True)
+
+git("init", "-q")
+(repository / "entry.py").write_bytes(b"one\\ntwo\\n")
+git("add", "entry.py")
+git("-c", "user.name=suite", "-c", "user.email=suite@example.invalid", "commit", "-qm", "seed")
+archive = git("archive", "--format=tar", "HEAD").stdout
+with tarfile.open(fileobj=io.BytesIO(archive)) as bundle:
+    sys.stdout.buffer.write(bundle.extractfile("entry.py").read())
+"""
+
 
 class GlobalGitFileTests(unittest.TestCase):
     """The global Git configuration a test process reads and writes is the suite's own."""
@@ -217,6 +239,32 @@ class GlobalGitFileTests(unittest.TestCase):
         self.assertEqual("Somebody Real", answer["name"])
         self.assertEqual(["C:/work/alpha", "C:/work/with space"], answer["safe"])
         self.assertEqual(1, answer["alias"], "a setting other than identity was carried")
+
+    def test_a_host_s_system_autocrlf_reaches_no_repository_a_test_makes(self) -> None:
+        """A host whose system Git file turns `core.autocrlf` on, as a hosted Windows
+        runner's does: a repository that a fresh process importing the package makes
+        archives the LF it committed, as `launcher.pin_release` reads it."""
+
+        directory = tempfile.TemporaryDirectory(prefix="vk-eol-", ignore_cleanup_errors=True)
+        self.addCleanup(directory.cleanup)
+        base = Path(directory.name).resolve()
+        system = base / "gitconfig"
+        system.write_bytes(b"[core]\n\tautocrlf = true\n")
+        repository = base / "repository"
+        repository.mkdir()
+        environment = {
+            name: value for name, value in os.environ.items() if name != "GIT_CONFIG_NOSYSTEM"
+        }
+        environment["GIT_CONFIG_SYSTEM"] = str(system)
+        found = subprocess.run(
+            [sys.executable, "-c", ARCHIVED_ENTRY, str(ROOT), str(repository)],
+            cwd=ROOT,
+            env=environment,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(0, found.returncode, found.stderr.decode("utf-8", "replace"))
+        self.assertEqual(b"one\ntwo\n", found.stdout)
 
 
 if __name__ == "__main__":
