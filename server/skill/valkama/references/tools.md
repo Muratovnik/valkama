@@ -503,6 +503,21 @@ item or takes it out of review is refused with `question` while a question to th
 owner is open on it, `force` or not; cancelling is not.
 `force: true` carries a refusal through and records an `overridden` event.
 
+## Preparing a release
+
+A bug is bound to a release by the label `<product>-<version>`, such as
+`valkama-2.4.1`, or by standing, at any depth, under an open goal or stage that
+carries that label. Tasks and improvements are not bound. Before the release is
+prepared, run
+`valkama released --before-prepare --repo <checkout> --product <product> --version <version>`.
+It exits non-zero while an open bug is bound, naming each by reference and
+title, and it changes nothing. The space is the one the project registry binds
+the checkout's project to, unless `--space` names one. A missing store,
+registry, project or binding is a refusal that names it, never a pass. The owner
+decides whether a bound bug moves to a later version, and moves it by changing
+its label to that version's: a bug under such a goal or stage moves by getting
+the later label. Do not change that label without the owner's word.
+
 ## Closing a release
 
 Before closing the release's goal, run

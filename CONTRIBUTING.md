@@ -235,8 +235,24 @@ uv venv .venv --python 3.15              # or: python -m venv .venv
 uv pip install --python .venv/Scripts/python.exe -r requirements-dev.txt
 uv venv .venv-semgrep --python 3.14
 uv pip install --python .venv-semgrep/Scripts/python.exe -r requirements-semgrep.txt
+.venv/Scripts/python windows/release.py scope
 .venv/Scripts/python .github/relkit.pyz release prepare <version>
 ```
+
+`scope` checks that no open bug is bound to the version in `VERSION`. A bug is
+bound to a release by the label `valkama-<version>`, such as `valkama-2.4.1`, or
+by standing, at any depth, under an open goal or stage that carries that label.
+Tasks and improvements are not counted. While a bug is bound, `scope` exits
+non-zero and names each one by reference and title. Fix and close it, or move it
+to a later version by changing its label to that version's, such as
+`valkama-2.4.2`. A bug under such a goal or stage moves the same way: give it
+the later version's label. `scope` asks the installed Valkama
+(`valkama released --before-prepare`), in the planning space the project registry
+binds this checkout's project to. It also refuses, naming what is missing, when
+there is no installed Valkama, no planning store, no project registered at the
+checkout or no space that project is bound to. `check` runs `scope` as its first
+stage, so `prepare` stops on a bound bug within seconds rather than after the
+suite.
 
 Outside Windows the interpreter is `.venv/bin/python`. `check` runs every
 Python tool from that interpreter's environment — as `python -m <tool>`, or as
@@ -254,8 +270,9 @@ temporary copy of the sources and runs every npm stage there, never in the check
 `node_modules` to the checkout's. The checkout's own `node_modules` is left as it is.
 Its stages are the gates `python tests/isolated.py gates` runs, from the one list
 `STAGES` in `windows/release.py`, less the commit-subject check and the history
-audit, which only `gates` runs, and with the installs and the price comparison
-first; the unittest suite runs through `tests/parallel.py`, several
+audit, which only `gates` runs, and with `scope`, the installs and the price
+comparison first. `scope` is `check`'s alone, since the gates have no planning
+store. The unittest suite runs through `tests/parallel.py`, several
 modules at once, in a throwaway profile. A stage that finds no room at the
 machine's heavy-process gate waits for it, even in an agent's session, where the
 gate would otherwise refuse at once: `check` sets `HEAVY_GATE_WAIT=1` for its
