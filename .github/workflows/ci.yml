@@ -91,7 +91,13 @@ jobs:
         run: npm test
         working-directory: web
       - name: Production Settings browser smoke
-        run: npm run test:browser -- --project=production production-settings.spec.ts
+        # A bare Playwright run also takes every timed test of the suite, as the teardown
+        # of the project it names (`tests/browser/timedChecks.ts`); the list holds the
+        # step to the Settings spec, which has none.
+        run: |
+          Set-Content -Path "$env:RUNNER_TEMP/browser-list.txt" -Value 'production-settings.spec.ts'
+          $env:VALKAMA_BROWSER_LIST = "$env:RUNNER_TEMP/browser-list.txt"
+          npm run test:browser -- --project=production production-settings.spec.ts
         working-directory: web
       - name: Build committed web artifact
         run: npm run build
