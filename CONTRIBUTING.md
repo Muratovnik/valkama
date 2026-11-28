@@ -270,9 +270,11 @@ temporary copy of the sources and runs every npm stage there, never in the check
 `npm ci` empties the tree it installs into, and other worktrees may link their
 `node_modules` to the checkout's. The checkout's own `node_modules` is left as it is.
 Its stages are the gates `python tests/isolated.py gates` runs, from the one list
-`STAGES` in `windows/release.py`, less the commit-subject check and the history
-audit, which only `gates` runs, and with `scope`, the installs and the price
-comparison first. `scope` is `check`'s alone, since the gates have no planning
+`STAGES` in `windows/release.py`, less the commit-subject check, the history
+audit and the coverage margin, which only `gates` runs, and with `scope`, the
+installs and the price comparison first. The coverage margin is not part of a
+release: it compares the measured total with the floor in the integrator's gates
+and in CI. `scope` is `check`'s alone, since the gates have no planning
 store. The unittest suite runs through `tests/parallel.py`, several
 modules at once, in a throwaway profile. A stage that finds no room at the
 machine's heavy-process gate waits for it, even in an agent's session, where the
@@ -281,7 +283,8 @@ stages before the first one, unless the caller set `HEAVY_GATE_WAIT=0`.
 `build` needs npm and no Python tool, and `smoke` runs the
 server, which needs only the standard library. The web build that `check` runs
 in the copy replaces `web/dist` in the checkout; commit it only when `web/src`
-changed.
+changed. What runs before `prepare`, and how the prepared candidate is
+published, is in [From candidate to publication](#from-candidate-to-publication).
 
 ### The changelog entry
 
@@ -345,6 +348,85 @@ Until its version is tagged, `tests/test_changelog_entry.py` holds the entry, an
 a heading, a table row, a lone link and a line the draft wrote are exempt. Every
 `feat`, `perf` and breaking commit on the first-parent line since `v<prev>` keeps
 its link, unless a revert in the same range names it. A dropped `fix` needs none.
+
+### From candidate to publication
+
+The candidate is the commit a release is cut from. It is `main`'s head, because
+`release prepare` refuses a commit that the `branch` of `relkit.toml` does not
+point to. Its `VERSION`, `desktop/package.json` and `desktop/package-lock.json`
+name the version, which `build` refuses otherwise, and its changelog entry is
+committed. Keep `main` at the candidate until the release is published:
+`prepare`, `plan` and `run` refuse a candidate `main` no longer points to, and
+a new candidate goes through the whole order again, since what a stage proved
+on one commit does not count for another.
+
+`prepare` runs `check`, whose suites take most of its time, first, and the
+publication audits, `build` and `smoke` after it, so a defect in one of those
+would surface only once the whole suite has passed. The cheap stages therefore
+run first, by the same commands, and `prepare` runs as soon as they pass:
+
+1. `scope`, as above.
+2. The static gates, with the commit-subject check that `check` leaves to the
+   gates:
+
+   ```powershell
+   .venv/Scripts/python tests/isolated.py gates --out tmp/release-static --only subjects ruff format typos vulture mypy lint-imports semgrep
+   ```
+
+3. The two audits `prepare` runs after `check`, of the tree and of the
+   history, which needs a clean tracked tree. An owner checkout adds `--owner`
+   to both:
+
+   ```powershell
+   .venv/Scripts/python .github/relkit.pyz audit
+   .venv/Scripts/python .github/relkit.pyz audit --history
+   ```
+
+4. `build` and `smoke` as `[release]` in `relkit.toml` declares them, run the
+   way `prepare` runs them:
+
+   ```powershell
+   .venv/Scripts/python windows/release.py build-smoke
+   ```
+
+   It copies the committed files of `HEAD`, or of `--commit <rev>`, with no
+   `.git`, into a new directory under `tmp/build-smoke/`, fills the placeholders
+   as Release Kit does, with `{python}` the interpreter that runs it, and runs
+   there every `build` command of `relkit.toml`, then every `smoke` command. The
+   first command that fails stops it and is named, and its directory is kept
+   for inspection; when all pass, the directory is removed. Like `prepare`, it
+   refuses a checkout with any uncommitted or untracked change.
+5. An upgrade rehearsal, for a release that changes the store's schema: its
+   migration and the way back run on a copy of a real store, in a home that
+   `tests/isolated.py profile --out DIR --store-copy [SOURCE]` makes, before
+   the long suites or beside them, so that what it finds does not void suites
+   that have already passed.
+6. `release prepare <version>`, which runs the stages as publication runs
+   them: `check` with Release Kit's interpreter and its npm stages in a copy of
+   the sources without `.git`, the audits, and `build` and `smoke` in a
+   snapshot of the commit. It records the files it built. That is why the
+   publication stages are not copied into a gate of their own: a copy is a
+   second list of stages, and it runs in another environment.
+7. The whole browser suite, which `check` does not run, once on the candidate:
+   `npm run test:browser:allowed` in `web/`. Like the suites of `prepare`, it
+   takes its room at the machine's heavy-process gate.
+
+Publication follows, on the day of it:
+
+```powershell
+.venv/Scripts/python .github/relkit.pyz release plan <version>
+.venv/Scripts/python .github/relkit.pyz release run <version> --publish --plan-hash <hash>
+```
+
+`plan` prints the plan, binds the prepared candidate to it and prints its
+fingerprint after `Plan SHA-256:`; `run` with that fingerprint publishes that
+candidate. Before it tags, `run` runs `check` and the audits once more, since
+Release Kit carries no gate's result from one invocation to the next. It then
+pushes, publishes the files `prepare` built and verifies the publication. After
+an interruption, `release status <version>` shows what was saved and
+`release resume <version> --publish` continues. A release with no time between
+preparation and publication does both in one invocation, so that its gate runs
+once: `release run <version> --publish --prepare`.
 
 ## Reporting a bug
 

@@ -41,6 +41,13 @@ store's own schema, while a checkout may be a build of another one, which would
 refuse the store rather than read it. Only the release runs it: the gates and the
 hosted jobs have no planning store.
 
+`build-smoke` runs `[release].build` and `.smoke` of `relkit.toml` by hand before
+`relkit release prepare`, the way prepare runs them: in a copy of one commit's
+files with no `.git`, below the checkout's ignored `tmp/build-smoke/`, with the
+placeholders and the environment Release Kit gives them. It reads the commands
+from the commit, so there is no second list of them. A failure keeps that
+attempt's directory; the next attempt makes a new one.
+
 `coverage-margin` is a stage of the gates, run after `coverage report`: it reads
 the total from the coverage data the suite left and refuses when that total
 stands more than `COVERAGE_MARGIN` above `fail_under`, naming the floor to raise
@@ -64,9 +71,11 @@ import re
 import shlex
 import shutil
 import stat
+import string
 import subprocess
 import sys
 import sysconfig
+import tarfile
 import tempfile
 import tomllib
 import urllib.request
@@ -575,13 +584,13 @@ def _writable_and_again(function: Callable[[str], object], path: str, _failure: 
     function(path)
 
 
-def _remove_copy(copy: Path) -> str | None:
+def _remove_copy(copy: Path, named: str = "release check: the npm copy") -> str | None:
     """Remove the copy without entering a link in it; what was left, said, when not all went."""
 
     try:
         shutil.rmtree(copy, onerror=_writable_and_again)
     except OSError as failure:
-        return f"release check: the npm copy {copy} could not be removed and is left: {failure}"
+        return f"{named} {copy} could not be removed and is left: {failure}"
     return None
 
 
@@ -1281,7 +1290,9 @@ def smoke(assets: Path, expected: str, work_dir: Path, commit: str) -> None:
             target = (extracted / item.filename).resolve()
             if not target.is_relative_to(extracted.resolve()):
                 raise ValueError("source archive escapes smoke workspace")
-        archive.extractall(extracted)
+        # A zip, its members checked just above: ruff's tar rule cannot tell the
+        # two apart once the module imports `tarfile` for `build-smoke`.
+        archive.extractall(extracted)  # noqa: S202
     # What `launcher install` checks in an unpacked archive, against the candidate.
     described = record.verify(extracted)
     if (described.commit, described.version) != (commit, expected):
@@ -1333,17 +1344,309 @@ def smoke(assets: Path, expected: str, work_dir: Path, commit: str) -> None:
     )
 
 
+#: Where `build-smoke` makes a directory of its own for each attempt, inside the
+#: checkout's ignored `tmp/`.
+BUILD_SMOKE_PARENT = PurePosixPath("tmp/build-smoke")
+
+#: The placeholders Release Kit fills in a `[release]` command. It refuses the
+#: configuration for any other field, and for a format spec or a conversion on one.
+RELEASE_PLACEHOLDERS = frozenset({"python", "source", "assets", "temp", "version", "tag", "commit"})
+
+#: What Release Kit points at `{temp}` for every project command it runs.
+_TEMPORARY_VARIABLES = (
+    "TMP",
+    "TEMP",
+    "TMPDIR",
+    "XDG_CACHE_HOME",
+    "XDG_STATE_HOME",
+    "XDG_DATA_HOME",
+)
+
+#: Release Kit's `command_timeout`, in seconds, when `[release]` names none.
+RELKIT_COMMAND_TIMEOUT = 600
+
+
+class BuildSmokeError(RuntimeError):
+    """`build-smoke` refuses, or one of its commands failed; the message says which."""
+
+
+def check_placeholders(command: Sequence[str]) -> None:
+    """Refuse `command` when an argument holds a field Release Kit would not fill.
+
+    An argument is a `str.format` template, so `{{` and `}}` stand for a literal
+    brace, and a lone brace is a malformed template.
+    """
+
+    for argument in command:
+        try:
+            fields = [
+                (field, spec, conversion)
+                for _, field, spec, conversion in string.Formatter().parse(argument)
+                if field is not None
+            ]
+        except ValueError as error:
+            raise BuildSmokeError(
+                f"release build-smoke: {argument!r} in relkit.toml is not a template ({error});"
+                " write a literal brace as {{ or }}"
+            ) from None
+        for field, spec, conversion in fields:
+            if field not in RELEASE_PLACEHOLDERS or spec or conversion:
+                written = "{" + field + (f"!{conversion}" if conversion else "")
+                written += (f":{spec}" if spec else "") + "}"
+                raise BuildSmokeError(
+                    f"release build-smoke: unknown placeholder {written} in {argument!r} in"
+                    f" relkit.toml; Release Kit fills only"
+                    f" {', '.join(sorted(RELEASE_PLACEHOLDERS))}, and a literal brace is"
+                    " written {{ or }}"
+                )
+
+
+def substitute(command: Sequence[str], values: Mapping[str, str]) -> list[str]:
+    """`command` with its placeholders filled from `values`, as Release Kit fills them."""
+
+    check_placeholders(command)
+    return [argument.format(**values) for argument in command]
+
+
+def release_commands(settings: Mapping[str, object]) -> list[tuple[str, list[str]]]:
+    """Every command of `[release].build`, then of `.smoke`, labelled, as `relkit.toml` writes it.
+
+    Each is checked before any runs, since Release Kit refuses the configuration
+    before its first stage.
+    """
+
+    commands: list[tuple[str, list[str]]] = []
+    for phase in ("build", "smoke"):
+        listed = settings.get(phase, [])
+        if (
+            not isinstance(listed, list)
+            or (phase == "smoke" and not listed)
+            or not all(
+                isinstance(command, list)
+                and command
+                and all(isinstance(argument, str) for argument in command)
+                for command in listed
+            )
+        ):
+            raise BuildSmokeError(
+                f"release build-smoke: [release].{phase} in relkit.toml is not a list of"
+                " argv arrays" + (", or is empty" if phase == "smoke" else "")
+            )
+        for index, command in enumerate(listed, start=1):
+            check_placeholders(command)
+            commands.append((f"{phase} {index}/{len(listed)}", command))
+    return commands
+
+
+def require_clean(checkout: Path) -> None:
+    """Refuse a checkout with any change, which `relkit release prepare` refuses too.
+
+    Prepare refuses each entry `git status` lists with every untracked file, a
+    tracked change or a file that is neither tracked nor ignored, before its
+    first stage, so a candidate a dirty tree builds is not one prepare would take.
+    """
+
+    listed = run(
+        "git",
+        "status",
+        "--porcelain=v1",
+        "-z",
+        "--untracked-files=all",
+        "--ignore-submodules=none",
+        cwd=checkout,
+    ).decode("utf-8", errors="strict")
+    records = iter(listed.split("\0"))
+    changes = []
+    for record in records:
+        if record:
+            changes.append(record)
+            if record[0] in "RC" or record[1] in "RC":
+                next(records, None)  # a rename or copy carries its source as the next record
+    if changes:
+        shown = "".join(f"\n  {record}" for record in changes[:5])
+        more = f"\n  ... and {len(changes) - 5} more" if len(changes) > 5 else ""
+        raise BuildSmokeError(
+            f"release build-smoke: {checkout} has {len(changes)} change(s), and"
+            f" `relkit release prepare` refuses a checkout that is not clean:{shown}{more}"
+        )
+
+
+def committed_file(checkout: Path, commit: str, name: str) -> str:
+    """The text of `name` as `commit` holds it."""
+
+    try:
+        data = run("git", "cat-file", "blob", f"{commit}:{name}", cwd=checkout)
+    except RuntimeError as error:
+        raise BuildSmokeError(f"release build-smoke: {error}") from None
+    return data.decode("utf-8", errors="strict")
+
+
+def release_version(checkout: Path, commit: str, settings: Mapping[str, object]) -> str:
+    """The version `[release].version_file` holds at `commit`, matched as Release Kit matches it."""
+
+    version_file, pattern = settings.get("version_file"), settings.get("version_pattern")
+    if not isinstance(version_file, str) or not isinstance(pattern, str):
+        raise BuildSmokeError(
+            "release build-smoke: [release] in relkit.toml names no version_file"
+            " and version_pattern"
+        )
+    text = committed_file(checkout, commit, version_file).replace("\r\n", "\n")
+    found = re.findall(pattern, text, re.MULTILINE)
+    if len(found) != 1:
+        raise BuildSmokeError(
+            f"release build-smoke: {version_file} holds {len(found)} matches of"
+            " version_pattern, not one"
+        )
+    return str(found[0])
+
+
+def attempt_directory(checkout: Path) -> Path:
+    """A new directory for one attempt, below `BUILD_SMOKE_PARENT`, which Git must ignore.
+
+    Each attempt gets its own, so one never reads what an earlier one left: build
+    refuses an asset directory that is not empty, and smoke a used work directory.
+    Its name is only the eight characters that make it new: the installer build
+    nests deep below it, and makensis cannot open an include whose path runs past
+    260 characters.
+    """
+
+    ignored = subprocess.run(
+        ("git", "check-ignore", "-q", "--", f"{BUILD_SMOKE_PARENT}/attempt"),
+        cwd=checkout,
+        capture_output=True,
+        check=False,
+    )
+    if ignored.returncode:
+        raise BuildSmokeError(
+            f"release build-smoke: {BUILD_SMOKE_PARENT} is not ignored in {checkout};"
+            " a copy there would leave the tree that prepare needs clean dirty"
+        )
+    parent = checkout.joinpath(*BUILD_SMOKE_PARENT.parts)
+    parent.mkdir(parents=True, exist_ok=True)
+    return Path(tempfile.mkdtemp(prefix="", dir=parent))
+
+
+def extract_commit(checkout: Path, commit: str, copy: Path) -> None:
+    """Write the files `commit` holds into `copy`, which has no `.git`, through `git archive`.
+
+    The archive excludes nothing and writes text as LF, as `.gitattributes`
+    stores it, so these are the bytes Release Kit's snapshot writes.
+    """
+
+    archived = run("git", "archive", "--format=tar", commit, cwd=checkout)
+    copy.mkdir()
+    with tarfile.open(fileobj=io.BytesIO(archived), mode="r:") as archive:
+        archive.extractall(copy, filter="data")
+
+
+def build_smoke(checkout: Path = ROOT, revision: str = "HEAD") -> Path:
+    """Run `[release].build` and `.smoke` of `revision` as `relkit release prepare` runs them.
+
+    They run in a copy of the commit's files with no `.git`, with the placeholders
+    and the environment Release Kit gives them, build first. The first command
+    that fails stops the run and its directory is kept; when all pass it is
+    removed. Returns that directory.
+    """
+
+    require_clean(checkout)
+    try:
+        commit = (
+            run(
+                "git",
+                "rev-parse",
+                "--verify",
+                "--end-of-options",
+                f"{revision}^{{commit}}",
+                cwd=checkout,
+            )
+            .decode("utf-8", errors="strict")
+            .strip()
+        )
+    except RuntimeError as error:
+        raise BuildSmokeError(f"release build-smoke: no commit {revision!r}: {error}") from None
+    settings = tomllib.loads(committed_file(checkout, commit, "relkit.toml")).get("release")
+    if not isinstance(settings, dict):
+        raise BuildSmokeError("release build-smoke: relkit.toml at the commit has no [release]")
+    commands = release_commands(settings)
+    candidate_version = release_version(checkout, commit, settings)
+    timeout = settings.get("command_timeout", RELKIT_COMMAND_TIMEOUT)
+    if type(timeout) is not int or timeout < 1:
+        raise BuildSmokeError(
+            "release build-smoke: [release].command_timeout is not a number of seconds"
+        )
+    directory = attempt_directory(checkout)
+    source, assets, temp = directory / "source", directory / "assets", directory / "temp"
+    try:
+        extract_commit(checkout, commit, source)
+        temp.mkdir()
+    except BaseException:
+        _remove_copy(directory, "release build-smoke: the directory")
+        raise
+    values = {
+        "python": sys.executable,
+        "source": str(source),
+        "assets": str(assets),
+        "temp": str(temp),
+        "version": candidate_version,
+        "tag": f"v{candidate_version}",
+        "commit": commit,
+    }
+    environment = {
+        **os.environ,
+        **dict.fromkeys(_TEMPORARY_VARIABLES, str(temp)),
+        "PYTHONDONTWRITEBYTECODE": "1",
+    }
+    for label, written in commands:
+        sys.stdout.write(f"release build-smoke: {label}: {shlex.join(written)}\n")
+        sys.stdout.flush()
+        try:
+            status = subprocess.run(
+                substitute(written, values),
+                cwd=source,
+                env=environment,
+                timeout=timeout,
+                check=False,
+            ).returncode
+            failed = f"exited {status}" if status else None
+        except subprocess.TimeoutExpired:
+            failed = f"did not end within command_timeout = {timeout} s"
+        except OSError as error:
+            failed = f"could not start: {error}"
+        if failed:
+            raise BuildSmokeError(
+                f"release build-smoke: {label} {failed}: {shlex.join(written)}."
+                f" The copy, the assets and the work directory are kept in {directory}"
+            )
+    left = _remove_copy(directory, "release build-smoke: the directory")
+    with contextlib.suppress(OSError):
+        directory.parent.rmdir()
+    sys.stdout.write(
+        f"release build-smoke: build and smoke of {commit[:12]} ({candidate_version}) passed\n"
+    )
+    if left is not None:
+        raise BuildSmokeError(left)
+    return directory
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "action", choices=("check", "scope", "prices", "coverage-margin", "build", "smoke")
+        "action",
+        choices=("check", "scope", "prices", "coverage-margin", "build-smoke", "build", "smoke"),
     )
     parser.add_argument("--assets", type=Path)
     parser.add_argument("--version")
     parser.add_argument("--work-dir", type=Path)
-    parser.add_argument("--commit", help="the commit the release is built from")
+    parser.add_argument(
+        "--commit", help="the commit the release is built from; build-smoke takes HEAD by default"
+    )
     args = parser.parse_args()
-    if args.action == "check":
+    if args.action == "build-smoke":
+        try:
+            build_smoke(ROOT, args.commit or "HEAD")
+        except BuildSmokeError as error:
+            sys.exit(str(error))
+    elif args.action == "check":
         try:
             check()
         except ToolchainError as error:
