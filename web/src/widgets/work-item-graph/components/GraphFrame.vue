@@ -31,7 +31,9 @@ import type { PlacedFrame } from '@/widgets/work-item-graph/utils/graphGeometry.
 const {
   frame,
   far = false,
+  marked = false,
   overview = false,
+  root = false,
   still = false,
   tabStop = null,
   working = 0,
@@ -39,8 +41,12 @@ const {
   frame: PlacedFrame
   /** Further still: the overview's words could not be read, so a header says less, larger. */
   far?: boolean
+  /** It is the branch the card chose, or holds it folded: edged in the selection accent. */
+  marked?: boolean
   /** The field is zoomed out past reading: the header is the reference and the edge. */
   overview?: boolean
+  /** Its goal is the root of the chain the field is narrowed to: the outer frame, marked so. */
+  root?: boolean
   /** The field's motion does not run, so the working sign holds still. */
   still?: boolean
   /** The walk target that takes Tab, when it is one of this frame's. */
@@ -80,6 +86,7 @@ function onGround() {
       'folded': frame.folded,
       'ground-opens': groundOpens,
       'holding': frame.folded && frame.foldable,
+      marked,
       nested,
       overview,
     }"
@@ -105,6 +112,7 @@ function onGround() {
       :far="far"
       :height="frame.header"
       :overview="overview"
+      :root="root"
       :still="still"
       :tab-stop="tabStop"
       :working="working"
@@ -156,6 +164,14 @@ function onGround() {
     box-shadow:
       0 16px 0 -4px var(--color-surface-hover),
       0 32px 0 -8px var(--color-surface-recess);
+  }
+
+  /* The branch the card chose, as its cards are marked: an edge in the selection
+     accent, just outside the frame, where neither its header's ground nor its
+     progress line covers it; the air round every frame is wider than the ring. */
+  &.marked {
+    outline: 1px solid var(--color-accent);
+    outline-offset: 2px;
   }
 }
 

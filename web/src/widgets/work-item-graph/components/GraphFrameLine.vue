@@ -3,7 +3,9 @@
  * A frame header's first line, as a card's is: what it is and its reference, its
  * state once it has moved, and at the far end the work moving under it. The state
  * gives way first when the line is full, then the reference; the header's button
- * keeps both whole in its name. Over the work under no goal the line is its name.
+ * keeps both whole in its name. The root of the chain the field is narrowed to says
+ * so beside its reference, as its card did. Over the work under no goal the line is
+ * its name.
  * Zoomed out it is the reference and the work moving, the whole line grown with the
  * field by the `--grow` the header sets, and far out the reference gives way to what
  * a fold hides (`named`). There the work moving shortens to its count beside the sign
@@ -12,6 +14,7 @@
  * before the mark is. The header's name and hover text keep both whole.
  */
 import { computed, onMounted, ref, useTemplateRef, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { useResizeObserver } from '@vueuse/core'
 
@@ -31,6 +34,7 @@ const {
   goal,
   named = true,
   overview = false,
+  root = false,
   working,
   wraps = false,
 } = defineProps<{
@@ -43,11 +47,15 @@ const {
   /** Whether the reference or the name is drawn. */
   named?: boolean
   overview?: boolean
+  /** The goal is the root of the chain the field is narrowed to, marked as its card was. */
+  root?: boolean
   /** The field's motion does not run, so the working sign holds still. */
   still?: boolean
   /** Zoomed out, the band gives the line a second row for what the first cannot hold. */
   wraps?: boolean
 }>()
+
+const { t } = useI18n()
 
 /** A goal or a stage says what it is, in its kind's sign and colour. */
 const kindGlyph = computed(() => (goal ? kindGlyphOf(goal.kind) : null) ?? 'parent')
@@ -115,6 +123,11 @@ useResizeObserver(
         class="graph-frame-title"
         :class="{ 'one-line': overview }"
       />
+      <span
+        v-if="goal && root && !overview"
+        class="graph-frame-root"
+        >{{ t('graph.rootMark') }}</span
+      >
     </template>
     <SemanticState
       v-if="goal && stateShown && !overview"
@@ -172,6 +185,17 @@ useResizeObserver(
 .graph-frame-reference {
   flex: 0 1 auto;
   font-variant-numeric: tabular-nums;
+}
+
+/* The chain's root, said as its card said it: the reference gives way before the mark. */
+.graph-frame-root {
+  flex: 0 0 auto;
+  padding: var(--space-hair) var(--space-1);
+  color: var(--color-text);
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--color-control-surface);
+  border-radius: var(--radius-status);
 }
 
 .graph-frame-title {

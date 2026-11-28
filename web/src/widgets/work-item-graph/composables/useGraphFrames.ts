@@ -7,11 +7,17 @@
  * its work, and a choice survives a reload.
  *
  * Kept apart from the board's folded lanes: the two start from different
- * defaults, so one choice would mean different things in each.
+ * defaults, so one choice would mean different things in each. A chain's frames
+ * are kept apart from the whole space's for the same reason: a chain's root starts
+ * open however much it holds, where the same goal over the whole space may start
+ * folded.
  */
 import { useFoldChoices } from '@/shared/lib/useFoldChoices.ts'
 
-const STORAGE_KEY = 'valkama-graph-frames'
+const STORAGE_KEYS = {
+  space: 'valkama-graph-frames',
+  chain: 'valkama-graph-chain-frames',
+} as const
 
 /** A frame as a choice is made against it: what it is now, and what it would be untouched. */
 export interface FoldableFrame {
@@ -20,8 +26,8 @@ export interface FoldableFrame {
   id: string
 }
 
-export function useGraphFrames(space: () => string) {
-  const { choices, choose } = useFoldChoices(STORAGE_KEY, space)
+export function useGraphFrames(space: () => string, field: keyof typeof STORAGE_KEYS = 'space') {
+  const { choices, choose } = useFoldChoices(STORAGE_KEYS[field], space)
 
   /**
    * Fold an open frame or open a folded one. Outside a filter, a choice that

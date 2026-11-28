@@ -15,6 +15,7 @@ import {
   graphWalk,
   isGraphWalkKey,
   nodeCentre,
+  sightBox,
   walkTargets,
 } from '@/widgets/work-item-graph/utils/graphWalk.ts'
 
@@ -143,6 +144,21 @@ test('the centre of a header target is the centre of its own box, not of a card'
   const open = framed.find((target) => target.id === foldTarget('E'))
   assert.ok(open)
   assert.deepEqual(nodeCentre(open), { x: 22, y: FRAME_HEADER / 2 })
+})
+
+const byId = (id: string) => framed.find((target) => target.id === id)
+
+test('a goal header is brought into sight from its start, its fold with it; a fold or a card as it is', () => {
+  const open = byId(frameTarget('G'))
+  assert.ok(open)
+  // The goal's button spans the header the frame draws, from the frame's own edge.
+  const seen = sightBox(open)
+  assert.deepEqual([seen.x, seen.y, seen.width, seen.height], [700, 0, 288, FRAME_HEADER])
+  for (const id of [foldTarget('E'), 'P']) {
+    const target = byId(id)
+    assert.ok(target)
+    assert.deepEqual(sightBox(target), target)
+  }
 })
 
 test('from a card the arrows reach its frame header, and along the header from fold to open', () => {

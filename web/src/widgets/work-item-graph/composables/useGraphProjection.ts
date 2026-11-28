@@ -47,6 +47,8 @@ import { createGraphLayoutRunner } from '@/widgets/work-item-graph/utils/graphLa
 import { layoutFrames } from '@/widgets/work-item-graph/utils/graphLayoutTree.ts'
 import type { FrameHeaders } from '@/widgets/work-item-graph/utils/graphLayoutTree.ts'
 
+import { WORK_ITEM_TREE } from '@/entities/work-item/utils/workTree.ts'
+
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 
 /** What the host is showing, read fresh on every change. */
@@ -188,7 +190,10 @@ export function useGraphProjection(
   const focus = ref<ReturnType<typeof createGraphFocus>>(
     createGraphFocus({ ...input(), showDone: false }),
   )
-  const frameChoices = useGraphFrames(() => input().space)
+  const spaceFrames = useGraphFrames(() => input().space)
+  const chainFrames = useGraphFrames(() => input().space, 'chain')
+  /** The fold choices of the field in view: a chain keeps its own. */
+  const frameChoices = () => (inChain() ? chainFrames : spaceFrames)
 
   const source = computed<GraphSource | null>(() => {
     const now = input()
@@ -227,15 +232,32 @@ export function useGraphProjection(
     () => new Map(frameItems.value.map((item) => [item.work_item_id, item])),
   )
 
-  /** The whole space as frames; none in a chain, which keeps its flat drawing. */
+  /**
+   * A chain's own items, its root and its members, when its root holds work; null
+   * otherwise. A chain grown from a task holds no goal of its own to frame it, and
+   * keeps its flat drawing.
+   */
+  const chainItems = computed(() => {
+    const now = scope.value
+    if (now.kind !== 'chain' || now.scopeRootId === null) return null
+    const root = itemsById.value.get(now.scopeRootId)
+    if (!root || !WORK_ITEM_TREE.isContainer(root)) return null
+    const chain = new Set([now.scopeRootId, ...(now.members ?? [])])
+    return frameItems.value.filter((item) => chain.has(item.work_item_id))
+  })
+
+  /** The whole space as frames, and a chain whose root holds work; a chain of a task is flat. */
   const projection = computed<FrameProjection | null>(() => {
-    if (!source.value || scope.value.kind !== 'all') return null
+    if (!source.value) return null
+    const chain = chainItems.value
+    if (scope.value.kind !== 'all' && !chain) return null
     return frameProjection({
-      items: frameItems.value,
+      items: chain ?? frameItems.value,
       links: source.value.edges,
       showDone: showDone.value,
       shown: shown.value,
-      choices: frameChoices.choices.value,
+      choices: frameChoices().choices.value,
+      chainRootId: chain ? scope.value.scopeRootId : null,
     })
   })
 
@@ -425,7 +447,7 @@ export function useGraphProjection(
     unread: computed(() => projection.value?.unread ?? []),
     toggle: (frameId) => {
       const frame = frameNow(frameId)
-      if (frame?.foldable) frameChoices.toggle(frame, shown.value !== null)
+      if (frame?.foldable) frameChoices().toggle(frame, shown.value !== null)
     },
   }
 }

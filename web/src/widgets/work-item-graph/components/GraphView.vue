@@ -35,16 +35,14 @@ import GraphNodeCard from '@/widgets/work-item-graph/components/GraphNodeCard.vu
 import { useGraphCamera } from '@/widgets/work-item-graph/composables/useGraphCamera.ts'
 import { useGraphFlowElements } from '@/widgets/work-item-graph/composables/useGraphFlowElements.ts'
 import { useGraphGroundTap } from '@/widgets/work-item-graph/composables/useGraphGroundTap.ts'
+import { useGraphKey } from '@/widgets/work-item-graph/composables/useGraphKey.ts'
 import { useGraphKeyboard } from '@/widgets/work-item-graph/composables/useGraphKeyboard.ts'
-import {
-  movesOn,
-  signsOf,
-  useGraphMotion,
-} from '@/widgets/work-item-graph/composables/useGraphMotion.ts'
+import { useGraphMotion } from '@/widgets/work-item-graph/composables/useGraphMotion.ts'
 import { useGraphNodeMarks } from '@/widgets/work-item-graph/composables/useGraphNodeMarks.ts'
 import { useGraphProjection } from '@/widgets/work-item-graph/composables/useGraphProjection.ts'
 import type { OtherSpaceEnds } from '@/widgets/work-item-graph/composables/useGraphProjection.ts'
-import { GRAPH_FLOW_ID } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+import { drawnBranch } from '@/widgets/work-item-graph/utils/graphCamera.ts'
+import { FOUND_FRAME, GRAPH_FLOW_ID } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type {
   LiveWork,
   PlacedFrame,
@@ -141,16 +139,12 @@ const emptyKind = computed(() => {
 
 const readyIdSet = computed(() => new Set(ready.value.map((node) => node.work_item_id)))
 
-/** The branch as drawn: framed whole and kept lit. None while nothing of it is on the field. */
-const branchFrame = computed(() => {
-  const branch = props.branch
-  if (!branch || !placed.value) return null
-  const wanted = new Set(branch.head === null ? branch.members : [branch.head, ...branch.members])
-  const ids = new Set(
-    placed.value.nodes.map((node) => node.work_item_id).filter((id) => wanted.has(id)),
-  )
-  return ids.size ? { headId: branch.head, ids } : null
-})
+/** The branch as drawn: framed whole and kept lit. */
+const branchFrame = computed(() =>
+  props.branch && placed.value ? drawnBranch(props.branch, placed.value) : null,
+)
+/** Whether a frame is the branch's: its goal's, or the band its work stands in. */
+const isBranchFrame = (frame: PlacedFrame) => branchFrame.value?.frameId === frame.id
 /** Whether a node is in the branch the card chose. */
 const inBranch = (node: PlacedNode) => branchFrame.value?.ids.has(node.work_item_id) ?? false
 const branchChip = computed(() => (branchFrame.value ? (props.branch?.reference ?? null) : null))
@@ -178,41 +172,20 @@ const cardAt = (id: string) => [cardById.value.get(id)].filter((node) => node !=
 /** The frame drawn at a place: none, or one. */
 const frameAt = (id: string) => [frameById.value.get(id)].filter((frame) => frame !== undefined)
 
-/**
- * The items whose live work moves: an agent is seen working on them now. A line runs when one
- * of its links reaches one, and a frame counts those under it. It stays the whole space's
- * set: a drawn line folded onto a frame reaches items no card shows.
- */
-const moving = computed(
-  () => new Set(Object.keys(live.value).filter((id) => movesOn(live.value[id]))),
-)
 const { motion, toggle: toggleMotion } = useGraphMotion()
 const still = computed(() => motion.value !== 'running')
-const workingIn = (frame: PlacedFrame) => frame.members.filter((id) => moving.value.has(id)).length
-/**
- * Something on the field moves: a drawn card being worked on, or a drawn frame, folded or
- * open, that counts work moving under it. Only then do the key and the switch speak of motion.
- */
-const anyMoving = computed(
-  () =>
-    [...cardById.value.keys()].some((id) => moving.value.has(id)) ||
-    [...frameById.value.values()].some((frame) => workingIn(frame) > 0),
-)
-/**
- * The sessions' signs the drawn cards show: the key names each of them, and none while the
- * cards are zoomed out past reading, where they draw no sign.
- */
-const liveSigns = computed(() =>
-  overview.value ? [] : signsOf([...cardById.value.keys()].map((id) => live.value[id])),
-)
 const liveOf = (node: PlacedNode) => live.value[node.work_item_id] ?? null
 
-/** A card standing in a drawn frame: the frame names its goal, so the card does not. */
+/**
+ * A card standing in a drawn frame: the frame names its goal, so the card does not —
+ * except a chain's found work, whose goal stands outside the chain and no frame names.
+ */
 const isFramed = (node: PlacedNode) => frameById.value.has(node.frameId)
 
 const { inChain, isChainRoot, isRecessed, legend, nodeChainGroup, parentReference, referenceById } =
   useGraphNodeMarks({
     scopeRootId: () => props.scopeRootId,
+    drawable: () => projected.value?.drawable.cards ?? null,
     focusSet,
     items: () => props.items,
     members: () => props.chain?.members,
@@ -222,13 +195,21 @@ const { inChain, isChainRoot, isRecessed, legend, nodeChainGroup, parentReferenc
 
 /** The goal chip, on a card no frame round it names. */
 function chipFor(node: PlacedNode): string | undefined {
-  return isFramed(node) ? undefined : parentReference(node)
+  return isFramed(node) && node.frameId !== FOUND_FRAME ? undefined : parentReference(node)
 }
+
+/**
+ * The chain's root while the field is narrowed to a chain. Its frame is the field's outer
+ * frame, and its header carries the root mark, as its card did.
+ */
+const chainRootId = computed(() => (inChain.value ? props.scopeRootId : null))
+const isRootFrame = (frame: PlacedFrame) => frame.id === chainRootId.value
 
 // Vue Flow owns the camera and all viewport math. The store is keyed so the
 // controls in the strip below and this field share one camera instance.
 const {
   anchorId,
+  arrivalId,
   cometStrokeScale,
   far,
   fitted,
@@ -242,7 +223,7 @@ const {
   branch: () => branchFrame.value,
   flowId: GRAPH_FLOW_ID,
   placed,
-  rootId: () => (inChain.value ? props.scopeRootId : null),
+  rootId: () => chainRootId.value,
   selectedId: () => props.selectedId ?? null,
   scopes: [
     () => props.space,
@@ -265,14 +246,17 @@ const switchCounts = computed(() => {
   const open = props.items.filter((item) => item.open).length
   return { open, done: props.items.length - open }
 })
-const hasEdges = computed(() => Boolean(placed.value?.edges.length))
+const { anyMoving, hasEdges, keepEdges, keptSigns, moving, signs, workingIn } = useGraphKey({
+  drawn: drawnField,
+  edges: () => props.edges,
+  live,
+  overview: () => overview.value,
+  projected,
+})
 /** Whether the field has a key to draw: the bar offers it on a narrow workspace. */
 const keyed = computed(
   () =>
-    legend.value.groups.length > 0 ||
-    hasEdges.value ||
-    anyMoving.value ||
-    liveSigns.value.length > 0,
+    legend.value.groups.length > 0 || hasEdges.value || anyMoving.value || signs.value.length > 0,
 )
 
 const chainChip = computed(() =>
@@ -294,6 +278,7 @@ const {
   onKeydown,
 } = useGraphKeyboard({
   anchorId,
+  arrivalId,
   canvas,
   fitted,
   focusRequest: () => props.focusRequest,
@@ -355,11 +340,14 @@ function toggleFrame(frameId: string) {
       <template #legend>
         <GraphLegend
           :groups="legend.groups"
+          :kept="legend.kept"
           :names="legend.names"
           :has-edges="hasEdges"
           :keep-done="keepDone"
+          :keep-edges="keepEdges"
+          :kept-signs="keptSigns"
           :moving="anyMoving"
-          :signs="liveSigns"
+          :signs="signs"
           :unread="unread"
         />
       </template>
@@ -391,13 +379,16 @@ function toggleFrame(frameId: string) {
         />
         <GraphFieldCorner
           :groups="legend.groups"
+          :kept="legend.kept"
           :names="legend.names"
           :has-edges="hasEdges"
           :keep-done="keepDone"
+          :keep-edges="keepEdges"
+          :kept-signs="keptSigns"
           :ready-count="ready.length"
           :motion="motion"
           :moving="anyMoving"
-          :signs="liveSigns"
+          :signs="signs"
           :unread="unread"
           @toggle-motion="toggleMotion"
         />
@@ -427,6 +418,8 @@ function toggleFrame(frameId: string) {
             :frame="frame"
             :far="far"
             :overview="overview"
+            :root="isRootFrame(frame)"
+            :marked="isBranchFrame(frame)"
             :tab-stop="frameStop(frame)"
             :working="workingIn(frame)"
             :still="still"
@@ -461,6 +454,7 @@ function toggleFrame(frameId: string) {
       <GraphFrameHeads
         v-if="projected"
         :projection="projected"
+        :root-id="chainRootId"
         @measured="measure"
       />
     </div>

@@ -33,6 +33,7 @@ import type { ViewportTransform } from '@vue-flow/core'
 import {
   graphAnchor,
   graphCameraMove,
+  graphChosen,
   graphWholeView,
   headerOnScreen,
 } from '@/widgets/work-item-graph/utils/graphCamera.ts'
@@ -44,7 +45,7 @@ import type {
 } from '@/widgets/work-item-graph/utils/graphCamera.ts'
 import { FRAME_GAP, GRAPH_ZOOM_MIN } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import type { GraphLayout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
-import { nodeCentre } from '@/widgets/work-item-graph/utils/graphWalk.ts'
+import { revealView } from '@/widgets/work-item-graph/utils/graphReveal.ts'
 import type { Box } from '@/widgets/work-item-graph/utils/graphWalk.ts'
 import { fieldZoomFloor } from '@/widgets/work-item-graph/utils/graphZoomFloor.ts'
 
@@ -140,27 +141,10 @@ export function useGraphCamera(input: CameraInput) {
     })
   }
 
-  /**
-   * Bring one target into sight when the keyboard reaches it, at the zoom the
-   * operator chose: a target already in view, `margin` clear of the flow's
-   * edges, leaves the camera where it is; any other is centred.
-   */
+  /** Bring one target into sight when the keyboard reaches it (`revealView`). */
   function reveal(node: Box, margin = FRAME_GAP) {
-    const { x, y, zoom } = viewport.value
-    const { width, height } = dimensions.value
-    const left = node.x * zoom + x
-    const top = node.y * zoom + y
-    const inView =
-      left >= margin &&
-      top >= margin &&
-      left + node.width * zoom <= width - margin &&
-      top + node.height * zoom <= height - margin
-    if (inView) return
-    const centre = nodeCentre(node)
-    void setViewport(
-      { x: width / 2 - centre.x * zoom, y: height / 2 - centre.y * zoom, zoom },
-      { duration: 0 },
-    )
+    const target = revealView(node, viewport.value, dimensions.value, margin)
+    if (target) void setViewport(target, { duration: 0 })
   }
 
   /** A different scope: the camera it held for the last one means nothing here. */
@@ -209,6 +193,12 @@ export function useGraphCamera(input: CameraInput) {
     return whole?.zoom ?? last ?? GRAPH_ZOOM_MIN
   })
 
+  const anchorOptions = () => ({
+    branch: input.branch(),
+    selectedId: input.selectedId(),
+    rootId: input.rootId(),
+  })
+
   /** «Fit whole graph»: set outright, so the limit, which is only as new as the last draw, cannot hold it. */
   function fitWhole() {
     const placed = input.placed.value
@@ -234,15 +224,19 @@ export function useGraphCamera(input: CameraInput) {
     anchorId: computed(() => {
       const placed = input.placed.value
       if (!placed) return null
-      const options = {
-        branch: input.branch(),
-        selectedId: input.selectedId(),
-        rootId: input.rootId(),
-      }
       const sight = fitted.value
         ? { camera: viewport.value, dimensions: dimensions.value, overview: overview.value }
         : null
-      return graphAnchor(placed, options, sight)?.id ?? null
+      return graphAnchor(placed, anchorOptions(), sight)?.id ?? null
+    }),
+    /**
+     * The target focus takes when the field arrives where the host asked: what was asked
+     * for (`graphChosen`), else the target the keyboard enters on.
+     */
+    arrivalId: computed(() => {
+      const placed = input.placed.value
+      const chosen = placed ? graphChosen(placed, anchorOptions(), overview.value) : undefined
+      return chosen?.id ?? null
     }),
     far,
     fitWhole,

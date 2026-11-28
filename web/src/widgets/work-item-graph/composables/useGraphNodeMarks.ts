@@ -31,6 +31,8 @@ import { useStateName } from '@/shared/lib/useStateName.ts'
 interface MarkInput {
   focusSet: Ref<ReturnType<typeof neighborhood> | null>
   placed: Ref<GraphLayout | null>
+  /** The cards the field would draw were every frame open; null for a flat field. */
+  drawable: () => readonly string[] | null
   items: () => readonly WorkItemBrief[]
   /** The chain's members by id, closed ones included and the root not among them. */
   members: () => readonly string[] | undefined
@@ -86,11 +88,36 @@ export function useGraphNodeMarks(input: MarkInput) {
     return inChain.value ? chainGroup(node) : undefined
   }
 
-  /** The chain groups the field draws, which is what its legend names, in the card's map's order. */
+  /**
+   * The chain groups the field draws, which is what its legend names, in the card's map's
+   * order: the cards' marks, and the parts a frame's edge draws of what is done, under way
+   * or stopped, which a folded frame draws with no card to mark them. A frame's «ahead» is
+   * ready, untriaged and deferred work together, three of the cards' groups, so no one word
+   * of the chain's key names it and only the cards drawn do.
+   */
   const chainLegend = computed(() => {
     if (!inChain.value || !input.placed.value) return []
-    const present = new Set(input.placed.value.nodes.map((node) => chainGroup(node)))
+    const present = new Set<ChainGroup>(input.placed.value.nodes.map((node) => chainGroup(node)))
+    for (const frame of input.placed.value.frames)
+      for (const [part, group] of FRAME_PARTS)
+        if (part !== 'ahead' && frame.progress[part]) present.add(group)
     return CHAIN_PROGRESS_ORDER.filter((group) => present.has(group))
+  })
+
+  /**
+   * The groups whose place the key keeps beside those drawn: the groups of the cards a fold
+   * hides, so folding or opening a frame moves no word of the key and no row of its strip.
+   */
+  const keptGroups = computed(() => {
+    const drawable = input.drawable()
+    if (!inChain.value || !drawable) return chainLegend.value
+    const items = new Map(input.items().map((item) => [item.work_item_id, item]))
+    const kept = new Set<ChainGroup>(chainLegend.value)
+    for (const id of drawable) {
+      const item = items.get(id)
+      if (item) kept.add(chainGroup(item))
+    }
+    return CHAIN_PROGRESS_ORDER.filter((group) => kept.has(group))
   })
 
   /**
@@ -117,12 +144,18 @@ export function useGraphNodeMarks(input: MarkInput) {
    * deferred work together, as an edge draws them.
    */
   const legend = computed(() => {
-    if (inChain.value) return { groups: chainLegend.value, names: chainLegendNames.value }
+    if (inChain.value)
+      return { groups: chainLegend.value, kept: keptGroups.value, names: chainLegendNames.value }
     const frames = input.placed.value?.frames ?? []
     const groups = FRAME_PARTS.filter(([part]) => frames.some((frame) => frame.progress[part])).map(
       ([, group]) => group,
     )
-    return { groups, names: { ...chainLegendNames.value, ready: t('graph.legendAhead') } }
+    // A folded frame draws the parts of its edge as an open one does: a fold changes none.
+    return {
+      groups,
+      kept: groups,
+      names: { ...chainLegendNames.value, ready: t('graph.legendAhead') },
+    }
   })
 
   return {

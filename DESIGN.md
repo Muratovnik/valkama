@@ -2461,8 +2461,10 @@ the section says what stands where and no sentence names the groups again. Chain
 views name a single state as the board's
 column does and a group of states by the group's own word, never by a
 workflow key. The graph's key stands in the field's own strip above the flow,
-not in the bar, and keeps the place of a state a switch can add, so no switch
-moves the bar or the field; the camera controls stand in the strip below. Neither
+not in the bar, and keeps the place of a state a switch can add, and unseen the place
+of what a fold hides — the groups, the sessions' signs and the lines the field would
+draw were every frame open — so no switch and no fold moves the bar or the field; the
+camera controls stand in the strip below. Neither
 lies on the flow, so no framing and no pan puts a node under either, and the field is as
 tall as the room the two strips leave it. It keeps a floor — one row of cards at the size
 the field opens to be read, with the air a framing keeps round it — and its row grows to
@@ -2519,7 +2521,12 @@ whose map has a branch chosen opens the
 chain framed on that branch — the whole of its work where that reads, else its
 beginning at reading size — with its members edged in the selection accent, a
 chip naming the branch that lets it go, and the branch in the address; focus
-goes to the graph, never to the page. The field is one Tab stop: the arrows
+goes to the graph, never to the page, and to what was asked for: the branch's first
+card, or the header of the frame folded over it, else the card's own item or the
+header of its frame, not what the camera stood on before it moved there. Focus the
+card gives back to the field, to the header that opened it, goes there too, and a
+branch that reaches the field only after focus has takes focus with it, unless the
+operator has moved focus since. The field is one Tab stop: the arrows
 walk to the nearest node their way, Home and End to the first and last as the
 field is read, and the camera follows. The node the keyboard stands on lights its
 lineage and the rest of the field recedes; a pointer over a node lights nothing and
@@ -2585,9 +2592,33 @@ finds, so the ground of an open frame with a goal opens that goal too and the po
 says so. It is the pointer's shortcut: the keyboard has the header's button and no new
 stop, a card on the ground and a frame inside a frame answer for themselves, and a drag
 from the ground moves the field. A card in
-a frame does not name its goal, since the frame does. A chain has no frames: it
-keeps its flat drawing, its root and its goals as nodes, because its progress is
-the card's map and not the field's.
+a frame does not name its goal, since the frame does.
+
+A chain grown from a goal or a stage stands in frames too, drawn from its own items
+alone: the root is the outermost frame, drawn whatever its work, and it and the stages
+inside it are open at first however much they hold, since a chain folded into headers
+shows nothing of what it grew into; the band below folds by the rule below. A member
+whose parent is not of the chain — work found on the way, filed under another goal or
+under none, and a goal found on the way with all it holds — stands in a band of its own
+after the root, «Найдено в цепочке» (`found`), and not under «Без цели», since some of
+it has a goal; its cards keep the chip that names that goal. The root's header carries the mark its card had,
+«корень», and its accessible name says «корень цепочки». A chain reads no other space,
+so its key never says a link was not read. Beside the groups its cards are marked by,
+a framed chain's key names the parts the frames' edges draw of what is finished, under
+review, under way or blocked; a frame's «ahead» is ready, untriaged and deferred work
+together, which no one word of the chain's key names, so only the cards drawn name
+those. A branch the card chose is edged in the selection accent here too, its cards
+and the frame of its goal, that frame's edge standing just outside it, where neither
+its header's ground nor its progress line covers it. The camera frames that frame from
+its header, whole where it reads, as a branch's work is framed; the keyboard enters on
+the branch's first card, or by the frame's header where the frame is folded over the
+branch's work. Work of
+the branch filed under no goal of the chain stands in the band of found work, which
+stands for the branch so only while none of its cards is drawn, since the band holds
+other work as well. A chain grown from a task holds no work to frame and keeps its flat drawing,
+its root a card among the rest. Before, a chain had no frames at all, and a goal's
+chain drew the goal, its stages and its tasks as cards side by side, with nothing
+to say which held which.
 
 A frame starts folded by its structure alone — how much open work it holds — and
 never by who is working on it, or every agent's turn would lay the field out again.
@@ -2598,11 +2629,15 @@ a few finished items draws them. Every frame between those starts open, so the
 links of its work are seen at once. What the operator chooses for a frame, folded or
 open, outranks that default and is kept per space in this browser (`localStorage`,
 `valkama-graph-frames`), apart from the board's folded lanes, which start from other
-defaults; outside a filter a choice that matches the frame's default is forgotten,
+defaults, and apart from the choices made in a chain (`valkama-graph-chain-frames`),
+so a goal folded on the whole space still opens as a chain's root; outside a filter a choice that matches the frame's default is forgotten,
 so a frame left alone follows its work again. Folding or opening a frame lays the
 field out again, and the camera follows across, at the operator's zoom, so the
 frame's header stays where it stood on the screen and what was pressed does not
-move from under the hand (`toggled`). The arrows reach a header's two buttons as
+move from under the hand (`toggled`) — save along a side the drawing fits the field
+at that zoom, where the camera moves only as far as brings the whole drawing into the
+field: held where it stood, the header of a fold that shrank the drawing would leave a
+frame beside it cut at the field's edge, its header above the field. The arrows reach a header's two buttons as
 they reach cards, the fold on its left (`frame:<id>:fold`) and the goal across the
 rest (`frame:<id>`); the work under no goal has only the first. Right from the fold
 is the goal's button beside it and Left from that button is the fold, however wide
@@ -2636,7 +2671,13 @@ placed, Tab from outside lands on the open card's item or the chosen branch's wo
 when it is in sight, else on the first header button or card in sight as the field
 is read, and only with nothing in sight on that card or the field's first target,
 which the press then brings into view; the camera does not move for a target
-already in sight.
+already in sight. Each side is its own: along a side the target is in sight the
+camera stays, and along one it is not the target is centred, except along a side it
+is longer than the field, a wide header on a phone, where its start stands at the
+field's edge, as it is read. Such a target is in sight along that side while its start
+stands in the field's first half, so the next press, or focus coming back to it, leaves
+it there. A goal's button is brought into sight from its header's start, the fold
+beside it with it, since the button is drawn across the whole header.
 
 A header says how its work stands in words, a number beside each word and never
 rounded to «99+»: «8 из 21 выполнено», then how many are in review, in progress and

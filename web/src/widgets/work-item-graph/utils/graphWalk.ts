@@ -117,6 +117,17 @@ export function walkTargets(
   return [...headers, ...cards]
 }
 
+/**
+ * What the camera brings into sight for a target. A goal's button is drawn across its
+ * whole header, the fold standing on its start, so it is seen from the header's start:
+ * its walk target begins after the fold only so the two are told apart.
+ */
+export function sightBox(target: WalkTarget): WalkTarget {
+  return target.id === frameTarget(target.frameId)
+    ? { ...target, x: target.x - FOLD_TARGET_WIDTH, width: target.width + FOLD_TARGET_WIDTH }
+    : target
+}
+
 /** The field as it is read: top to bottom, then left to right. */
 export function readingOrder(left: Box, right: Box): number {
   return left.y - right.y || left.x - right.x

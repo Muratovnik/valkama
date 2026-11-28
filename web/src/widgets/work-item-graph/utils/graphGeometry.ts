@@ -8,6 +8,13 @@ export type { LiveWork } from '@/shared/api/liveWorkModel.ts'
 /** The frame of the work filed under no goal. */
 export const NO_PARENT_FRAME = 'none'
 
+/**
+ * The frame of a chain's work whose parent the chain does not hold: work found
+ * on the way, filed under another goal or under none. It is not «no goal», which
+ * would say the wrong thing about work that has one elsewhere.
+ */
+export const FOUND_FRAME = 'found'
+
 /** The space another space's work stands in: its key and its name. */
 export type FrameSpace = NonNullable<WorkItemBrief['other_space']>
 
@@ -19,7 +26,10 @@ export const spaceFrameId = (key: string) => `space:${key}`
  * space: every reader measures the box it was given rather than a card size.
  */
 export interface PlacedNode extends WorkItemBrief {
-  /** The frame that holds it: a goal's id, `NO_PARENT_FRAME` or another space's (`spaceFrameId`). */
+  /**
+   * The frame that holds it: a goal's id, `NO_PARENT_FRAME`, a chain's `FOUND_FRAME` or
+   * another space's (`spaceFrameId`).
+   */
   frameId: string
   height: number
   width: number
@@ -54,7 +64,7 @@ export interface PlacedFrame {
   /** How tall its header is: the room the layout left for it, which is what is drawn. */
   header: number
   height: number
-  /** A goal's or container's `work_item_id`, `NO_PARENT_FRAME`, or another space's frame. */
+  /** A goal's or container's `work_item_id`, `NO_PARENT_FRAME`, `FOUND_FRAME`, or another space's frame. */
   id: string
   /** Open and closed work under it, nested frames' included, for live counts. */
   members: readonly string[]

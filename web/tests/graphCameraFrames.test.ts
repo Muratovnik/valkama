@@ -13,12 +13,18 @@ import {
   graphAnchor,
   graphCameraMove,
   graphCameraView,
+  graphChosen,
   graphWholeView,
   headerOnScreen,
 } from '@/widgets/work-item-graph/utils/graphCamera.ts'
 import { layout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
-import type { GraphLayoutEngine } from '@/widgets/work-item-graph/utils/graphLayout.ts'
-import { foldTarget, readingOrder, walkTargets } from '@/widgets/work-item-graph/utils/graphWalk.ts'
+import type { GraphLayout, GraphLayoutEngine } from '@/widgets/work-item-graph/utils/graphLayout.ts'
+import {
+  foldTarget,
+  frameTarget,
+  readingOrder,
+  walkTargets,
+} from '@/widgets/work-item-graph/utils/graphWalk.ts'
 
 import { broadSpace } from './fixtures/graphSpaces.ts'
 
@@ -56,6 +62,23 @@ test('a field of frames too large to read opens on its first header at the top-l
   assert.ok(Math.abs(first.y * camera.zoom + camera.y - 36) < 0.5)
   // In sight at the top-left, it is where the keyboard enters too.
   assert.equal(graphAnchor(placed, {}, { camera, dimensions })?.id, first.id)
+})
+
+test('what was asked for is its frame’s header where the field draws it as a frame, a card where a card', async () => {
+  const placed = await space()
+  const goal = goals[0].work_item_id
+  assert.ok(placed.frames.some((frame) => frame.id === goal))
+  assert.ok(!placed.nodes.some((node) => node.work_item_id === goal))
+  // The open card's item, or a chain's root, drawn as a frame: its goal's button.
+  assert.equal(graphChosen(placed, { selectedId: goal })?.id, frameTarget(goal))
+  assert.equal(graphChosen(placed, { rootId: goal })?.id, frameTarget(goal))
+  // A card asked for comes before the root's frame; nothing asked for is nothing.
+  const [card] = placed.nodes
+  assert.equal(
+    graphChosen(placed, { selectedId: card.work_item_id, rootId: goal })?.id,
+    card.work_item_id,
+  )
+  assert.equal(graphChosen(placed), undefined)
 })
 
 test('the keyboard enters on a target wholly in sight before one the field’s edge cuts', () => {
@@ -181,7 +204,19 @@ for (const [what, fold] of [
   })
 }
 
-test('a fold that leaves the camera past the whole view comes up to it with its header held', async () => {
+/** The drawing's edges on the screen under a camera: its frames and cards, as they are drawn. */
+function drawnOnScreen(graph: GraphLayout, camera: { x: number; y: number; zoom: number }) {
+  const boxes = [...graph.frames, ...graph.nodes]
+  const at = (value: number, offset: number) => value * camera.zoom + offset
+  return {
+    left: at(Math.min(...boxes.map((box) => box.x)), camera.x),
+    top: at(Math.min(...boxes.map((box) => box.y)), camera.y),
+    right: at(Math.max(...boxes.map((box) => box.x + box.width)), camera.x),
+    bottom: at(Math.max(...boxes.map((box) => box.y + box.height)), camera.y),
+  }
+}
+
+test('a fold that leaves the camera past the whole view comes up to it, the drawing whole in the field', async () => {
   const frameId = goals[1].work_item_id
   const before = await space()
   const after = await space({ [frameId]: true })
@@ -190,6 +225,35 @@ test('a fold that leaves the camera past the whole view comes up to it with its 
   const camera = { x: 300, y: 200, zoom: whole.zoom / 2 }
   const screen = headerOnScreen(before, frameId, camera)
   assert.ok(screen)
+  const moved = graphCameraMove('toggled', after, { camera, dimensions, held: { frameId, screen } })
+  assert.ok(moved)
+  assert.equal(moved.zoom, whole.zoom)
+  // Held where it stood, the header would leave the drawing cut at the field's edge.
+  const held = headerOnScreen(after, frameId, { ...camera, zoom: whole.zoom })
+  assert.ok(held)
+  const cut = drawnOnScreen(after, {
+    x: camera.x + screen.x - held.x,
+    y: camera.y + screen.y - held.y,
+    zoom: whole.zoom,
+  })
+  assert.ok(
+    cut.left < 0 || cut.top < 0 || cut.right > dimensions.width || cut.bottom > dimensions.height,
+  )
+  // The drawing fits at that zoom, so it stands whole in the field.
+  const shown = drawnOnScreen(after, moved)
+  assert.ok(shown.left >= 0 && shown.right <= dimensions.width, JSON.stringify(shown))
+  assert.ok(shown.top >= 0 && shown.bottom <= dimensions.height, JSON.stringify(shown))
+})
+
+test('a fold past the whole view keeps its header where it stood when the drawing stands whole there', async () => {
+  const frameId = goals[1].work_item_id
+  const after = await space({ [frameId]: true })
+  const whole = graphWholeView(after, dimensions)
+  assert.ok(whole)
+  // The header was pressed where the whole view draws it: held there, nothing is cut.
+  const screen = headerOnScreen(after, frameId, whole)
+  assert.ok(screen)
+  const camera = { x: 300, y: 200, zoom: whole.zoom / 2 }
   const moved = graphCameraMove('toggled', after, { camera, dimensions, held: { frameId, screen } })
   assert.ok(moved)
   assert.equal(moved.zoom, whole.zoom)
@@ -254,4 +318,54 @@ test('zoomed out to the overview, the keyboard enters on a target the overview d
     { camera: { ...camera, zoom: 0.75 }, dimensions, overview: false },
   )
   assert.match(reading?.id ?? '', /:fold$/u)
+})
+
+test('a branch whose frame is folded over its work is framed and entered on that frame’s header', async () => {
+  // The largest goal starts folded: none of its cards is drawn.
+  const goalId = goals[0].work_item_id
+  const placed = await space()
+  const folded = placed.frames.find((frame) => frame.id === goalId)
+  assert.ok(folded?.folded)
+  assert.equal(placed.nodes.filter((node) => node.frameId === goalId).length, 0)
+  const branch = { headId: goalId, ids: new Set<string>(), frameId: goalId }
+  assert.equal(graphAnchor(placed, { branch })?.id, frameTarget(goalId))
+  const camera = graphCameraView(placed, dimensions, { branch })
+  assert.ok(camera)
+  const screen = headerOnScreen(placed, goalId, camera)
+  assert.ok(screen)
+  assert.ok(screen.x >= 0 && screen.x < dimensions.width, JSON.stringify(screen))
+  assert.ok(screen.y >= 0 && screen.y < dimensions.height, JSON.stringify(screen))
+  // Without the frame the branch has nothing on the field to enter on.
+  const bare = { headId: goalId, ids: new Set<string>() }
+  assert.notEqual(graphAnchor(placed, { branch: bare })?.id, frameTarget(goalId))
+})
+
+test('a branch with a card drawn is entered on its card, and framed from its frame’s header', async () => {
+  // The goal the lone link stands in starts open, its cards drawn.
+  const goalId = goals[1].work_item_id
+  const placed = await space()
+  const [card] = placed.nodes.filter((node) => node.frameId === goalId).sort(readingOrder)
+  assert.ok(card)
+  const branch = { headId: goalId, ids: new Set([card.work_item_id]), frameId: goalId }
+  assert.equal(graphAnchor(placed, { branch })?.id, card.work_item_id)
+  const camera = graphCameraView(placed, dimensions, { branch })
+  assert.ok(camera)
+  // The frame begins at the field's start, its header at the top-left and as wide as it reads.
+  const frame = placed.frames.find((each) => each.id === goalId)
+  assert.ok(frame)
+  const shown = {
+    left: frame.x * camera.zoom + camera.x,
+    top: frame.y * camera.zoom + camera.y,
+    right: (frame.x + frame.width) * camera.zoom + camera.x,
+  }
+  assert.ok(shown.left >= 0 && shown.left < 64, JSON.stringify(shown))
+  assert.ok(shown.top >= 0 && shown.top < 64, JSON.stringify(shown))
+  assert.ok(shown.right <= dimensions.width, JSON.stringify(shown))
+  assert.ok(camera.zoom >= 0.75, String(camera.zoom))
+  // Control: a branch of the same card with no frame of its own is framed on the card.
+  const loose = graphCameraView(placed, dimensions, {
+    branch: { headId: null, ids: new Set([card.work_item_id]) },
+  })
+  assert.ok(loose)
+  assert.notDeepEqual(loose, camera)
 })
