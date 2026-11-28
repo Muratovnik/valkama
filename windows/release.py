@@ -40,6 +40,13 @@ this checkout's code: the installed release reads the planning store at that
 store's own schema, while a checkout may be a build of another one, which would
 refuse the store rather than read it. Only the release runs it: the gates and the
 hosted jobs have no planning store.
+
+`coverage-margin` is a stage of the gates, run after `coverage report`: it reads
+the total from the coverage data the suite left and refuses when that total
+stands more than `COVERAGE_MARGIN` above `fail_under`, naming the floor to raise
+it to. `coverage report` fails a total under the floor; this fails a floor left
+behind. A release does not run it: it checks that the floor holds, not that it
+was raised.
 """
 
 from __future__ import annotations
@@ -49,6 +56,7 @@ import contextlib
 import hashlib
 import importlib.metadata
 import importlib.util
+import io
 import json
 import math
 import os
@@ -60,6 +68,7 @@ import subprocess
 import sys
 import sysconfig
 import tempfile
+import tomllib
 import urllib.request
 import zipfile
 from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
@@ -189,7 +198,8 @@ UNITTEST_PARALLEL = "unittest-parallel"
 #: stage wasted, and the answer takes seconds. It then installs the lockfiles'
 #: modules, a registry that cannot be reached costing seconds and not the whole
 #: suite, and compares prices next for the same reason. The two steps that read the
-#: commits, the subjects and the history audit, are the gates' alone.
+#: commits, the subjects and the history audit, are the gates' alone, and so is the
+#: coverage margin, which asks for a higher floor rather than refusing a release.
 STAGES = (
     Stage("scope", "python", "python windows/release.py scope", runners=frozenset({CHECK})),
     Stage("web-ci", "web", "npm ci", "web", runners=frozenset({CHECK})),
@@ -223,6 +233,12 @@ STAGES = (
     ),
     Stage("unittest", "python", "python tests/parallel.py --coverage", resource=UNITTEST_PARALLEL),
     Stage("coverage", "python", "python -m coverage report"),
+    Stage(
+        "coverage-margin",
+        "python",
+        "python windows/release.py coverage-margin",
+        runners=frozenset({GATES}),
+    ),
     Stage("web-test", "web", "npm test", "web"),
     Stage("web-build", "web", "npm run build", "web"),
     Stage("desktop-test", "desktop", "npm test", "desktop"),
@@ -989,6 +1005,62 @@ def check_prices(
     ]
 
 
+PYPROJECT = ROOT / "pyproject.toml"
+
+#: How many points the measured total may stand above `fail_under` before the
+#: margin stage asks for a higher floor. The floor is the whole number under the
+#: total, so a total within a point of it is a floor that is current; one further
+#: above is a floor left behind, under which tests worth that much coverage could
+#: be deleted and nothing would fail.
+COVERAGE_MARGIN = 1
+
+
+class CoverageMarginError(RuntimeError):
+    """The margin stage refuses, and the message says why."""
+
+
+def check_coverage_margin(total: float, fail_under: float) -> str:
+    """The line to print when `total` is within the margin of `fail_under`, or a refusal."""
+
+    if total > fail_under + COVERAGE_MARGIN:
+        raise CoverageMarginError(
+            f"coverage margin: the suite measures {total:.2f}%, more than {COVERAGE_MARGIN}"
+            f" point above fail_under = {fail_under:g} in pyproject.toml."
+            f" Raise fail_under to {math.floor(total)}."
+        )
+    return (
+        f"coverage margin: {total:.2f}% is within {COVERAGE_MARGIN} point of"
+        f" fail_under = {fail_under:g}"
+    )
+
+
+def measured_coverage(pyproject: Path) -> float:
+    """The total of the coverage data the suite left, as `coverage report` rounds it."""
+
+    # Imported here: build and smoke run on an interpreter with no development tool.
+    import coverage
+
+    measured = coverage.Coverage(config_file=str(pyproject))
+    try:
+        measured.load()
+        total = measured.report(file=io.StringIO())
+    except coverage.exceptions.NoDataError as error:
+        raise CoverageMarginError(
+            f"coverage margin: no coverage data to read ({error})."
+            " Run the suite under coverage first: python tests/parallel.py --coverage"
+        ) from None
+    except coverage.exceptions.CoverageException as error:
+        raise CoverageMarginError(f"coverage margin: coverage could not report: {error}") from None
+    return round(total, measured.config.precision)
+
+
+def coverage_margin(pyproject: Path = PYPROJECT) -> str:
+    """The margin stage: the measured total against `fail_under` in `pyproject`."""
+
+    report = tomllib.loads(pyproject.read_text(encoding="utf-8"))["tool"]["coverage"]["report"]
+    return check_coverage_margin(measured_coverage(pyproject), float(report["fail_under"]))
+
+
 def source_files() -> list[Path]:
     files = []
     for parent, directories, names in os.walk(ROOT):
@@ -1263,7 +1335,9 @@ def smoke(assets: Path, expected: str, work_dir: Path, commit: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("check", "scope", "prices", "build", "smoke"))
+    parser.add_argument(
+        "action", choices=("check", "scope", "prices", "coverage-margin", "build", "smoke")
+    )
     parser.add_argument("--assets", type=Path)
     parser.add_argument("--version")
     parser.add_argument("--work-dir", type=Path)
@@ -1286,6 +1360,12 @@ def main() -> None:
         except PriceCheckError as error:
             sys.exit(str(error))
         sys.stdout.write("".join(f"{line}\n" for line in lines))
+    elif args.action == "coverage-margin":
+        try:
+            line = coverage_margin()
+        except CoverageMarginError as error:
+            sys.exit(str(error))
+        sys.stdout.write(f"{line}\n")
     elif args.assets is None or args.version is None or args.commit is None:
         parser.error("build and smoke require --assets, --version and --commit")
     elif args.action == "build":

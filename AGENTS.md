@@ -107,6 +107,7 @@ lint-imports --cache-dir .cache/import-linter
 semgrep scan --config p/python --config p/security-audit --metrics off --error server valkama.py
 python tests/parallel.py --coverage
 python -m coverage report
+python windows/release.py coverage-margin
 cd web
 npm test
 npm run build

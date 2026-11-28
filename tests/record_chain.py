@@ -24,7 +24,9 @@ otherwise, naming the step and the path. What a step reads, conservatively:
   `coverage run`) reads, test module by test module, what `tests/affected.py`
   reaches; a module a change reaches counts again from a run of it that the
   change does not reach, so a whole suite is carried by targeted reruns;
-- `coverage report` reads every Python file and whatever reaches a test module;
+- `coverage report`, and `windows/release.py coverage-margin`, which compares
+  the same data with the floor, read every Python file and whatever reaches a
+  test module;
   ruff, mypy, vulture and lint-imports the Python files; semgrep `server/` and
   `valkama.py`;
 - an npm, npx or node command run in `web/` reads everything under `web/` but
@@ -215,7 +217,7 @@ def place(entry: Mapping[str, object], worktree: str, logs: Path) -> Placement:
         units = _parallel(arguments)
     elif tool == "affected.py" and "--list" not in arguments:
         units = _selected(logs / str(entry.get("log", "")))
-    elif tool == "coverage" and arguments[:1] == ["report"]:
+    elif (tool, *arguments[:1]) in (("coverage", "report"), ("release.py", "coverage-margin")):
         return Placement(COVERAGE)
     elif tool == "coverage" and arguments[:1] == ["run"] and "-m" in arguments:
         after = arguments[arguments.index("-m") + 1 :]

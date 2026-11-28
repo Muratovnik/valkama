@@ -42,6 +42,8 @@ from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from unittest import mock
 
+import coverage
+
 from tests import heavy_gate, heavy_gate_double
 from tests.worktree import link_directory
 
@@ -1000,6 +1002,86 @@ class ReleasePriceTests(unittest.TestCase):
     def test_the_servers_own_table_loads_from_its_file(self) -> None:
         table = release.price_table()
         self.assertEqual("anthropic", table.listings()["claude-fable-5-2"].vendor)
+
+
+class ReleaseCoverageMarginTests(unittest.TestCase):
+    """The margin stage fails a coverage floor left more than a point under the total.
+
+    The totals are made up: the figures directly, and a coverage data file written
+    here for a four-line module, three lines of it run, which is 75%.
+    """
+
+    def setUp(self) -> None:
+        scratch = tempfile.TemporaryDirectory()
+        self.addCleanup(scratch.cleanup)
+        self.root = Path(scratch.name)
+        # The suite's own runner may name its data file in the environment, which
+        # coverage reads before any configuration.
+        environment = mock.patch.dict(os.environ)
+        environment.start()
+        self.addCleanup(environment.stop)
+        os.environ.pop("COVERAGE_FILE", None)
+
+    def pyproject(self, fail_under: int, *, data: bool) -> Path:
+        data_file = self.root / "data"
+        if data:
+            module = self.root / "measured.py"
+            module.write_text("a = 1\nb = 2\nc = 3\nd = 4\n", encoding="utf-8")
+            recorded = coverage.CoverageData(basename=str(data_file))
+            recorded.add_lines({str(module): [1, 2, 3]})
+            recorded.write()
+            recorded.close()
+        path = self.root / "pyproject.toml"
+        path.write_text(
+            f'[tool.coverage.run]\ndata_file = "{data_file.as_posix()}"\n'
+            f"[tool.coverage.report]\nfail_under = {fail_under}\nprecision = 2\n",
+            encoding="utf-8",
+        )
+        return path
+
+    def test_a_total_more_than_a_point_above_the_floor_names_the_floor_to_raise_to(self) -> None:
+        for total, floor in ((92.01, 92), (94.7, 94)):
+            with self.subTest(total=total):
+                with self.assertRaises(release.CoverageMarginError) as refused:
+                    release.check_coverage_margin(total, 91)
+                self.assertIn(f"{total:.2f}%", str(refused.exception))
+                self.assertIn(f"Raise fail_under to {floor}.", str(refused.exception))
+
+    def test_a_total_at_or_within_a_point_of_the_floor_passes(self) -> None:
+        # Under the floor is `coverage report`'s refusal, not this stage's.
+        for total in (92.0, 91.65, 91.0, 90.5):
+            with self.subTest(total=total):
+                line = release.check_coverage_margin(total, 91)
+                self.assertIn(f"{total:.2f}%", line)
+
+    def test_the_stage_reads_the_total_from_the_data_the_suite_left(self) -> None:
+        with self.assertRaises(release.CoverageMarginError) as refused:
+            release.coverage_margin(self.pyproject(70, data=True))
+        self.assertIn("75.00%", str(refused.exception))
+        self.assertIn("Raise fail_under to 75.", str(refused.exception))
+
+        self.assertIn("75.00%", release.coverage_margin(self.pyproject(74, data=True)))
+
+    def test_no_coverage_data_is_refused_in_words_through_the_command(self) -> None:
+        pyproject = self.pyproject(91, data=False)
+        stage = release.coverage_margin
+        with (
+            mock.patch.object(release, "coverage_margin", lambda: stage(pyproject)),
+            mock.patch.object(release.sys, "argv", ["release.py", "coverage-margin"]),
+            self.assertRaises(SystemExit) as stopped,
+        ):
+            release.main()
+        message = stopped.exception.code
+        assert isinstance(message, str)
+        self.assertIn("no coverage data to read", message)
+        self.assertIn("python tests/parallel.py --coverage", message)
+
+    def test_the_gates_run_the_stage_after_the_report_and_a_release_does_not(self) -> None:
+        gates = [stage.name for stage in release.runner_stages(release.GATES)]
+        check = [stage.name for stage in release.runner_stages(release.CHECK)]
+        self.assertEqual(gates.index("coverage") + 1, gates.index("coverage-margin"))
+        self.assertIn("coverage", check)
+        self.assertNotIn("coverage-margin", check)
 
 
 #: A made-up commit id of the full length Git writes.

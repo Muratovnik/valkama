@@ -282,11 +282,17 @@ junction behind, and the directory that holds it.
 
 `lint-imports` is the one-way import rule `AGENTS.md` states in prose, stated
 as configuration so a tool refuses a breach instead of a reviewer noticing one.
-mypy checks the modules that are already clean and names the rest in
-`[[tool.mypy.overrides]]` with what each owes; that list is a ratchet to empty
-module by module, never to grow, and a module absent from it — including every
-new one — is checked. Both read the repository root as the import root, which
-is what it is: `server` sits directly in it.
+mypy checks `server`, `valkama.py` and everything under `tests`, the test
+modules included. The modules that had errors when the test modules joined are
+named in one `[[tool.mypy.overrides]]` with `ignore_errors`; that list is a
+ratchet to empty module by module, never to grow, and a module absent from it —
+including every new one — is checked. `tests/test_mypy_backlog.py` holds it
+there: it fails a module added beyond the baseline it freezes, a listed module
+that no longer exists, and one that mypy, run without the exemption, finds no
+error in, so a module that became clean comes off the list (and the baseline) in
+the commit that cleaned it. That run keeps its own cache in `.cache/mypy-backlog`:
+about 12 s cold, under a second warm. Both tools read the repository root as the
+import root, which is what it is: `server` sits directly in it.
 
 knip owns dead code on the web side: unused files, exports, types and
 dependencies all fail `npm test`. A symbol used only inside its own file must
@@ -297,7 +303,13 @@ keywords mechanically; the compiler then reports whatever was dead all along.
 The suite runs under coverage because a floor is the only thing that notices a
 test being deleted. `fail_under` in `pyproject.toml` is a ratchet: raise it when
 the measured figure rises, never lower it to make a run green. Deleting a test
-and lowering the floor to match is the one move it exists to prevent.
+and lowering the floor to match is the one move it exists to prevent. A floor
+left behind lets the same loss through unnoticed, so
+`python windows/release.py coverage-margin`, the step after `coverage report`,
+reads the total from the suite's data and fails when it stands more than
+`COVERAGE_MARGIN`, one point, above `fail_under`, naming the floor to raise it
+to: the whole number under the total. The gates and CI run it; the release check
+does not, since a release needs the floor to hold, not to have been raised.
 
 One trap worth knowing: coverage records line numbers and resolves them against
 the file as it is when the report runs. Reformat a measured file before

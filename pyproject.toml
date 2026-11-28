@@ -371,22 +371,19 @@ forbidden_modules = [
   "server.planning.service",
 ]
 
+# mypy checks `server`, `valkama.py` and everything under `tests`, the test
+# modules included. The modules that had errors when the test modules joined are
+# named in the one `[[tool.mypy.overrides]]` below, whose errors mypy ignores: a
+# ratchet to empty module by module, never to grow. A module absent from it,
+# every new one included, is checked. `tests/test_mypy_backlog.py` fails the list
+# for a module added to it, one that no longer exists, and one with no error left.
 [tool.mypy]
 python_version = "3.11"
 cache_dir = ".cache/mypy"
 files = [
   "server",
   "valkama.py",
-  "tests/isolated.py",
-  "tests/affected.py",
-  "tests/agent_probes.py",
-  "tests/agent_probes_judge.py",
-  "tests/commit_subjects.py",
-  "tests/heavy_gate.py",
-  "tests/legacy_lock.py",
-  "tests/parallel.py",
-  "tests/run_record.py",
-  "tests/worktree.py",
+  "tests",
 ]
 check_untyped_defs = true
 strict_equality = true
@@ -394,11 +391,139 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 warn_unused_configs = true
 
-# Every module `files` names, and every module one of them imports, is checked
-# with no exemption: the `[[tool.mypy.overrides]]` list that held the typing
-# backlog emptied when the last modules on it were deleted. A list that returns
-# is a ratchet to empty, never to grow, and a module absent from it is checked.
-# The test modules, `tests/test_*.py`, are not named in `files`.
+[[tool.mypy.overrides]]
+module = [
+  "tests.fixtures.fake_mcp_release",
+  "tests.planning_fixtures",
+  "tests.quota.test_forecast",
+  "tests.quota.test_poll",
+  "tests.test_adapter_check",
+  "tests.test_adapters",
+  "tests.test_affected",
+  "tests.test_alerts_messages",
+  "tests.test_alerts_reaper",
+  "tests.test_analytics_cost",
+  "tests.test_analytics_uses_http",
+  "tests.test_app_shell",
+  "tests.test_atomic_files",
+  "tests.test_commits_manual",
+  "tests.test_commits_pickup",
+  "tests.test_commits_rewrite",
+  "tests.test_desktop_app_sources",
+  "tests.test_docs_lifecycle",
+  "tests.test_documents",
+  "tests.test_executions",
+  "tests.test_heavy_gate",
+  "tests.test_hooks",
+  "tests.test_hooks_agent_notices",
+  "tests.test_hooks_marks",
+  "tests.test_hooks_notify",
+  "tests.test_hooks_place",
+  "tests.test_hooks_tree_cost",
+  "tests.test_hooks_tree_notices",
+  "tests.test_http_security",
+  "tests.test_journal",
+  "tests.test_launcher",
+  "tests.test_launcher_on_demand",
+  "tests.test_mcp_front",
+  "tests.test_mcp_surface",
+  "tests.test_memory",
+  "tests.test_module_manifest",
+  "tests.test_module_registry",
+  "tests.test_ops_git_hook",
+  "tests.test_parallel",
+  "tests.test_planning_agents",
+  "tests.test_planning_api",
+  "tests.test_planning_apply_groups",
+  "tests.test_planning_card",
+  "tests.test_planning_chain",
+  "tests.test_planning_claim_moves",
+  "tests.test_planning_close",
+  "tests.test_planning_composed",
+  "tests.test_planning_consent",
+  "tests.test_planning_decisions",
+  "tests.test_planning_deferral",
+  "tests.test_planning_discussion",
+  "tests.test_planning_domain",
+  "tests.test_planning_exact_api",
+  "tests.test_planning_executors",
+  "tests.test_planning_goal_volumes",
+  "tests.test_planning_held",
+  "tests.test_planning_holders",
+  "tests.test_planning_interactions_migration",
+  "tests.test_planning_item_projects",
+  "tests.test_planning_item_projects_migration",
+  "tests.test_planning_label_edits",
+  "tests.test_planning_leases",
+  "tests.test_planning_merge",
+  "tests.test_planning_participants",
+  "tests.test_planning_pending_actions",
+  "tests.test_planning_person_events",
+  "tests.test_planning_question_reads",
+  "tests.test_planning_question_reviews",
+  "tests.test_planning_questions",
+  "tests.test_planning_queue",
+  "tests.test_planning_recommendation_why",
+  "tests.test_planning_requests",
+  "tests.test_planning_resolve",
+  "tests.test_planning_retired_words",
+  "tests.test_planning_schema_limits",
+  "tests.test_planning_scope_http",
+  "tests.test_planning_session_requests",
+  "tests.test_planning_space_projects",
+  "tests.test_planning_space_reads",
+  "tests.test_planning_space_window",
+  "tests.test_planning_states",
+  "tests.test_planning_sweep",
+  "tests.test_planning_threads",
+  "tests.test_planning_tools",
+  "tests.test_planning_triage",
+  "tests.test_planning_triage_groups",
+  "tests.test_planning_triage_review",
+  "tests.test_planning_volume_flow",
+  "tests.test_planning_volumes",
+  "tests.test_planning_words",
+  "tests.test_planning_work_model_history",
+  "tests.test_planning_work_model_migration",
+  "tests.test_planning_work_model_surfaces",
+  "tests.test_planning_work_model_write",
+  "tests.test_platform_core",
+  "tests.test_processes",
+  "tests.test_project_registry",
+  "tests.test_quota_samples",
+  "tests.test_quota_seats",
+  "tests.test_refs",
+  "tests.test_registry_owner",
+  "tests.test_relates_once_migration",
+  "tests.test_release",
+  "tests.test_runner",
+  "tests.test_server",
+  "tests.test_session_open",
+  "tests.test_skills",
+  "tests.test_static_assets",
+  "tests.test_store_bringup",
+  "tests.test_store_migration",
+  "tests.test_subprocess_encoding",
+  "tests.test_toast_contract",
+  "tests.test_transcript_roots",
+  "tests.test_transcripts",
+  "tests.test_tray_session",
+  "tests.test_usage_claims",
+  "tests.test_usage_collect",
+  "tests.test_usage_item_analytics",
+  "tests.test_usage_item_parts",
+  "tests.test_usage_pauses",
+  "tests.test_usage_prices",
+  "tests.test_usage_read",
+  "tests.test_usage_rebuild",
+  "tests.test_usage_reread",
+  "tests.test_usage_tokens",
+  "tests.test_web_contract_fixtures",
+  "tests.test_work_focus_migration",
+  "tests.usage_fixtures",
+  "tests.web_fixture_closed",
+]
+ignore_errors = true
 
 # Branch coverage of the server, measured by the suite that already exists. The
 # floor is a ratchet: it is the number the suite actually reaches, so a change
@@ -430,8 +555,11 @@ data_file = ".cache/coverage/data"
 # Execution, scoped-read and registry regressions held the floor at 83%;
 # removing the extension registry with its code and tests left 84.14%.
 # The hook command and its suite took it to 85.28%, and the chain read with
-# its card and graph to 86.45%.
-fail_under = 86
+# its card and graph to 86.45%. The floor stayed at 86 while the figure rose;
+# 91.65%, measured on 2026-11-19, took it to 91, and since then
+# `python windows/release.py coverage-margin` fails a total more than a point
+# above the floor, so it cannot fall that far behind again.
+fail_under = 91
 precision = 2
 skip_covered = true
 exclude_also = [
