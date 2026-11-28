@@ -7,6 +7,7 @@ import type { PlaywrightTestConfig } from '@playwright/test'
 import { lockedCommand, spawnInherited } from '../heavyLock.ts'
 import { harnessPort } from './browserRun.ts'
 import { clipboardOptIn, clipboardSpecs } from './clipboardSpecs.ts'
+import { serverStore } from './serverStore.ts'
 import { timedList } from './timedChecks.ts'
 
 /**
@@ -33,7 +34,9 @@ import { timedList } from './timedChecks.ts'
  * earlier runs of as many specs used, not as the whole machine; with no room it exits 75 at once
  * in an agent's session, saying why, and waits elsewhere or with `HEAVY_GATE_WAIT=1`. A run
  * under `--list` runs no test, and takes no lease. The command line is read whole, and refused,
- * before the lease is asked for, so a refusal never comes after a wait for room.
+ * before the lease is asked for, so a refusal never comes after a wait for room. With
+ * VALKAMA_BROWSER_STORE naming a store, the configuration narrows the run to the `server` project
+ * without saying so, so the run must name it with `--project=server`, or it is refused.
  *
  * Input that means one thing is taken in each of its forms: a list file names a spec by its file
  * name, by that name without `.spec.ts` or by its path, and so does `--with-clipboard`, which also
@@ -87,6 +90,11 @@ export interface RunnerIo {
   /** A list file's text, or null when there is no such file. */
   readList: (file: string) => string | null
   say: (line: string) => void
+  /**
+   * Whether VALKAMA_BROWSER_STORE names a store: the configuration then runs its server project
+   * alone.
+   */
+  storeNamed: () => boolean
   /** Every spec of the suite, by file name. */
   suiteSpecs: () => string[]
   /** Writes the list Playwright reads and returns its path. */
@@ -283,6 +291,11 @@ export async function runAllowed(argv: readonly string[], io: RunnerIo): Promise
   let specs: string[]
   try {
     request = parseArguments(argv)
+    if (io.storeNamed() && !request.playwright.some((option) => option.startsWith('--project=')))
+      throw new Refusal(
+        'VALKAMA_BROWSER_STORE names a store, and under it Playwright runs only the server ' +
+          'project without saying so: name it with --project=server',
+      )
     specs = selectSpecs(request, io)
     if (specs.length === 0) throw new Refusal('the list of specs to run is empty')
     if (request.listFile !== undefined) refuseUnrun(specs, await io.projects())
@@ -374,6 +387,7 @@ export const realIo: RunnerIo = {
   projects: configProjects,
   readList: (file) => (existsSync(file) ? readFileSync(file, 'utf8') : null),
   say: (line) => process.stdout.write(`${line}\n`),
+  storeNamed: () => serverStore() !== null,
   suiteSpecs: () => readdirSync(suiteDirectory).filter((name) => name.endsWith('.spec.ts')),
   writeList: (specs) => {
     // Beside this port's results rather than in them: Playwright empties those when it starts.
