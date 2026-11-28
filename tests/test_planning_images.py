@@ -77,6 +77,12 @@ class StoreCase(unittest.TestCase):
         patch = mock.patch.dict(os.environ, {"VALKAMA_DB": self.path})
         patch.start()
         self.addCleanup(patch.stop)
+        # The notes of freed pictures belong to the process, keyed by `id(conn)`. A test
+        # that ends a delete without the surface leaves one, and a later test's connection
+        # may get the same `id`; so each test starts with none and its own go with it.
+        notes = mock.patch.dict(images._FREED, clear=True)
+        notes.start()
+        self.addCleanup(notes.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
         service.create_planning_space(self.conn, name="Pics", key="PIC")
@@ -232,9 +238,11 @@ class DeletionTests(StoreCase):
     def test_a_delete_that_fails_before_its_commit_leaves_nothing_noted(self) -> None:
         images.store(self.conn, self.first, png(19))
         release = images.release
+        noted: list[int] = []
 
         def release_then_fail(conn: sqlite3.Connection, hashes: list[str]) -> list[str]:
             release(conn, hashes)
+            noted.append(len(images._FREED))
             raise RuntimeError("failed on the way to the commit")
 
         with (
@@ -242,7 +250,9 @@ class DeletionTests(StoreCase):
             self.assertRaises(RuntimeError),
         ):
             self.delete(self.first)
-        self.assertNotIn(id(self.conn), images._FREED)
+        # The delete noted its picture, and the failure took the note away.
+        self.assertEqual([1], noted)
+        self.assertEqual({}, images._FREED)
         self.assertTrue((self.folder / sha(png(19))).exists())
 
     def test_an_upload_that_failed_and_could_not_take_its_file_back_leaves_it_to_the_sweep(
@@ -589,11 +599,12 @@ class HttpTests(HttpCase):
         self,
     ) -> None:
         self.upload(self.first, png(34))
-        before = set(images._FREED)
         release = images.release
+        noted: list[int] = []
 
         def release_then_fail(conn: sqlite3.Connection, hashes: list[str]) -> list[str]:
             release(conn, hashes)
+            noted.append(len(images._FREED))
             raise model.PlanningError("refused on the way to the commit")
 
         body = json.dumps({"id": self.first}).encode("utf-8")
@@ -607,7 +618,10 @@ class HttpTests(HttpCase):
         with mock.patch.object(images, "release", release_then_fail):
             status, _, _ = self.request("POST", "/api/planning/work-item/delete", headers, body)
         self.assertEqual(400, status)
-        self.assertEqual(before, set(images._FREED))
+        # The server's connection noted the picture, and the refusal took the note away
+        # before it answered.
+        self.assertEqual([1], noted)
+        self.assertEqual({}, images._FREED)
         self.assertTrue((self.folder / sha(png(34))).exists())
 
     def test_an_upload_without_the_browser_credential_is_refused(self) -> None:
