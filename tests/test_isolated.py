@@ -8,9 +8,11 @@ the owner of the machine uses, and the store it copies is one made here.
 from __future__ import annotations
 
 import contextlib
+import functools
 import hashlib
 import http.client
 import io
+import itertools
 import json
 import os
 import re
@@ -31,7 +33,7 @@ from unittest import mock
 import tests
 from server import store
 from server.store_identity.refs import planning_space_entity
-from tests import heavy_gate, heavy_gate_double, isolated, legacy_lock, parallel
+from tests import heavy_gate, heavy_gate_double, isolated, legacy_lock, parallel, run_record
 from tests import test_planning_work_model_migration as work_model
 from tests.test_legacy_lock import earlier_whole_machine_run
 from tests.test_mcp_front import alive, wait_until
@@ -637,7 +639,7 @@ class GateTests(Workspace):
             mock.patch.object(isolated.release, "STAGES", steps),
             mock.patch.object(isolated.release, "require_toolchain", return_value={}),
         ):
-            return quietly(isolated.main, ["gates", "--out", str(self.out)])
+            return quietly(isolated.main, ["gates", "--out", str(self.out), "--allow-dirty"])
 
     def test_the_command_runs_every_step_in_a_new_profile_and_reports_the_failure(self) -> None:
         self.home.mkdir()
@@ -662,7 +664,7 @@ class GateTests(Workspace):
     def test_a_wrong_interpreter_is_refused_and_counted_as_nothing_having_run(self) -> None:
         refusal = isolated.release.ToolchainError("this interpreter lacks ruff")
         with mock.patch.object(isolated.release, "require_toolchain", side_effect=refusal):
-            code, said = quietly(isolated.main, ["gates", "--out", str(self.out)])
+            code, said = quietly(isolated.main, ["gates", "--out", str(self.out), "--allow-dirty"])
 
         self.assertEqual(1, code)
         self.assertIn("this interpreter lacks ruff", said)
@@ -676,7 +678,9 @@ class GateTests(Workspace):
             mock.patch.object(isolated.release, "require_toolchain", return_value={}) as toolchain,
             mock.patch.object(isolated, "run_gates", return_value=0),
         ):
-            code, _ = quietly(isolated.gates, selected, self.out)
+            code, _ = quietly(
+                functools.partial(isolated.gates, allow_dirty=True), selected, self.out
+            )
 
         self.assertEqual(0, code)
         self.assertEqual({"ruff"}, toolchain.call_args.kwargs["only"])
@@ -690,6 +694,90 @@ class GateTests(Workspace):
         self.assertEqual(1, code)
         self.assertIn("run stop first", said)
         self.assertTrue(self.home.exists())
+
+    def gates_on_tree(
+        self, tree: dict[str, object], *flags: str
+    ) -> tuple[int, str, mock.MagicMock, Path]:
+        """The command run on a tree in the state `tree` stands for, with one step that leaves a mark.
+
+        `run_record.tree_state` gives `tree` first and another state after it, so a
+        record that says `tree` holds the state that was judged and not a later read.
+        """
+
+        started = self.root / "started"
+        step = isolated.Step(
+            "mark", "python", f"python -c \"open('{started.as_posix()}', 'w').close()\""
+        )
+        later = {**tree, "head": "9" * 40}
+        with (
+            mock.patch.object(isolated.release, "STAGES", (step,)),
+            mock.patch.object(isolated.release, "require_toolchain", return_value={}) as toolchain,
+            mock.patch.object(
+                run_record,
+                "tree_state",
+                side_effect=itertools.chain([tree], itertools.repeat(later)),
+            ),
+        ):
+            code, said = quietly(isolated.main, ["gates", "--out", str(self.out), *flags])
+        return code, said, toolchain, started
+
+    @staticmethod
+    def tree(*changed: str) -> dict[str, object]:
+        """A made-up state of a checkout as `run_record.tree_state` reads one, with `changed` differing."""
+
+        tree: dict[str, object] = {
+            "worktree": "C:/checkout",
+            "head": "1" * 40,
+            "branch": "main",
+            "dirty": bool(changed),
+            "changes": "2" * 64 if changed else None,
+        }
+        if changed:
+            tree["paths"] = dict.fromkeys(changed, "3" * 40)
+        return tree
+
+    def test_gates_refuse_a_dirty_tree_before_the_toolchain_check_naming_the_files(self) -> None:
+        dirty = self.tree("server/app.py", "web/tests/browser/probe.spec.ts")
+
+        code, said, toolchain, started = self.gates_on_tree(dirty)
+
+        self.assertEqual(1, code, said)
+        lines = said.splitlines()
+        self.assertEqual(2, len(lines), said)
+        self.assertTrue(lines[0].startswith("refused before the first step: "), said)
+        self.assertIn("uncommitted changes", lines[0])
+        self.assertIn(
+            f"differ from {'1' * 40}: server/app.py, web/tests/browser/probe.spec.ts;", lines[0]
+        )
+        self.assertIn("--allow-dirty", lines[0])
+        self.assertEqual("no gate step ran", lines[1])
+        toolchain.assert_not_called()
+        self.assertFalse(started.exists(), "a step ran")
+        self.assertFalse((self.out / run_record.NAME).exists())
+
+    def test_gates_given_allow_dirty_run_on_a_dirty_tree_and_record_the_state_judged(self) -> None:
+        dirty = self.tree("web/tests/browser/probe.spec.ts")
+
+        code, said, toolchain, started = self.gates_on_tree(dirty, "--allow-dirty")
+
+        self.assertEqual(0, code, said)
+        self.assertNotIn("refused", said)
+        toolchain.assert_called_once()
+        self.assertTrue(started.exists(), said)
+        record = json.loads((self.out / run_record.NAME).read_text(encoding="utf-8"))
+        self.assertEqual(dirty, record["tree"])
+
+    def test_gates_run_on_a_clean_tree_with_no_flag(self) -> None:
+        clean = self.tree()
+
+        code, said, toolchain, started = self.gates_on_tree(clean)
+
+        self.assertEqual(0, code, said)
+        self.assertNotIn("refused", said)
+        toolchain.assert_called_once()
+        self.assertTrue(started.exists(), said)
+        record = json.loads((self.out / run_record.NAME).read_text(encoding="utf-8"))
+        self.assertEqual(clean, record["tree"])
 
 
 class HeavyGateTests(Workspace):
@@ -720,7 +808,7 @@ class HeavyGateTests(Workspace):
             selection = (
                 [part for name in only for part in ("--only", name)] if each else ["--only", *only]
             )
-            quietly(isolated.main, ["gates", "--out", str(self.out), *selection])
+            quietly(isolated.main, ["gates", "--out", str(self.out), "--allow-dirty", *selection])
         return run_gates.call_args.args[0]
 
     def test_a_repeated_only_adds_its_names_instead_of_replacing_them(self) -> None:
@@ -1038,7 +1126,7 @@ class ModulesStepTests(ModulesCase):
             mock.patch.object(isolated.release, "NPM", sys.executable),
             mock.patch.object(isolated.release, "require_toolchain", return_value={}),
         ):
-            return quietly(isolated.main, ["gates", "--out", str(self.out)])
+            return quietly(isolated.main, ["gates", "--out", str(self.out), "--allow-dirty"])
 
     STEPS = (
         isolated.Step("first", "python", 'python -c "print(1)"'),

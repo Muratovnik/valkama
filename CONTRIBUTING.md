@@ -81,7 +81,10 @@ once and `python .github/relkit.pyz audit --history --owner` before publication.
 `tests/isolated.py` runs that list in one call, in a throwaway profile, so a run
 cannot write test projects or a store into your own. Run it with the virtual
 environment built from `requirements-dev.txt`, and give it a result directory
-outside the tracked tree; it has no default:
+outside the tracked tree; it has no default. `gates` refuses a tree with
+uncommitted changes, untracked files among them, before the first step and
+naming the files, since the record it leaves holds only for those changes:
+commit first, or give `--allow-dirty`.
 
 ```powershell
 # Every gate above; add --only python, or any step name, for part of the list.

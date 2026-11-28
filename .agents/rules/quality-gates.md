@@ -178,10 +178,11 @@ refuses for another tree or state, and, given `--require NAME`, for having no
 step of that name; a step that `run` records takes the name of its command's
 words, so `run --out DIR -- typos` is the step `typos` the integrator requires
 of a worker's record. `run` replaces the record in DIR once the tree has
-changed, so each commit's checks go into a directory of their own. It refuses a
-tree with uncommitted changes, untracked files among them, before the command
-starts and naming the files, since that record holds only while those same
-changes stand; `--allow-dirty` runs there all the same. A run its runner refused
+changed, so each commit's checks go into a directory of their own. `run` and
+`gates` both refuse a tree with uncommitted changes, untracked files among them,
+before the first step and naming the files, since that record holds only while
+those same changes stand; `gates` refuses it before the toolchain check too, and
+`--allow-dirty` runs either there all the same. A run its runner refused
 before any test started, the browser runner's exit 2 or the heavy-process gate's
 75 for no room, each with the line it says then, is not recorded, so its
 corrected run joins the record without the other steps running again; a run
