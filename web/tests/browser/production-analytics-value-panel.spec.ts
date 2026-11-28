@@ -349,7 +349,11 @@ test('a model’s bar opens its panel from the keyboard, Escape and Back close i
   await expect(panel.locator('[data-part="model"]')).toHaveCount(0)
   await expect(panel.getByRole('link', { name: 'Open the card' })).toHaveCount(0)
 
-  // Escape closes it as a new place, and the focus goes back to the bar.
+  // Escape closes it as a new place, and the focus goes back to the bar. A shown hint takes the
+  // Escape first, so the pointer rests on an empty spot and no hint may be up: were one, this
+  // names it, and production-analytics-all-names.spec.ts finds the same surface present on a hover.
+  await page.mouse.move(2, 2)
+  await expect(page.locator('[data-hint-surface]')).toHaveCount(0)
   await page.keyboard.press('Escape')
   await expect(panel).toBeHidden()
   await expect(bar).toBeFocused()
