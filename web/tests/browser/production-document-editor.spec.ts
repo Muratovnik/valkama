@@ -165,11 +165,14 @@ test('on its own page: at the line the address names, and by keyboard', async ({
     )
     heading?.scrollIntoView({ block: 'start' })
   })
+  // The button ignores an Enter while its own request is in flight, so each later press waits for it.
+  await expect(editor).not.toHaveAttribute('aria-busy', 'true')
   await page.keyboard.press('Enter')
   await expect.poll(() => asked.length).toBe(2)
   expect(fileAsked(asked.at(-1)).line).toBe('84')
 
   await toStart(body)
+  await expect(editor).not.toHaveAttribute('aria-busy', 'true')
   await page.keyboard.press('Enter')
   await expect.poll(() => asked.length).toBe(3)
   expect(fileAsked(asked.at(-1)).line).toBe('32')
