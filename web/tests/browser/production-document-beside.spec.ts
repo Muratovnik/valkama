@@ -14,6 +14,7 @@ import {
   tabRound,
   WINDOW,
 } from './documentBeside.ts'
+import { copiedTexts } from './pageClipboard.ts'
 import { test } from './test.ts'
 
 /**
@@ -183,6 +184,8 @@ test('from the questions waiting for an answer: beside the dialog, and nothing i
   const sent = requests.writes.length
   await pane.getByRole('button', { name: 'Refresh' }).click()
   await pane.getByRole('button', { name: 'Copy the path docs/plan.md' }).click()
+  // The path went to the page's clipboard (`pageClipboard.ts`), not to the system's.
+  await expect.poll(() => copiedTexts(page)).toEqual(['docs/plan.md'])
   await edge.focus()
   await page.keyboard.press('ArrowLeft')
   await title.click()

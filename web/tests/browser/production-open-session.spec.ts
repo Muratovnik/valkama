@@ -2,76 +2,33 @@
  * The way from a card to a session, in the real app with the plan's route answered: the
  * keyboard reaches every holder in reading order, a panel holds focus and Escape gives it
  * back, and each width and language keeps the place in view. `window.open` is recorded,
- * so no test starts anything outside the browser.
+ * so no test starts anything outside the browser. A copy lands in the page's clipboard
+ * (`pageClipboard.ts`); the test that reads one back from the system clipboard is in
+ * `production-open-session-clipboard.spec.ts`.
  */
 import AxeBuilder from '@axe-core/playwright'
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { shot } from './boardPage.ts'
-import { enableExecutionTab } from './executionFixtures.ts'
 import {
   CRASHED,
   DESKTOP_LINK,
-  finishedCard,
   FOLDER_LINK,
-  heldCard,
   IN_VSCODE,
   markNames,
   openPlanFor,
-  RESUME_COMMAND,
   SESSION_LINK,
-  threeAgents,
   UNLINKED_SESSION,
 } from './openSessionFixtures.ts'
+import { openCard, openedLinks } from './openSessionPage.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { globalScope, spaceScope, workItemRef } from './planningFixtures.ts'
+import { globalScope } from './planningFixtures.ts'
 import { separatorRoom } from './separators.ts'
 import { test } from './test.ts'
-
-const CARD = serializePlatformRoute({
-  module_id: 'planning',
-  scope: spaceScope,
-  entity: planningWorkItemEntity(workItemRef),
-})
-
-interface Opening {
-  always?: string
-  closed?: boolean
-  locale?: 'en' | 'ru'
-  width?: number
-}
-
-async function openCard(page: Page, { always, closed, locale = 'en', width = 1280 }: Opening = {}) {
-  await page.setViewportSize({ width, height: 1500 })
-  await page.addInitScript(
-    ({ always: place, language }) => {
-      localStorage.setItem('valkama-locale', language)
-      if (place)
-        localStorage.setItem(
-          'valkama-settings',
-          JSON.stringify({ sessions: { claude: { fallback: 'vscode', always: place } } }),
-        )
-    },
-    { always, language: locale },
-  )
-  await enableExecutionTab(page)
-  await installBackend(page, {
-    agents: threeAgents,
-    card: closed ? finishedCard : heldCard,
-    closedWith: closed ? 'It is done.' : undefined,
-    openPlan: openPlanFor,
-  })
-  await page.goto(CARD)
-  await expect(page.locator('.drawer .card-holder button.open-action')).toBeVisible()
-}
-
-const openedLinks = (page: Page) =>
-  page.evaluate(() => (window as unknown as { __opened?: string[] }).__opened ?? [])
 
 /** Tab until the control has focus, as a reader does, failing if the pass runs out. */
 async function tabTo(page: Page, control: Locator, limit = 60) {
@@ -166,41 +123,6 @@ test('Escape closes the panel of a running session and gives focus back to its b
   // The card it stood over is still there, and nothing ran.
   await expect(page.locator('.drawer .card-holder')).toBeVisible()
   expect(await openedLinks(page)).toEqual([])
-})
-
-test('a session long silent warns first, and resumes only on its own press', async ({
-  page,
-  context,
-}) => {
-  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
-  await openCard(page)
-  const fromStep = page.locator(`.step-holder button.open-action[aria-description*="${CRASHED}"]`)
-  await fromStep.focus()
-  await page.keyboard.press('Enter')
-  const panel = page.getByRole('dialog', { name: 'The session is running' })
-  await expect(panel).toContainText('Last sign of it:')
-  await expect(panel).toContainText('It may have crashed')
-  await expect(panel).toContainText('a second process would write to the same transcript')
-  const resume = panel.getByRole('button', { name: 'Copy the command, if the window is closed' })
-  await expect(resume).toBeVisible()
-  // Focus stands on the way to look at it, and walking those steps never reaches the offer.
-  await expect(
-    panel.getByRole('button', { name: 'Open the project window in VS Code' }),
-  ).toBeFocused()
-  await page.keyboard.press('Enter')
-  await page.keyboard.press('Enter')
-  await expect(panel).toBeHidden()
-  await expect.poll(() => openedLinks(page)).toEqual([FOLDER_LINK, SESSION_LINK])
-  expect(await page.evaluate(() => navigator.clipboard.readText())).not.toBe(RESUME_COMMAND)
-
-  await fromStep.focus()
-  await page.keyboard.press('Enter')
-  await resume.click()
-  await expect(panel).toBeHidden()
-  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(RESUME_COMMAND)
-  await expect(
-    page.getByRole('status').filter({ hasText: /^Command for session .* copied/ }),
-  ).toHaveCount(1)
 })
 
 test('a reason with nothing to press is reachable from the keyboard', async ({ page }) => {

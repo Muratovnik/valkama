@@ -3,8 +3,8 @@ import type { Locator, Page } from '@playwright/test'
 /**
  * The plan the server answers for a file, as a browser asks for it: one link that opens
  * the file in VS Code at its line, or an explanation of why nothing opens. What the page
- * asked and what it copied are kept in the page, so nothing reaches the system's
- * clipboard or starts a program; `window.open` is the browser doubles' to record.
+ * asked is kept in the page, so nothing starts a program; `window.open` is the browser
+ * doubles' to record, and what the page copied the page's clipboard's (`pageClipboard.ts`).
  */
 
 export const EDITOR = 'Open in VS Code'
@@ -65,26 +65,6 @@ export const fileAsked = (query: URLSearchParams | undefined) => ({
   line: query?.get('line'),
   surface: query?.get('surface'),
 })
-
-/** What the page put on the clipboard, kept in the page. */
-export async function keepCopies(page: Page) {
-  await page.addInitScript(() => {
-    const copied: string[] = []
-    Object.defineProperty(navigator, 'clipboard', {
-      configurable: true,
-      value: {
-        writeText: (text: string) => {
-          copied.push(text)
-          return Promise.resolve()
-        },
-      },
-    })
-    Object.assign(window, { copied })
-  })
-}
-
-export const copiedIn = (page: Page) =>
-  page.evaluate(() => (window as unknown as { copied: string[] }).copied)
 
 export const openedIn = (page: Page) =>
   page.evaluate(() => (window as unknown as { __opened?: string[] }).__opened ?? [])

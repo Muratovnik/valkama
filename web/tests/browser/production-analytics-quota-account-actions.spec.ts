@@ -8,7 +8,8 @@
  * page stays on its section, after which the entry is disabled, «Already in filter»; «Copy ID»
  * puts the account's whole id on the clipboard and says so. No hint says that id. An account with
  * no name of its own has «Name» beside the menu, which opens the same field and is gone once the
- * account has a name.
+ * account has a name. «Copy ID», which reads the system clipboard back, is in
+ * `production-analytics-quota-account-actions-clipboard.spec.ts`.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -16,34 +17,14 @@ import type { Page } from '@playwright/test'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { NIGHT, NIGHT_NAME } from '../fixtures/quota.ts'
-import { openPanel, pageAt, serve, WORLD } from './analyticsPage.ts'
+import { pageAt } from './analyticsPage.ts'
 import { globalScope } from './planningFixtures.ts'
+import { openMenu, openQuota, WORK_ID } from './quotaAccountsPage.ts'
 import { test } from './test.ts'
 
-/** The account the quota names «Work», by the key Valkama keeps its name under: its id. */
-const WORK_ORGANIZATION = '5b0c7e21-4a3f-4d8e-9c16-2f7a8b9d0e1f'
-const WORK_UUID = '0b7d4e19-1c2d-4e3f-8a4b-5c6d7e8f9a0b'
-const WORK_ID = `${WORK_ORGANIZATION}/${WORK_UUID}`
 const NIGHT_ID = `${NIGHT.organization}/${NIGHT.account_uuid}`
 
 const path = (page: Page) => page.url().slice(new URL(page.url()).origin.length)
-
-async function openQuota(page: Page) {
-  const backend = await serve(page, WORLD, false, { accountNames: { [WORK_ID]: 'Work' } })
-  await page.setViewportSize({ width: 1440, height: 900 })
-  const analytics = await openPanel(page, pageAt({ by: 'quota_week' }))
-  await expect(analytics.locator('[data-account="Work"]')).toBeVisible()
-  return { analytics, backend }
-}
-
-/** The menu of the account named `name`, opened, and its button. */
-async function openMenu(page: Page, name: string) {
-  const button = page.getByRole('button', { name: `Account actions: ${name}` })
-  await button.click()
-  const menu = page.getByRole('menu')
-  await expect(menu).toBeVisible()
-  return { button, menu }
-}
 
 test('«Rename» saves the name Settings shows on Enter, leaves it on Escape, and gives the focus back', async ({
   page,
@@ -149,18 +130,4 @@ test('«Add to filter» adds the account as a chip and keeps the section; then i
   await expect(held.menu.getByRole('menuitem', { name: 'Add to filter' })).toHaveCount(0)
   await page.keyboard.press('Escape')
   await expect(held.menu).toBeHidden()
-})
-
-test('«Copy ID» puts the account’s whole id on the clipboard, which no hint says', async ({
-  page,
-}) => {
-  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
-  const { analytics } = await openQuota(page)
-  const account = analytics.locator('[data-account="Work"]')
-  expect(await account.evaluate((one) => one.outerHTML)).not.toContain(WORK_UUID)
-
-  const { menu } = await openMenu(page, 'Work')
-  await menu.getByRole('menuitem', { name: 'Copy ID' }).click()
-  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(WORK_UUID)
-  await expect(account.locator('[data-account-head="menu"]')).toContainText('ID copied')
 })

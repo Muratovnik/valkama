@@ -1,6 +1,7 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
+import { copiedTexts } from './pageClipboard.ts'
 import { pointerBand } from './pointerBand.ts'
 import { test } from './test.ts'
 
@@ -33,20 +34,6 @@ async function open(
   { width = 1100, surface = 'document-links', slow = false } = {},
 ): Promise<Page2> {
   await page.setViewportSize({ width, height: 800 })
-  // The clipboard stays in the page: nothing here reaches the system's.
-  await page.addInitScript(() => {
-    const copied: string[] = []
-    ;(window as unknown as { __copied: string[] }).__copied = copied
-    Object.defineProperty(navigator, 'clipboard', {
-      configurable: true,
-      value: {
-        writeText: (text: string) => {
-          copied.push(text)
-          return Promise.resolve()
-        },
-      },
-    })
-  })
   // Held until the test says, not for a time: a loaded machine takes any time to get there.
   const gate: { open: () => void } = { open: () => {} }
   const held = new Promise<void>((settle) => {
@@ -76,7 +63,7 @@ async function open(
   return {
     answer,
     spoken: () => page.evaluate(() => (window as unknown as { __spoken: string[] }).__spoken),
-    copied: () => page.evaluate(() => (window as unknown as { __copied: string[] }).__copied),
+    copied: () => copiedTexts(page),
   }
 }
 

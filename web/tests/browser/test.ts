@@ -1,6 +1,10 @@
+import { basename } from 'node:path'
+
 import { test as base } from '@playwright/test'
 
+import { usesSystemClipboard } from './clipboardSpecs.ts'
 import { keepTestOutput, shotRunVariable } from './keptShots.ts'
+import { keepClipboardInPage, refuseClipboardGrant } from './pageClipboard.ts'
 import { timedProject, timedTag } from './timedChecks.ts'
 
 interface RendererExit {
@@ -12,7 +16,10 @@ interface RendererExit {
  * The suite's `test`: Playwright's, with what each test wrote and attached kept past
  * the run, with any renderer death attached to the test that saw it, since a crash
  * this rare is read once, from those artifacts, and with a test that bounds a time failed
- * in any project but the one that runs it alone (`timedChecks.ts`).
+ * in any project but the one that runs it alone (`timedChecks.ts`), and, in a spec off the
+ * clipboard list (`clipboardSpecs.ts`), with the page's clipboard (`pageClipboard.ts`) in every
+ * context the test opens, before its first page: the test's `context` and any it makes itself
+ * through `browser.newContext` or `browser.newPage`.
  *
  * Playwright reports every such death as "Page crashed" or "Target crashed", and
  * the trace it keeps says no more. A killed renderer and one with an access
@@ -21,6 +28,7 @@ interface RendererExit {
  * reports, so the test fails on its timeout.
  */
 export const test = base.extend<{
+  clipboardKept: undefined
   keptOutput: undefined
   rendererExits: RendererExit[]
   timedAlone: undefined
@@ -70,6 +78,41 @@ export const test = base.extend<{
             `a timed test runs only in ${timedProject}, which takes the production specs`,
         )
       await use(undefined)
+    },
+    { auto: true },
+  ],
+  // Playwright's `page` opens in this context, so the page's first document meets the page's
+  // clipboard. A grant the configuration or `test.use` asks for fails before the context opens.
+  context: async ({ context, permissions }, use, testInfo) => {
+    if (!usesSystemClipboard(testInfo.file)) {
+      const spec = basename(testInfo.file)
+      refuseClipboardGrant(spec, permissions)
+      await keepClipboardInPage(context, spec)
+    }
+    await use(context)
+  },
+  // A context the test opens itself gets the page's clipboard as it opens, as Playwright's own
+  // does here, since Playwright opens that one the same way.
+  clipboardKept: [
+    async ({ browser }, use, testInfo) => {
+      if (usesSystemClipboard(testInfo.file)) {
+        await use(undefined)
+        return
+      }
+      const spec = basename(testInfo.file)
+      const open = browser.newContext.bind(browser)
+      browser.newContext = async (options) => {
+        refuseClipboardGrant(spec, options?.permissions)
+        const context = await open(options)
+        await keepClipboardInPage(context, spec)
+        return context
+      }
+      try {
+        await use(undefined)
+      } finally {
+        // The worker's browser goes on to the next test with its own method again.
+        Reflect.deleteProperty(browser, 'newContext')
+      }
     },
     { auto: true },
   ],
