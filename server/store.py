@@ -1077,6 +1077,18 @@ def _running_sqlite() -> str:
     return sqlite3.sqlite_version
 
 
+def older_than_work_model_floor(found: str) -> bool:
+    """Whether the SQLite version `found` is older than `WORK_MODEL_SQLITE`."""
+
+    return tuple(int(part) for part in found.split(".")) < WORK_MODEL_SQLITE
+
+
+def work_model_floor_text() -> str:
+    """`WORK_MODEL_SQLITE` as the dotted version a message names."""
+
+    return ".".join(str(part) for part in WORK_MODEL_SQLITE)
+
+
 def refuse_an_old_sqlite(report: dict[str, Any]) -> None:
     """Refuse the work-model migration on a SQLite older than `WORK_MODEL_SQLITE`.
 
@@ -1086,9 +1098,9 @@ def refuse_an_old_sqlite(report: dict[str, Any]) -> None:
     """
 
     found = _running_sqlite()
-    if tuple(int(part) for part in found.split(".")) >= WORK_MODEL_SQLITE:
+    if not older_than_work_model_floor(found):
         return
-    floor = ".".join(str(part) for part in WORK_MODEL_SQLITE)
+    floor = work_model_floor_text()
     message = (
         f"this Python runs SQLite {found}, and the work-model migration needs SQLite"
         f" {floor} or newer: run it again with a Python whose SQLite is {floor} or newer;"
