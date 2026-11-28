@@ -17,6 +17,13 @@ const engines = vi.hoisted(
     }>,
 )
 
+/**
+ * The number of the running test. Vitest does not stop the body of a test that
+ * timed out, so such a body can resume during a later test and act on the modules
+ * that test loaded; `whileCurrent` parks it instead.
+ */
+const running = vi.hoisted(() => ({ test: 0 }))
+
 vi.mock('@/widgets/work-item-graph/utils/graphLayoutEngine.ts', () => ({
   createGraphLayoutEngine: () => {
     const engine = { layouts: [] as (typeof engines)[number]['layouts'], terminateWorker: vi.fn() }
@@ -31,36 +38,53 @@ vi.mock('@/widgets/work-item-graph/utils/graphLayoutEngine.ts', () => ({
   },
 }))
 
-// The view itself is Vue Flow and more; prefetching it is not what is measured here.
-vi.mock('@/widgets/work-item-graph/components/GraphView.vue', () => ({ default: {} }))
+// The view's download is not what is measured here, and mocking its loader keeps
+// each test's fresh import to the warm-up and the runner instead of Vue and the shell.
+vi.mock('@/shared/ui/lazyView.ts', () => ({
+  lazyView: () => ({ prefetch: () => {} }),
+}))
+
+/** Resolves while `test` is still the running one; for a body that outlived its test, never. */
+function whileCurrent(test: number): Promise<void> {
+  return test === running.test ? Promise.resolve() : new Promise<void>(() => {})
+}
 
 async function load() {
+  const test = running.test
   const { graphView } = await import('@/pages/planning/utils/graphView.ts')
   const { createGraphLayoutRunner } =
     await import('@/widgets/work-item-graph/utils/graphLayoutRunner.ts')
   const { SPARE_LIFETIME_MS, takeGraphLayoutEngine } =
     await import('@/widgets/work-item-graph/utils/graphLayoutWarm.ts')
-  return { graphView, createGraphLayoutRunner, SPARE_LIFETIME_MS, takeGraphLayoutEngine }
-}
-
-/** A prefetch, and the warm-up its dynamic import starts. */
-async function prefetch(graphView: Awaited<ReturnType<typeof load>>['graphView']) {
-  graphView.prefetch()
-  await vi.dynamicImportSettled()
+  await whileCurrent(test)
+  return {
+    createGraphLayoutRunner,
+    SPARE_LIFETIME_MS,
+    takeGraphLayoutEngine,
+    /** A prefetch, and the warm-up its dynamic import starts. */
+    prefetch: async () => {
+      graphView.prefetch()
+      await vi.dynamicImportSettled()
+      await whileCurrent(test)
+    },
+    /** For an await the test makes itself, before it acts on the modules. */
+    whileCurrent: () => whileCurrent(test),
+  }
 }
 
 const graph = { id: 'root' }
 
 describe('the warm layout worker', () => {
   beforeEach(() => {
+    running.test += 1
     engines.length = 0
     vi.resetModules()
   })
   afterEach(() => vi.useRealTimers())
 
   it('is started by the prefetch, and the first layout runs on it', async () => {
-    const { graphView, createGraphLayoutRunner } = await load()
-    await prefetch(graphView)
+    const { prefetch, createGraphLayoutRunner } = await load()
+    await prefetch()
     // Created before any layout was asked for, and given the warm-up graph.
     expect(engines).toHaveLength(1)
     expect(engines[0].layouts).toHaveLength(1)
@@ -72,27 +96,27 @@ describe('the warm layout worker', () => {
   })
 
   it('is not started twice while the spare waits', async () => {
-    const { graphView } = await load()
-    await prefetch(graphView)
-    await prefetch(graphView)
+    const { prefetch } = await load()
+    await prefetch()
+    await prefetch()
     expect(engines).toHaveLength(1)
   })
 
   it('is not started while a field holds its own, and is again once that field is gone', async () => {
-    const { graphView, createGraphLayoutRunner } = await load()
+    const { prefetch, createGraphLayoutRunner } = await load()
     const runner = createGraphLayoutRunner()
     void runner.layout(graph).catch(() => {})
     expect(engines).toHaveLength(1)
-    await prefetch(graphView)
+    await prefetch()
     expect(engines).toHaveLength(1)
     runner.dispose()
-    await prefetch(graphView)
+    await prefetch()
     expect(engines).toHaveLength(2)
   })
 
   it('goes with the runner that took it, on stop and on dispose, as before', async () => {
-    const { graphView, createGraphLayoutRunner } = await load()
-    await prefetch(graphView)
+    const { prefetch, createGraphLayoutRunner } = await load()
+    await prefetch()
     const runner = createGraphLayoutRunner()
     void runner.layout(graph).catch(() => {})
     runner.stop()
@@ -105,22 +129,24 @@ describe('the warm layout worker', () => {
 
   it('is ended when nobody takes it within a minute, and the next field starts afresh', async () => {
     vi.useFakeTimers()
-    const { graphView, SPARE_LIFETIME_MS, takeGraphLayoutEngine } = await load()
-    await prefetch(graphView)
+    const { prefetch, SPARE_LIFETIME_MS, takeGraphLayoutEngine, whileCurrent } = await load()
+    await prefetch()
     await vi.advanceTimersByTimeAsync(SPARE_LIFETIME_MS - 1)
     expect(engines[0].terminateWorker).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1)
     expect(engines[0].terminateWorker).toHaveBeenCalledOnce()
+    await whileCurrent()
     takeGraphLayoutEngine()
     expect(engines).toHaveLength(2)
     expect(vi.getTimerCount()).toBe(0)
   })
 
   it('is ended when its warm-up fails, and the next field starts afresh', async () => {
-    const { graphView, takeGraphLayoutEngine } = await load()
-    await prefetch(graphView)
+    const { prefetch, takeGraphLayoutEngine, whileCurrent } = await load()
+    await prefetch()
     engines[0].layouts[0].reject(new Error('worker failed'))
     await vi.waitFor(() => expect(engines[0].terminateWorker).toHaveBeenCalledOnce())
+    await whileCurrent()
     takeGraphLayoutEngine()
     expect(engines).toHaveLength(2)
   })
