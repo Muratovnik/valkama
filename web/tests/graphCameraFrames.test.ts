@@ -16,6 +16,8 @@ import {
   graphChosen,
   graphWholeView,
   headerOnScreen,
+  zoomGivenBack,
+  zoomTaken,
 } from '@/widgets/work-item-graph/utils/graphCamera.ts'
 import { layout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import type { GraphLayout, GraphLayoutEngine } from '@/widgets/work-item-graph/utils/graphLayout.ts'
@@ -260,6 +262,86 @@ test('a fold past the whole view keeps its header where it stood when the drawin
   const now = headerOnScreen(after, frameId, moved)
   assert.ok(now)
   assert.ok(Math.abs(now.x - screen.x) <= 1 && Math.abs(now.y - screen.y) <= 1)
+})
+
+/**
+ * The operator at a zoom between the whole views of the open and the folded drawing,
+ * the fold of the lone link's goal raised to the folded one, and its header where
+ * that fold left it.
+ */
+async function raisedByFold() {
+  const frameId = goals[1].work_item_id
+  const open = await space()
+  const folded = await space({ [frameId]: true })
+  const [wholeOpen, wholeFolded] = [
+    graphWholeView(open, dimensions),
+    graphWholeView(folded, dimensions),
+  ]
+  assert.ok(wholeOpen && wholeFolded)
+  assert.ok(wholeOpen.zoom < wholeFolded.zoom, JSON.stringify([wholeOpen, wholeFolded]))
+  const before = { x: wholeOpen.x, y: wholeOpen.y, zoom: (wholeOpen.zoom + wholeFolded.zoom) / 2 }
+  const pressed = headerOnScreen(open, frameId, before)
+  assert.ok(pressed)
+  const after = graphCameraMove('toggled', folded, {
+    camera: before,
+    dimensions,
+    held: { frameId, screen: pressed },
+  })
+  assert.ok(after)
+  assert.equal(after.zoom, wholeFolded.zoom)
+  const screen = headerOnScreen(folded, frameId, after)
+  assert.ok(screen)
+  return { frameId, open, before, after, screen }
+}
+
+test('a frame whose fold raised the zoom gives it back as it opens again, its header held', async () => {
+  const { frameId, open, before, after, screen } = await raisedByFold()
+  const taken = zoomTaken(frameId, before, after)
+  const zoom = zoomGivenBack(taken, frameId, after)
+  assert.equal(zoom, before.zoom)
+  const reopened = graphCameraMove('toggled', open, {
+    camera: after,
+    dimensions,
+    held: { frameId, screen, zoom },
+  })
+  assert.ok(reopened)
+  assert.equal(reopened.zoom, before.zoom)
+  const now = headerOnScreen(open, frameId, reopened)
+  assert.ok(now)
+  assert.ok(
+    Math.abs(now.x - screen.x) <= 1 && Math.abs(now.y - screen.y) <= 1,
+    JSON.stringify([screen, now]),
+  )
+})
+
+test('nothing is given back once the camera moved from where the fold left it, or for another frame', async () => {
+  const { frameId, open, before, after, screen } = await raisedByFold()
+  const taken = zoomTaken(frameId, before, after)
+  // The control: from where the fold left the camera, this frame gets its zoom back.
+  assert.equal(zoomGivenBack(taken, frameId, after), before.zoom)
+  for (const moved of [
+    { ...after, x: after.x + 40 },
+    { ...after, y: after.y - 40 },
+    { ...after, zoom: after.zoom * 1.1 },
+  ])
+    assert.equal(zoomGivenBack(taken, frameId, moved), undefined, JSON.stringify(moved))
+  assert.equal(zoomGivenBack(taken, goals[0].work_item_id, after), undefined)
+  assert.equal(zoomGivenBack(null, frameId, after), undefined)
+  // Opened with nothing given back, the frame keeps the zoom the camera has.
+  const reopened = graphCameraMove('toggled', open, {
+    camera: after,
+    dimensions,
+    held: { frameId, screen },
+  })
+  assert.ok(reopened)
+  assert.equal(reopened.zoom, after.zoom)
+})
+
+test('a fold or an opening that leaves the zoom where it was takes nothing', async () => {
+  const { frameId, before, after } = await raisedByFold()
+  assert.equal(zoomTaken(frameId, before, before), null)
+  assert.equal(zoomTaken(frameId, after, before), null)
+  assert.deepEqual(zoomTaken(frameId, before, after), { frameId, zoom: before.zoom, camera: after })
 })
 
 test('a fold the camera holds nothing for moves nothing', async () => {

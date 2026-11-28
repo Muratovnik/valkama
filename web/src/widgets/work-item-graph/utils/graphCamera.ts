@@ -408,6 +408,43 @@ export interface HeldFrame {
   frameId: string
   /** Where its header's top-left corner stood on the screen. */
   screen: { x: number; y: number }
+  /** The zoom it opens at, when its fold took the operator's (`zoomGivenBack`). */
+  zoom?: number
+}
+
+/** The operator's zoom a frame's fold raised the camera from, and where the fold left it. */
+export interface TakenZoom {
+  camera: ViewportTransform
+  frameId: string
+  zoom: number
+}
+
+/** What a frame's fold or opening took of the operator's zoom: something only when it raised it. */
+export function zoomTaken(
+  frameId: string,
+  before: ViewportTransform,
+  after: ViewportTransform,
+): TakenZoom | null {
+  return after.zoom > before.zoom ? { frameId, zoom: before.zoom, camera: after } : null
+}
+
+/**
+ * The zoom a frame opens at when its fold took the operator's: the zoom taken, while the
+ * camera stands where the fold left it. Once the operator has zoomed or panned, or another
+ * frame folded, the zoom is the one the camera has, and nothing is given back.
+ */
+export function zoomGivenBack(
+  taken: TakenZoom | null,
+  frameId: string,
+  camera: ViewportTransform,
+): number | undefined {
+  if (taken?.frameId !== frameId) return undefined
+  const left = taken.camera
+  const still =
+    Math.abs(camera.x - left.x) < 0.5 &&
+    Math.abs(camera.y - left.y) < 0.5 &&
+    Math.abs(camera.zoom - left.zoom) < 1e-3
+  return still ? taken.zoom : undefined
 }
 
 /** Where on the screen a frame's header stands at a camera; null when it is not drawn. */
@@ -506,11 +543,12 @@ function keptWhole(
  * (`keptWhole`); and a new queue, search or switch — or a field that changed
  * size — moves it only when not one drawn box is left in sight, and then only
  * across, at the zoom the operator chose. The explicit «Fit whole graph» is the
- * one way to change the zoom besides the operator's own and one more: a camera the
+ * one way to change the zoom besides the operator's own and two more: a camera the
  * new drawing or the new size leaves past the whole view (`graphWholeView`) comes
  * up to it, with a pressed header held as above, since the camera does not stand
- * further out than that. A refresh leaves even that one where it is, until the
- * operator next moves.
+ * further out than that; and a frame whose fold took the operator's zoom that way
+ * gives it back as it opens again (`held.zoom`, `zoomGivenBack`), its header held as
+ * above. A refresh leaves even the first where it is, until the operator next moves.
  */
 export function graphCameraMove(
   cause: GraphCameraCause,
@@ -525,7 +563,7 @@ export function graphCameraMove(
   if (cause === 'refresh') return null
   const past = camera.zoom < whole.zoom
   if (cause === 'toggled' && field.held) {
-    const zoom = past ? whole.zoom : camera.zoom
+    const zoom = Math.max(field.held.zoom ?? camera.zoom, whole.zoom)
     const now = headerOnScreen(graph, field.held.frameId, { ...camera, zoom })
     if (!now) return past ? whole : null
     const held = {

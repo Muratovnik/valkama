@@ -36,12 +36,15 @@ import {
   graphChosen,
   graphWholeView,
   headerOnScreen,
+  zoomGivenBack,
+  zoomTaken,
 } from '@/widgets/work-item-graph/utils/graphCamera.ts'
 import type {
   GraphBranchFrame,
   GraphCameraCause,
   GraphFieldSize,
   HeldFrame,
+  TakenZoom,
 } from '@/widgets/work-item-graph/utils/graphCamera.ts'
 import { FRAME_GAP, GRAPH_ZOOM_MIN } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import type { GraphLayout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
@@ -103,6 +106,8 @@ export function useGraphCamera(input: CameraInput) {
   const flowReady = ref(false)
   const fitted = ref(false)
   let cameraRequest = 0
+  /** The operator's zoom the last fold took, given back when that frame opens again. */
+  let taken: TakenZoom | null = null
   const scopeKey = () => JSON.stringify(input.scopes.map((source) => toValue(source)))
   onBeforeUnmount(() => {
     cameraRequest += 1
@@ -136,8 +141,12 @@ export function useGraphCamera(input: CameraInput) {
       if (!flowReady.value || request !== cameraRequest || !placed) return
       const target = destination(cause, placed, frame)
       if (!target) return
+      const before = { ...viewport.value }
       const positioned = await setViewport(target, { duration: 0 })
-      if (request === cameraRequest && positioned) fitted.value = true
+      if (request !== cameraRequest || !positioned) return
+      fitted.value = true
+      if (cause === 'toggled' && frame)
+        taken = zoomTaken(frame.frameId, before, { ...viewport.value })
     })
   }
 
@@ -150,6 +159,7 @@ export function useGraphCamera(input: CameraInput) {
   /** A different scope: the camera it held for the last one means nothing here. */
   function open() {
     heldCamera = null
+    taken = null
     fitted.value = false
     place('open')
   }
@@ -163,12 +173,17 @@ export function useGraphCamera(input: CameraInput) {
   /**
    * Hold a frame's header where it stands on the screen while the frame folds
    * or opens; call it before the fold. The next layout moves the camera across,
-   * at the same zoom, so the header stays under the hand that pressed it.
+   * at the same zoom, so the header stays under the hand that pressed it — or at
+   * the zoom this frame's fold took, which it gives back as it opens, while the
+   * camera stands where that fold left it. Any fold or opening ends that memory,
+   * and only a fold that raises the zoom starts it again.
    */
   function holdFrame(frameId: string) {
     const placed = input.placed.value
     const screen = placed ? headerOnScreen(placed, frameId, viewport.value) : null
-    held = screen ? { frameId, screen } : null
+    const zoom = zoomGivenBack(taken, frameId, viewport.value)
+    taken = null
+    held = screen ? { frameId, screen, ...(zoom === undefined ? {} : { zoom }) } : null
   }
   // A narrowing lays the field out again while the initialized Vue Flow canvas
   // stays mounted, and the projection is briefly absent while it does; neither
