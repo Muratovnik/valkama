@@ -312,8 +312,8 @@ class Backend:
         except subprocess.TimeoutExpired:
             if not processes.stop_process_tree(self.process):
                 self._report(
-                    f"release {self.pin.label} was stopped alone: its process tree could"
-                    " not be killed whole, so a process it started may still run"
+                    f"release {self.pin.label} did not exit, and its process tree was not"
+                    " seen to end after the stop: a process it started may still run"
                 )
         for pump in self._pumps:
             pump.join(timeout=timeout)

@@ -10,8 +10,9 @@ member, and an ancestor contributes its executable name to a lookup, never its
 path, its arguments or its process id.
 
 `ancestors` is the one impure reader, and the hook calls it on a session start
-only. It imports `ctypes` when called, so the call pair, which imports
-this module on every Valkama tool call, never loads it.
+only. It imports `processes.process_table`, and with it `ctypes`, when called,
+so the call pair, which imports this module on every Valkama tool call, never
+loads them.
 """
 
 from __future__ import annotations
@@ -239,47 +240,6 @@ def ancestors() -> tuple[str, ...]:
 
     if sys.platform != "win32":
         return ()
-    return chain(_snapshot(), os.getpid())
+    from .. import processes
 
-
-def _snapshot() -> dict[int, tuple[int, str]]:
-    """Every process as `{pid: (parent pid, executable name)}`."""
-
-    import ctypes
-    from ctypes import wintypes
-
-    class ProcessEntry(ctypes.Structure):
-        # PROCESSENTRY32W, field for field.
-        _fields_ = (
-            ("dwSize", wintypes.DWORD),
-            ("cntUsage", wintypes.DWORD),
-            ("th32ProcessID", wintypes.DWORD),
-            ("th32DefaultHeapID", ctypes.c_size_t),
-            ("th32ModuleID", wintypes.DWORD),
-            ("cntThreads", wintypes.DWORD),
-            ("th32ParentProcessID", wintypes.DWORD),
-            ("pcPriClassBase", wintypes.LONG),
-            ("dwFlags", wintypes.DWORD),
-            ("szExeFile", wintypes.WCHAR * 260),
-        )
-
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    kernel32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
-    kernel32.CreateToolhelp32Snapshot.argtypes = (wintypes.DWORD, wintypes.DWORD)
-    kernel32.Process32FirstW.argtypes = (wintypes.HANDLE, ctypes.POINTER(ProcessEntry))
-    kernel32.Process32NextW.argtypes = (wintypes.HANDLE, ctypes.POINTER(ProcessEntry))
-    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
-    snapshot_processes = 0x00000002
-    handle = kernel32.CreateToolhelp32Snapshot(snapshot_processes, 0)
-    if handle is None or handle == wintypes.HANDLE(-1).value:
-        raise OSError(ctypes.get_last_error(), "process snapshot refused")
-    processes: dict[int, tuple[int, str]] = {}
-    try:
-        entry = ProcessEntry(dwSize=ctypes.sizeof(ProcessEntry))
-        more = kernel32.Process32FirstW(handle, ctypes.byref(entry))
-        while more:
-            processes[int(entry.th32ProcessID)] = (int(entry.th32ParentProcessID), entry.szExeFile)
-            more = kernel32.Process32NextW(handle, ctypes.byref(entry))
-    finally:
-        kernel32.CloseHandle(handle)
-    return processes
+    return chain(processes.process_table(), os.getpid())

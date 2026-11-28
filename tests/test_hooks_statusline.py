@@ -591,18 +591,23 @@ class ChainTests(StoreCase):
         started = time.monotonic()
         with mock.patch.object(statusline, "PREVIOUS_SECONDS", 2.0):
             printed, errors = self.chained(hanging)
-        self.assertLess(time.monotonic() - started, 15)
-        self.assertEqual(b"", printed)
-        self.assertIn("ran past", errors)
-        with open(marker, encoding="utf-8") as handle:
-            grandchild = int(handle.read())
-        if sys.platform == "win32":
-            self.assertFalse(wait_gone(grandchild), "the previous command's own child was stopped")
-        else:
+        elapsed = time.monotonic() - started
+        grandchild = None
+        if os.path.exists(marker):
+            with open(marker, encoding="utf-8") as handle:
+                grandchild = int(handle.read())
+        if sys.platform != "win32" and grandchild is not None:
             # On POSIX the previous command shares this command's process group, so only
-            # the command itself is stopped; the client's stop of the group reaches the rest.
+            # the command itself is stopped and its child still runs here; the client's
+            # stop of the group reaches it. Ended before an assertion can fail and leave it.
             with contextlib.suppress(ProcessLookupError):
                 os.kill(grandchild, 9)
+        self.assertLess(elapsed, 15)
+        self.assertEqual(b"", printed)
+        self.assertIn("ran past", errors)
+        assert grandchild is not None, "the previous command wrote no number"
+        if sys.platform == "win32":
+            self.assertFalse(wait_gone(grandchild), "the previous command's own child was stopped")
 
     def test_a_previous_command_that_cannot_start_leaves_the_reading_and_a_blank_line(
         self,

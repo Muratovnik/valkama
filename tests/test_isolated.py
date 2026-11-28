@@ -35,6 +35,7 @@ from tests import heavy_gate, heavy_gate_double, isolated, legacy_lock, parallel
 from tests import test_planning_work_model_migration as work_model
 from tests.test_legacy_lock import earlier_whole_machine_run
 from tests.test_mcp_front import alive, wait_until
+from tests.test_processes import end_sleeper
 from tests.test_registry_owner import _former_inventory, _former_projection
 from tests.test_release import link_directory
 
@@ -427,8 +428,8 @@ class GateTests(Workspace):
         run = self.run_python(
             "stdio", "import sys; assert sys.stdin.read() == ''; assert not sys.stdout.isatty()"
         )
-        real_run = subprocess.run
-        with mock.patch.object(subprocess, "run", side_effect=real_run) as spy:
+        real_contained = isolated.processes.contained
+        with mock.patch.object(isolated.processes, "contained", side_effect=real_contained) as spy:
             code, _ = quietly(isolated.run_gates, [run], self.out, os.environ)
 
         self.assertEqual(0, code)
@@ -436,6 +437,28 @@ class GateTests(Workspace):
         self.assertEqual(subprocess.DEVNULL, keywords["stdin"])
         self.assertEqual(subprocess.STDOUT, keywords["stderr"])
         self.assertTrue(keywords["stdout"].name.endswith("stdio.log"))
+
+    def test_what_a_step_leaves_running_ends_with_the_step(self) -> None:
+        number = self.root / "left.txt"
+        leaver = self.run_python(
+            "leaver",
+            "import subprocess, sys\n"
+            "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'],"
+            " stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
+            f"open({str(number)!r}, 'w').write(str(child.pid))\n",
+        )
+
+        code, _ = quietly(isolated.run_gates, [leaver], self.out, os.environ)
+        left = int(number.read_text(encoding="utf-8")) if number.exists() else None
+        gone = left is None or wait_until(lambda: not alive(left))
+        if left is not None and not gone:
+            # Seen running just now, so the number is still the sleeper's: a failing test
+            # must not leave it, and a passing one kills nothing by a number that ended.
+            end_sleeper(left)
+
+        self.assertEqual(0, code)
+        self.assertIsNotNone(left, "the step wrote no number")
+        self.assertTrue(gone, "the step's child outlived it")
 
     def test_a_step_runs_with_its_own_programs_directory_first_on_path(self) -> None:
         # semgrep comes from an environment of its own, and its launcher finds

@@ -119,6 +119,7 @@ class AFailedLaunchTests(ReaperHarness):
         alert_settings.write(self.conn, {"locale": "en", "events": {"launchFailed": True}})
         reference = self.launch("stop me")
         executions.stop_work_item(self.conn, reference)
+        self.assertEqual([self.process_of[reference]], self.stopped, "the stop was not requested")
         self.conn.commit()
         self.reap()
         self.assertEqual([], self.shown)
