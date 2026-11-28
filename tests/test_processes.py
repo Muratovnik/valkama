@@ -240,21 +240,24 @@ class ContainedTests(unittest.TestCase):
         with processes.contained([sys.executable, "-c", LEAVER], stdout=subprocess.PIPE) as child:
             assert child.stdout is not None
             left = int(child.stdout.readline())
-            if sys.platform != "win32":
-                # Registered before anything can fail: a failing test must not leave it.
-                self.addCleanup(end_sleeper, left)
+            # Ended at cleanup only while it was last seen running: a failing test must
+            # not leave it, and nothing is killed by a number that has ended.
+            seen_running = {"last": sys.platform != "win32"}
+            self.addCleanup(lambda: seen_running["last"] and end_sleeper(left))
             child.stdout.close()
             self.assertEqual(0, child.wait())
             if sys.platform == "win32":
                 held = self.hold(left)
                 self.assertFalse(held.gone_within(0), "the sleeper ended before the block did")
             else:
-                self.assertTrue(alive(left), "the sleeper ended before the block did")
+                seen_running["last"] = alive(left)
+                self.assertTrue(seen_running["last"], "the sleeper ended before the block did")
 
         if sys.platform == "win32":
             self.assertTrue(held.gone_within(GONE_SECONDS), "the sleeper outlived the block")
         else:
-            self.assertTrue(gone_within(left, GONE_SECONDS), "the sleeper outlived the block")
+            seen_running["last"] = not gone_within(left, GONE_SECONDS)
+            self.assertFalse(seen_running["last"], "the sleeper outlived the block")
 
     def test_the_child_runs_with_what_it_was_given_and_says_its_exit_code(self) -> None:
         with tempfile.TemporaryDirectory(prefix="vk-proc-") as directory:

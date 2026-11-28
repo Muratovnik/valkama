@@ -449,13 +449,16 @@ class GateTests(Workspace):
         )
 
         code, _ = quietly(isolated.run_gates, [leaver], self.out, os.environ)
-        if number.exists():
-            # A failing step can leave its sleeper running: end it whatever the outcome.
-            self.addCleanup(end_sleeper, int(number.read_text(encoding="utf-8")))
+        left = int(number.read_text(encoding="utf-8")) if number.exists() else None
+        gone = left is None or wait_until(lambda: not alive(left))
+        if left is not None and not gone:
+            # Seen running just now, so the number is still the sleeper's: a failing test
+            # must not leave it, and a passing one kills nothing by a number that ended.
+            end_sleeper(left)
 
         self.assertEqual(0, code)
-        left = int(number.read_text(encoding="utf-8"))
-        self.assertTrue(wait_until(lambda: not alive(left)), "the step's child outlived it")
+        self.assertIsNotNone(left, "the step wrote no number")
+        self.assertTrue(gone, "the step's child outlived it")
 
     def test_a_step_runs_with_its_own_programs_directory_first_on_path(self) -> None:
         # semgrep comes from an environment of its own, and its launcher finds
