@@ -47,7 +47,14 @@ test('English and Russian catalogs have exactly the same keys', () => {
   assert.deepEqual(catalogKeys(messages.en), catalogKeys(messages.ru))
 })
 
-test('every translation key written out in the source resolves in the catalog', () => {
+/**
+ * Every written-out key the source names, and which of them the English catalog lacks. The
+ * source is read as this file loads: a test's timeout counts its own body, and reading about
+ * nine hundred files on a cold cache takes longer than that.
+ */
+const SCAN = scanSource()
+
+function scanSource(): { missing: string[]; seen: Set<string> } {
   const missing: string[] = []
   const seen = new Set<string>()
   for (const relative of sourceFiles()) {
@@ -58,10 +65,14 @@ test('every translation key written out in the source resolves in the catalog', 
       if (!resolves(messages.en, key)) missing.push(`${relative}: ${key}`)
     }
   }
-  assert.deepEqual(missing, [])
+  return { missing, seen }
+}
+
+test('every translation key written out in the source resolves in the catalog', () => {
+  assert.deepEqual(SCAN.missing, [])
   // Known retained call sites keep a broken scanner from reporting a clean catalog.
   for (const key of ['language.label', 'settings.interface', 'open.settings.title']) {
-    assert.ok(seen.has(key), `the scan missed the retained call site for ${key}`)
+    assert.ok(SCAN.seen.has(key), `the scan missed the retained call site for ${key}`)
   }
 })
 
