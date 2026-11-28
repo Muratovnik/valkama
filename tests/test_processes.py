@@ -275,6 +275,18 @@ class ContainedTests(unittest.TestCase):
         self.assertEqual(3, code)
         self.assertEqual(os.path.normcase(directory), os.path.normcase(said))
 
+    def test_a_caller_s_own_creation_flags_are_taken(self) -> None:
+        # The gate passes its no-window flag itself; the block adds its own on top,
+        # on every platform, rather than naming the keyword a second time.
+        with processes.contained(
+            [sys.executable, "-c", "raise SystemExit(4)"],
+            stdin=subprocess.DEVNULL,
+            creationflags=processes.NO_WINDOW,
+        ) as child:
+            code = child.wait()
+
+        self.assertEqual(4, code)
+
     @unittest.skipUnless(sys.platform == "win32", "a Job Object is a Windows object")
     def test_the_tree_ends_when_the_process_holding_it_is_killed_hard(self) -> None:
         gate = subprocess.Popen([sys.executable, "-c", GATE], stdout=subprocess.PIPE)

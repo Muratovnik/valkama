@@ -459,7 +459,9 @@ def contained(argv: list[str], **options: Any) -> Iterator[subprocess.Popen[byte
                     started.wait(timeout=5)
         return
     # NO_WINDOW is 0 on POSIX; passing it keeps every server child told the same way.
-    process = subprocess.Popen(argv, start_new_session=True, creationflags=NO_WINDOW, **options)
+    # A caller's own flags are taken out first, as above, so the keyword is given once.
+    flags = int(options.pop("creationflags", NO_WINDOW))
+    process = subprocess.Popen(argv, start_new_session=True, creationflags=flags, **options)
     try:
         yield process
     finally:
@@ -492,8 +494,10 @@ def stop_process_tree(process: Any, *, wait_timeout: float = 2.0) -> bool:
     by handle before the kill, and True means each process held has ended within
     `wait_timeout`; what `taskkill` leaves running, after a timeout or a failure,
     this ends through those handles rather than leaving all but the child. On
-    POSIX True means the group is empty. Where the tree cannot be seen, the child
-    alone stopped is False, and so is a member that exists but cannot be opened.
+    POSIX True means the group is empty. Where the tree cannot be read, the
+    success of `taskkill` is the answer; its failure, with the child stopped alone,
+    is False, and so is a member that exists but cannot be opened. A root number
+    that names no process holds nothing, and its stop is True.
 
     This lived in three places — the launch runner, the evaluation sandbox and
     the job supervisor — and the copies had already drifted apart: only two of
