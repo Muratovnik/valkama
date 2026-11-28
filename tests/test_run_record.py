@@ -611,6 +611,105 @@ class RunTests(TreeCase):
         self.assertIn("is not a Git working tree", said.getvalue())
         self.assertFalse((bare / "tmp" / run_record.NAME).exists())
 
+    def test_a_run_its_runner_refused_before_any_test_is_not_recorded_and_its_rerun_joins(
+        self,
+    ) -> None:
+        # The browser runner's refusal, standing in: a list naming a clipboard spec runs nothing.
+        runner = (
+            "import sys\n"
+            "names = open(sys.argv[1]).read().split()\n"
+            "if 'clip.spec.ts' in names:\n"
+            "    print('Refused, no test ran: clip.spec.ts writes the clipboard')\n"
+            "    sys.exit(2)\n"
+            "print(f'Ran {len(names)} tests in 0.1s')\n"
+        )
+        listed = self.repo / "tmp" / "specs.txt"
+        listed.parent.mkdir(parents=True, exist_ok=True)
+        self.ran("python", "-c", "pass", name="typos")
+        listed.write_text("a.spec.ts\nclip.spec.ts\n", encoding="utf-8")
+
+        code, said = self.ran("python", "-c", runner, "tmp/specs.txt", name="browser")
+
+        self.assertEqual(2, code, "the exit code is still the runner's")
+        self.assertEqual(["typos"], [entry["name"] for entry in self.recorded()["steps"]])
+        self.assertIn(
+            "not recorded: exit=2, the runner refused before any test ran:"
+            " Refused, no test ran: clip.spec.ts writes the clipboard; the log is ",
+            said,
+        )
+        kept = Path(said.rsplit("the log is ", 1)[1].strip())
+        self.assertIn(b"Refused, no test ran", kept.read_bytes())
+
+        listed.write_text("a.spec.ts\nb.spec.ts\n", encoding="utf-8")
+        self.assertEqual(0, self.ran("python", "-c", runner, "tmp/specs.txt", name="browser")[0])
+
+        steps = self.recorded()["steps"]
+        self.assertEqual(["typos", "browser"], [entry["name"] for entry in steps])
+        self.assertEqual(2, steps[1]["tests"])
+        code, said = self.checked(self.out, self.repo, "typos", "browser")
+        self.assertEqual(run_record.PASSED, code, said)
+
+    def test_a_run_the_heavy_gate_found_no_room_for_is_not_recorded_and_its_rerun_joins(
+        self,
+    ) -> None:
+        lines: list[str] = []
+        refused = heavy_gate._no_room("unittest-suite", "the machine is busy", lines.append)
+        # A run that finds no room exits; the same command waiting for room runs its tests.
+        suite = (
+            "import os, sys\n"
+            "if os.environ.get('STAND_IN_NO_ROOM'):\n"
+            "    sys.stderr.write(os.environ['STAND_IN_NO_ROOM'] + '\\n')\n"
+            f"    sys.exit({refused})\n"
+            "print('Ran 3 tests in 0.1s')\n"
+        )
+
+        code, said = self.ran(
+            "python",
+            "-c",
+            suite,
+            name="suite",
+            environment={**os.environ, "STAND_IN_NO_ROOM": lines[0]},
+        )
+        self.assertEqual(refused, code)
+        self.assertIn(f"the runner refused before any test ran: {lines[0]}; ", said)
+        self.assertFalse((self.out / run_record.NAME).exists(), "a record of nothing was begun")
+        environment = {
+            name: value for name, value in os.environ.items() if name != "STAND_IN_NO_ROOM"
+        }
+        self.assertEqual(
+            0, self.ran("python", "-c", suite, name="suite", environment=environment)[0]
+        )
+
+        self.assertEqual(["suite"], [entry["name"] for entry in self.recorded()["steps"]])
+        self.assertEqual(run_record.PASSED, self.checked(self.out, self.repo, "suite")[0])
+
+    def test_a_run_whose_tests_ran_and_failed_is_recorded_and_its_rerun_goes_beside_it(
+        self,
+    ) -> None:
+        no_room: list[str] = []
+        heavy_gate._no_room("unittest-suite", "the machine is busy", no_room.append)
+        failing = {
+            "unit": "print('Ran 3 tests in 0.1s'); print('FAILED (failures=1)'); raise SystemExit(1)",
+            # typos exits 2 on a typo it found, the code the browser runner refuses with.
+            "typos": "print('error: a misspelled word'); raise SystemExit(2)",
+            # The gate passes a command's own 75 on, with no word of room.
+            "own-75": "raise SystemExit(75)",
+            # A refusal's words that a failing run prints are no refusal of it.
+            "quoted": "print('Refused, no test ran: a test quoting it'); raise SystemExit(1)",
+            # Nor is one runner's line said with the other runner's code.
+            "crossed": f"print({no_room[0]!r}); raise SystemExit(2)",
+        }
+        for name, script in failing.items():
+            self.ran("python", "-c", script, name=name)
+        self.ran("python", "-c", "pass", name="unit")
+
+        steps = self.recorded()["steps"]
+        self.assertEqual([*failing, "unit-2"], [entry["name"] for entry in steps])
+        self.assertEqual([1, 2, 75, 1, 2, 0], [entry["exit"] for entry in steps])
+        code, said = self.checked(self.out, self.repo, "unit")
+        self.assertEqual(run_record.FAILED, code, said)
+        self.assertIn("; failed: unit (required), typos, own-75, quoted, crossed; ran: ", said)
+
     def test_the_command_line_runs_a_command_and_refuses_none(self) -> None:
         with contextlib.redirect_stdout(io.StringIO()):
             code = run_record.main(
@@ -634,6 +733,36 @@ class RunTests(TreeCase):
         self.assertEqual(git_worktrees.canonical(ROOT), record["tree"]["worktree"])
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             run_record.main(["run", "--out", str(self.root / "cli"), "--"])
+
+
+class RefusedBeforeStartTests(unittest.TestCase):
+    """The declared refusals are each runner's own code and words, read from the runner."""
+
+    def test_the_browser_runner_refuses_with_the_code_and_line_declared(self) -> None:
+        source = (ROOT / "web" / "tests" / "browser" / "allowedRun.ts").read_text(encoding="utf-8")
+        said = re.search(
+            r"io\.say\(`(Refused, no test ran: )\$\{error\.message\}`\)\s*return (\d+)", source
+        )
+        assert said is not None, "the runner no longer says and returns its refusal so"
+        line = f"{said.group(1)}the list file batch.txt names no spec"
+
+        found = run_record.refused_before_start(int(said.group(2)), f"x\n{line}\n".encode())
+
+        self.assertEqual(line, found)
+
+    def test_the_heavy_gate_refuses_with_the_code_and_line_declared(self) -> None:
+        lines: list[str] = []
+        code = heavy_gate._no_room("browser-suite", "the machine is busy", lines.append)
+
+        self.assertEqual(heavy_gate.EXIT_NO_ROOM, code)
+        self.assertEqual(lines[0], run_record.refused_before_start(code, lines[0].encode()))
+        # The gate itself says it after its name, as its `say` writes every line.
+        gate = f"heavy-gate: no room for valkama:browser-suite: {lines[0].split(': ', 1)[1]}"
+        self.assertEqual(gate, run_record.refused_before_start(code, gate.encode()))
+
+    def test_only_the_runners_codes_are_declared(self) -> None:
+        self.assertEqual({2, heavy_gate.EXIT_NO_ROOM}, set(run_record.REFUSED_BEFORE_START))
+        self.assertIsNone(run_record.refused_before_start(1, b"Refused, no test ran: x\n"))
 
 
 class CountTests(unittest.TestCase):

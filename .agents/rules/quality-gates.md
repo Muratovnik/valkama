@@ -156,7 +156,11 @@ of a worker's record. `run` replaces the record in DIR once the tree has
 changed, so each commit's checks go into a directory of their own. It refuses a
 tree with uncommitted changes, untracked files among them, before the command
 starts and naming the files, since that record holds only while those same
-changes stand; `--allow-dirty` runs there all the same. Use `gates`
+changes stand; `--allow-dirty` runs there all the same. A run its runner refused
+before any test started, the browser runner's exit 2 or the heavy-process gate's
+75 for no room, each with the line it says then, is not recorded, so its
+corrected run joins the record without the other steps running again; a run
+whose tests ran and failed stays, beside any rerun. Use `gates`
 instead of a wrapper of your own, and
 `serve --out DIR` with `stop --out DIR` for a live check; a test compares its
 steps with `AGENTS.md`.
