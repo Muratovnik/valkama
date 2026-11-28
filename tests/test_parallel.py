@@ -81,6 +81,22 @@ MODULES = {
             def test_passes_then_the_process_fails(self):
                 atexit.register(leave, 4)
     """,
+    "test_records_temp": """
+        import json
+        import os
+        import unittest
+        from pathlib import Path
+
+        class RecordsTemp(unittest.TestCase):
+            def test_what_temp_the_worker_was_given(self):
+                temp = os.environ["TEMP"]
+                record = {
+                    "TEMP": temp,
+                    "TMP": os.environ["TMP"],
+                    "resolved": str(Path(temp).resolve()),
+                }
+                Path("temp-seen.json").write_text(json.dumps(record), encoding="utf-8")
+    """,
 }
 
 #: The package's `__init__`: a way out of the process that skips every cleanup, as a
@@ -190,6 +206,69 @@ class VerdictTests(unittest.TestCase):
         started = parallel.worker_environment({"VALKAMA_DB": named, "HOME": "h"})
 
         self.assertEqual({"HOME": "h"}, started)
+
+    def worker_temp(self, environment: dict[str, str]) -> dict[str, str]:
+        """What a worker started with `environment` recorded of its temporary directory."""
+        said: list[str] = []
+        code = parallel.run(
+            [module("test_records_temp")],
+            1,
+            cwd=self.root,
+            environment={**environment, "PYTHONPATH": str(ROOT)},
+            durations=None,
+            say=said.append,
+        )
+        self.assertEqual(0, code, "\n".join(said))
+        return json.loads((self.root / "temp-seen.json").read_text(encoding="utf-8"))
+
+    def test_a_worker_gets_the_short_form_of_its_temporary_directory_when_there_is_one(
+        self,
+    ) -> None:
+        short = self.root / "stub-short"
+        short.mkdir()
+
+        with mock.patch.object(parallel, "short_path", return_value=str(short)) as probe:
+            seen = self.worker_temp({**os.environ, "TEMP": "caller-temp", "TMP": "caller-tmp"})
+
+        self.assertEqual(str(short), seen["TEMP"])
+        self.assertEqual(str(short), seen["TMP"])
+        (asked,) = probe.call_args.args
+        self.assertGreater(len(asked.name), 8)
+
+    def test_a_worker_keeps_the_callers_temporary_directory_without_a_different_short_form(
+        self,
+    ) -> None:
+        def same(path: Path) -> str:
+            return str(path)
+
+        def unavailable(_path: Path) -> None:
+            return None
+
+        def failing(_path: Path) -> str:
+            raise OSError("the call failed")
+
+        caller = {**os.environ, "TEMP": "caller-temp", "TMP": "caller-tmp"}
+        for label, stub in (("same", same), ("unavailable", unavailable), ("failing", failing)):
+            with self.subTest(label), mock.patch.object(parallel, "short_path", side_effect=stub):
+                seen = self.worker_temp(caller)
+
+                self.assertEqual("caller-temp", seen["TEMP"])
+                self.assertEqual("caller-tmp", seen["TMP"])
+
+    def test_on_windows_a_real_worker_gets_a_temporary_directory_that_resolves_elsewhere(
+        self,
+    ) -> None:
+        if sys.platform != "win32":
+            self.skipTest("8.3 short names are a Windows volume feature")
+        probe = self.root / "probe-with-a-long-name"
+        probe.mkdir()
+        if parallel.short_path(probe) in (None, str(probe)):
+            self.skipTest("this volume keeps no 8.3 short names")
+
+        seen = self.worker_temp(dict(os.environ))
+
+        self.assertEqual(seen["TEMP"], seen["TMP"])
+        self.assertNotEqual(seen["resolved"], seen["TEMP"])
 
 
 class SuiteTests(unittest.TestCase):

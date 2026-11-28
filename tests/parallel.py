@@ -42,6 +42,7 @@ environment every worker must inherit untouched.
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
 import locale
 import os
@@ -274,6 +275,48 @@ def worker_environment(base: Mapping[str, str]) -> dict[str, str]:
     return {name: value for name, value in base.items() if name != "VALKAMA_DB"}
 
 
+def short_path(path: Path) -> str | None:
+    """`path` in its 8.3 short form on Windows, or None where there is none.
+
+    None covers the other platforms, a volume that keeps no short names and a failed
+    call; the caller then keeps the path it has.
+    """
+
+    if sys.platform != "win32":
+        return None
+    kernel32 = ctypes.WinDLL("kernel32")
+    get_short_path = kernel32.GetShortPathNameW
+    get_short_path.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint32]
+    get_short_path.restype = ctypes.c_uint32
+    needed = get_short_path(str(path), None, 0)
+    if needed == 0:
+        return None
+    buffer = ctypes.create_unicode_buffer(needed)
+    if get_short_path(str(path), buffer, needed) == 0:
+        return None
+    return buffer.value
+
+
+def temp_environment(base: Mapping[str, str], scratch: Path) -> dict[str, str]:
+    """`base` with `TEMP` and `TMP` at the short form of a directory made in `scratch`.
+
+    The hosted runner gives `TEMP` in 8.3 form, and a test that compares a temporary
+    path with one the code resolves must fail here too. So a worker starts with the
+    short form when this platform has one, and with `base` as it is otherwise.
+    """
+
+    environment = dict(base)
+    directory = scratch / "module-temp"
+    directory.mkdir()
+    try:
+        short = short_path(directory)
+    except OSError:
+        return environment
+    if short is not None and short != str(directory):
+        environment["TEMP"] = environment["TMP"] = short
+    return environment
+
+
 def _output_codec() -> str:
     # What a worker's streams are written in: it runs with this interpreter's flags.
     return "utf-8" if sys.flags.utf8_mode else locale.getpreferredencoding(False)
@@ -292,11 +335,13 @@ def run_modules(
 
     pending = list(dict.fromkeys(modules))
     total = len(pending)
-    started_with = worker_environment(os.environ if environment is None else environment)
     finished: list[Outcome] = []
     running: dict[str, tuple[subprocess.Popen[bytes], Path, Path, float]] = {}
     scratch = Path(tempfile.mkdtemp(prefix="valkama-parallel-"))
     try:
+        started_with = temp_environment(
+            worker_environment(os.environ if environment is None else environment), scratch
+        )
         while pending or running:
             while pending and len(running) < jobs:
                 module = pending.pop(0)
