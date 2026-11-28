@@ -168,18 +168,25 @@ its record names. A step of an earlier record counts only when no path that
 differs between its state and the tree touches what it reads: `typos`, the
 subjects and the release audit count only from the newest; a unittest run reads,
 module by module, what `tests/affected.py` reaches, so a whole suite is carried
-by a rerun of the modules a change reaches; a command in `web/` reads `web/` but
+by a rerun of the modules a change reaches, and a change in `desktop/`,
+`windows/`, `.github/` but its Release Kit, or `pyproject.toml`, which a test
+may read by its path,
+reaches every module; ruff and vulture read the Python files under the paths they
+name, and mypy and lint-imports every Python file, each with `pyproject.toml`;
+a command in `web/` reads `web/` but
 `web/dist` and every file a source there names, as `DESIGN.md` is by the token
-check `npm test` runs; the browser suite reads `web/` but `web/dist`, `server/`
-and `valkama.py`; the vendored `.github/relkit.pyz` touches the release audit,
-the test modules that name it and the coverage report; a path outside `web/`, `server/`, `tests/`, `docs/`,
-`.agents/`, `valkama.py`, `.github/relkit.pyz` and the Markdown files at the top
-touches every step. A touched step
+check `npm test` runs; the browser suite reads `web/` but `web/dist`, `server/`,
+`valkama.py`, the desktop page a spec renders and the tray's and the toast's
+files the server reads; the vendored `.github/relkit.pyz` touches the release audit,
+the test modules that name it and the coverage report; the other top-level paths,
+which `EVERY_STEP` in `tests/record_chain.py` lists and a test holds every
+tracked path to, touch every step. A touched step
 counts from a record where it is untouched, and is refused, naming it and the
 path, when none is. A passed `npm test` in `web/` counts for the web steps its `test`
 script runs, including those the scripts it runs reach, so a touched one of them
 needs no run of its own. The same step is the same words in the same directory, and
-for the browser runner the specs its list file named, which `run` keeps. A
+for the browser runner the specs its list file named, which `run` keeps,
+whatever path the file had. A
 document no check names therefore needs `typos` and the subjects alone. After a
 merge the branch's records count on the merged head the same way, so only the
 steps the other side's changes touch run again. The chain's Python reach is this
