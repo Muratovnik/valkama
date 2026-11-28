@@ -135,8 +135,11 @@ for (const { least, touch, width } of [
     test(`at ${width}px a fold is a ${least}px square at the opening scale, and the goal's words stay the goal's`, async ({
       page,
     }) => {
-      // Every scale this walks waits for a settled camera: about 16 s alone at 1280px, which
-      // a full suite on a busy machine pushed past the default 30 s.
+      // The camera is waited for once, and the time goes to foldTarget's hit-test scan: for each
+      // fold in sight it asks elementFromPoint about every point of a box that reaches 70 px past
+      // the fold's top and left and 10 px past its bottom and right. About 16 s alone at 1280px
+      // when 8a5287969 sized the budget, which a full suite on a busy machine pushed past the
+      // default 30 s.
       test.setTimeout(90_000)
       await openBroadField(page, width)
       await settledCamera(page)
