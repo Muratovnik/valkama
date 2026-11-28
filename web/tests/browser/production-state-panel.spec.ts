@@ -118,7 +118,9 @@ test('a failed read of the alerts lies inside its settings group, apart from the
   await page.goto(serializePlatformRoute({ module_id: 'settings', scope: spaceScope }))
   const group = page.locator('.settings-group').filter({ hasText: 'Windows notifications' })
   const panel = group.locator('.platform-state-panel')
-  await expect(panel).toBeVisible()
+  // The panel is visible while the read is still under way, where its background is clear; the
+  // measurements below are of the failure, so they wait for its tone.
+  await expect(panel).toHaveAttribute('data-tone', 'danger')
   const room = await panel.evaluate((node) => {
     const box = node.getBoundingClientRect()
     const head = node.closest('.settings-group')?.querySelector('.settings-group-head')
@@ -201,7 +203,8 @@ for (const { name, open } of ON_THE_WORKSPACE)
     await page.setViewportSize({ width: 1500, height: 900 })
     await installBackend(page)
     const panel = await open(page)
-    await expect(panel).toBeVisible()
+    // Visible while the read is under way too: wait for the failure before measuring it.
+    await expect(panel).toHaveAttribute('data-tone', 'danger')
     const ratio = await seam(panel)
     expect(ratio).toBeGreaterThanOrEqual(1.15)
     expect(ratio).toBeLessThan(1.3)
