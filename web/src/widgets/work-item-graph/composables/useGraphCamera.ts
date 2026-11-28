@@ -73,9 +73,11 @@ const COMET_STROKE_HOLDS_ZOOM = 0.625
  * The last camera a field stood at, and the scope it stood on. Module-level on
  * purpose: one field is drawn at a time, and it unmounts whenever the operator
  * switches to the board or the list, which would otherwise forget the camera
- * and frame the field afresh on the way back.
+ * and frame the field afresh on the way back. The zoom a fold took is held with
+ * it, so a frame folded before the trip still gives the zoom back after it.
  */
-let heldCamera: { scope: string; viewport: ViewportTransform } | null = null
+let heldCamera: { scope: string; taken: TakenZoom | null; viewport: ViewportTransform } | null =
+  null
 
 interface CameraInput {
   /** The Vue Flow store this field's canvas and controls share. */
@@ -111,19 +113,23 @@ export function useGraphCamera(input: CameraInput) {
   const scopeKey = () => JSON.stringify(input.scopes.map((source) => toValue(source)))
   onBeforeUnmount(() => {
     cameraRequest += 1
-    if (fitted.value) heldCamera = { scope: scopeKey(), viewport: { ...viewport.value } }
+    if (fitted.value) heldCamera = { scope: scopeKey(), viewport: { ...viewport.value }, taken }
   })
 
   /**
    * Where the camera goes for `cause`. Until the field is first placed every
    * cause is an opening, and the camera held for this scope, if any, is the
-   * opening it returns to — moved across only if nothing is left in its sight.
+   * opening it returns to — moved across only if nothing is left in its sight —
+   * with the zoom a fold had taken there.
    */
   function destination(cause: GraphCameraCause, placed: GraphLayout, frame: HeldFrame | null) {
     const opening = !fitted.value
-    const held = opening && heldCamera?.scope === scopeKey() ? heldCamera.viewport : null
-    if (held)
+    const back = opening && heldCamera?.scope === scopeKey() ? heldCamera : null
+    if (back) {
+      taken = back.taken
+      const held = back.viewport
       return graphCameraMove('resized', placed, { camera: held, dimensions: field() }) ?? held
+    }
     return graphCameraMove(
       opening ? 'open' : cause,
       placed,

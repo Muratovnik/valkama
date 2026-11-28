@@ -44,9 +44,12 @@ const chainEdges: PlanningEdge[] = [{ from: id(4), to: id(2), kind: 'discovered-
 
 type Graph = ReturnType<typeof openGraph>
 
+const openChain = () =>
+  openGraph({ scopeKind: 'chain', scopeRootId: id(1), chain, edges: chainEdges })
+
 /** The chain grown from goal 1 with the camera at its whole view, the farthest out it goes. */
 async function atWholeView() {
-  const graph = openGraph({ scopeKind: 'chain', scopeRootId: id(1), chain, edges: chainEdges })
+  const graph = openChain()
   await drawn(graph)
   const whole = wholeZoom(graph)
   viewport.value = { x: 0, y: 0, zoom: whole }
@@ -87,5 +90,20 @@ describe('a fold that raised the zoom', () => {
     await press(graph, 'Expand')
     await vi.waitFor(() => expect(wholeZoom(graph)).toBeCloseTo(whole, 6))
     expect(viewport.value.zoom).toBeCloseTo(raised, 6)
+  })
+
+  it('gives the zoom back after a trip to the board and back to the same chain', async () => {
+    const { graph, whole } = await atWholeView()
+    await press(graph, 'Collapse')
+    await vi.waitFor(() => expect(viewport.value.zoom).toBeGreaterThan(whole + 0.01))
+    const folded = { ...viewport.value }
+    // The board takes the page and the field unmounts; the graph comes back on the same chain.
+    graph.unmount()
+    const back = openChain()
+    await drawn(back)
+    // The camera stands where the fold left it, and the frame opens at the zoom the fold took.
+    expect(viewport.value).toEqual(folded)
+    await press(back, 'Expand')
+    await vi.waitFor(() => expect(viewport.value.zoom).toBeCloseTo(whole, 6))
   })
 })

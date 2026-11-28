@@ -2642,10 +2642,11 @@ frame beside it cut at the field's edge, its header above the field. A fold that
 the camera further out than the folded drawing's whole view brings it up to that view,
 and the frame gives the operator's zoom back as it opens again, its header held as
 above, while the camera stands where that fold left it (`zoomGivenBack`): folded and
-opened at the whole view, a goal comes back to the view it was folded from rather than
-staying zoomed in on a drawing that has grown. A pan or a zoom of the operator's in
-between, any other fold or opening and another scope end that memory, and the frame
-then opens at the zoom the camera has. The arrows reach a header's two buttons as
+opened again, a goal comes back to the zoom it was folded from rather than staying
+zoomed in on a drawing that has grown. A trip to the board or the list and back keeps
+that memory with the camera it holds. A pan or a zoom of the operator's in between, any
+other fold or opening and another scope end it, and the frame then opens at the zoom
+the camera has. The arrows reach a header's two buttons as
 they reach cards, the fold on its left (`frame:<id>:fold`) and the goal across the
 rest (`frame:<id>`); the work under no goal has only the first. Right from the fold
 is the goal's button beside it and Left from that button is the fold, however wide

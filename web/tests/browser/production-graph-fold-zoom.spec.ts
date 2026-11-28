@@ -103,6 +103,23 @@ for (const width of [1440, 1024]) {
   })
 }
 
+test('a root folded at the whole view gives the zoom back after a trip to the board', async ({
+  page,
+}) => {
+  const whole = await chainAtWholeView(page, 1440)
+  const folded = await pressRootFold(page, 'Collapse')
+  expect(folded.zoom).toBeGreaterThan(whole + 0.01)
+  await page.getByRole('radio', { name: 'Kanban', exact: true }).click()
+  await expect(page.locator('.graph-canvas')).toHaveCount(0)
+  await page.getByRole('radio', { name: 'Graph', exact: true }).click()
+  await expect(page.locator('.graph-canvas.settled')).toBeVisible()
+  // The field comes back with the camera where the fold left it.
+  const returned = await settledCamera(page)
+  expect(returned.zoom).toBeCloseTo(folded.zoom, 3)
+  const opened = await pressRootFold(page, 'Expand')
+  expect(opened.zoom).toBeCloseTo(whole, 3)
+})
+
 test('a root folded at the whole view and opened after a pan keeps the zoom the camera has', async ({
   page,
 }) => {
