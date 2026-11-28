@@ -94,6 +94,8 @@ jobs:
         run: ./.github/memory-readout.ps1 -Title "Memory after the tests"
       - name: Coverage ratchet
         run: python -m coverage report
+      - name: Coverage margin
+        run: python windows/release.py coverage-margin
 
   web:
     if: ${{ github.event.repository && !github.event.repository.private }}

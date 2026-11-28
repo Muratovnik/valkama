@@ -303,7 +303,13 @@ keywords mechanically; the compiler then reports whatever was dead all along.
 The suite runs under coverage because a floor is the only thing that notices a
 test being deleted. `fail_under` in `pyproject.toml` is a ratchet: raise it when
 the measured figure rises, never lower it to make a run green. Deleting a test
-and lowering the floor to match is the one move it exists to prevent.
+and lowering the floor to match is the one move it exists to prevent. A floor
+left behind lets the same loss through unnoticed, so
+`python windows/release.py coverage-margin`, the step after `coverage report`,
+reads the total from the suite's data and fails when it stands more than
+`COVERAGE_MARGIN`, one point, above `fail_under`, naming the floor to raise it
+to: the whole number under the total. The gates and CI run it; the release check
+does not, since a release needs the floor to hold, not to have been raised.
 
 One trap worth knowing: coverage records line numbers and resolves them against
 the file as it is when the report runs. Reformat a measured file before

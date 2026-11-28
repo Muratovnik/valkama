@@ -555,8 +555,11 @@ data_file = ".cache/coverage/data"
 # Execution, scoped-read and registry regressions held the floor at 83%;
 # removing the extension registry with its code and tests left 84.14%.
 # The hook command and its suite took it to 85.28%, and the chain read with
-# its card and graph to 86.45%.
-fail_under = 86
+# its card and graph to 86.45%. The floor stayed at 86 while the figure rose;
+# 91.65%, measured on 2026-11-19, took it to 91, and since then
+# `python windows/release.py coverage-margin` fails a total more than a point
+# above the floor, so it cannot fall that far behind again.
+fail_under = 91
 precision = 2
 skip_covered = true
 exclude_also = [
