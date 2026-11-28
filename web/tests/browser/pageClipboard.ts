@@ -155,19 +155,38 @@ function installPageClipboard(key: string) {
     return name === 'paste' ? false : command(commandId, showUI, value)
   }
 
-  /** The browser's clipboard command a key press starts, if any. */
+  /** The keys of the browser's clipboard commands by `keyCode`, which a raw event may carry alone. */
+  const byKeyCode: Record<number, string> = {
+    45: 'insert',
+    46: 'delete',
+    67: 'c',
+    86: 'v',
+    88: 'x',
+  }
+
+  /**
+   * The browser's clipboard command a key press starts, if any. The key is told by any of its
+   * names: the physical key (`code`), the key it types (`key`) and the virtual key (`keyCode`), as
+   * the browser may pick its command by any of them, so a press caught by one name too many stays
+   * in the page rather than one caught by too few reaching the system.
+   */
   const keyed = (event: KeyboardEvent): Act | undefined => {
     if (event.altKey) return undefined
-    const letter = /^Key([A-Z])$/u.exec(event.code)?.[1]?.toLowerCase() ?? event.key.toLowerCase()
-    const key = event.code || event.key
+    // eslint-disable-next-line unicorn/prefer-keyboard-event-key -- a raw event may carry its virtual key alone, and the browser picks its command by it
+    const virtual = byKeyCode[event.keyCode]
+    const names = new Set(
+      [/^Key([A-Z])$/u.exec(event.code)?.[1], event.code, event.key, virtual]
+        .filter((name): name is string => Boolean(name))
+        .map((name) => name.toLowerCase()),
+    )
     if (event.ctrlKey || event.metaKey) {
-      if (letter === 'c' || key === 'Insert') return 'copy'
-      if (letter === 'x') return 'cut'
-      if (letter === 'v') return 'paste'
+      if (names.has('c') || names.has('insert')) return 'copy'
+      if (names.has('x')) return 'cut'
+      if (names.has('v')) return 'paste'
       return undefined
     }
-    if (event.shiftKey && key === 'Delete') return 'cut'
-    if (event.shiftKey && key === 'Insert') return 'paste'
+    if (event.shiftKey && names.has('delete')) return 'cut'
+    if (event.shiftKey && names.has('insert')) return 'paste'
     return undefined
   }
 
@@ -228,24 +247,32 @@ export function refuseClipboardGrant(spec: string, permissions: readonly string[
     )
 }
 
-const kept = new WeakSet<BrowserContext>()
+/** The contexts whose grants already fail for the system clipboard. */
+const guarded = new WeakSet<BrowserContext>()
 
 /**
- * Puts the page's clipboard into `context`, a context of `spec`'s that has no page yet, for every
- * page it opens, and fails each grant of the system clipboard to it. A context already kept is
- * left as it is.
+ * Puts the page's clipboard into `context`, a context of `spec`'s, for every page it opens, and
+ * fails each grant of the system clipboard to it. The context has no page yet, or only the empty
+ * one Playwright keeps when it reuses a context between tests (`PW_TEST_REUSE_CONTEXT`), which gets
+ * the page's clipboard at once.
+ *
+ * The script goes in each time, even into a context this has seen: a reused context loses the
+ * scripts the previous test added when that test ends, and two of them in one page install once.
  */
 export async function keepClipboardInPage(context: BrowserContext, spec: string): Promise<void> {
-  if (kept.has(context)) return
-  if (context.pages().length > 0)
+  const pages = context.pages()
+  if (pages.some((page) => page.url() !== 'about:blank'))
     throw new Error('the page clipboard goes into a context before its first page, not after')
-  kept.add(context)
-  const grant = context.grantPermissions.bind(context)
-  context.grantPermissions = async (permissions, options) => {
-    refuseClipboardGrant(spec, permissions)
-    return grant(permissions, options)
+  if (!guarded.has(context)) {
+    guarded.add(context)
+    const grant = context.grantPermissions.bind(context)
+    context.grantPermissions = async (permissions, options) => {
+      refuseClipboardGrant(spec, permissions)
+      return grant(permissions, options)
+    }
   }
   await context.addInitScript(installPageClipboard, storeKey)
+  await Promise.all(pages.map((page) => page.evaluate(installPageClipboard, storeKey)))
 }
 
 /** Every write the page made to its clipboard in the document it shows, oldest first. */
@@ -264,6 +291,12 @@ export function pageCopies(page: Page): Promise<PageCopy[]> {
 export async function copiedTexts(page: Page): Promise<string[]> {
   const copies = await pageCopies(page)
   return copies.map(({ data }) => data['text/plain'] ?? '')
+}
+
+/** The text of the page's last write to its clipboard, which a paste would give: none before one. */
+export async function lastCopiedText(page: Page): Promise<string | undefined> {
+  const texts = await copiedTexts(page)
+  return texts.at(-1)
 }
 
 /** Runs in the page: its clipboard refuses from now on. */

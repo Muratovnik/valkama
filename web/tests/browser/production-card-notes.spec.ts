@@ -1,7 +1,8 @@
 import { expect } from '@playwright/test'
 
 import { expectNote, openCard } from './cardNotesPage.ts'
-import { refuseClipboard } from './pageClipboard.ts'
+import { expectNoSilentClipping } from './overflow.ts'
+import { lastCopiedText, refuseClipboard } from './pageClipboard.ts'
 import { workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
@@ -13,8 +14,9 @@ import { test } from './test.ts'
  * last the note's words step aside whole. Where the bar's «…» leaves a phone's line too
  * short for the words, the glyph stays and says it, the whole sentence in its tooltip.
  *
- * The copies here land in the page's clipboard (`pageClipboard.ts`); the notes after a copy
- * read back from the system clipboard are in `production-card-notes-clipboard.spec.ts`.
+ * The copies here land in the page's clipboard (`pageClipboard.ts`) and are read back from there;
+ * the system clipboard's own check of a card's copy is in
+ * `production-reference-preview-copy-clipboard.spec.ts`, whose card copies as the head does.
  */
 
 test('on a desktop drawer the date is whole or not there, never a piece of one', async ({
@@ -75,3 +77,36 @@ test('a note goes after a few seconds, and what stepped aside for it comes back'
   await expect(kind).toBeVisible()
   await expect(anchor).toBeVisible()
 })
+
+// 430px is a phone whose line holds a note's words once the date, the kind and the anchor have
+// stepped aside; at 390px the bar's «…» leaves the line too short for them, and the glyph says it.
+const notesAt = [
+  [1500, 'whole'],
+  [1280, 'whole'],
+  [430, 'whole'],
+  [390, 'stepped aside'],
+] as const
+for (const [width, words] of notesAt) {
+  test(`every note in the head is said whole, never cut, at ${width}px`, async ({ page }) => {
+    const drawer = await openCard(page, width)
+    const clipboard = () => lastCopiedText(page)
+
+    // The link, from the keyboard: the reference, then its link.
+    const link = drawer.getByRole('button', {
+      name: `Копировать ссылку на ${workItemRef.reference}`,
+    })
+    await drawer.locator('.head-reference').focus()
+    await page.keyboard.press('Tab')
+    await expect(link).toBeFocused()
+    await page.keyboard.press('Enter')
+    const address = `${new URL(page.url()).origin}/open/${workItemRef.reference}`
+    await expect.poll(clipboard).toBe(address)
+    await expectNote(page, drawer, 'Ссылка скопирована', { words })
+    await expectNoSilentClipping(page, `link note at ${width}px`)
+
+    // The reference copies itself.
+    await drawer.locator('.head-reference').click()
+    await expect.poll(clipboard).toBe(workItemRef.reference)
+    await expectNote(page, drawer, `${workItemRef.reference} скопирован`, { words })
+  })
+}

@@ -9,7 +9,7 @@ import { spaceScope, workItemRef } from './planningFixtures.ts'
 
 /**
  * A card in Russian, the longer of the two languages, and what its identity line says after a
- * press there (`production-card-notes.spec.ts`, `production-card-notes-clipboard.spec.ts`).
+ * press there (`production-card-notes.spec.ts`).
  */
 
 /** The card in Russian at `width`, its identity line drawn. */

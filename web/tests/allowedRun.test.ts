@@ -20,7 +20,7 @@ vi.mock('./heavyLock.ts', async (actual) => ({
 }))
 
 const allowed = ['production-settings.spec.ts', 'ui-buttons.spec.ts']
-const notes = 'production-card-notes-clipboard.spec.ts'
+const clipboardSpec = 'production-open-session-clipboard.spec.ts'
 /** A spec file of the suite whose name no project's pattern takes. */
 const scratch = 'zz-scratch-shots.spec.ts'
 /** A spec file a project's pattern takes and its ignore list leaves out. */
@@ -154,7 +154,12 @@ describe('the allowed browser run', () => {
         (name) => name.startsWith('ui-') && !clipboardSpecs.includes(name),
       )
       expect(harnessSpec).toBeDefined()
-      const valid = [harnessSpec, 'production-settings.spec.ts', 'production-locale.spec.ts', notes]
+      const valid = [
+        harnessSpec,
+        'production-settings.spec.ts',
+        'production-locale.spec.ts',
+        clipboardSpec,
+      ]
       const lists = { 'scratch.txt': `${scratch}\n`, 'valid.txt': valid.join('\n') }
       const io = {
         ...runner(lists).io,
@@ -175,7 +180,9 @@ describe('the allowed browser run', () => {
 
       const named = runner(lists)
       const real = { ...named.io, projects: realIo.projects, suiteSpecs: () => suite }
-      expect(await runAllowed(['--specs=valid.txt', `--with-clipboard=${notes}`], real)).toBe(0)
+      expect(
+        await runAllowed(['--specs=valid.txt', `--with-clipboard=${clipboardSpec}`], real),
+      ).toBe(0)
       expect(named.written).toEqual([valid])
     } finally {
       vi.unstubAllEnvs()
@@ -183,18 +190,20 @@ describe('the allowed browser run', () => {
   })
 
   it('runs a clipboard spec only when --with-clipboard names it', async () => {
-    const lists = { 'batch.txt': `${notes}\n` }
+    const lists = { 'batch.txt': `${clipboardSpec}\n` }
     const refused = runner(lists)
     expect(await runAllowed(['--specs=batch.txt'], refused.io)).not.toBe(0)
     expect(refused.playwright).not.toHaveBeenCalled()
 
     const named = runner(lists)
-    expect(await runAllowed(['--specs=batch.txt', `--with-clipboard=${notes}`], named.io)).toBe(0)
-    expect(named.written).toEqual([[notes]])
+    expect(
+      await runAllowed(['--specs=batch.txt', `--with-clipboard=${clipboardSpec}`], named.io),
+    ).toBe(0)
+    expect(named.written).toEqual([[clipboardSpec]])
 
     const whole = runner()
-    expect(await runAllowed([`--with-clipboard=${notes}`], whole.io)).toBe(0)
-    expect(whole.written).toEqual([[...allowed, notes]])
+    expect(await runAllowed([`--with-clipboard=${clipboardSpec}`], whole.io)).toBe(0)
+    expect(whole.written).toEqual([[...allowed, clipboardSpec]])
   })
 
   it('lets the configuration select the clipboard specs only when --with-clipboard names one', async () => {
@@ -203,7 +212,7 @@ describe('the allowed browser run', () => {
     expect(plain.playwright.mock.calls.map(([, clipboard]) => clipboard)).toEqual([false])
 
     const named = runner()
-    expect(await runAllowed([`--with-clipboard=${notes}`], named.io)).toBe(0)
+    expect(await runAllowed([`--with-clipboard=${clipboardSpec}`], named.io)).toBe(0)
     expect(named.playwright.mock.calls.map(([, clipboard]) => clipboard)).toEqual([true])
   })
 

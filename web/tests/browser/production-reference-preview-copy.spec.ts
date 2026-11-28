@@ -1,14 +1,15 @@
 /**
  * The card a reference shows says a refused copy as refused, and its text can be selected: the
  * press that starts a selection was refused so that focus would not move, and the card closed
- * under a drag that left it. A copy lands in the page's clipboard (`pageClipboard.ts`); the
- * tests that read one back from the system clipboard are in
- * `production-reference-preview-copy-clipboard.spec.ts`.
+ * under a drag that left it, and it copies its number and its address in either language and
+ * width, from the pointer and from the keyboard. A copy lands in the page's clipboard
+ * (`pageClipboard.ts`) and is read back from there; the one test that reads a copy back from the
+ * system clipboard is in `production-reference-preview-copy-clipboard.spec.ts`.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import { refuseClipboard } from './pageClipboard.ts'
+import { lastCopiedText, refuseClipboard } from './pageClipboard.ts'
 import { selected, shown, WORDS } from './previewCopyPage.ts'
 import { card, cardsAfterTheDelay, ontoCard, openReported, reference, rest } from './previewPage.ts'
 import { test } from './test.ts'
@@ -117,4 +118,77 @@ test('a selection hands focus back to a draft at the next Tab, which stays in th
   expect(await page.evaluate(() => document.activeElement?.closest('.overlay-host') !== null)).toBe(
     true,
   )
+})
+
+for (const locale of ['en', 'ru'] as const) {
+  for (const width of [1280, 390]) {
+    test(`the card copies its number and its address and stays, ${locale} at ${width}px`, async ({
+      page,
+    }) => {
+      const words = WORDS[locale]
+      await shown(page, locale, width)
+      const before = page.url()
+      const note = card(page).locator('.identity-note')
+
+      await page.getByRole('button', { name: words.copy, exact: true }).click()
+      await expect.poll(() => lastCopiedText(page)).toBe('MAIN-12')
+      await expect(note).toContainText(words.copied)
+      await expect(card(page).locator('[role="status"]')).toHaveText(words.copied)
+
+      await page.getByRole('button', { name: words.link, exact: true }).click()
+      await expect.poll(() => lastCopiedText(page)).toBe(`${new URL(before).origin}/open/MAIN-12`)
+      await expect(note).toContainText(words.linked)
+
+      // It opened nothing and went nowhere.
+      expect(page.url()).toBe(before)
+      await expect(card(page)).toContainText('Keep the reader in place')
+      const overflow = await card(page).evaluate((element) => {
+        const { left, right } = element.getBoundingClientRect()
+        return left < 0 || right > document.documentElement.clientWidth
+      })
+      expect(overflow).toBe(false)
+    })
+  }
+}
+
+test('the keyboard reaches both controls from the reference, and goes on from there', async ({
+  page,
+}) => {
+  const { entry } = await openReported(page)
+  const link = reference(entry, 'MAIN-12')
+  await link.evaluate((element) => {
+    const before = document.createElement('button')
+    before.dataset.before = ''
+    element.before(before)
+  })
+  await entry.locator('[data-before]').focus()
+  await page.keyboard.press('Tab')
+  await expect(link).toBeFocused()
+  const copy = page.getByRole('button', { name: WORDS.en.copy, exact: true })
+  const address = page.getByRole('button', { name: WORDS.en.link, exact: true })
+
+  await page.keyboard.press('Tab')
+  await expect(copy).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect.poll(() => lastCopiedText(page)).toBe('MAIN-12')
+  await expect(card(page)).toBeVisible()
+  await page.keyboard.press('Tab')
+  await expect(address).toBeFocused()
+  await page.keyboard.press('Shift+Tab')
+  await expect(copy).toBeFocused()
+  await page.keyboard.press('Shift+Tab')
+  await expect(link).toBeFocused()
+  await expect(card(page)).toBeVisible()
+
+  await page.keyboard.press('Tab')
+  await page.keyboard.press('Tab')
+  await page.keyboard.press('Tab')
+  await expect(reference(entry, 'MAIN-13')).toBeFocused()
+  await expect(card(page)).toContainText('MAIN-13')
+
+  // Escape from inside closes the card alone, and focus stands on the reference again.
+  await page.keyboard.press('Tab')
+  await page.keyboard.press('Escape')
+  await expect(card(page)).toHaveCount(0)
+  await expect(reference(entry, 'MAIN-13')).toBeFocused()
 })

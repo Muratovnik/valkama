@@ -15,12 +15,12 @@ import { basename } from 'node:path'
  *
  * `tests/clipboardSpecs.test.ts` fails when a spec that grants or writes the clipboard, itself or
  * through a module of the suite it imports, is missing here, when a name here is no longer a spec,
- * which would let a renamed one back in, and when a spec takes its `test` from anywhere but the
- * suite's, which would leave its pages the system clipboard.
+ * which would let a renamed one back in, when a spec here does neither, so it runs on the system
+ * clipboard for nothing, and when a spec takes its `test` from anywhere but the suite's, which
+ * would leave its pages the system clipboard.
  */
 export const clipboardSpecs: readonly string[] = [
   'production-analytics-quota-account-actions-clipboard.spec.ts',
-  'production-card-notes-clipboard.spec.ts',
   'production-card-source-clipboard.spec.ts',
   'production-open-session-clipboard.spec.ts',
   'production-reference-preview-copy-clipboard.spec.ts',
@@ -83,6 +83,8 @@ function reachesClipboard(
 
 /** What the list misses and what it names in vain. */
 export interface ClipboardListGaps {
+  /** Listed specs that neither grant nor write the clipboard, so they need no system clipboard. */
+  needless: string[]
   /** Listed names that are no spec among the sources. */
   stale: string[]
   /** Specs that grant or write the clipboard and are not listed. */
@@ -99,6 +101,7 @@ export function clipboardListGaps(
 ): ClipboardListGaps {
   const specs = [...sources.keys()].filter((name) => name.endsWith('.spec.ts'))
   return {
+    needless: listed.filter((name) => specs.includes(name) && !reachesClipboard(name, sources)),
     stale: listed.filter((name) => !specs.includes(name)),
     unlisted: specs.filter(
       (name) =>
@@ -107,19 +110,54 @@ export function clipboardListGaps(
   }
 }
 
-/** An import of the suite's `test`, the one that keeps a page's clipboard in the page. */
-const suiteTest = /^import \{[^}]*\btest\b[^}]*\} from '\.\/test\.ts'$/mu
+/** What one `import … from '<module>'` of a source binds. */
+interface Imported {
+  module: string
+  /** The names it imports between braces, as the module exports them. */
+  named: string[]
+  /** A default or namespace binding: the module's whole `test` among what it gives. */
+  whole: boolean
+}
 
-/** An import of Playwright's own `test`, which leaves a page the system clipboard. */
-const playwrightTest = /^import \{[^}]*\btest\b[^}]*\} from '@playwright\/test'$/mu
+/** Each value import of `source`; `import type` binds no value and is left out. */
+function importsOf(source: string): Imported[] {
+  // The clause stops at a quote, so it never runs on into an earlier import's module.
+  return [...source.matchAll(/^import\s+(?!type\s)([^'"]+?)\s+from\s+'([^']+)'/gmu)].map(
+    ([, clause = '', module = '']) => {
+      const braces = /\{([^}]*)\}/u.exec(clause)?.[1] ?? ''
+      const outside = clause.replace(/\{[^}]*\}/u, '').trim()
+      return {
+        module,
+        named: braces
+          .split(',')
+          .map((one) => one.trim())
+          .filter((one) => one !== '' && !one.startsWith('type '))
+          .map((one) => /^[\w$]+/u.exec(one)?.[0] ?? ''),
+        whole: /^(?:[\w$]|\*\s*as\s)/u.test(outside),
+      }
+    },
+  )
+}
 
 /**
  * The specs among `sources`, as `clipboardListGaps` takes them, that do not take their `test`
- * from the suite's (`test.ts`) alone.
+ * from the suite's (`test.ts`) alone: the suite's is imported by name, since it has no default
+ * export, and anything that binds Playwright's own, by name, by default or as a namespace, leaves
+ * a page the system clipboard.
  */
 export function specsWithoutSuiteTest(sources: ReadonlyMap<string, string>): string[] {
   return [...sources]
     .filter(([name]) => name.endsWith('.spec.ts'))
-    .filter(([, source]) => !suiteTest.test(source) || playwrightTest.test(source))
+    .filter(([, source]) => {
+      const imports = importsOf(source)
+      const suite = imports.some(
+        ({ module, named }) => module === './test.ts' && named.includes('test'),
+      )
+      const playwright = imports.some(
+        ({ module, whole, named }) =>
+          module === '@playwright/test' && (whole || named.includes('test')),
+      )
+      return !suite || playwright
+    })
     .map(([name]) => name)
 }

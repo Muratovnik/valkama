@@ -24,28 +24,49 @@ import {
 
 const suite = fileURLToPath(new URL('browser/', import.meta.url))
 
-function suiteSources(): Map<string, string> {
-  return new Map(
-    readdirSync(suite)
-      .filter((name) => name.endsWith('.ts'))
-      .map((name) => [name, readFileSync(`${suite}${name}`, 'utf8')]),
-  )
-}
+// The suite's sources are read and scanned as this file loads, not in a test's body, where the
+// test's timeout would count the disk (`.agents/rules/web-tests.md`).
+const suiteFiles = readdirSync(suite)
+const sources = new Map(
+  suiteFiles
+    .filter((name) => name.endsWith('.ts'))
+    .map((name) => [name, readFileSync(`${suite}${name}`, 'utf8')]),
+)
+const suiteSpecs = suiteFiles.filter((name) => name.endsWith('.spec.ts'))
+const suiteGaps = clipboardListGaps(sources)
+const leftOff = 'production-card-source-clipboard.spec.ts'
+const gapsWithoutOne = clipboardListGaps(
+  sources,
+  clipboardSpecs.filter((name) => name !== leftOff),
+)
+const suiteWithoutSuiteTest = specsWithoutSuiteTest(sources)
 
 const quiet = "import { test } from './test.ts'\ntest('reads', async () => {})\n"
 
 describe('the clipboard specs', () => {
-  it('lists every spec of the suite that grants or writes the clipboard, and only specs', () => {
-    expect(clipboardListGaps(suiteSources())).toEqual({ unlisted: [], stale: [] })
+  it('lists every spec of the suite that grants or writes the clipboard, and only those', () => {
+    expect(suiteGaps).toEqual({ needless: [], unlisted: [], stale: [] })
   })
 
   it('fails on the suite as it is when one of its clipboard specs is left off', () => {
-    const listed = clipboardSpecs.filter(
-      (name) => name !== 'production-card-source-clipboard.spec.ts',
-    )
-    expect(clipboardListGaps(suiteSources(), listed).unlisted).toEqual([
-      'production-card-source-clipboard.spec.ts',
+    expect(gapsWithoutOne.unlisted).toEqual([leftOff])
+  })
+
+  it('reports a listed spec that neither grants nor writes the clipboard, and no other', () => {
+    const sources = new Map([
+      ['production-quiet.spec.ts', quiet],
+      [
+        'production-copies-clipboard.spec.ts',
+        "test('reads', async ({ page }) => {\n" +
+          "  await page.context().grantPermissions(['clipboard-read'])\n})\n",
+      ],
     ])
+    expect(
+      clipboardListGaps(sources, [
+        'production-quiet.spec.ts',
+        'production-copies-clipboard.spec.ts',
+      ]).needless,
+    ).toEqual(['production-quiet.spec.ts'])
   })
 
   it('catches an unlisted spec that is granted the clipboard', () => {
@@ -82,7 +103,7 @@ describe('the clipboard specs', () => {
   })
 
   it('leaves off the list the spec of the page clipboard alone, which is a spec', () => {
-    expect(suiteSources().has(pageClipboardSpec)).toBe(true)
+    expect(suiteSpecs).toContain(pageClipboardSpec)
     const grants = "test('asks', ({ context }) => context.grantPermissions(['clipboard-read']))\n"
     const sources = new Map([
       [pageClipboardSpec, grants],
@@ -92,10 +113,10 @@ describe('the clipboard specs', () => {
   })
 
   it('tells a listed spec by its name, from a path or from the name alone', () => {
-    const listed = 'production-card-notes-clipboard.spec.ts'
+    const listed = 'production-card-source-clipboard.spec.ts'
     expect(usesSystemClipboard(`${suite}${listed}`)).toBe(true)
     expect(usesSystemClipboard(listed)).toBe(true)
-    expect(usesSystemClipboard(`${suite}production-card-notes.spec.ts`)).toBe(false)
+    expect(usesSystemClipboard(`${suite}production-card-source.spec.ts`)).toBe(false)
   })
 
   it('reports a listed name that is no longer a spec', () => {
@@ -109,10 +130,8 @@ describe('the clipboard specs', () => {
 
 describe("the suite's test", () => {
   it('is the test every spec of the suite takes', () => {
-    const sources = suiteSources()
-    const specs = [...sources.keys()].filter((name) => name.endsWith('.spec.ts'))
-    expect(specs.length).toBeGreaterThan(clipboardSpecs.length)
-    expect(specsWithoutSuiteTest(sources)).toEqual([])
+    expect(suiteSpecs.length).toBeGreaterThan(clipboardSpecs.length)
+    expect(suiteWithoutSuiteTest).toEqual([])
   })
 
   it("catches a spec that takes Playwright's test, or no test of the suite", () => {
@@ -122,12 +141,29 @@ describe("the suite's test", () => {
       ['ui-own.spec.ts', "import { expect, test } from '@playwright/test'\n"],
       ['ui-both.spec.ts', `import { test } from '@playwright/test'\n${quiet}`],
       ['ui-none.spec.ts', "import { expect } from '@playwright/test'\n"],
+      ['ui-typed.spec.ts', `import type { Page } from '@playwright/test'\n${quiet}`],
       ['copyHelper.ts', "import { test } from '@playwright/test'\n"],
     ])
     expect(specsWithoutSuiteTest(sources)).toEqual([
       'ui-own.spec.ts',
       'ui-both.spec.ts',
       'ui-none.spec.ts',
+    ])
+  })
+
+  it("catches Playwright's test taken by default or as a namespace, and a default of the suite's", () => {
+    const sources = new Map([
+      ['ui-default.spec.ts', `import test from '@playwright/test'\n${quiet}`],
+      ['ui-default-and-named.spec.ts', `import base, { expect } from '@playwright/test'\n${quiet}`],
+      ['ui-namespace.spec.ts', `import * as playwright from '@playwright/test'\n${quiet}`],
+      ['ui-suite-default.spec.ts', "import test from './test.ts'\n"],
+      ['ui-suite-alias.spec.ts', "import { test as it } from './test.ts'\n"],
+    ])
+    expect(specsWithoutSuiteTest(sources)).toEqual([
+      'ui-default.spec.ts',
+      'ui-default-and-named.spec.ts',
+      'ui-namespace.spec.ts',
+      'ui-suite-default.spec.ts',
     ])
   })
 })
@@ -147,15 +183,13 @@ async function configSelects(env: Record<string, string | undefined>): Promise<s
   vi.resetModules()
   for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value)
   const { default: config } = await import('../playwright.config.ts')
-  return readdirSync(suite)
-    .filter((name) => name.endsWith('.spec.ts'))
-    .filter((name) =>
-      (config.projects ?? []).some(
-        (project) =>
-          matches(project.testMatch, `${suite}${name}`) &&
-          !matches(project.testIgnore ?? config.testIgnore, `${suite}${name}`),
-      ),
-    )
+  return suiteSpecs.filter((name) =>
+    (config.projects ?? []).some(
+      (project) =>
+        matches(project.testMatch, `${suite}${name}`) &&
+        !matches(project.testIgnore ?? config.testIgnore, `${suite}${name}`),
+    ),
+  )
 }
 
 describe('the browser configuration', () => {

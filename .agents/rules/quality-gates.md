@@ -78,10 +78,15 @@ for the clipboard, but it is still not how the suite runs: it refuses nothing
 and ends with no count to compare, so the whole suite goes through the runner.
 `tests/clipboardSpecs.test.ts` fails on a spec that grants or writes the
 clipboard and is not on that list, so a test that starts to goes into a listed
-spec of its own in the same change; on a spec that takes its `test` from
+spec of its own in the same change; on a listed spec that does neither, which
+would run on the system clipboard for nothing; on a spec that takes its `test` from
 anywhere but the suite's; and on a configuration that selects a listed spec
 without the variable. `ui-page-clipboard.spec.ts` checks the page's clipboard
 itself, and is the one spec off the list that may write and ask for it.
+No runner checks that a run left the system clipboard alone, since the system's
+count of its writes (on Windows `GetClipboardSequenceNumber`) also moves when
+the person at the machine copies something: whoever runs the suite reads that
+count by hand before and after the run, and the two must be equal.
 
 The Analytics sweep (`web/tests/sweep/analyticsSweep.ts`) is not a gate but a
 measurement of a running Valkama: every rail section, period, chart view and the

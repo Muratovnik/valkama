@@ -8,13 +8,18 @@ import { test } from './test.ts'
  * The page's clipboard (`pageClipboard.ts`) in a spec off the clipboard list: a page meets it
  * before its first script; what a page copies, by each way a browser offers, stays in the page
  * and is read back from there; it refuses when told to; and a grant of the system clipboard
- * fails. That the system clipboard was left as it was is not something a page can see: a run of
- * this spec shows it by the system's own count of its writes, read before and after.
+ * fails.
+ *
+ * That the system clipboard was left as it was is not something a page can see, and no runner
+ * checks it: the system's own count of its writes (on Windows, `GetClipboardSequenceNumber`) also
+ * moves when the person at the machine copies anything during a run, so a check of it would refuse
+ * runs that did nothing wrong. Whoever runs the suite reads that count by hand before and after a
+ * run that touches this fixture, and the two must be equal.
+ *
+ * Each test copies only once its page is shown to have the page's clipboard and the listener that
+ * keeps the keys from the browser (`beforeEach`), so a test run alone, or after a change that
+ * broke the fixture, fails before it presses a key rather than reach the system clipboard.
  */
-
-// The first test finds the page's clipboard in place; should it not, the rest, which copy, do not
-// run against the system's.
-test.describe.configure({ mode: 'serial' })
 
 const PAGE = '/page-clipboard'
 
@@ -51,6 +56,36 @@ const firstScript = (page: Page) =>
 /** What the first script meets where the page's clipboard came before it. */
 const KEPT = { kept: true, native: 0, control: true }
 
+/**
+ * The phase of each `keydown` listener on the page's window, as DevTools lists them. The page
+ * above adds none, so each one there is the page clipboard's.
+ */
+async function keyListeners(page: Page): Promise<string[]> {
+  const session = await page.context().newCDPSession(page)
+  try {
+    const { result } = (await session.send('Runtime.evaluate', { expression: 'window' })) as {
+      result: { objectId?: string }
+    }
+    if (!result.objectId) throw new Error('the page has no window to read listeners from')
+    const { listeners } = (await session.send('DOMDebugger.getEventListeners', {
+      objectId: result.objectId,
+    })) as { listeners: { type: string; useCapture: boolean }[] }
+    return listeners
+      .filter(({ type }) => type === 'keydown')
+      .map(({ useCapture }) => (useCapture ? 'capture' : 'bubble'))
+  } finally {
+    await session.detach()
+  }
+}
+
+// Before any test copies: the page has the page's clipboard, and the one listener that takes the
+// keys first, on the way down, so the browser's own copy never starts.
+test.beforeEach(async ({ page }) => {
+  await open(page)
+  expect(await firstScript(page)).toEqual(KEPT)
+  expect(await keyListeners(page)).toEqual(['capture'])
+})
+
 /** The start of what a refused grant of `asked` says. */
 const why = (asked: string) =>
   new RegExp(
@@ -59,7 +94,6 @@ const why = (asked: string) =>
   )
 
 test('a page meets the page clipboard before its first script runs', async ({ page }) => {
-  await open(page)
   expect(await firstScript(page)).toEqual(KEPT)
   // A second page of the context, opened once the first has loaded, meets it as well.
   const other = await page.context().newPage()
@@ -70,7 +104,6 @@ test('a page meets the page clipboard before its first script runs', async ({ pa
 test('what a page writes through its clipboard is kept in the page and read back', async ({
   page,
 }) => {
-  await open(page)
   const read = await page.evaluate(async () => {
     await navigator.clipboard.writeText('first')
     const item = new ClipboardItem({
@@ -91,7 +124,6 @@ test('what a page writes through its clipboard is kept in the page and read back
 test('the keys copy the selection, or what the page set, and cut and paste within the page', async ({
   page,
 }) => {
-  await open(page)
   await page.locator('#words').selectText()
   await page.keyboard.press('Control+c')
   await expect.poll(() => copiedTexts(page)).toEqual(['Words to copy'])
@@ -137,10 +169,55 @@ test('the keys copy the selection, or what the page set, and cut and paste withi
   expect(copies.at(-1)).toEqual({ via: 'cut', data: { 'text/plain': 'cut me ' } })
 })
 
+test('a press known by its virtual key alone copies, cuts and pastes within the page', async ({
+  page,
+}) => {
+  // The page's own listener cancels every key with the browser's own `preventDefault`, so a press
+  // the page clipboard missed never starts the browser's command: it copies nowhere, and the check
+  // below fails rather than the system clipboard being written.
+  await page.evaluate(() => {
+    document.addEventListener('keydown', (event) => {
+      Event.prototype.preventDefault.call(event)
+    })
+  })
+  // An event as DevTools and other drivers may send it: the virtual key, and neither `code` nor
+  // `key`.
+  const session = await page.context().newCDPSession(page)
+  const [control, shift] = [2, 8]
+  const press = async (windowsVirtualKeyCode: number, modifiers: number) => {
+    const event = { windowsVirtualKeyCode, modifiers }
+    await session.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...event })
+    await session.send('Input.dispatchKeyEvent', { type: 'keyUp', ...event })
+  }
+
+  await page.locator('#words').selectText()
+  await press(67, control)
+  await press(45, control)
+  await expect.poll(() => copiedTexts(page)).toEqual(['Words to copy', 'Words to copy'])
+
+  const field = page.getByRole('textbox', { name: 'Field' })
+  await field.fill('cut me please')
+  await field.evaluate((node: HTMLTextAreaElement) => node.setSelectionRange(0, 7))
+  await press(88, control)
+  await expect(field).toHaveValue('please')
+  await field.fill('one two')
+  await field.evaluate((node: HTMLTextAreaElement) => node.setSelectionRange(0, 4))
+  await press(46, shift)
+  await expect(field).toHaveValue('two')
+
+  await field.evaluate((node: HTMLTextAreaElement) => node.setSelectionRange(3, 3))
+  await press(86, control)
+  await expect(field).toHaveValue('twoone ')
+  await press(45, shift)
+  await expect(field).toHaveValue('twoone one ')
+  const copies = await pageCopies(page)
+  expect(copies.map(({ via }) => via)).toEqual(['copy', 'copy', 'cut', 'cut'])
+  await session.detach()
+})
+
 test('execCommand copies into the page, pastes nothing, and still does the rest', async ({
   page,
 }) => {
-  await open(page)
   await page.locator('#words').selectText()
   const done = await page.evaluate(() => [
     document.execCommand('copy'),
@@ -157,7 +234,6 @@ test('execCommand copies into the page, pastes nothing, and still does the rest'
 test('a clipboard told to refuse refuses each write and read, here and in the next document', async ({
   page,
 }) => {
-  await open(page)
   await refuseClipboard(page)
   const tries = () =>
     page.evaluate(() =>
@@ -195,7 +271,6 @@ test('a grant of the system clipboard fails and says where such a test goes', as
   // Any other permission is granted as before.
   await page.context().grantPermissions(['geolocation'])
   // A page the test opens in a context of its own meets the page's clipboard too.
-  await open(page)
   const own = await browser.newPage()
   await open(own, page.url())
   expect(await firstScript(own)).toEqual(KEPT)
