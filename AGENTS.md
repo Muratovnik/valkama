@@ -164,13 +164,12 @@ split with it:
   `.heavy-gate.toml` declares: in an agent's session a run that finds no room
   exits 75 and says why, and `HEAVY_GATE_WAIT=1` makes it wait.
   A defect that depends on a neighbouring worktree shows up only at this run.
-- Each worktree is made with `python tests/worktree.py add` and removed with
-  `python tests/worktree.py remove`. The first links its `web` and `desktop`
-  `node_modules` to the main checkout's where its lockfile is the main
-  checkout's, so it gets no copy of its own; the second takes those links out
-  before Git removes the worktree, which would leave them standing. `npm ci`
-  runs only in a package with no link: through one it empties the main
-  checkout's modules and those of every worktree sharing them.
+- Each worktree is made with `python tests/worktree.py add`, which links its
+  `web` and `desktop` `node_modules` to the main checkout's where the lockfile
+  is the same byte for byte, and removed with `python tests/worktree.py
+  remove`, which takes the links out first. `npm ci` runs only in a package
+  with no link: through one it empties the modules of every checkout sharing
+  them. The runners refuse a worktree with a copy where a link was due.
 
 How to run one browser spec, a probe spec kept outside the suite, or the whole
 suite, and which specs that runner leaves out, is in
@@ -390,11 +389,11 @@ force, and the gates hold each:
 - Keep generated `node_modules`, release bundles, databases, WAL files, logs,
   and user runtime state out of Git. The one deliberate exception is `web/dist`,
   committed so a clone serves the built UI with no build step; rebuild it
-  whenever `web/src` changes and include it in the next incremental local
-  commit after a coherent task-owned green boundary. In a parallel worktree the
-  worker does not commit it and returns it to its branch's state before handing
-  off; the integrator rebuilds it once on the integrated head and commits it
-  there.
+  whenever `web/src` changes and commit it at the next green boundary. In a
+  parallel worktree only the integrator commits it, once on the integrated head,
+  under a subject starting `build(web)`; the worker returns it to its branch's
+  state before handing off, and the runners refuse a branch carrying it in
+  another commit.
 - Test fixtures, comments and titles carry no value from a live store or the
   owner's own records: no figure, name or id. A case found on live data is
   rebuilt from made-up values, and its comment says the case, not where it was

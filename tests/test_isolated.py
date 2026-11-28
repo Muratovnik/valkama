@@ -27,13 +27,22 @@ import tempfile
 import threading
 import unittest
 import urllib.parse
+from collections.abc import Sequence
 from pathlib import Path
 from unittest import mock
 
 import tests
 from server import store
 from server.store_identity.refs import planning_space_entity
-from tests import heavy_gate, heavy_gate_double, isolated, legacy_lock, parallel, run_record
+from tests import (
+    heavy_gate,
+    heavy_gate_double,
+    isolated,
+    legacy_lock,
+    parallel,
+    run_record,
+    worktree,
+)
 from tests import test_planning_work_model_migration as work_model
 from tests.test_legacy_lock import earlier_whole_machine_run
 from tests.test_mcp_front import alive, wait_until
@@ -71,6 +80,7 @@ for _ in range(600):
 #: Asks the product where it would write, and writes there.
 PROBE = """\
 import json, os, sys
+from collections.abc import Sequence
 from pathlib import Path
 from server import store
 from server.projects import project_registry
@@ -696,12 +706,13 @@ class GateTests(Workspace):
         self.assertTrue(self.home.exists())
 
     def gates_on_tree(
-        self, tree: dict[str, object], *flags: str
+        self, tree: dict[str, object], *flags: str, defects: Sequence[str] = ()
     ) -> tuple[int, str, mock.MagicMock, Path]:
         """The command run on a tree in the state `tree` stands for, with one step that leaves a mark.
 
         `run_record.tree_state` gives `tree` first and another state after it, so a
         record that says `tree` holds the state that was judged and not a later read.
+        `tests/worktree.py` finds `defects` in this checkout, and none by default.
         """
 
         started = self.root / "started"
@@ -717,8 +728,10 @@ class GateTests(Workspace):
                 "tree_state",
                 side_effect=itertools.chain([tree], itertools.repeat(later)),
             ),
+            mock.patch.object(worktree, "defects", return_value=list(defects)) as judged,
         ):
             code, said = quietly(isolated.main, ["gates", "--out", str(self.out), *flags])
+        judged.assert_called_once_with(isolated.ROOT)
         return code, said, toolchain, started
 
     @staticmethod
@@ -766,6 +779,30 @@ class GateTests(Workspace):
         self.assertTrue(started.exists(), said)
         record = json.loads((self.out / run_record.NAME).read_text(encoding="utf-8"))
         self.assertEqual(dirty, record["tree"])
+
+    def test_gates_refuse_a_worktree_defect_before_the_toolchain_dirty_allowed_or_not(
+        self,
+    ) -> None:
+        found = ["the first defect: its fix", "the second defect: its fix"]
+
+        for flags in ((), ("--allow-dirty",)):
+            with self.subTest(flags=flags):
+                code, said, toolchain, started = self.gates_on_tree(
+                    self.tree(), *flags, defects=found
+                )
+
+                self.assertEqual(2, code, said)
+                self.assertEqual(
+                    [
+                        "refused before the first step: the first defect: its fix",
+                        "refused before the first step: the second defect: its fix",
+                        "no gate step ran",
+                    ],
+                    said.splitlines(),
+                )
+                toolchain.assert_not_called()
+                self.assertFalse(started.exists(), "a step ran")
+                self.assertFalse((self.out / run_record.NAME).exists())
 
     def test_gates_run_on_a_clean_tree_with_no_flag(self) -> None:
         clean = self.tree()

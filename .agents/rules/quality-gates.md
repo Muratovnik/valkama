@@ -312,13 +312,12 @@ them; a release check run in the main checkout once did, and then failed on a
 file a running process held. So `check` installs nowhere in the checkout: it
 copies the sources Git tracks or would add, never a `node_modules`, into a
 temporary directory, runs `npm ci` and every npm stage there, puts the web build
-back in `web/dist`, and removes the copy without entering a link in it. A gate's
-refusal says to remove a link before running `npm ci` in a worktree. `gates`
+back in `web/dist`, and removes the copy without entering a link in it. `gates`
 still reads through a link, so a worktree may share modules as long as they match
-its own lockfile. `tests/worktree.py` makes those links where a worktree's
-lockfile is the main checkout's byte for byte, and takes them out before
-`git worktree remove`, which deletes the rest of the worktree but leaves a
-junction behind, and the directory that holds it.
+its own lockfile. `tests/worktree.py` makes those links, and `run`, `check` and
+`gates` refuse, whatever `--allow-dirty` says, a worktree with a copy where a link
+was due or whose branch carries `web/dist` in a commit not starting `build(web)`,
+naming each defect and its fix.
 
 `lint-imports` is the one-way import rule `AGENTS.md` states in prose, stated
 as configuration so a tool refuses a breach instead of a reviewer noticing one.
