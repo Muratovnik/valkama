@@ -35,6 +35,7 @@ from tests import heavy_gate, heavy_gate_double, isolated, legacy_lock, parallel
 from tests import test_planning_work_model_migration as work_model
 from tests.test_legacy_lock import earlier_whole_machine_run
 from tests.test_mcp_front import alive, wait_until
+from tests.test_processes import end_sleeper
 from tests.test_registry_owner import _former_inventory, _former_projection
 from tests.test_release import link_directory
 
@@ -448,6 +449,9 @@ class GateTests(Workspace):
         )
 
         code, _ = quietly(isolated.run_gates, [leaver], self.out, os.environ)
+        if number.exists():
+            # A failing step can leave its sleeper running: end it whatever the outcome.
+            self.addCleanup(end_sleeper, int(number.read_text(encoding="utf-8")))
 
         self.assertEqual(0, code)
         left = int(number.read_text(encoding="utf-8"))
