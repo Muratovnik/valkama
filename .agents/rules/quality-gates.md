@@ -121,9 +121,12 @@ follows a tainted value through a function. It reads the Python server alone,
 because it does not parse `.vue`; the web side is covered by
 eslint-plugin-security through vue-eslint-parser. Registry rules are fetched
 once and cached, so the first run on a fresh machine needs the network. It
-scans only files Git knows about: a new module that is not yet staged is
-skipped without a word, so stage new files (`git add -N` is enough) before
-reading its result as covering them.
+scans the files Git tracks and the untracked ones `.gitignore` does not exclude,
+so a new module is read before it is staged, and no `git add -N` is needed. A
+file under an ignored path, such as `server/__pycache__/`, is not scanned.
+Measured with semgrep 1.187.0: a `subprocess.call(cmd, shell=True)` probe under
+`server/` was reported while untracked, and one under `server/__pycache__/` was
+not.
 
 Run the Python gates from the ignored `.venv`, built on Python 3.15 — the
 interpreter the installed launcher runs, so the suite meets the SQLite the
