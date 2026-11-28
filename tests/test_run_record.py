@@ -15,10 +15,11 @@ import re
 import sys
 import tempfile
 import unittest
+from collections.abc import Mapping
 from pathlib import Path
 from unittest import mock
 
-from server import git_worktrees, processes
+from server import git_worktrees, processes, store_lock
 from tests import heavy_gate, isolated, legacy_lock, run_record
 from windows import release
 
@@ -367,7 +368,11 @@ class RunTests(TreeCase):
         self.addCleanup(note.stop)
 
     def ran(
-        self, *command: str, name: str | None = None, environment: dict[str, str] | None = None
+        self,
+        *command: str,
+        name: str | None = None,
+        environment: dict[str, str] | None = None,
+        allow_dirty: bool = False,
     ) -> tuple[int, str]:
         with contextlib.redirect_stdout(io.StringIO()) as said:
             code = run_record.run(
@@ -377,6 +382,7 @@ class RunTests(TreeCase):
                 name=name,
                 environment=os.environ if environment is None else environment,
                 root=self.repo,
+                allow_dirty=allow_dirty,
             )
         return code, said.getvalue()
 
@@ -419,7 +425,7 @@ class RunTests(TreeCase):
         self.ran("python", "-c", "pass", name="first")
         self.write("server/app.py", "print('edited')\n")
 
-        code, said = self.ran("python", "-c", "pass", name="second")
+        code, said = self.ran("python", "-c", "pass", name="second", allow_dirty=True)
 
         self.assertEqual(0, code)
         self.assertIn("a new record replaces ", said)
@@ -477,6 +483,233 @@ class RunTests(TreeCase):
         # No marker of a holder, so a targeted test run in it still names the holder when it fails.
         self.assertEqual(b"given None", (self.out / "logs" / "env.log").read_bytes().strip())
 
+    def during(self, first: str, then: tuple[str, ...]) -> contextlib.AbstractContextManager:
+        """`_run_step` with the first run of the step named `first` doing the run `then` meanwhile.
+
+        Two runs into one `out` at once, in the order of the race: the second, named
+        `second`, starts and ends while the first one's command is still going.
+        """
+
+        real = isolated._run_step
+        pending = [then]
+
+        def step(run: isolated.Run, log: Path, environment: Mapping[str, str]) -> int:
+            if run.name == first and pending:
+                self.ran(*pending.pop(), name="second")
+            return real(run, log, environment)
+
+        return mock.patch.object(isolated, "_run_step", side_effect=step)
+
+    def test_a_run_that_ends_while_another_into_the_same_out_goes_keeps_both_steps(self) -> None:
+        with self.during("suite", ("python", "-c", "print('typos ran')")):
+            self.ran("python", "-c", "print('Ran 4 tests in 0.2s')", name="suite")
+
+        steps = self.recorded()["steps"]
+        self.assertEqual(["second", "suite"], [entry["name"] for entry in steps])
+        self.assertEqual(4, steps[1]["tests"])
+        self.assertEqual(run_record.PASSED, self.checked(self.out, self.repo, "second")[0])
+
+    def test_two_runs_of_the_same_words_at_once_each_keep_a_step_and_a_log_of_their_own(
+        self,
+    ) -> None:
+        with self.during("second", ("python", "-c", "print('inner')")):
+            self.ran("python", "-c", "print('outer')", name="second")
+
+        steps = self.recorded()["steps"]
+        self.assertEqual(["second", "second-2"], [entry["name"] for entry in steps])
+        logs = self.out / isolated.LOGS
+        self.assertEqual(b"inner", (logs / "second.log").read_bytes().strip())
+        self.assertEqual(b"outer", (logs / "second-2.log").read_bytes().strip())
+        self.assertEqual(
+            ["second-2.log", "second.log"],
+            sorted(path.name for path in logs.iterdir()),
+            "a log under its running name is left behind",
+        )
+
+    def test_a_run_waits_for_a_live_holder_of_the_lock_and_records_nothing_past_the_wait(
+        self,
+    ) -> None:
+        self.ran("python", "-c", "pass", name="first")
+        before = (self.out / run_record.NAME).read_bytes()
+        with (
+            (self.out / run_record.LOCK).open("a+b") as held,
+            mock.patch.object(run_record, "LOCK_WAIT_SECONDS", 0.2),
+        ):
+            self.assertTrue(store_lock.try_lock(held))
+            try:
+                code, said = self.ran("python", "-c", "pass", name="blocked")
+            finally:
+                store_lock.unlock(held)
+
+        self.assertEqual(run_record.REFUSED, code)
+        self.assertIn(f"not recorded: {self.out / run_record.LOCK} stayed locked for 0.2 s", said)
+        self.assertEqual(before, (self.out / run_record.NAME).read_bytes())
+
+    def test_a_lock_its_holder_died_with_does_not_hold_a_run_up(self) -> None:
+        self.out.mkdir(parents=True)
+        lock = self.out / run_record.LOCK
+        held = (
+            "import os, sys; sys.path.insert(0, sys.argv[2]); from server import store_lock;"
+            " handle = open(sys.argv[1], 'a+b'); assert store_lock.try_lock(handle); os._exit(0)"
+        )
+        died = processes.run_text([sys.executable, "-c", held, str(lock), str(ROOT)])
+        self.assertEqual(0, died.returncode, died.stderr)
+
+        with mock.patch.object(run_record, "LOCK_WAIT_SECONDS", 5.0):
+            code, said = self.ran("python", "-c", "pass", name="after")
+
+        self.assertEqual(0, code, said)
+        self.assertEqual(["after"], [entry["name"] for entry in self.recorded()["steps"]])
+
+    def test_a_tree_with_uncommitted_changes_is_refused_before_the_command_starts(self) -> None:
+        self.ran("python", "-c", "pass", name="first")
+        before = (self.out / run_record.NAME).read_bytes()
+        started = self.root / "started"
+        mark = f"open({str(started)!r}, 'w').close()"
+        self.write("web/tests/browser/probe.spec.ts", "a probe\n")
+        self.write("server/app.py", "print('edited')\n")
+
+        code, said = self.ran("python", "-c", mark, name="long")
+
+        self.assertEqual(run_record.REFUSED, code, said)
+        self.assertFalse(started.exists(), "the command started")
+        self.assertEqual(before, (self.out / run_record.NAME).read_bytes())
+        self.assertIn(
+            "refused before the first step: it was made with uncommitted changes,"
+            " and this tree has none; the files that differ from ",
+            said,
+        )
+        self.assertIn(": server/app.py, web/tests/browser/probe.spec.ts; commit or remove", said)
+
+    def test_a_dirty_run_allowed_is_recorded_and_held_to_those_changes_alone(self) -> None:
+        self.write("web/tests/browser/probe.spec.ts", "a probe\n")
+
+        code, said = self.ran("python", "-c", "pass", name="draft", allow_dirty=True)
+
+        self.assertEqual(0, code, said)
+        self.assertTrue(self.recorded()["tree"]["dirty"])
+        self.assertEqual(run_record.PASSED, self.checked(self.out, self.repo)[0])
+        (self.repo / "web/tests/browser/probe.spec.ts").unlink()
+        code, said = self.checked(self.out, self.repo)
+        self.assertEqual(run_record.REFUSED, code, said)
+        self.assertIn("it was made with uncommitted changes, and this tree has none", said)
+
+    def test_a_tree_git_does_not_know_is_refused_before_the_command_starts(self) -> None:
+        bare = self.root / "bare"
+        bare.mkdir()
+        with contextlib.redirect_stdout(io.StringIO()) as said:
+            code = run_record.run(
+                bare / "tmp",
+                ["python", "-c", "raise SystemExit(4)"],
+                cwd=bare,
+                name=None,
+                environment=os.environ,
+                root=bare,
+            )
+        self.assertEqual(run_record.REFUSED, code)
+        self.assertIn("refused before the first step: ", said.getvalue())
+        self.assertIn("is not a Git working tree", said.getvalue())
+        self.assertFalse((bare / "tmp" / run_record.NAME).exists())
+
+    def test_a_run_its_runner_refused_before_any_test_is_not_recorded_and_its_rerun_joins(
+        self,
+    ) -> None:
+        # The browser runner's refusal, standing in: a list naming a clipboard spec runs nothing.
+        runner = (
+            "import sys\n"
+            "names = open(sys.argv[1]).read().split()\n"
+            "if 'clip.spec.ts' in names:\n"
+            "    print('Refused, no test ran: clip.spec.ts writes the clipboard')\n"
+            "    sys.exit(2)\n"
+            "print(f'Ran {len(names)} tests in 0.1s')\n"
+        )
+        listed = self.repo / "tmp" / "specs.txt"
+        listed.parent.mkdir(parents=True, exist_ok=True)
+        self.ran("python", "-c", "pass", name="typos")
+        listed.write_text("a.spec.ts\nclip.spec.ts\n", encoding="utf-8")
+
+        code, said = self.ran("python", "-c", runner, "tmp/specs.txt", name="browser")
+
+        self.assertEqual(2, code, "the exit code is still the runner's")
+        self.assertEqual(["typos"], [entry["name"] for entry in self.recorded()["steps"]])
+        self.assertIn(
+            "not recorded: exit=2, the runner refused before any test ran:"
+            " Refused, no test ran: clip.spec.ts writes the clipboard; the log is ",
+            said,
+        )
+        kept = Path(said.rsplit("the log is ", 1)[1].strip())
+        self.assertIn(b"Refused, no test ran", kept.read_bytes())
+
+        listed.write_text("a.spec.ts\nb.spec.ts\n", encoding="utf-8")
+        self.assertEqual(0, self.ran("python", "-c", runner, "tmp/specs.txt", name="browser")[0])
+
+        steps = self.recorded()["steps"]
+        self.assertEqual(["typos", "browser"], [entry["name"] for entry in steps])
+        self.assertEqual(2, steps[1]["tests"])
+        code, said = self.checked(self.out, self.repo, "typos", "browser")
+        self.assertEqual(run_record.PASSED, code, said)
+
+    def test_a_run_the_heavy_gate_found_no_room_for_is_not_recorded_and_its_rerun_joins(
+        self,
+    ) -> None:
+        lines: list[str] = []
+        refused = heavy_gate._no_room("unittest-suite", "the machine is busy", lines.append)
+        # A run that finds no room exits; the same command waiting for room runs its tests.
+        suite = (
+            "import os, sys\n"
+            "if os.environ.get('STAND_IN_NO_ROOM'):\n"
+            "    sys.stderr.write(os.environ['STAND_IN_NO_ROOM'] + '\\n')\n"
+            f"    sys.exit({refused})\n"
+            "print('Ran 3 tests in 0.1s')\n"
+        )
+
+        code, said = self.ran(
+            "python",
+            "-c",
+            suite,
+            name="suite",
+            environment={**os.environ, "STAND_IN_NO_ROOM": lines[0]},
+        )
+        self.assertEqual(refused, code)
+        self.assertIn(f"the runner refused before any test ran: {lines[0]}; ", said)
+        self.assertFalse((self.out / run_record.NAME).exists(), "a record of nothing was begun")
+        environment = {
+            name: value for name, value in os.environ.items() if name != "STAND_IN_NO_ROOM"
+        }
+        self.assertEqual(
+            0, self.ran("python", "-c", suite, name="suite", environment=environment)[0]
+        )
+
+        self.assertEqual(["suite"], [entry["name"] for entry in self.recorded()["steps"]])
+        self.assertEqual(run_record.PASSED, self.checked(self.out, self.repo, "suite")[0])
+
+    def test_a_run_whose_tests_ran_and_failed_is_recorded_and_its_rerun_goes_beside_it(
+        self,
+    ) -> None:
+        no_room: list[str] = []
+        heavy_gate._no_room("unittest-suite", "the machine is busy", no_room.append)
+        failing = {
+            "unit": "print('Ran 3 tests in 0.1s'); print('FAILED (failures=1)'); raise SystemExit(1)",
+            # typos exits 2 on a typo it found, the code the browser runner refuses with.
+            "typos": "print('error: a misspelled word'); raise SystemExit(2)",
+            # The gate passes a command's own 75 on, with no word of room.
+            "own-75": "raise SystemExit(75)",
+            # A refusal's words that a failing run prints are no refusal of it.
+            "quoted": "print('Refused, no test ran: a test quoting it'); raise SystemExit(1)",
+            # Nor is one runner's line said with the other runner's code.
+            "crossed": f"print({no_room[0]!r}); raise SystemExit(2)",
+        }
+        for name, script in failing.items():
+            self.ran("python", "-c", script, name=name)
+        self.ran("python", "-c", "pass", name="unit")
+
+        steps = self.recorded()["steps"]
+        self.assertEqual([*failing, "unit-2"], [entry["name"] for entry in steps])
+        self.assertEqual([1, 2, 75, 1, 2, 0], [entry["exit"] for entry in steps])
+        code, said = self.checked(self.out, self.repo, "unit")
+        self.assertEqual(run_record.FAILED, code, said)
+        self.assertIn("; failed: unit (required), typos, own-75, quoted, crossed; ran: ", said)
+
     def test_the_command_line_runs_a_command_and_refuses_none(self) -> None:
         with contextlib.redirect_stdout(io.StringIO()):
             code = run_record.main(
@@ -484,6 +717,8 @@ class RunTests(TreeCase):
                     "run",
                     "--out",
                     str(self.root / "cli"),
+                    # So that this holds in a checkout with uncommitted changes too.
+                    "--allow-dirty",
                     "--cwd",
                     str(self.root),
                     "--",
@@ -498,6 +733,36 @@ class RunTests(TreeCase):
         self.assertEqual(git_worktrees.canonical(ROOT), record["tree"]["worktree"])
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             run_record.main(["run", "--out", str(self.root / "cli"), "--"])
+
+
+class RefusedBeforeStartTests(unittest.TestCase):
+    """The declared refusals are each runner's own code and words, read from the runner."""
+
+    def test_the_browser_runner_refuses_with_the_code_and_line_declared(self) -> None:
+        source = (ROOT / "web" / "tests" / "browser" / "allowedRun.ts").read_text(encoding="utf-8")
+        said = re.search(
+            r"io\.say\(`(Refused, no test ran: )\$\{error\.message\}`\)\s*return (\d+)", source
+        )
+        assert said is not None, "the runner no longer says and returns its refusal so"
+        line = f"{said.group(1)}the list file batch.txt names no spec"
+
+        found = run_record.refused_before_start(int(said.group(2)), f"x\n{line}\n".encode())
+
+        self.assertEqual(line, found)
+
+    def test_the_heavy_gate_refuses_with_the_code_and_line_declared(self) -> None:
+        lines: list[str] = []
+        code = heavy_gate._no_room("browser-suite", "the machine is busy", lines.append)
+
+        self.assertEqual(heavy_gate.EXIT_NO_ROOM, code)
+        self.assertEqual(lines[0], run_record.refused_before_start(code, lines[0].encode()))
+        # The gate itself says it after its name, as its `say` writes every line.
+        gate = f"heavy-gate: no room for valkama:browser-suite: {lines[0].split(': ', 1)[1]}"
+        self.assertEqual(gate, run_record.refused_before_start(code, gate.encode()))
+
+    def test_only_the_runners_codes_are_declared(self) -> None:
+        self.assertEqual({2, heavy_gate.EXIT_NO_ROOM}, set(run_record.REFUSED_BEFORE_START))
+        self.assertIsNone(run_record.refused_before_start(1, b"Refused, no test ran: x\n"))
 
 
 class CountTests(unittest.TestCase):
