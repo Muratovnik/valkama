@@ -15,10 +15,11 @@ import re
 import sys
 import tempfile
 import unittest
+from collections.abc import Mapping
 from pathlib import Path
 from unittest import mock
 
-from server import git_worktrees, processes
+from server import git_worktrees, processes, store_lock
 from tests import heavy_gate, isolated, legacy_lock, run_record
 from windows import release
 
@@ -476,6 +477,84 @@ class RunTests(TreeCase):
         self.assertEqual(0, code)
         # No marker of a holder, so a targeted test run in it still names the holder when it fails.
         self.assertEqual(b"given None", (self.out / "logs" / "env.log").read_bytes().strip())
+
+    def during(self, first: str, then: tuple[str, ...]) -> contextlib.AbstractContextManager:
+        """`_run_step` with the first run of the step named `first` doing the run `then` meanwhile.
+
+        Two runs into one `out` at once, in the order of the race: the second, named
+        `second`, starts and ends while the first one's command is still going.
+        """
+
+        real = isolated._run_step
+        pending = [then]
+
+        def step(run: isolated.Run, log: Path, environment: Mapping[str, str]) -> int:
+            if run.name == first and pending:
+                self.ran(*pending.pop(), name="second")
+            return real(run, log, environment)
+
+        return mock.patch.object(isolated, "_run_step", side_effect=step)
+
+    def test_a_run_that_ends_while_another_into_the_same_out_goes_keeps_both_steps(self) -> None:
+        with self.during("suite", ("python", "-c", "print('typos ran')")):
+            self.ran("python", "-c", "print('Ran 4 tests in 0.2s')", name="suite")
+
+        steps = self.recorded()["steps"]
+        self.assertEqual(["second", "suite"], [entry["name"] for entry in steps])
+        self.assertEqual(4, steps[1]["tests"])
+        self.assertEqual(run_record.PASSED, self.checked(self.out, self.repo, "second")[0])
+
+    def test_two_runs_of_the_same_words_at_once_each_keep_a_step_and_a_log_of_their_own(
+        self,
+    ) -> None:
+        with self.during("second", ("python", "-c", "print('inner')")):
+            self.ran("python", "-c", "print('outer')", name="second")
+
+        steps = self.recorded()["steps"]
+        self.assertEqual(["second", "second-2"], [entry["name"] for entry in steps])
+        logs = self.out / isolated.LOGS
+        self.assertEqual(b"inner", (logs / "second.log").read_bytes().strip())
+        self.assertEqual(b"outer", (logs / "second-2.log").read_bytes().strip())
+        self.assertEqual(
+            ["second-2.log", "second.log"],
+            sorted(path.name for path in logs.iterdir()),
+            "a log under its running name is left behind",
+        )
+
+    def test_a_run_waits_for_a_live_holder_of_the_lock_and_records_nothing_past_the_wait(
+        self,
+    ) -> None:
+        self.ran("python", "-c", "pass", name="first")
+        before = (self.out / run_record.NAME).read_bytes()
+        with (
+            (self.out / run_record.LOCK).open("a+b") as held,
+            mock.patch.object(run_record, "LOCK_WAIT_SECONDS", 0.2),
+        ):
+            self.assertTrue(store_lock.try_lock(held))
+            try:
+                code, said = self.ran("python", "-c", "pass", name="blocked")
+            finally:
+                store_lock.unlock(held)
+
+        self.assertEqual(run_record.REFUSED, code)
+        self.assertIn(f"not recorded: {self.out / run_record.LOCK} stayed locked for 0.2 s", said)
+        self.assertEqual(before, (self.out / run_record.NAME).read_bytes())
+
+    def test_a_lock_its_holder_died_with_does_not_hold_a_run_up(self) -> None:
+        self.out.mkdir(parents=True)
+        lock = self.out / run_record.LOCK
+        held = (
+            "import os, sys; sys.path.insert(0, sys.argv[2]); from server import store_lock;"
+            " handle = open(sys.argv[1], 'a+b'); assert store_lock.try_lock(handle); os._exit(0)"
+        )
+        died = processes.run_text([sys.executable, "-c", held, str(lock), str(ROOT)])
+        self.assertEqual(0, died.returncode, died.stderr)
+
+        with mock.patch.object(run_record, "LOCK_WAIT_SECONDS", 5.0):
+            code, said = self.ran("python", "-c", "pass", name="after")
+
+        self.assertEqual(0, code, said)
+        self.assertEqual(["after"], [entry["name"] for entry in self.recorded()["steps"]])
 
     def test_the_command_line_runs_a_command_and_refuses_none(self) -> None:
         with contextlib.redirect_stdout(io.StringIO()):

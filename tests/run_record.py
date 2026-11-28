@@ -30,6 +30,7 @@ input to anything, so it is never tracked.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -37,14 +38,15 @@ import platform
 import re
 import shutil
 import sys
-from collections.abc import Collection, Mapping, Sequence
+import time
+from collections.abc import Collection, Iterator, Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from server import git_worktrees, processes
+from server import git_worktrees, processes, store_lock
 from server.executions import artifacts
 from windows import release
 
@@ -262,13 +264,18 @@ def placement_warning(root: Path, out: Path) -> str | None:
     )
 
 
-def begin(root: Path, tools: Mapping[str, str | None]) -> dict[str, object]:
-    """What a record says before its first step: when, where and with what."""
+def begin(
+    root: Path, tools: Mapping[str, str | None], tree: Mapping[str, object] | None = None
+) -> dict[str, object]:
+    """What a record says before its first step: when, where and with what.
+
+    `tree` is `root`'s state as `tree_state` read it, when the caller read it already.
+    """
 
     return {
         "format": FORMAT,
         "started": datetime.now().astimezone().isoformat(timespec="seconds"),
-        "tree": tree_state(root),
+        "tree": dict(tree) if tree is not None else tree_state(root),
         "tools": dict(tools),
     }
 
@@ -355,7 +362,8 @@ RUN_HELP = """Run COMMAND as a step of the record in DIR and exit with its exit 
 
 The step joins the record in DIR while this checkout is as that record says, and
 a new record replaces it otherwise, so the checks one state of the tree needs,
-run one after another, make one record. A report cites DIR/record.json:
+run one after another or at the same time, make one record. A report cites
+DIR/record.json:
 
   python tests/run_record.py run --out tmp/rec -- python -m unittest tests.test_x
   python tests/run_record.py run --out tmp/rec --cwd web -- npm run lint
@@ -385,13 +393,18 @@ def read(path: Path) -> tuple[dict | None, str]:
     return record, ""
 
 
-def _describing(path: Path, tree: Path) -> tuple[dict | None, str]:
-    """The record at `path` when it describes `tree` as it is now, or None and why it does not."""
+def _describing(
+    path: Path, tree: Path, state: Mapping[str, object] | None = None
+) -> tuple[dict | None, str]:
+    """The record at `path` when it describes `tree` as it is now, or None and why it does not.
+
+    `state` is `tree` as `tree_state` read it, when that is the state to compare with.
+    """
 
     record, why = read(path)
     if record is None:
         return None, why
-    found = differences(record["tree"], tree_state(tree))
+    found = differences(record["tree"], tree_state(tree) if state is None else state)
     if found:
         changed = record.get("changed_by_run")
         left = (
@@ -485,10 +498,15 @@ def run(
 ) -> int:
     """Run `command` in `cwd` as `gates` runs a step, record it in `out`, and return its exit code.
 
-    The step joins the record already in `out` while `root` is as that record says;
-    otherwise a new record replaces it, and this says why. The command gets
-    `environment` as it is: no throwaway profile and no lock, so a targeted test run
-    stays a targeted run, and a failed one says which heavy runs were going.
+    The step joins the record in `out` when the command ends, if that record says
+    `root` as it was when the command started; otherwise a new record replaces it,
+    and this says why. The record is read again and written under `out`'s lock once
+    the command has ended, so runs into one `out` at the same time each add their
+    step. Each command writes its log under a name of its own while it runs, and the
+    log takes the step's name only then. The command gets `environment` as it is: no
+    throwaway profile and no lock, so a targeted test run stays a targeted run, and a
+    failed one says which heavy runs were going. `REFUSED` is the exit code when the
+    lock stays held for `LOCK_WAIT_SECONDS` and the step is not recorded.
     """
 
     # Imported here, not at the top, for the reason `tests/isolated.py` gives `_refusal`.
@@ -497,22 +515,84 @@ def run(
     warning = placement_warning(root, out)
     if warning is not None:
         _say(warning)
+    tree = tree_state(root)
+    words = name or " ".join([Path(command[0]).stem, *command[1:]])
+    logs = out / isolated.LOGS
+    logs.mkdir(parents=True, exist_ok=True)
+    # A step's name never starts with a dot, so no step's log has this name.
+    running = logs / f".{_step_name(words, ())}.{os.getpid()}.log"
+    argv = _resolved(command)
+    code = isolated._run_step(isolated.Run(words, argv, cwd), running, environment)
+    try:
+        with _locked(out / LOCK):
+            label, written = _add_step(out, root, tree, words, argv, cwd, running, code)
+    except LockTimeoutError as error:
+        _say(f"not recorded: {error}; the log is {running}")
+        return REFUSED
+    log = logs / f"{label}.log"
+    _say(f"{label:<14} exit={code}  {isolated._tail(log)}")
+    note = heavy_gate.load_note() if code != 0 else None
+    if note is not None:
+        _say(note)
+    _say(f"record: {written}")
+    return code
+
+
+#: The file in a result directory that `run` holds while it reads and writes the record there.
+LOCK = "record.lock"
+#: How long `run` waits for another run's hold on that lock: a read, a merge and a write.
+#: The lock is the operating system's, so a run that died holding it holds it no longer.
+LOCK_WAIT_SECONDS = 60.0
+
+
+class LockTimeoutError(RuntimeError):
+    """Another live process held a result directory's lock for longer than `run` waits."""
+
+
+@contextlib.contextmanager
+def _locked(path: Path) -> Iterator[None]:
+    """Hold the lock on `path` while the block runs, waiting `LOCK_WAIT_SECONDS` for it."""
+
+    deadline = time.monotonic() + LOCK_WAIT_SECONDS
+    with path.open("a+b") as handle:
+        while not store_lock.try_lock(handle):
+            if time.monotonic() >= deadline:
+                raise LockTimeoutError(f"{path} stayed locked for {LOCK_WAIT_SECONDS:g} s")
+            time.sleep(0.05)
+        try:
+            yield
+        finally:
+            store_lock.unlock(handle)
+
+
+def _add_step(
+    out: Path,
+    root: Path,
+    tree: Mapping[str, object],
+    words: str,
+    argv: Sequence[str],
+    cwd: Path,
+    running: Path,
+    code: int,
+) -> tuple[str, Path]:
+    """Add the step that ran on `tree` to the record in `out` as it is now: its name and the record.
+
+    Called under `out`'s lock, so the record read here is the one written here.
+    """
+
     path = out / NAME
-    record, why = _describing(path, root)
+    record, why = _describing(path, root, tree)
     steps: list[Mapping[str, object]] = []
     if record is None:
         if path.is_file():
             _say(f"a new record replaces {why}")
-        record = begin(root, tool_versions(release.running_interpreter(), npm=True))
+        tools = tool_versions(release.running_interpreter(), npm=True)
+        record = begin(root, tools, tree)
     else:
         steps = list(record["steps"])
-    words = name or " ".join([Path(command[0]).stem, *command[1:]])
     label = _step_name(words, {str(entry["name"]) for entry in steps})
-    logs = out / isolated.LOGS
-    logs.mkdir(parents=True, exist_ok=True)
-    log = logs / f"{label}.log"
-    argv = _resolved(command)
-    code = isolated._run_step(isolated.Run(label, argv, cwd), log, environment)
+    log = running.with_name(f"{label}.log")
+    os.replace(running, log)
     entry = step(label, argv, cwd, log, code)
     if "tests" not in entry and (counted := tests_said(log)) is not None:
         entry["tests"] = counted
@@ -520,12 +600,7 @@ def run(
         entry["lists"] = lists
     steps.append(entry)
     result = 0 if all(entry["exit"] == 0 for entry in steps) else 1
-    _say(f"{label:<14} exit={code}  {isolated._tail(log)}")
-    note = heavy_gate.load_note() if code != 0 else None
-    if note is not None:
-        _say(note)
-    _say(f"record: {write(out, record, steps, result)}")
-    return code
+    return label, write(out, record, steps, result)
 
 
 def named_lists(argv: Sequence[str], cwd: Path) -> dict[str, list[str] | None]:
