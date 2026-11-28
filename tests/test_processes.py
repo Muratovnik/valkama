@@ -217,7 +217,9 @@ class HoldByStartTests(unittest.TestCase):
         fake = FakeKernel32({}, cutoff=1000)
         with (
             mock.patch.object(processes, "_kernel32", return_value=fake),
-            mock.patch("ctypes.get_last_error", return_value=87),  # ERROR_INVALID_PARAMETER
+            # ERROR_INVALID_PARAMETER. get_last_error exists on Windows only: created here so
+            # the fake can run on POSIX too.
+            mock.patch("ctypes.get_last_error", return_value=87, create=True),
         ):
             tree = processes._Tree.seen(TREE_ROOT)
         assert tree is not None
