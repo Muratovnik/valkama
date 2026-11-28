@@ -1500,11 +1500,14 @@ def release_version(checkout: Path, commit: str, settings: Mapping[str, object])
     return str(found[0])
 
 
-def attempt_directory(checkout: Path, commit: str) -> Path:
+def attempt_directory(checkout: Path) -> Path:
     """A new directory for one attempt, below `BUILD_SMOKE_PARENT`, which Git must ignore.
 
     Each attempt gets its own, so one never reads what an earlier one left: build
     refuses an asset directory that is not empty, and smoke a used work directory.
+    Its name is only the eight characters that make it new: the installer build
+    nests deep below it, and makensis cannot open an include whose path runs past
+    260 characters.
     """
 
     ignored = subprocess.run(
@@ -1520,7 +1523,7 @@ def attempt_directory(checkout: Path, commit: str) -> Path:
         )
     parent = checkout.joinpath(*BUILD_SMOKE_PARENT.parts)
     parent.mkdir(parents=True, exist_ok=True)
-    return Path(tempfile.mkdtemp(prefix=f"{commit[:12]}-", dir=parent))
+    return Path(tempfile.mkdtemp(prefix="", dir=parent))
 
 
 def extract_commit(checkout: Path, commit: str, copy: Path) -> None:
@@ -1571,7 +1574,7 @@ def build_smoke(checkout: Path = ROOT, revision: str = "HEAD") -> Path:
         raise BuildSmokeError(
             "release build-smoke: [release].command_timeout is not a number of seconds"
         )
-    directory = attempt_directory(checkout, commit)
+    directory = attempt_directory(checkout)
     source, assets, temp = directory / "source", directory / "assets", directory / "temp"
     try:
         extract_commit(checkout, commit, source)
