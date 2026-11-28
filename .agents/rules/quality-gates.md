@@ -6,7 +6,9 @@ stays in `AGENTS.md`; this file is why each gate exists and how it bites.
 
 `npm test` runs oxlint, ESLint, Prettier, Stylelint, vue-tsc, the UI-system
 guard, knip and jscpd before the suites; `npm run format` applies the two
-formatters. `npm run test:browser` adds the axe pass over the harness surfaces,
+formatters. Prettier checks `web/` only, so the root `DESIGN.md` is outside
+the format check, and `web/.prettierignore` names it. `npm run test:browser`
+adds the axe pass over the harness surfaces,
 and `desktop`'s own `npm test` asserts the renderer options and the packaged
 fuse set as text, because configuration is what silently reverts.
 
