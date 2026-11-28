@@ -306,10 +306,10 @@ describe('the allowed browser run', () => {
     expect(every.written).toEqual([[...allowed, ...clipboardSpecs]])
     expect(every.playwright.mock.calls[0]?.[1]).toBe(true)
 
-    const one = runner({ 'batch.txt': `${notes}\n` })
-    const short = notes.replace(/\.spec\.ts$/, '')
+    const one = runner({ 'batch.txt': `${clipboardSpec}\n` })
+    const short = clipboardSpec.replace(/\.spec\.ts$/, '')
     expect(await runAllowed(['--specs', 'batch.txt', '--with-clipboard', short], one.io)).toBe(0)
-    expect(one.written).toEqual([[notes]])
+    expect(one.written).toEqual([[clipboardSpec]])
   })
 
   it('refuses --with-clipboard with no value, saying it may name all', async () => {
