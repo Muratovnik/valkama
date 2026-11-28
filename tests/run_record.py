@@ -288,19 +288,29 @@ def placement_warning(root: Path, out: Path) -> str | None:
 
 
 def begin(
-    root: Path, tools: Mapping[str, str | None], tree: Mapping[str, object] | None = None
+    root: Path,
+    tools: Mapping[str, str | None],
+    tree: Mapping[str, object] | None = None,
+    started: str | None = None,
 ) -> dict[str, object]:
     """What a record says before its first step: when, where and with what.
 
-    `tree` is `root`'s state as `tree_state` read it, when the caller read it already.
+    `tree` is `root`'s state as `tree_state` read it, and `started` the time its first
+    step started, as `now` gave it, when the caller has them already.
     """
 
     return {
         "format": FORMAT,
-        "started": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "started": started or now(),
         "tree": dict(tree) if tree is not None else tree_state(root),
         "tools": dict(tools),
     }
+
+
+def now() -> str:
+    """The time a record says, local and to the second."""
+
+    return datetime.now().astimezone().isoformat(timespec="seconds")
 
 
 def tests_run(name: str, log: Path) -> int | None:
@@ -343,7 +353,7 @@ def write(
     path = out / NAME
     finished = {
         **record,
-        "finished": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "finished": now(),
         "steps": list(steps),
         "result": result,
     }
@@ -567,6 +577,7 @@ def run(
     # A step's name never starts with a dot, so no step's log has this name.
     running = logs / f".{_step_name(words, ())}.{os.getpid()}.log"
     argv = _resolved(command)
+    started = now()
     code = isolated._run_step(isolated.Run(words, argv, cwd), running, environment)
     if (refusal := refused_before_start(code, running.read_bytes())) is not None:
         _say(
@@ -576,7 +587,7 @@ def run(
         return code
     try:
         with _locked(out / LOCK):
-            label, written = _add_step(out, root, tree, words, argv, cwd, running, code)
+            label, written = _add_step(out, root, tree, started, words, argv, cwd, running, code)
     except LockTimeoutError as error:
         _say(f"not recorded: {error}; the log is {running}")
         return REFUSED
@@ -638,6 +649,7 @@ def _add_step(
     out: Path,
     root: Path,
     tree: Mapping[str, object],
+    started: str,
     words: str,
     argv: Sequence[str],
     cwd: Path,
@@ -646,7 +658,8 @@ def _add_step(
 ) -> tuple[str, Path]:
     """Add the step that ran on `tree` to the record in `out` as it is now: its name and the record.
 
-    Called under `out`'s lock, so the record read here is the one written here.
+    Called under `out`'s lock, so the record read here is the one written here. A new
+    record starts when the step did, `started`, not when the step ended.
     """
 
     path = out / NAME
@@ -656,7 +669,7 @@ def _add_step(
         if path.is_file():
             _say(f"a new record replaces {why}")
         tools = tool_versions(release.running_interpreter(), npm=True)
-        record = begin(root, tools, tree)
+        record = begin(root, tools, tree, started)
     else:
         steps = list(record["steps"])
     label = _step_name(words, {str(entry["name"]) for entry in steps})

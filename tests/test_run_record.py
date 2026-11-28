@@ -16,6 +16,7 @@ import sys
 import tempfile
 import unittest
 from collections.abc import Mapping
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest import mock
 
@@ -411,6 +412,27 @@ class RunTests(TreeCase):
         code, said = self.checked(self.out / run_record.NAME, self.repo)
         self.assertEqual(run_record.FAILED, code, said)
         self.assertIn("; failed: unit, unit-2; ran: ", said)
+
+    def test_a_new_record_starts_when_its_command_did_and_finishes_when_it_ended(self) -> None:
+        # The record's clock stands still but for the command, which takes an hour of it.
+        start = datetime(2030, 1, 1, 9, 0, tzinfo=UTC)
+        clock = mock.Mock()
+        clock.now.return_value = start
+        real = isolated._run_step
+
+        def an_hour_long(run: isolated.Run, log: Path, environment: Mapping[str, str]) -> int:
+            clock.now.return_value = start + timedelta(hours=1)
+            return real(run, log, environment)
+
+        with (
+            mock.patch.object(run_record, "datetime", clock),
+            mock.patch.object(isolated, "_run_step", side_effect=an_hour_long),
+        ):
+            self.assertEqual(0, self.ran("python", "-c", "pass")[0])
+
+        record = self.recorded()
+        self.assertEqual(start, datetime.fromisoformat(record["started"]))
+        self.assertEqual(start + timedelta(hours=1), datetime.fromisoformat(record["finished"]))
 
     def test_check_takes_the_directory_run_wrote_the_record_in(self) -> None:
         self.ran("python", "-c", "pass", name="reads")
