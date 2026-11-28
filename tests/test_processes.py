@@ -1,11 +1,16 @@
-"""Stopping a process tree on POSIX, where the tree is a process group.
+"""Process trees: the one `contained` starts and ends, and the one a stop ends.
 
-`processes.stop_process_tree` kills the child's process group. That group is
-the child's own tree only when the child was started in a session of its own;
-a child left in the caller's group shares it with the caller, and killing it
-once took the stdio front and the client that started it down too. Both
-tests are POSIX-only: Windows stops a tree with `taskkill /T` by process id,
-which the stdio front's tests exercise.
+`processes.contained` runs a command in a tree that ends with its block, and on
+Windows with its caller however that caller dies: a gate step that outlived its
+gate once kept writing into the tree the next run read. The tests here start
+every process they look at and stop only those.
+
+`processes.stop_process_tree` kills the child's process group on POSIX. That
+group is the child's own tree only when the child was started in a session of
+its own; a child left in the caller's group shares it with the caller, and
+killing it once took the stdio front and the client that started it down too.
+Windows stops a tree with `taskkill /T` by process id, which the stdio front's
+tests exercise.
 """
 
 from __future__ import annotations
@@ -13,11 +18,15 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import tempfile
 import time
 import unittest
+from pathlib import Path
+from unittest import mock
 
 from server import processes
 
+ROOT = Path(__file__).resolve().parents[1]
 SLEEPER = "import time; time.sleep(30)"
 PARENT = (
     "import subprocess, sys, time\n"
@@ -25,6 +34,40 @@ PARENT = (
     "print(child.pid, flush=True)\n"
     "time.sleep(30)\n"
 )
+#: Starts a sleeper with no pipe of its own, says its number and exits: what a
+#: step that leaks a process does.
+LEAVER = (
+    "import subprocess, sys\n"
+    f"child = subprocess.Popen([sys.executable, '-c', {SLEEPER!r}],"
+    " stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
+    "print(child.pid, flush=True)\n"
+)
+#: A gate in small: it runs, through `contained`, a step that starts a sleeper
+#: and stays, and says both numbers.
+GATE = (
+    "import subprocess, sys\n"
+    f"sys.path.insert(0, {str(ROOT)!r})\n"
+    "from server import processes\n"
+    f"step = {PARENT!r}\n"
+    "with processes.contained([sys.executable, '-c', step], stdout=subprocess.PIPE) as child:\n"
+    "    grandchild = child.stdout.readline().decode().strip()\n"
+    "    print(child.pid, grandchild, flush=True)\n"
+    "    child.wait()\n"
+)
+#: Inside a job, a step that makes a job of its own for one child, as the
+#: heavy-process gate does, and starts another with `CREATE_BREAKAWAY_FROM_JOB`.
+NESTING = (
+    "import subprocess, sys\n"
+    f"sys.path.insert(0, {str(ROOT)!r})\n"
+    "from server import processes\n"
+    "with processes.contained([sys.executable, '-c', 'print(7)'], stdout=subprocess.PIPE) as inner:\n"
+    "    said = inner.stdout.read().strip()\n"
+    "    assert inner.wait() == 0 and said == b'7', said\n"
+    f"left = subprocess.Popen([sys.executable, '-c', {SLEEPER!r}], creationflags=0x01000000)\n"
+    "print(left.pid, flush=True)\n"
+)
+#: How long a killed tree may take to go.
+GONE_SECONDS = 10.0
 
 
 def alive(pid: int) -> bool:
@@ -33,6 +76,147 @@ def alive(pid: int) -> bool:
     except OSError:
         return False
     return True
+
+
+class Held:
+    """A process this test started, held by a handle so its number cannot be reused.
+
+    Windows only. Ending it is the cleanup of a test whose tree survived.
+    """
+
+    def __init__(self, pid: int) -> None:
+        import _winapi
+
+        self._winapi = _winapi
+        # SYNCHRONIZE | PROCESS_TERMINATE | PROCESS_QUERY_LIMITED_INFORMATION
+        self.handle = _winapi.OpenProcess(0x00100000 | 0x0001 | 0x1000, False, pid)
+
+    def gone_within(self, seconds: float) -> bool:
+        return self._winapi.WaitForSingleObject(self.handle, int(seconds * 1000)) == 0
+
+    def end(self) -> None:
+        if not self.gone_within(0):
+            self._winapi.TerminateProcess(self.handle, 1)
+        self._winapi.CloseHandle(self.handle)
+
+
+def gone_within(pid: int, seconds: float) -> bool:
+    deadline = time.monotonic() + seconds
+    while alive(pid):
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.05)
+    return True
+
+
+class ContainedTests(unittest.TestCase):
+    def hold(self, pid: int) -> Held:
+        held = Held(pid)
+        self.addCleanup(held.end)
+        return held
+
+    def test_what_the_child_leaves_running_ends_with_the_block(self) -> None:
+        with processes.contained([sys.executable, "-c", LEAVER], stdout=subprocess.PIPE) as child:
+            assert child.stdout is not None
+            left = int(child.stdout.readline())
+            child.stdout.close()
+            self.assertEqual(0, child.wait())
+            if sys.platform == "win32":
+                held = self.hold(left)
+                self.assertFalse(held.gone_within(0), "the sleeper ended before the block did")
+            else:
+                self.assertTrue(alive(left), "the sleeper ended before the block did")
+
+        if sys.platform == "win32":
+            self.assertTrue(held.gone_within(GONE_SECONDS), "the sleeper outlived the block")
+        else:
+            self.assertTrue(gone_within(left, GONE_SECONDS), "the sleeper outlived the block")
+
+    def test_the_child_runs_with_what_it_was_given_and_says_its_exit_code(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="vk-proc-") as directory:
+            log = Path(directory) / "out.log"
+            with (
+                log.open("wb") as output,
+                processes.contained(
+                    [sys.executable, "-c", "import os, sys; print(os.getcwd()); sys.exit(3)"],
+                    cwd=directory,
+                    stdin=subprocess.DEVNULL,
+                    stdout=output,
+                    stderr=subprocess.STDOUT,
+                ) as child,
+            ):
+                code = child.wait()
+            said = log.read_text(encoding="utf-8").strip()
+
+        self.assertEqual(3, code)
+        self.assertEqual(os.path.normcase(directory), os.path.normcase(said))
+
+    @unittest.skipUnless(sys.platform == "win32", "a Job Object is a Windows object")
+    def test_the_tree_ends_when_the_process_holding_it_is_killed_hard(self) -> None:
+        gate = subprocess.Popen([sys.executable, "-c", GATE], stdout=subprocess.PIPE)
+        self.addCleanup(gate.wait, GONE_SECONDS)
+        self.addCleanup(gate.kill)
+        assert gate.stdout is not None
+        self.addCleanup(gate.stdout.close)
+        step, left = (int(number) for number in gate.stdout.readline().split())
+        tree = [self.hold(step), self.hold(left)]
+        self.assertFalse(tree[1].gone_within(0), "the sleeper ended before the gate did")
+
+        gate.kill()  # TerminateProcess: the gate runs no code of its own after it
+        gate.wait(timeout=GONE_SECONDS)
+        started = time.monotonic()
+        survivors = [held for held in tree if not held.gone_within(GONE_SECONDS)]
+
+        self.assertEqual([], survivors, "the step's tree outlived its gate")
+        self.assertLess(time.monotonic() - started, GONE_SECONDS)
+
+    @unittest.skipUnless(sys.platform == "win32", "a Job Object is a Windows object")
+    def test_a_job_inside_and_a_child_that_breaks_away_still_start(self) -> None:
+        with processes.contained([sys.executable, "-c", NESTING], stdout=subprocess.PIPE) as child:
+            assert child.stdout is not None
+            line = child.stdout.readline()
+            child.stdout.close()
+            self.assertEqual(0, child.wait(), "the step could not start its children")
+        away = self.hold(int(line))
+
+        # It left the job at its own request, so the job's end does not reach it.
+        self.assertFalse(away.gone_within(0.5), "a child that broke away was ended with the job")
+
+    @unittest.skipUnless(sys.platform == "win32", "a Job Object is a Windows object")
+    def test_a_child_the_job_cannot_take_never_runs_and_is_not_left(self) -> None:
+        real_take = processes._Job.take
+        started: list[subprocess.Popen] = []
+        real_popen = subprocess.Popen
+
+        def popen(*arguments, **options):
+            started.append(real_popen(*arguments, **options))
+            return started[-1]
+
+        def refused(job, pid: int) -> None:
+            import _winapi
+
+            # A handle that is not a job's, so the assignment is refused for real.
+            job_handle, job._handle = job._handle, _winapi.GetCurrentProcess()
+            try:
+                real_take(job, pid)
+            finally:
+                job._handle = job_handle
+
+        with tempfile.TemporaryDirectory(prefix="vk-proc-") as directory:
+            marker = Path(directory) / "ran"
+            source = f"open({str(marker)!r}, 'w').close()"
+            with (
+                mock.patch.object(processes._Job, "take", refused),
+                mock.patch.object(subprocess, "Popen", side_effect=popen),
+                self.assertRaises(OSError) as raised,
+                processes.contained([sys.executable, "-c", source]),
+            ):
+                self.fail("the block ran with the child outside the job")
+
+            self.assertIn("AssignProcessToJobObject", str(raised.exception))
+            self.assertEqual(1, len(started))
+            self.assertIsNotNone(started[0].poll(), "the refused child was left running")
+            self.assertFalse(marker.exists(), "the refused child ran")
 
 
 @unittest.skipIf(sys.platform == "win32", "a process group is the POSIX tree")

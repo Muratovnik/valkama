@@ -27,6 +27,9 @@ Each rule here is a way a hand-written wrapper went wrong:
   now and then with `PermissionError`, which reads as a defect in the code.
 - A child gets no pipe of the caller's. A server that inherits one keeps a
   pipeline or `execFileSync` waiting for as long as it runs.
+- A step's tree ends with the step, and with the gate however the gate ends. A
+  gate its client stopped left its coverage step running, which kept writing
+  into the tree the next run read, and that run failed tests that pass.
 - A failed step decides the result whatever ran after it, and a run in which
   nothing ran is a failure.
 - An npm step runs only on the modules its lockfile pins. On any others it failed
@@ -422,9 +425,16 @@ def _tail(log: Path) -> str:
 
 
 def _run_step(run: Run, log: Path, environment: Mapping[str, str]) -> int:
+    """Run one step to its end; what it started and left running ends with it.
+
+    The tree also ends when this process dies, however it dies: a step that
+    outlived its gate once kept writing into its log, and the next run in the same
+    tree read its leftovers as failures. `processes.contained` says how.
+    """
+
     with log.open("wb") as output:
         try:
-            return subprocess.run(
+            with processes.contained(
                 run.argv,
                 cwd=run.cwd,
                 # A tool from an environment of its own needs that environment's
@@ -434,8 +444,8 @@ def _run_step(run: Run, log: Path, environment: Mapping[str, str]) -> int:
                 stdout=output,
                 stderr=subprocess.STDOUT,
                 creationflags=_NO_WINDOW,
-                check=False,
-            ).returncode
+            ) as step:
+                return step.wait()
         except OSError as error:
             output.write(f"could not start {run.argv[0]}: {error}\n".encode())
             return 127
