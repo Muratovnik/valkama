@@ -25,6 +25,10 @@ the same `<spec>__` prefix. The `server-` specs, run with `VALKAMA_BROWSER_STORE
 the exception: the Python server serves `web/dist` alone, so they build there.
 Each command below runs in `web/`:
 
+- One Vitest file: `npx vitest run <file>`, or from the repository root
+  `npm --prefix web run test:unit -- tests/<file>`. `npm --prefix web exec`
+  runs in the directory it is called from, so Vitest finds no `vitest.config.ts`
+  there.
 - One spec, under a lease at the heavy-process gate (below):
   `python ../tests/heavy_gate.py run --kind browser-targeted --want 4 -- npx playwright test <file> '--workers={k}'`.
   A name is a prefix, so give the whole file name when it begins another. Every test of the suite that bounds
@@ -53,14 +57,19 @@ Each command below runs in `web/`:
   missing list file before Playwright starts, and ends with each project's count
   and the total, to compare with what the run was meant to select. `--list`
   shows the selection without running it; `--specs=<file>` runs the specs a file
-  names, one a line, each bare and relative to `web/tests/browser`
-  (`production-list.spec.ts`, not `tests/browser/production-list.spec.ts`). A
-  Playwright option takes its value after `=`, as in `--grep=freshness`: the
-  runner refuses a separate value.
+  names, one a line, each by its file name, that name without `.spec.ts` or its
+  path (`production-list.spec.ts`, `production-list`,
+  `tests/browser/production-list.spec.ts`). An option that needs a value takes
+  it after `=` or as the next word (`--grep "a|b"`, `--workers 4`); one whose
+  value is optional, such as `--update-snapshots`, takes it after `=` alone. The
+  runner reads the whole command line and refuses what it
+  cannot read before it asks the gate for room, so a refusal never follows a
+  wait.
 
 The specs that write the system clipboard or are granted it are named in
 `web/tests/browser/clipboardSpecs.ts`, and they run only when asked for: with
-`VALKAMA_BROWSER_CLIPBOARD=1` or through the runner's `--with-clipboard=<spec name>`.
+`VALKAMA_BROWSER_CLIPBOARD=1` or through the runner's `--with-clipboard=<spec name>`,
+or `--with-clipboard=all` for every one of them.
 `web/playwright.config.ts` reads that list and selects none of them without the
 variable — not in a bare run, not when one is named, not under `--list` — and
 the runner sets it when `--with-clipboard` names one and removes it otherwise.

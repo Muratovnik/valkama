@@ -58,6 +58,15 @@ A check that can fail:
   as its file loads, not in a test's body, where the test's timeout counts the
   wall.
 
+A browser spec is linted by eslint-plugin-playwright's recommended set (the
+`tests/browser/**` blocks of `web/eslint.config.ts`), and `npm run lint` fails on
+its warnings as on its errors. Two of its rules shape a test's body: no `if`,
+ternary or `switch` among a test's steps (`playwright/no-conditional-in-test`)
+and no `expect` under one (`playwright/no-conditional-expect`), so a branch the
+test needs goes into a helper outside the test's body or into a test of its own.
+Run `npx eslint <spec>` in `web/` before the first browser run of a new or
+changed spec: a finding after the run costs the run again.
+
 When many tests fail at once, sort every failure before changing anything:
 
 - the rule broke: fix the code;
