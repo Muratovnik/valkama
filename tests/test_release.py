@@ -1014,7 +1014,8 @@ class ReleaseCoverageMarginTests(unittest.TestCase):
     def setUp(self) -> None:
         scratch = tempfile.TemporaryDirectory()
         self.addCleanup(scratch.cleanup)
-        self.root = Path(scratch.name)
+        # A runner's TEMP may be in 8.3 short form, while coverage reports the long one.
+        self.root = Path(scratch.name).resolve()
         # The suite's own runner may name its data file in the environment, which
         # coverage reads before any configuration.
         environment = mock.patch.dict(os.environ)
