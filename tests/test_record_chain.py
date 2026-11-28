@@ -61,6 +61,20 @@ LINT_DEAD: Step = ("npm-run-lint-dead", ["C:/node/npm.CMD", "run", "lint:dead"],
 BUILD: Step = ("npm-run-build", ["C:/node/npm.CMD", "run", "build"], "web", 0, "")
 NPM_TEST: Step = ("npm-test", ["C:/node/npm.CMD", "test"], "web", 0, "")
 FAILED_NPM_TEST: Step = ("npm-test", ["C:/node/npm.CMD", "test"], "web", 1, "")
+RUFF: Step = ("ruff", [sys.executable, "-m", "ruff", "check", "."], "", 0, "")
+MYPY: Step = ("mypy", ["C:/env/mypy.exe"], "", 0, "")
+VULTURE: Step = (
+    "vulture",
+    ["C:/env/vulture.exe", "server", "tests", "valkama.py", "--min-confidence", "60"],
+    "",
+    0,
+    "",
+)
+SEMGREP: Step = ("semgrep", ["C:/env/semgrep.exe", "scan", "server", "valkama.py"], "", 0, "")
+REPORT: Step = ("report", [sys.executable, "-m", "coverage", "report"], "", 0, "")
+AUDIT: Step = ("audit", [sys.executable, ".github/relkit.pyz", "audit", "--history"], "", 0, "")
+#: Every kind of step but the newest-only ones, as a full record holds them.
+FULL = [TYPOS, SUBJECTS, AUDIT, UNIT, REPORT, LINT, BROWSER, RUFF, MYPY, VULTURE, SEMGREP]
 
 #: The web package the chain reads: `test` runs lint, typecheck, check:ui-system and lint:dead,
 #: and `lint` runs `lint:types` in turn; `build` is a script `test` does not run.
@@ -324,18 +338,136 @@ class NpmTestTests(ChainCase):
 class PlacementTests(ChainCase):
     def test_a_path_no_rule_places_touches_every_step_of_the_earlier_record(self) -> None:
         full = self.record("full", [TYPOS, SUBJECTS, UNIT, LINT])
-        self.write("pyproject.toml", "[tool.x]\n")
-        self.commit("build: configure x")
+        self.write("requirements-dev.txt", "ruff==1.0\n")
+        self.commit("build: pin ruff")
 
         code, said = self.judged(self.record("small", [TYPOS, SUBJECTS]), full)
 
         self.assertEqual(run_record.REFUSED, code, said)
         self.assertIn(
-            "step npm-run-lint may read pyproject.toml, which changed since"
+            "step npm-run-lint may read requirements-dev.txt, which changed since"
             f" {self.git('rev-parse', 'HEAD~1').strip()} and which no rule places",
             said,
         )
-        self.assertIn("step unit ran tests.test_app, which pyproject.toml, which no rule", said)
+        self.assertIn(
+            "step unit ran tests.test_app, which requirements-dev.txt, which no rule", said
+        )
+
+    def changed_after_full(self, path: str, text: str) -> tuple[Path, str]:
+        """A record of every kind of step, then a commit of `path` alone, and what is refused."""
+
+        full = self.record("full", FULL)
+        self.write(path, text)
+        self.commit(f"chore: change {path}")
+        code, said = self.judged(self.record("small", [TYPOS, SUBJECTS]), full)
+        self.assertEqual(run_record.REFUSED, code, said)
+        self.assertNotIn("no rule places", said)
+        return full, said
+
+    def assert_touches(self, said: str, touched: Sequence[str], untouched: Sequence[str]) -> None:
+        for name in touched:
+            self.assertIn(f"step {name} ", said)
+        for name in untouched:
+            self.assertNotIn(f"step {name} ", said)
+
+    def test_a_desktop_file_touches_the_tests_and_the_report_and_no_lint_web_or_browser(
+        self,
+    ) -> None:
+        full, said = self.changed_after_full("desktop/main.js", "app.start()\n")
+
+        self.assertIn("step unit ran tests.test_app, which may read desktop/main.js by", said)
+        self.assertIn("step unit ran tests.test_docs, which may read desktop/main.js by", said)
+        self.assertIn("step report reads tests.test_app, which may read desktop/main.js", said)
+        self.assert_touches(
+            said,
+            ["audit", "unit", "report"],
+            ["npm-run-lint", "browser-specs", "ruff", "mypy", "vulture", "semgrep"],
+        )
+        # The control: the tests and the report run again complete the chain.
+        again = self.record("again", [TYPOS, SUBJECTS, AUDIT, UNIT, REPORT])
+        self.assertEqual(run_record.PASSED, self.judged(again, full)[0])
+
+    def test_pyproject_touches_the_python_tools_the_tests_and_the_report_and_not_the_web(
+        self,
+    ) -> None:
+        full, said = self.changed_after_full("pyproject.toml", "[tool.ruff]\nline-length = 99\n")
+
+        self.assertIn("step ruff reads pyproject.toml, which changed since", said)
+        self.assertIn("step report reads pyproject.toml, which changed since", said)
+        self.assert_touches(
+            said,
+            ["audit", "unit", "report", "ruff", "mypy", "vulture"],
+            ["npm-run-lint", "browser-specs", "semgrep"],
+        )
+        again = self.record("again", [TYPOS, SUBJECTS, AUDIT, UNIT, REPORT, RUFF, MYPY, VULTURE])
+        self.assertEqual(run_record.PASSED, self.judged(again, full)[0])
+
+    def test_a_python_file_of_windows_touches_what_reads_every_python_file_and_not_vulture(
+        self,
+    ) -> None:
+        full, said = self.changed_after_full("windows/release.py", "print('release')\n")
+
+        self.assertIn("step ruff reads windows/release.py, which changed since", said)
+        self.assertIn("step unit ran tests.test_app, which may read windows/release.py", said)
+        self.assert_touches(
+            said,
+            ["audit", "unit", "report", "ruff", "mypy"],
+            ["vulture", "npm-run-lint", "browser-specs", "semgrep"],
+        )
+        again = self.record("again", [TYPOS, SUBJECTS, AUDIT, UNIT, REPORT, RUFF, MYPY])
+        self.assertEqual(run_record.PASSED, self.judged(again, full)[0])
+
+    def test_the_tray_script_the_server_starts_touches_the_browser_suite_and_not_ruff(
+        self,
+    ) -> None:
+        _, said = self.changed_after_full("windows/tray.ps1", "Write-Output tray\n")
+
+        self.assertIn("step browser-specs reads windows/tray.ps1, which changed since", said)
+        self.assert_touches(
+            said,
+            ["audit", "unit", "report", "browser-specs"],
+            ["ruff", "mypy", "vulture", "npm-run-lint", "semgrep"],
+        )
+
+    def test_a_workflow_touches_the_audit_the_tests_and_the_report_alone(self) -> None:
+        full, said = self.changed_after_full(".github/workflows/ci.yml", "on: push\n")
+
+        self.assertIn("step audit reads every file or commit", said)
+        self.assert_touches(
+            said,
+            ["audit", "unit", "report"],
+            ["ruff", "mypy", "vulture", "npm-run-lint", "browser-specs", "semgrep"],
+        )
+        again = self.record("again", [TYPOS, SUBJECTS, AUDIT, UNIT, REPORT])
+        self.assertEqual(run_record.PASSED, self.judged(again, full)[0])
+
+    def test_a_ruff_step_reads_the_files_it_names_and_not_one_whose_name_they_begin(
+        self,
+    ) -> None:
+        self.write("tests/test_release.py", "RELEASE = 1\n")
+        self.commit("test: the release")
+        named: Step = (
+            "ruff-named",
+            [sys.executable, "-m", "ruff", "check", "windows/release.py", "tests/test_release.py"],
+            "",
+            0,
+            "",
+        )
+        full = self.record("full", [TYPOS, SUBJECTS, named, MYPY])
+        self.write("tests/test_released.py", "RELEASED = 1\n")
+        self.commit("test: the released")
+
+        code, said = self.judged(self.record("small", [TYPOS, SUBJECTS]), full)
+
+        self.assertEqual(run_record.REFUSED, code, said)
+        self.assertIn("step mypy reads tests/test_released.py", said)
+        self.assertNotIn("step ruff-named", said)
+        # The control: a change of a file it names touches it.
+        self.write("tests/test_release.py", "RELEASE = 2\n")
+        self.commit("test: the release again")
+        code, said = self.judged(self.record("later", [TYPOS, SUBJECTS]), full)
+        self.assertEqual(run_record.REFUSED, code, said)
+        self.assertIn("step ruff-named reads tests/test_release.py, which changed since", said)
 
     def test_an_update_of_the_vendored_release_kit_needs_again_only_the_audit_and_its_namers(
         self,
@@ -599,6 +731,39 @@ class ThisCheckoutTests(unittest.TestCase):
                 read = record_chain.reads(record_chain.BROWSER, path, names)
                 self.assertTrue(read or not record_chain.placed(path))
 
+    def test_every_tracked_path_is_placed_or_listed_as_an_input_of_every_step(self) -> None:
+        def declared(path: str) -> bool:
+            top, nested, _ = path.partition("/")
+            return record_chain.placed(path) or top + ("/" if nested else "") in (
+                record_chain.EVERY_STEP
+            )
+
+        tracked = record_chain._git(str(ROOT), "ls-files", "-z")
+        self.assertGreater(len(tracked), 100)
+        self.assertEqual([], [path for path in tracked if not declared(path)])
+        tops = {path.split("/", 1)[0] + ("/" if "/" in path else "") for path in tracked}
+        for name in record_chain.EVERY_STEP:
+            with self.subTest(name=name):
+                self.assertIn(name, tops, "an entry no tracked path has is stale")
+                self.assertFalse(record_chain.placed(name.rstrip("/") + "/x"))
+        # The controls: a new top-level directory or file is neither.
+        self.assertFalse(declared("newtop/file.txt"))
+        self.assertFalse(declared("NEWFILE"))
+
+    def test_every_file_the_served_server_reads_beside_it_is_one_the_browser_rule_reads(
+        self,
+    ) -> None:
+        from server.ops import toast, tray
+
+        names = record_chain.Names(str(ROOT))
+        found = [*tray.assets(str(ROOT)), *toast.assets(str(ROOT))]
+        self.assertEqual(4, len(found))
+        for full in found:
+            path = Path(full).relative_to(ROOT).as_posix()
+            with self.subTest(path=path):
+                self.assertTrue(record_chain.placed(path))
+                self.assertTrue(record_chain.reads(record_chain.BROWSER, path, names))
+
 
 class PlaceTests(unittest.TestCase):
     """What each command a record keeps reads, by its words."""
@@ -636,6 +801,50 @@ class PlaceTests(unittest.TestCase):
         )
         browser = ["C:/node/npm.CMD", "run", "test:browser:allowed", "--", SPECS]
         self.assertEqual(record_chain.BROWSER, self.placed(browser, "C:/tree/web").kind)
+
+    def test_a_ruff_or_vulture_step_is_placed_with_the_paths_it_names(self) -> None:
+        python = "C:/Python315/python.exe"
+        named = ("windows/release.py", "tests/test_release.py")
+        cases: dict[tuple[tuple[str, ...], str], tuple[str, ...] | None] = {
+            (("-m", "ruff", "check", "."), "C:/tree"): None,
+            (("-m", "ruff", "format", "--check", "."), "C:/tree"): None,
+            (("-m", "ruff", "check"), "C:/tree"): None,
+            (("-m", "ruff", "check", *named), "C:/tree"): named,
+            (("-m", "ruff", "check", "--output-format", "concise", "x.py"), "C:/tree"): None,
+            (("-m", "ruff", "check", "../tests/x.py"), "C:/tree/web"): ("tests/x.py",),
+            (("-m", "ruff", "check", "../outside.py"), "C:/tree"): None,
+            (("-m", "vulture", "server", "tests", "--min-confidence", "60"), "C:/tree"): (
+                "server",
+                "tests",
+            ),
+            (("-m", "vulture", "server", "--exclude", "x"), "C:/tree"): None,
+        }
+        for (words, cwd), scope in cases.items():
+            with self.subTest(words=words, cwd=cwd):
+                found = self.placed([python, *words], cwd)
+                self.assertEqual(record_chain.PYTHON, found.kind)
+                self.assertEqual(scope, found.scope)
+
+    def test_a_scoped_python_step_reads_its_files_their_directories_and_configuration(
+        self,
+    ) -> None:
+        names = record_chain.Names("C:/none")
+        scope = ("tests/test_release.py", "server")
+        cases = {
+            "tests/test_release.py": True,
+            "tests/test_released.py": False,
+            "server/app.py": True,
+            "server/sub/app.py": True,
+            "server_old/app.py": False,
+            "server/notes.md": False,
+            "pyproject.toml": True,
+            "windows/release.py": False,
+        }
+        for path, expected in cases.items():
+            with self.subTest(path=path):
+                found = record_chain.reads(record_chain.PYTHON, path, names, scope)
+                self.assertEqual(expected, found)
+        self.assertTrue(record_chain.reads(record_chain.PYTHON, "windows/release.py", names))
 
     def test_a_unittest_run_is_placed_with_the_tests_it_ran(self) -> None:
         python = "C:/Python315/python.exe"

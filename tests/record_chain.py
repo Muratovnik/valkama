@@ -23,26 +23,40 @@ otherwise, naming the step and the path. What a step reads, conservatively:
 - a unittest run (`-m unittest`, `tests/parallel.py`, `tests/affected.py`,
   `coverage run`) reads, test module by test module, what `tests/affected.py`
   reaches; a module a change reaches counts again from a run of it that the
-  change does not reach, so a whole suite is carried by targeted reruns;
+  change does not reach, so a whole suite is carried by targeted reruns. A test
+  may read a file of `desktop/`, `windows/` or `.github/`, or `pyproject.toml`,
+  by its path in a way `tests/affected.py` does not read as naming it, so a
+  change of one reaches every test module (`EVERY_TEST`);
 - `coverage report`, and `windows/release.py coverage-margin`, which compares
-  the same data with the floor, read every Python file and whatever reaches a
-  test module;
-  ruff, mypy, vulture and lint-imports the Python files; semgrep `server/` and
-  `valkama.py`;
+  the same data with the floor, read every Python file, the Python tools'
+  configuration and whatever reaches a test module;
+- ruff and vulture read the Python files under the paths they name, all of them
+  when they name none, and their configuration, `pyproject.toml` among it; mypy
+  and lint-imports follow imports, so they read every Python file and their
+  configuration; semgrep reads `server/` and `valkama.py`. A ruff or vulture
+  command with a word this does not know reads every Python file;
 - an npm, npx or node command run in `web/` reads everything under `web/` but
   `web/dist`, and every file a source there names; the browser suite
   (`test:browser`, `playwright`) reads everything under `web/` but `web/dist`,
-  `server/`, `valkama.py`, which its configuration serves, and the files outside
-  them its sources read (`BROWSER_READS`). An untouched, passed `npm test` in
-  `web/` covers the `npm run NAME` steps its `test` script runs, expanded through
-  the scripts those run, so a touched one of them needs no record of its own;
+  `server/`, `valkama.py`, which its configuration serves, the files outside
+  them its sources read, and the tray's and the toast's files in `windows/` that
+  the server reads as it runs (`BROWSER_READS`). An untouched, passed `npm test`
+  in `web/` covers the `npm run NAME` steps its `test` script runs, expanded
+  through the scripts those run, so a touched one of them needs no record of its
+  own;
 - the vendored Release Kit, `.github/relkit.pyz`, is run by the release audit
   alone, and a test module that names it is reached as any module naming a file
   is, so an update of it needs again the audit, those modules and `coverage
-  report`, which reads them, and leaves the other steps as true as they were;
-- a path outside `web/`, `server/`, `tests/`, `docs/`, `.agents/`, `valkama.py`,
-  `.github/relkit.pyz` and the Markdown files at the top is not placed, and is
-  an input of every step.
+  report`, which reads them, and leaves the other steps as true as they were.
+  The rest of `.github/`, the workflows the audit reads among it, touches the
+  audit, every test module and `coverage report`;
+- `desktop/` is read by the steps above that read it: the tests, `coverage
+  report`, a web step when a source there names a file of it, and the browser
+  suite the page a spec renders (`BROWSER_READS`); its own `npm test` runs in
+  `desktop/`, a command no rule places;
+- every other top-level path is not placed, and is an input of every step.
+  `EVERY_STEP` lists those, and a test holds each tracked path to a placed one
+  or to that list.
 
 The same step is the same command in the same directory, by its words after the
 program, and for the browser runner also by the specs its list file named when
@@ -56,6 +70,7 @@ matter: of two that both carry a step, the newer one's run of it decides.
 from __future__ import annotations
 
 import json
+import os
 import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -74,13 +89,76 @@ WEB = "web"
 BROWSER = "browser"
 
 #: Directories whose every path is placed, and the files outside them that are.
-PLACED_DIRECTORIES = ("web/", "server/", "tests/", "docs/", ".agents/")
-PLACED_FILES = ("valkama.py", ".github/relkit.pyz")
+PLACED_DIRECTORIES = (
+    "web/",
+    "server/",
+    "tests/",
+    "docs/",
+    ".agents/",
+    "desktop/",
+    "windows/",
+    ".github/",
+)
+PLACED_FILES = ("valkama.py", "pyproject.toml")
+#: The tracked top-level paths that stay an input of every step: no rule here says
+#: which steps read them. `tests/test_record_chain.py` holds every tracked path to a
+#: placed one or to this list, so a new top-level path does not get that silently.
+EVERY_STEP = (
+    ".betterleaks.toml",
+    ".claude-plugin/",
+    ".editorconfig",
+    ".git-blame-ignore-revs",
+    ".gitattributes",
+    ".gitignore",
+    ".heavy-gate.toml",
+    "LICENSE",
+    "VERSION",
+    "relkit.toml",
+    "requirements-dev.txt",
+    "requirements-semgrep.txt",
+    "vulture_whitelist.py",
+)
+#: Placed paths outside the import graph that a test module may read by its path
+#: without naming it as `tests/affected.py` reads a name, so a change in one reaches
+#: every test module. The vendored Release Kit is reached by its name instead.
+EVERY_TEST = ("desktop/", "windows/", ".github/", "pyproject.toml")
+RELEASE_KIT = ".github/relkit.pyz"
 WEB_BUILD = "web/dist/"
 #: Files outside `web/` and `server/` the browser suite reads: the server its
-#: configuration starts. `tests/test_record_chain.py` holds every path a browser
-#: source climbs out of `web/` to either to this list or to a path not placed.
-BROWSER_READS = ("valkama.py",)
+#: configuration starts, the desktop page a spec renders, and the tray's and the
+#: toast's files in `windows/`, which that server reads as it runs.
+#: `tests/test_record_chain.py` holds every path a browser source climbs out of
+#: `web/` to, and every file those two read, either to this list or to a path not placed.
+BROWSER_READS = (
+    "valkama.py",
+    "desktop/startup_page.js",
+    "windows/tray.ps1",
+    "windows/valkama.ico",
+    "windows/toast.cs",
+)
+#: What a Python tool reads besides Python: its configuration, by file name.
+PYTHON_SOURCES = (".py", ".pyi")
+PYTHON_CONFIGURATION = frozenset(
+    {
+        "pyproject.toml",
+        "ruff.toml",
+        ".ruff.toml",
+        "mypy.ini",
+        ".mypy.ini",
+        "setup.cfg",
+        ".coveragerc",
+        ".importlinter",
+    }
+)
+#: The flags of ruff and vulture that leave which files they read to the paths named.
+_RUFF_COMMANDS = frozenset({"check", "format"})
+_SCOPE_FLAGS = {
+    "ruff": frozenset(
+        {"--check", "--diff", "--no-fix", "--statistics", "-q", "--quiet", "--no-cache"}
+    ),
+    "vulture": frozenset({"--sort-by-size", "-v", "--verbose"}),
+}
+_SCOPE_VALUED = {"ruff": frozenset(), "vulture": frozenset({"--min-confidence"})}
 
 #: unittest's own flags that change what it prints, not which tests run.
 _QUIET_FLAGS = frozenset(
@@ -101,12 +179,21 @@ def placed(path: str) -> bool:
     )
 
 
+def reaches_every_test(path: str) -> bool:
+    """Whether a change of placed `path` reaches every test module, read by its path."""
+
+    directories = tuple(name for name in EVERY_TEST if name.endswith("/"))
+    return path != RELEASE_KIT and (path.startswith(directories) or path in EVERY_TEST)
+
+
 @dataclass(frozen=True)
 class Placement:
-    """What one step is: its kind, and for a unittest run the tests it ran, None for all."""
+    """What one step is: its kind, for a unittest run the tests it ran, None for all,
+    and for a Python step the paths whose Python it reads, None for every one."""
 
     kind: str
     units: frozenset[str] | None = None
+    scope: tuple[str, ...] | None = None
 
 
 def module_of(unit: str) -> str | None:
@@ -223,7 +310,10 @@ def place(entry: Mapping[str, object], worktree: str, logs: Path) -> Placement:
         after = arguments[arguments.index("-m") + 1 :]
         if after[:1] == ["unittest"]:
             units = _unittest(after[1:])
-    elif tool in ("ruff", "mypy", "vulture", "lint-imports"):
+    elif tool in ("ruff", "vulture"):
+        return Placement(PYTHON, scope=_scope(entry, worktree, _named_paths(tool, arguments)))
+    elif tool in ("mypy", "lint-imports"):
+        # Both follow imports out of whatever they are given, so they read any Python.
         return Placement(PYTHON)
     elif tool == "semgrep":
         return Placement(SEMGREP)
@@ -233,6 +323,58 @@ def place(entry: Mapping[str, object], worktree: str, logs: Path) -> Placement:
     if isinstance(units, bool):
         return Placement(NEWEST)
     return Placement(UNITS, units)
+
+
+def _named_paths(tool: str, arguments: Sequence[str]) -> list[str]:
+    """The paths a ruff or vulture command names, none when a word is not one it reads."""
+
+    words = list(arguments)
+    if tool == "ruff":
+        if words[:1] and words[0] in _RUFF_COMMANDS:
+            words = words[1:]
+        else:
+            return []
+    flags, valued = _SCOPE_FLAGS[tool], _SCOPE_VALUED[tool]
+    named: list[str] = []
+    value = False
+    for word in words:
+        if value:
+            value = False
+        elif word in valued:
+            value = True
+        elif word in flags or word.split("=", 1)[0] in valued:
+            continue
+        elif word.startswith("-"):
+            return []
+        else:
+            named.append(word)
+    return named
+
+
+def _scope(
+    entry: Mapping[str, object], worktree: str, named: Sequence[str]
+) -> tuple[str, ...] | None:
+    """The tree's paths `named` are, from where the step ran, None for the whole tree."""
+
+    if not named:
+        return None
+    root = git_worktrees.canonical(worktree)
+    found = []
+    for name in named:
+        full = git_worktrees.canonical(Path(str(entry.get("cwd", ""))) / name)
+        if not full.startswith(root + os.sep):
+            return None
+        found.append(full[len(root) + 1 :].replace(os.sep, "/"))
+    return tuple(found)
+
+
+def _in_scope(path: str, scope: tuple[str, ...] | None) -> bool:
+    """Whether `path` is one of `scope`'s files or under one of its directories."""
+
+    if scope is None:
+        return True
+    folded = os.path.normcase(path).replace(os.sep, "/")
+    return any(folded == named or folded.startswith(named + "/") for named in scope)
 
 
 def _directory(entry: Mapping[str, object]) -> str:
@@ -319,7 +461,8 @@ def identity(entry: Mapping[str, object], worktree: str) -> tuple[object, ...]:
 
 
 class Reach:
-    """Which test modules changed paths reach, as `tests/affected.py` selects them."""
+    """Which test modules changed paths reach, as `tests/affected.py` selects them,
+    and every one for a path any of them may read by its path (`EVERY_TEST`)."""
 
     def __init__(self, select: Callable[[list[str]], Mapping[str, str]], modules: set[str]):
         self._select = select
@@ -329,7 +472,12 @@ class Reach:
         """Each test module the paths reach, with what reaches it."""
 
         chosen = sorted(set(paths))
-        return dict(self._select(chosen)) if chosen else {}
+        found = dict(self._select(chosen)) if chosen else {}
+        every = next((path for path in chosen if reaches_every_test(path)), None)
+        if every is not None:
+            for module in sorted(self.modules):
+                found.setdefault(module, f"may read {every} by its path")
+        return found
 
 
 class ReachRefusedError(Exception):
@@ -391,11 +539,20 @@ def _in_web(path: str) -> bool:
     return path.startswith("web/") and not path.startswith(WEB_BUILD)
 
 
-def reads(kind: str, path: str, web_names: Names) -> bool:
-    """Whether a step of `kind` reads `path`; a unittest run's paths are its modules'."""
+def configures_python(path: str) -> bool:
+    """Whether `path` is a file a Python tool takes its configuration from."""
+
+    return path.rsplit("/", 1)[-1] in PYTHON_CONFIGURATION
+
+
+def reads(kind: str, path: str, web_names: Names, scope: tuple[str, ...] | None = None) -> bool:
+    """Whether a step of `kind` reads `path`; a unittest run's paths are its modules'.
+
+    `scope` is a Python step's: the paths whose Python it reads, None for every one.
+    """
 
     if kind == PYTHON:
-        return path.endswith(".py")
+        return configures_python(path) or (path.endswith(PYTHON_SOURCES) and _in_scope(path, scope))
     if kind == SEMGREP:
         return path.startswith("server/") or path == "valkama.py"
     if kind == WEB:
@@ -542,7 +699,7 @@ def _judge(
             if placement.kind == UNITS:
                 runs.append((link, entry, *_touched_units(link, placement, unplaced, reached)))
                 continue
-            touched = _touched(link, placement.kind, unplaced, web_names, reached)
+            touched = _touched(link, placement, unplaced, web_names, reached)
             plain.append((link, entry, (placement.kind, *identity(entry, worktree)), touched))
 
     problems: list[str] = []
@@ -586,7 +743,7 @@ def _judge(
 
 def _touched(
     link: Link,
-    kind: str,
+    placement: Placement,
     unplaced: str | None,
     web_names: Names,
     reached: Callable[[Link], dict[str, str]],
@@ -595,6 +752,7 @@ def _touched(
 
     if link.newest:
         return None
+    kind = placement.kind
     since = f"since {link.head}"
     if kind == NEWEST:
         return (
@@ -603,12 +761,14 @@ def _touched(
     if unplaced is not None:
         return f"may read {unplaced}, which changed {since} and which no rule places"
     if kind == COVERAGE:
-        python = next((path for path in link.changed if path.endswith(".py")), None)
+        python = next((path for path in link.changed if reads(PYTHON, path, web_names)), None)
         if python is not None:
             return f"reads {python}, which changed {since}"
         module, why = next(iter(reached(link).items()), (None, ""))
         return None if module is None else f"reads {module}, which {why} {since}"
-    path = next((path for path in link.changed if reads(kind, path, web_names)), None)
+    path = next(
+        (path for path in link.changed if reads(kind, path, web_names, placement.scope)), None
+    )
     return None if path is None else f"reads {path}, which changed {since}"
 
 
