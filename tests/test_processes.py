@@ -15,11 +15,15 @@ tests exercise.
 
 from __future__ import annotations
 
+import contextlib
+import ctypes
 import os
+import signal
 import subprocess
 import sys
 import tempfile
 import time
+import types
 import unittest
 from pathlib import Path
 from typing import Any
@@ -111,6 +115,119 @@ def gone_within(pid: int, seconds: float) -> bool:
     return True
 
 
+def end_sleeper(pid: int) -> None:
+    """End a sleeper a failing test left running; a number that has ended is left.
+
+    SIGTERM on Windows is TerminateProcess, so one call serves both platforms.
+    """
+    with contextlib.suppress(OSError):
+        os.kill(pid, signal.SIGTERM)
+
+
+class FakeKernel32:
+    """The kernel32 calls `_Tree` makes, over processes this test describes.
+
+    A handle is a number past every process number, so nothing real is opened or ended.
+    `starts` maps each pid to its creation time, or to None when it cannot be read.
+    """
+
+    HANDLE_BASE = 1 << 20
+
+    def __init__(self, starts: dict[int, int | None], cutoff: int) -> None:
+        self.starts = starts
+        self.cutoff = cutoff
+
+    def OpenProcess(self, rights: int, inherit: bool, pid: int) -> int:  # noqa: ARG002, N802
+        return pid + self.HANDLE_BASE if pid in self.starts else 0
+
+    def GetProcessId(self, handle: int) -> int:  # noqa: N802
+        return handle - self.HANDLE_BASE
+
+    def GetProcessTimes(self, handle: int, creation: int, *_: int) -> int:  # noqa: N802
+        start = self.starts[handle - self.HANDLE_BASE]
+        if start is None:
+            return 0
+        ctypes.c_ulonglong.from_address(creation).value = start
+        return 1
+
+    def GetSystemTimeAsFileTime(self, address: int) -> None:  # noqa: N802
+        ctypes.c_ulonglong.from_address(address).value = self.cutoff
+
+    def CloseHandle(self, handle: int) -> int:  # noqa: N802, ARG002
+        return 1
+
+
+#: A root number no test process has; the table and the starts below are made up around it.
+TREE_ROOT = 4000
+
+
+class HoldByStartTests(unittest.TestCase):
+    """`_Tree` holds a child only when it started after its parent and before the snapshot.
+
+    Over `FakeKernel32`, so no real process is opened or ended here.
+    """
+
+    def seen(self, starts: dict[int, int | None], table: dict, cutoff: int) -> processes._Tree:
+        fake = FakeKernel32(starts, cutoff)
+        with (
+            mock.patch.object(processes, "_kernel32", return_value=fake),
+            mock.patch.object(processes, "process_table", return_value=table),
+        ):
+            tree = processes._Tree.seen(TREE_ROOT)
+        assert tree is not None
+        self.addCleanup(tree.close)
+        return tree
+
+    def test_a_child_created_after_the_snapshot_cutoff_is_not_held(self) -> None:
+        # 4002 is a number the snapshot did not list: its process was created after the
+        # cutoff, so it took the number over since and is not the child the table named.
+        starts = {TREE_ROOT: 100, 4001: 200, 4002: 2000}
+        table = {
+            TREE_ROOT: (1, "root.exe"),
+            4001: (TREE_ROOT, "child.exe"),
+            4002: (TREE_ROOT, "unrelated.exe"),
+        }
+
+        tree = self.seen(starts, table, cutoff=1000)
+
+        self.assertEqual({TREE_ROOT, 4001}, set(tree.pids))
+        self.assertFalse(tree.unseen)
+
+    def test_a_child_created_in_the_cutoff_clock_tick_is_not_held(self) -> None:
+        # Equal times are refused: a reused number created in the tick of the cutoff read
+        # would otherwise pass the check the time of its creation cannot distinguish.
+        starts = {TREE_ROOT: 100, 4001: 1000}
+        table = {TREE_ROOT: (1, "root.exe"), 4001: (TREE_ROOT, "unrelated.exe")}
+
+        tree = self.seen(starts, table, cutoff=1000)
+
+        self.assertEqual([TREE_ROOT], tree.pids)
+
+    def test_a_root_whose_start_cannot_be_read_holds_no_child(self) -> None:
+        # Without the root's start the start filter is unknown, so no child is held by it.
+        starts = {TREE_ROOT: None, 4001: 200}
+        table = {TREE_ROOT: (1, "root.exe"), 4001: (TREE_ROOT, "child.exe")}
+
+        tree = self.seen(starts, table, cutoff=1000)
+
+        self.assertEqual([TREE_ROOT], tree.pids)
+        self.assertTrue(tree.unseen, "a tree that cannot be read in full claims no end")
+
+    def test_a_root_number_naming_no_process_is_absent_and_holds_nothing(self) -> None:
+        fake = FakeKernel32({}, cutoff=1000)
+        with (
+            mock.patch.object(processes, "_kernel32", return_value=fake),
+            mock.patch("ctypes.get_last_error", return_value=87),  # ERROR_INVALID_PARAMETER
+        ):
+            tree = processes._Tree.seen(TREE_ROOT)
+        assert tree is not None
+        self.addCleanup(tree.close)
+
+        self.assertTrue(tree.absent)
+        self.assertEqual([], tree.pids)
+        self.assertFalse(tree.unseen)
+
+
 class ContainedTests(unittest.TestCase):
     def hold(self, pid: int) -> Held:
         held = Held(pid)
@@ -121,6 +238,9 @@ class ContainedTests(unittest.TestCase):
         with processes.contained([sys.executable, "-c", LEAVER], stdout=subprocess.PIPE) as child:
             assert child.stdout is not None
             left = int(child.stdout.readline())
+            if sys.platform != "win32":
+                # Registered before anything can fail: a failing test must not leave it.
+                self.addCleanup(end_sleeper, left)
             child.stdout.close()
             self.assertEqual(0, child.wait())
             if sys.platform == "win32":
@@ -220,6 +340,38 @@ class ContainedTests(unittest.TestCase):
             self.assertIsNotNone(started[0].poll(), "the refused child was left running")
             self.assertFalse(marker.exists(), "the refused child ran")
 
+    @unittest.skipUnless(sys.platform == "win32", "a Job Object is a Windows object")
+    def test_a_child_whose_job_cannot_be_opened_is_ended_and_not_left_suspended(self) -> None:
+        # `take` fails before it touches the child: only `contained` can end it.
+        started: list[subprocess.Popen] = []
+        real_popen = subprocess.Popen
+
+        def popen(*arguments, **options):
+            started.append(real_popen(*arguments, **options))
+            # Cleanups run last in first out: the kill, then the reap that follows it.
+            self.addCleanup(started[-1].wait, GONE_SECONDS)
+            self.addCleanup(started[-1].kill)
+            return started[-1]
+
+        def refused(job, pid: int) -> None:  # noqa: ARG001
+            raise OSError(5, "OpenProcess refused")
+
+        with tempfile.TemporaryDirectory(prefix="vk-proc-") as directory:
+            marker = Path(directory) / "ran"
+            source = f"open({str(marker)!r}, 'w').close()"
+            with (
+                mock.patch.object(processes._Job, "take", refused),
+                mock.patch.object(subprocess, "Popen", side_effect=popen),
+                self.assertRaises(OSError),
+                processes.contained([sys.executable, "-c", source]),
+            ):
+                self.fail("the block ran with the child not in the job")
+
+            self.assertEqual(1, len(started))
+            # Without the kill the child stays suspended: the wait in `contained` times out.
+            self.assertIsNotNone(started[0].poll(), "the suspended child was left running")
+            self.assertFalse(marker.exists(), "the suspended child ran")
+
 
 @unittest.skipUnless(sys.platform == "win32", "the tree is held by handle on Windows")
 class StopByOutcomeTests(unittest.TestCase):
@@ -304,12 +456,32 @@ class StopByOutcomeTests(unittest.TestCase):
         self.assertTrue(stopped)
         self.assertEqual([True, True], [held.gone_within(GONE_SECONDS) for held in tree])
 
+    def test_a_root_number_naming_no_process_is_not_given_to_taskkill(self) -> None:
+        # Nothing holds this number now, so `taskkill /PID` would end whatever takes it
+        # over, with its tree. Over `FakeKernel32` nothing real is opened or ended.
+        fake = FakeKernel32({}, cutoff=1000)
+        process = types.SimpleNamespace(pid=TREE_ROOT, wait=lambda timeout=None: 0)  # noqa: ARG005
+
+        with (
+            mock.patch.object(processes, "_kernel32", return_value=fake),
+            mock.patch("ctypes.get_last_error", return_value=87),  # ERROR_INVALID_PARAMETER
+            mock.patch.object(processes.subprocess, "run") as run,
+        ):
+            stopped = processes.stop_process_tree(process, wait_timeout=0.1)
+
+        self.assertTrue(stopped, "no process of the tree is left running")
+        run.assert_not_called()
+
     def test_a_number_no_process_has_is_not_taken_for_its_neighbour_s(self) -> None:
         child, _ = self.start_tree()
 
         # Windows opens process n for n + 2 as well, so a stop of a made-up number
         # would reach whatever process holds the number next to it.
-        self.assertIsNone(processes._Tree.seen(child.pid + 2))
+        absent = processes._Tree.seen(child.pid + 2)
+        assert absent is not None
+        self.addCleanup(absent.close)
+        self.assertTrue(absent.absent)
+        self.assertEqual([], absent.pids)
         seen = processes._Tree.seen(child.pid)
         assert seen is not None
         self.addCleanup(seen.close)

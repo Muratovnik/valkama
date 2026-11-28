@@ -139,6 +139,7 @@ def _kernel32() -> Any:
         "OpenProcess": ((dword, boolean, dword), handle),
         "TerminateProcess": ((handle, wintypes.UINT), boolean),
         "WaitForSingleObject": ((handle, dword), dword),
+        "GetSystemTimeAsFileTime": ((pointer,), None),
         "GetProcessTimes": ((handle, pointer, pointer, pointer, pointer), boolean),
         "GetProcessId": ((handle,), dword),
         "CloseHandle": ((handle,), boolean),
@@ -157,6 +158,16 @@ def _windows_error(call: str) -> OSError:
 
     code = ctypes.get_last_error()
     return OSError(code, f"{call} failed: {ctypes.FormatError(code).strip()}")
+
+
+def _system_time() -> int:
+    """The system time in FILETIME units, those of a process's creation time. Windows only."""
+
+    import ctypes
+
+    now = ctypes.c_ulonglong()
+    _kernel32().GetSystemTimeAsFileTime(ctypes.addressof(now))
+    return int(now.value)
 
 
 def process_table() -> dict[int, tuple[int, str]]:
@@ -213,8 +224,11 @@ class _Tree:
         self._kernel32 = _kernel32()
         self.pids: list[int] = []
         self._handles: list[int] = []
-        #: A member that exists but would not open, so its end cannot be seen.
+        #: A member that exists but would not open, or whose start cannot be read,
+        #: so its end cannot be seen.
         self.unseen = False
+        #: The root number names no process now, so it is never given to `taskkill`.
+        self.absent = False
 
     @classmethod
     def seen(cls, pid: int) -> _Tree | None:
@@ -223,8 +237,19 @@ class _Tree:
         tree = cls()
         started = tree._hold(pid)
         if started is None:
-            return None
+            if tree.unseen:
+                tree.close()
+                return None
+            tree.absent = True
+            return tree
+        if not started:
+            # The root's start is unreadable, so no child can be told from a reused number.
+            tree.unseen = True
+            return tree
         try:
+            # Read before the snapshot: a process the snapshot lists was created before
+            # the snapshot ended, and `_hold` refuses one created at or after this time.
+            cutoff = _system_time()
             table = process_table()
         except OSError:
             tree.close()
@@ -238,13 +263,19 @@ class _Tree:
             for child in children.get(parent, ()):
                 if child in tree.pids:
                     continue
-                child_started = tree._hold(child, after=parent_started)
+                child_started = tree._hold(child, after=parent_started, cutoff=cutoff)
                 if child_started is not None:
                     waiting.append((child, child_started))
         return tree
 
-    def _hold(self, pid: int, *, after: int = 0) -> int | None:
-        """Hold `pid` when it started at `after` or later; its start, or None when not held."""
+    def _hold(self, pid: int, *, after: int = 0, cutoff: int | None = None) -> int | None:
+        """Hold `pid` when it started at `after` or later and before `cutoff`.
+
+        Returns its start, or None when not held. A number the snapshot listed names a process created before the snapshot ended,
+        so a process created at or after `cutoff` took its number over since. Equal is
+        refused too: a clock tick can give both the same time. A refusal costs a child
+        that is not held, which `taskkill /T` has already had the chance to end.
+        """
 
         import ctypes
 
@@ -260,9 +291,13 @@ class _Tree:
         started = 0
         if self._kernel32.GetProcessTimes(handle, *(address + size * n for n in range(4))):
             started = int(times[0])
+        else:
+            # Without a start the process cannot be told from a reused number.
+            self.unseen = True
         # Windows ignores a number's two low bits when it opens one, so 4242 opens
         # process 4240: a number no process has is not taken for its neighbour's.
-        if self._kernel32.GetProcessId(handle) != pid or started < after:
+        too_late = cutoff is not None and started >= cutoff
+        if self._kernel32.GetProcessId(handle) != pid or started < after or too_late:
             self._kernel32.CloseHandle(handle)
             return None
         self.pids.append(pid)
@@ -408,7 +443,13 @@ def contained(argv: list[str], **options: Any) -> Iterator[subprocess.Popen[byte
         try:
             flags = int(options.pop("creationflags", 0)) | _CREATE_SUSPENDED
             started = subprocess.Popen(argv, creationflags=flags, **options)
-            job.take(started.pid)
+            try:
+                job.take(started.pid)
+            except BaseException:
+                # Still suspended and outside the job: nothing will end it but this.
+                with contextlib.suppress(OSError):
+                    started.kill()
+                raise
             yield started
         finally:
             # Closed before the wait: the wait is for a tree the close ends.
@@ -422,6 +463,11 @@ def contained(argv: list[str], **options: Any) -> Iterator[subprocess.Popen[byte
         yield process
     finally:
         # The group outlives its leader while a member runs; its number is the leader's.
+        # Once the leader is reaped (the block may have waited for it), that number can
+        # be taken by a new process leading a group of its own, and this kill would reach
+        # it. The window is the time from that reap to this line, and it is accepted: it
+        # needs a reused number inside it, and closing it means holding the number past
+        # the reap, which `Popen` does not do.
         with contextlib.suppress(ProcessLookupError, PermissionError):
             os.killpg(process.pid, signal.SIGKILL)
         with contextlib.suppress(OSError, subprocess.SubprocessError):
@@ -461,15 +507,18 @@ def stop_process_tree(process: Any, *, wait_timeout: float = 2.0) -> bool:
     if sys.platform == "win32" and pid:
         tree = _Tree.seen(pid)
         said: int | None = None
-        with contextlib.suppress(OSError, subprocess.SubprocessError):
-            said = subprocess.run(
-                ["taskkill", "/PID", str(pid), "/T", "/F"],
-                capture_output=True,
-                shell=False,
-                timeout=5,
-                check=False,
-                creationflags=NO_WINDOW,
-            ).returncode
+        # A number that names no process now may be taken over by an unrelated one, and
+        # `taskkill /PID` would end that one with its tree: it is not asked for that number.
+        if tree is None or not tree.absent:
+            with contextlib.suppress(OSError, subprocess.SubprocessError):
+                said = subprocess.run(
+                    ["taskkill", "/PID", str(pid), "/T", "/F"],
+                    capture_output=True,
+                    shell=False,
+                    timeout=5,
+                    check=False,
+                    creationflags=NO_WINDOW,
+                ).returncode
         if tree is not None:
             try:
                 gone = tree.ended(wait_timeout)
