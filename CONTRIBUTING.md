@@ -270,9 +270,11 @@ temporary copy of the sources and runs every npm stage there, never in the check
 `npm ci` empties the tree it installs into, and other worktrees may link their
 `node_modules` to the checkout's. The checkout's own `node_modules` is left as it is.
 Its stages are the gates `python tests/isolated.py gates` runs, from the one list
-`STAGES` in `windows/release.py`, less the commit-subject check and the history
-audit, which only `gates` runs, and with `scope`, the installs and the price
-comparison first. `scope` is `check`'s alone, since the gates have no planning
+`STAGES` in `windows/release.py`, less the commit-subject check, the history
+audit and the coverage margin, which only `gates` runs, and with `scope`, the
+installs and the price comparison first. The coverage margin is not part of a
+release: it compares the measured total with the floor in the integrator's gates
+and in CI. `scope` is `check`'s alone, since the gates have no planning
 store. The unittest suite runs through `tests/parallel.py`, several
 modules at once, in a throwaway profile. A stage that finds no room at the
 machine's heavy-process gate waits for it, even in an agent's session, where the
@@ -381,30 +383,19 @@ run first, by the same commands, and `prepare` runs as soon as they pass:
    ```
 
 4. `build` and `smoke` as `[release]` in `relkit.toml` declares them, run the
-   way `prepare` runs them: in a copy of the candidate's committed files with
-   no `.git`, with `{python}` the interpreter of `.venv`, `{assets}` a
-   directory for the release files that does not exist yet, `{temp}` a work
-   directory, and the candidate's `{version}` and `{commit}`:
+   way `prepare` runs them:
 
    ```powershell
-   $commit = git rev-parse HEAD
-   $version = (Get-Content VERSION).Trim()
-   $python = (Resolve-Path .venv/Scripts/python.exe).Path
-   $work = Join-Path (Get-Location) "tmp/candidate-$version"
-   New-Item -ItemType Directory -Path "$work/source" | Out-Null
-   git archive --format=tar --output "$work/source.tar" $commit
-   tar -xf "$work/source.tar" -C "$work/source"
-   Push-Location "$work/source"
-   & $python windows/release.py build --assets "$work/assets" --version $version --work-dir "$work/temp" --commit $commit
-   & $python windows/release.py smoke --assets "$work/assets" --version $version --work-dir "$work/temp" --commit $commit
-   Pop-Location
+   .venv/Scripts/python windows/release.py build-smoke
    ```
 
-   `git archive` writes the committed files byte for byte here, because
-   `.gitattributes` stores and writes text as LF and excludes nothing from an
-   archive. `build` refuses an asset directory that is not empty, and `smoke` a
-   work directory it has already used, so another attempt starts from a new
-   `$work`. Remove `$work` once both pass.
+   It copies the committed files of `HEAD`, or of `--commit <rev>`, with no
+   `.git`, into a new directory under `tmp/build-smoke/`, fills the placeholders
+   as Release Kit does, with `{python}` the interpreter that runs it, and runs
+   there every `build` command of `relkit.toml`, then every `smoke` command. The
+   first command that fails stops it and is named, and its directory is kept
+   for inspection; when all pass, the directory is removed. Like `prepare`, it
+   refuses a checkout with any uncommitted or untracked change.
 5. An upgrade rehearsal, for a release that changes the store's schema: its
    migration and the way back run on a copy of a real store, in a home that
    `tests/isolated.py profile --out DIR --store-copy [SOURCE]` makes, before

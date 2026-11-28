@@ -1391,5 +1391,241 @@ class ReleaseBuildTests(unittest.TestCase):
         self.assertEqual({*SNAPSHOT, "server/source_archive.py"}, held)
 
 
+#: A command that writes what it was given and what it found into the file
+#: `BUILD_SMOKE_LOG` names, one JSON line each: its arguments, its directory and
+#: the files in it, the environment Release Kit sets and the asset directory.
+RECORDER = b"""\
+import json, os, sys
+from pathlib import Path
+
+here = Path.cwd()
+phase, python, source, assets, temp = sys.argv[1:6]
+entry = {
+    "argv": sys.argv[1:],
+    "cwd": str(here),
+    "files": sorted(p.relative_to(here).as_posix() for p in here.rglob("*") if p.is_file()),
+    "names": sorted(p.name for p in here.iterdir()),
+    "environment": [os.environ.get(name) for name in ("TEMP", "TMP", "TMPDIR")],
+    "bytecode": os.environ.get("PYTHONDONTWRITEBYTECODE"),
+    "assets": sorted(p.name for p in Path(assets).iterdir()) if Path(assets).exists() else None,
+    "temp": sorted(p.name for p in Path(temp).iterdir()) if Path(temp).is_dir() else None,
+}
+with open(os.environ["BUILD_SMOKE_LOG"], "a", encoding="utf-8") as log:
+    log.write(json.dumps(entry) + "\\n")
+if phase == "build":
+    Path(assets).mkdir()
+    (Path(assets) / "built.txt").write_text("built", encoding="utf-8")
+"""
+
+#: The arguments the recorder takes, every placeholder Release Kit fills, then a literal brace.
+RECORDED = '"{python}", "{source}", "{assets}", "{temp}", "{version}", "{tag}", "{commit}", "{{x}}"'
+
+#: A `[release]` table in `relkit.toml`'s shape, with made-up values.
+RELEASE_TABLE = f"""\
+[release]
+version_file = "VERSION"
+version_pattern = '^([0-9]+\\.[0-9]+\\.[0-9]+)$'
+build = [["{{python}}", "record.py", "build", {RECORDED}]]
+smoke = [["{{python}}", "record.py", "smoke", {RECORDED}]]
+"""
+
+#: The files the fixture commits.
+COMMITTED = {
+    ".gitignore": b"/tmp/\n*.log\n",
+    "VERSION": b"7.8.9\n",
+    "record.py": RECORDER,
+    "relkit.toml": RELEASE_TABLE.encode(),
+    "src/kept.txt": b"committed\n",
+}
+
+
+class BuildSmokeTests(unittest.TestCase):
+    """`build-smoke` runs the build and smoke commands of `relkit.toml` the way prepare does.
+
+    They used to be copied by hand into the release procedure, where a copy drifts
+    from `relkit.toml`. Each test commits a made-up checkout whose commands are
+    a recorder, never the real build, in a Git with no global or system
+    configuration, so no hook of this machine runs.
+    """
+
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory(prefix="vk-bs-", ignore_cleanup_errors=True)
+        self.addCleanup(directory.cleanup)
+        top = Path(directory.name).resolve()
+        self.checkout = top / "checkout"
+        self.log = top / "log.jsonl"
+        (top / "gitconfig").write_bytes(b"")
+        environment = {
+            name: value for name, value in os.environ.items() if not name.startswith("GIT_")
+        }
+        environment.update(
+            {
+                "GIT_CONFIG_GLOBAL": str(top / "gitconfig"),
+                "GIT_CONFIG_NOSYSTEM": "1",
+                "GIT_AUTHOR_NAME": "Tester",
+                "GIT_AUTHOR_EMAIL": "tester@example.invalid",
+                "GIT_COMMITTER_NAME": "Tester",
+                "GIT_COMMITTER_EMAIL": "tester@example.invalid",
+                "BUILD_SMOKE_LOG": str(self.log),
+            }
+        )
+        patch = mock.patch.dict(os.environ, environment, clear=True)
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.parent = self.checkout / "tmp" / "build-smoke"
+
+    def commit(self, **changed: bytes) -> str:
+        """Commit `COMMITTED` with `changed` over it; the full id of the commit."""
+
+        for name, data in {**COMMITTED, **changed}.items():
+            path = self.checkout / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        self.git("init", "-q")
+        self.git("add", "-A")
+        self.git("commit", "-qm", "chore: fixture")
+        return self.git("rev-parse", "HEAD").strip()
+
+    def git(self, *arguments: str) -> str:
+        done = _real_run((_GIT, *arguments), cwd=self.checkout, capture_output=True, check=True)
+        return done.stdout.decode("utf-8", errors="strict")
+
+    def run_it(self) -> Path:
+        with mock.patch.object(release.sys, "stdout", io.StringIO()):
+            return release.build_smoke(self.checkout, "HEAD")
+
+    def refused(self) -> str:
+        with self.assertRaises(release.BuildSmokeError) as refusal:
+            self.run_it()
+        return str(refusal.exception)
+
+    def entries(self) -> list[dict]:
+        if not self.log.exists():
+            return []
+        return [json.loads(line) for line in self.log.read_text(encoding="utf-8").splitlines()]
+
+    def test_the_commands_run_build_first_in_a_copy_of_the_commit_with_no_git(self) -> None:
+        commit = self.commit()
+        # In the working tree, not in the commit: ignored output.
+        (self.checkout / "local.log").write_bytes(b"ignored\n")
+
+        directory = self.run_it()
+
+        build, smoke = self.entries()
+        self.assertEqual(["build", "smoke"], [build["argv"][0], smoke["argv"][0]])
+        source = str(directory / "source")
+        assets, temp = str(directory / "assets"), str(directory / "temp")
+        filled = [sys.executable, source, assets, temp, "7.8.9", "v7.8.9", commit, "{x}"]
+        self.assertEqual(["build", *filled], build["argv"])
+        self.assertEqual(["smoke", *filled], smoke["argv"])
+        self.assertEqual(self.parent.resolve(), directory.parent.resolve())
+        for entry in (build, smoke):
+            self.assertEqual(source, entry["cwd"])
+            self.assertNotIn(".git", entry["names"])
+            self.assertEqual(sorted(COMMITTED), entry["files"])
+            self.assertEqual([temp] * 3, entry["environment"])
+            self.assertEqual("1", entry["bytecode"])
+        # The asset directory does not exist yet when build starts; smoke reads what it wrote.
+        self.assertIsNone(build["assets"])
+        self.assertEqual([], build["temp"])
+        self.assertEqual(["built.txt"], smoke["assets"])
+        self.assertFalse(directory.exists())
+
+    def test_an_unknown_placeholder_is_refused_naming_it_and_nothing_runs(self) -> None:
+        for argument, named in (
+            ("{interpreter}", "{interpreter}"),
+            ("{version:>9}", "{version:>9}"),
+            ("{commit!r}", "{commit!r}"),
+            ("--{}", "{}"),
+            ("{tag.upper}", "{tag.upper}"),
+        ):
+            with self.subTest(argument=argument):
+                table = {"build": [["{python}", argument]], "smoke": [["{python}"]]}
+                with self.assertRaisesRegex(
+                    release.BuildSmokeError, "unknown placeholder"
+                ) as refusal:
+                    release.release_commands(table)
+                self.assertIn(named, str(refusal.exception))
+        with self.assertRaisesRegex(release.BuildSmokeError, "literal brace"):
+            release.release_commands({"smoke": [["{python}", "a { lone brace"]]})
+
+        self.commit(
+            **{
+                "relkit.toml": RELEASE_TABLE.replace(
+                    '"smoke", ', '"smoke", "{interpreter}", '
+                ).encode()
+            }
+        )
+
+        self.assertIn("{interpreter}", self.refused())
+        self.assertEqual([], self.entries())
+        self.assertFalse(self.parent.exists())
+
+    def test_a_failing_command_stops_the_run_and_keeps_its_directory(self) -> None:
+        failing = RELEASE_TABLE.replace(
+            "build = [", 'build = [["{python}", "-c", "raise SystemExit(3)"], '
+        )
+        self.commit(**{"relkit.toml": failing.encode()})
+
+        kept = []
+        for _attempt in range(2):
+            said = self.refused()
+            self.assertIn("build 1/2 exited 3", said)
+            self.assertIn("raise SystemExit(3)", said)
+            [directory] = set(self.parent.iterdir()) - set(kept)
+            self.assertIn(str(directory), said)
+            self.assertTrue((directory / "source" / "record.py").is_file())
+            kept.append(directory)
+        # Neither the build's recorder after it nor the smoke ran, and each attempt had its own.
+        self.assertEqual([], self.entries())
+        self.assertEqual(2, len(set(kept)))
+
+    def test_a_checkout_prepare_would_refuse_is_refused_before_anything_is_made(self) -> None:
+        self.commit()
+        for name, data in (("src/kept.txt", b"edited\n"), ("src/new.txt", b"not added\n")):
+            with self.subTest(name=name):
+                original = (
+                    (self.checkout / name).read_bytes() if (self.checkout / name).exists() else None
+                )
+                (self.checkout / name).write_bytes(data)
+                try:
+                    said = self.refused()
+                finally:
+                    if original is None:
+                        (self.checkout / name).unlink()
+                    else:
+                        (self.checkout / name).write_bytes(original)
+                self.assertIn(name, said)
+                self.assertIn("not clean", said)
+                self.assertEqual([], self.entries())
+                self.assertFalse(self.parent.exists())
+
+    def test_a_directory_git_does_not_ignore_is_refused(self) -> None:
+        self.commit(**{".gitignore": b"*.log\n"})
+
+        said = self.refused()
+
+        self.assertIn("tmp/build-smoke is not ignored", said)
+        self.assertEqual([], self.entries())
+        self.assertFalse(self.parent.exists())
+
+    def test_the_command_line_runs_head_unless_a_commit_is_named(self) -> None:
+        for arguments, revision in (([], "HEAD"), (["--commit", "abc123"], "abc123")):
+            with (
+                self.subTest(arguments=arguments),
+                mock.patch.object(release.sys, "argv", ["release.py", "build-smoke", *arguments]),
+                mock.patch.object(release, "build_smoke") as ran,
+            ):
+                release.main()
+            ran.assert_called_once_with(release.ROOT, revision)
+        with (
+            mock.patch.object(release.sys, "argv", ["release.py", "build-smoke"]),
+            mock.patch.object(release, "build_smoke", side_effect=release.BuildSmokeError("why")),
+            self.assertRaises(SystemExit) as stopped,
+        ):
+            release.main()
+        self.assertEqual("why", stopped.exception.code)
+
+
 if __name__ == "__main__":
     unittest.main()
