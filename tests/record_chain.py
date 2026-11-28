@@ -59,8 +59,9 @@ otherwise, naming the step and the path. What a step reads, conservatively:
   or to that list.
 
 The same step is the same command in the same directory, by its words after the
-program, and for the browser runner also by the specs its list file named when
-`run` ran it. An earlier record made on uncommitted changes counts with the paths
+program, and for the browser runner by the specs its list file named when `run`
+ran it in place of the file's path, so two runs of one list kept at two paths are
+one step and runs of two lists are two. An earlier record made on uncommitted changes counts with the paths
 it names with their content: a path differs since when its content now is not
 the one the run read. One that names none, as a record made before this check
 does, or whose run changed the tree itself, cannot be placed and is refused. The order the records are given in does not
@@ -445,19 +446,25 @@ def _tested_by_npm(
 
 
 def identity(entry: Mapping[str, object], worktree: str) -> tuple[object, ...]:
-    """The same step in two records: its words after the program, where it ran, the lists it read."""
+    """The same step in two records: its words after the program, where it ran, the lists it read.
 
-    argv = _argv(entry)
+    The browser runner reads one list, the last `--specs=FILE` it is given, so a step
+    with one such word that `run` read is its specs, whatever the file's path was.
+    """
+
+    words = tuple(_argv(entry)[1:])
     where = _directory(entry)
     root = git_worktrees.canonical(worktree)
     relative = where[len(root) :] if where.startswith(root) else where
-    lists = entry.get("lists")
-    named = tuple(
-        sorted((str(key), tuple(value or ())) for key, value in lists.items())
-        if isinstance(lists, dict)
-        else ()
-    )
-    return (tuple(argv[1:]), relative.replace("\\", "/"), named)
+    found = entry.get("lists")
+    lists = {str(key): value for key, value in found.items()} if isinstance(found, dict) else {}
+    given = [word for word in words if word.startswith("--specs=")]
+    specs = lists.get(given[0].removeprefix("--specs=")) if len(given) == 1 else None
+    if isinstance(specs, list):
+        unlisted = tuple(word for word in words if word != given[0])
+        return (unlisted, relative.replace("\\", "/"), ("--specs", tuple(sorted(map(str, specs)))))
+    named = tuple(sorted((key, tuple(value or ())) for key, value in lists.items()))
+    return (words, relative.replace("\\", "/"), named)
 
 
 class Reach:

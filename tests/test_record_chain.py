@@ -247,6 +247,30 @@ class WebTests(ChainCase):
         self.assertEqual(run_record.REFUSED, code, said)
         self.assertIn("step browser-specs reads web/src/App.vue", said)
 
+    def test_a_browser_run_is_its_specs_whatever_path_its_list_file_had(self) -> None:
+        full = self.record("full", [TYPOS, SUBJECTS, BROWSER])
+        self.write("web/src/App.vue", "<template>two</template>\n")
+        self.commit("fix(web): say two")
+        elsewhere = self.repo / "tmp" / "elsewhere" / "chosen.txt"
+        elsewhere.parent.mkdir(parents=True)
+        elsewhere.write_text("production-two.spec.ts\nproduction-one.spec.ts\n", encoding="utf-8")
+        moved: Step = (
+            "browser-chosen",
+            [*BROWSER[1][:-1], "--specs=../tmp/elsewhere/chosen.txt"],
+            "web",
+            0,
+            "",
+        )
+
+        code, said = self.judged(self.record("moved", [TYPOS, SUBJECTS, moved]), full)
+
+        self.assertEqual(run_record.PASSED, code, said)
+        # The control: a list of other specs at that path is another step.
+        elsewhere.write_text("production-one.spec.ts\n", encoding="utf-8")
+        code, said = self.judged(self.record("fewer", [TYPOS, SUBJECTS, moved]), full)
+        self.assertEqual(run_record.REFUSED, code, said)
+        self.assertIn("step browser-specs reads web/src/App.vue", said)
+
     def test_a_failed_step_that_still_counts_fails_the_chain_and_a_newer_pass_replaces_it(
         self,
     ) -> None:
@@ -845,6 +869,34 @@ class PlaceTests(unittest.TestCase):
                 found = record_chain.reads(record_chain.PYTHON, path, names, scope)
                 self.assertEqual(expected, found)
         self.assertTrue(record_chain.reads(record_chain.PYTHON, "windows/release.py", names))
+
+    def test_the_identity_of_a_browser_run_is_its_specs_and_not_its_list_file(self) -> None:
+        def identity(words: list[str], lists: Mapping[str, list[str] | None]) -> tuple[object, ...]:
+            entry = {"argv": ["C:/node/npm.CMD", *words], "cwd": "C:/tree/web", "lists": lists}
+            return record_chain.identity(entry, "C:/tree")
+
+        run = ["run", "test:browser:allowed", "--"]
+        one = identity([*run, "--specs=a.txt"], {"a.txt": ["x.spec.ts", "y.spec.ts"]})
+        self.assertEqual(
+            one, identity([*run, "--specs=b.txt"], {"b.txt": ["y.spec.ts", "x.spec.ts"]})
+        )
+        self.assertNotEqual(one, identity([*run, "--specs=a.txt"], {"a.txt": ["x.spec.ts"]}))
+        self.assertNotEqual(
+            one,
+            identity(
+                [*run, "--with-clipboard=z", "--specs=b.txt"], {"b.txt": ["x.spec.ts", "y.spec.ts"]}
+            ),
+        )
+        # A list `run` could not read, and two lists, the runner reading the last, keep their paths.
+        self.assertNotEqual(
+            identity([*run, "--specs=a.txt"], {"a.txt": None}),
+            identity([*run, "--specs=b.txt"], {"b.txt": None}),
+        )
+        both = {"a.txt": ["x.spec.ts"], "b.txt": ["y.spec.ts"]}
+        self.assertNotEqual(
+            identity([*run, "--specs=a.txt", "--specs=b.txt"], both),
+            identity([*run, "--specs=b.txt", "--specs=a.txt"], both),
+        )
 
     def test_a_unittest_run_is_placed_with_the_tests_it_ran(self) -> None:
         python = "C:/Python315/python.exe"

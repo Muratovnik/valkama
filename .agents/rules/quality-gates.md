@@ -185,7 +185,8 @@ counts from a record where it is untouched, and is refused, naming it and the
 path, when none is. A passed `npm test` in `web/` counts for the web steps its `test`
 script runs, including those the scripts it runs reach, so a touched one of them
 needs no run of its own. The same step is the same words in the same directory, and
-for the browser runner the specs its list file named, which `run` keeps. A
+for the browser runner the specs its list file named, which `run` keeps,
+whatever path the file had. A
 document no check names therefore needs `typos` and the subjects alone. After a
 merge the branch's records count on the merged head the same way, so only the
 steps the other side's changes touch run again. The chain's Python reach is this
