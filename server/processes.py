@@ -458,7 +458,8 @@ def contained(argv: list[str], **options: Any) -> Iterator[subprocess.Popen[byte
                 with contextlib.suppress(OSError, subprocess.SubprocessError):
                     started.wait(timeout=5)
         return
-    process = subprocess.Popen(argv, start_new_session=True, **options)
+    # NO_WINDOW is 0 on POSIX; passing it keeps every server child told the same way.
+    process = subprocess.Popen(argv, start_new_session=True, creationflags=NO_WINDOW, **options)
     try:
         yield process
     finally:
