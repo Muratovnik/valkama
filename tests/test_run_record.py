@@ -932,7 +932,7 @@ class GatesRecordTests(unittest.TestCase):
             mock.patch.object(isolated.release, "require_toolchain", return_value={}),
             contextlib.redirect_stdout(io.StringIO()) as said,
         ):
-            code = isolated.main(["gates", "--out", str(self.out)])
+            code = isolated.main(["gates", "--out", str(self.out), "--allow-dirty"])
 
         self.assertEqual(1, code)
         path = self.out / run_record.NAME
@@ -987,7 +987,7 @@ class GatesRecordTests(unittest.TestCase):
             mock.patch.object(run_record, "placement_warning", return_value=warning) as placed,
             contextlib.redirect_stdout(io.StringIO()) as said,
         ):
-            isolated.main(["gates", "--out", str(self.out)])
+            isolated.main(["gates", "--out", str(self.out), "--allow-dirty"])
 
         placed.assert_called_once_with(isolated.ROOT, self.out)
         lines = said.getvalue().splitlines()

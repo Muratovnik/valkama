@@ -1,6 +1,6 @@
 """Run the gates, or a server, inside a throwaway profile.
 
-    python tests/isolated.py gates --out DIR [--only NAME ...] [--owner]
+    python tests/isolated.py gates --out DIR [--only NAME ...] [--owner] [--allow-dirty]
     python tests/isolated.py serve --out DIR [--store-copy [SOURCE]]
     python tests/isolated.py profile --out DIR --store-copy [SOURCE] [--copy PATH ...]
     python tests/isolated.py stop --out DIR
@@ -52,6 +52,10 @@ Each rule here is a way a hand-written wrapper went wrong:
   of `npm test` goes through the gate on its own and says so in its log.
 - A run is cited, not retold: reports that retyped results got them wrong, so
   each `gates` run leaves the record `tests/run_record.py` describes and checks.
+- A tree with uncommitted changes, untracked files among them, is refused before
+  the first step, naming the files: its record holds only while those same
+  changes stand, and a run of many minutes ended in a record the committed tree
+  refused. `--allow-dirty` runs there all the same.
 
 A served store copy holds whatever the live store holds, so it lives inside the
 throwaway profile, together with any backup a migration writes beside it, and
@@ -582,10 +586,29 @@ def _tools_started(steps: Sequence[Step]) -> set[str]:
     return named
 
 
-def gates(steps: Sequence[Step], out: Path) -> int:
+def gates(steps: Sequence[Step], out: Path, *, allow_dirty: bool = False) -> int:
+    """Run `steps` in a throwaway profile under `out`, record them there, and return 0 if all passed.
+
+    It returns 1 before its first step for a directory a profile is in, and, saying
+    `no gate step ran`, for a tree with uncommitted changes, untracked files among
+    them, naming the files, unless `allow_dirty`, and then for an interpreter that
+    lacks the tools the steps start. `check` accepts a record of a dirty tree only
+    while the tree has those same changes, so a run of many minutes there ends in a
+    record its committed tree refuses. The tree is read once, and the record says the
+    state that was judged.
+    """
+
     occupied = _occupied(out)
     if occupied is not None:
         _say(occupied)
+        return 1
+    # Imported here, not at the top, for the reason `_refusal` gives.
+    from tests import run_record
+
+    tree = run_record.tree_state(ROOT)
+    if not allow_dirty and (found := run_record.unrecordable(tree)):
+        _say(f"refused before the first step: {'; '.join(found)}")
+        _say("no gate step ran")
         return 1
     interpreter = release.running_interpreter()
     requirements = (ROOT / "requirements-dev.txt").read_text(encoding="utf-8")
@@ -621,14 +644,11 @@ def gates(steps: Sequence[Step], out: Path) -> int:
         refusal = modules_refusal(package)
         if refusal is not None:
             _say(f"the npm steps here will be refused. {refusal}")
-    # Imported here, not at the top, for the reason `_refusal` gives.
-    from tests import run_record
-
     warning = run_record.placement_warning(ROOT, out)
     if warning is not None:
         _say(warning)
     versions = run_record.tool_versions(interpreter, npm=any(run.needs_modules for run in runs))
-    return run_gates(runs, out, environment, record=run_record.begin(ROOT, versions))
+    return run_gates(runs, out, environment, record=run_record.begin(ROOT, versions, tree))
 
 
 # --- the bundle --------------------------------------------------------------
@@ -1402,6 +1422,11 @@ def _parser() -> argparse.ArgumentParser:
     gates_command.add_argument(
         "--owner", action="store_true", help="have the release audit enforce the owner policy"
     )
+    gates_command.add_argument(
+        "--allow-dirty",
+        action="store_true",
+        help="run in a tree with uncommitted changes, whose record holds only for those changes",
+    )
     serve_command = commands.add_parser("serve", help="start a server on a free port and return")
     serve_command.add_argument(
         "--store-copy",
@@ -1456,7 +1481,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         return profile(out, source, options.copy, registry_files())
     out.mkdir(parents=True, exist_ok=True)
     if options.command == "gates":
-        return gates(select_steps(options.only, owner=options.owner), out)
+        return gates(
+            select_steps(options.only, owner=options.owner), out, allow_dirty=options.allow_dirty
+        )
     if options.command == "stop":
         return stop(out)
     if options.command == SUPERVISE:
