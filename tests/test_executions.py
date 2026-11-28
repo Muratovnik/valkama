@@ -91,6 +91,19 @@ class LaunchHarness(unittest.TestCase):
         self._real_runner = runner.RUNNER
         runner.RUNNER = runner.Runner(spawn=spawn)
 
+        # The fake's number is made up (1 is a real process on POSIX): a real stop would
+        # reach whatever holds it. The stop is recorded, so a test can assert it was asked.
+        self.stopped: list[object] = []
+
+        def stop(process, *, wait_timeout: float) -> bool:  # noqa: ARG001
+            self.stopped.append(process)
+            process.kill()
+            return True
+
+        stopping = mock.patch.object(runner.processes, "stop_process_tree", side_effect=stop)
+        stopping.start()
+        self.addCleanup(stopping.stop)
+
     def tearDown(self) -> None:
         runner.RUNNER = self._real_runner
         self.conn.close()
@@ -214,6 +227,7 @@ class LaunchLifecycleTests(LaunchHarness):
         started = executions.launch_work_item(self.conn, self.packet(reference))
         stopped = executions.stop_work_item(self.conn, reference)
         self.assertTrue(stopped["stopped"])
+        self.assertEqual([self.processes[0]], self.stopped, "the stop was not requested")
         detail = planning.get_work_item(self.conn, reference)
         self.assertIn("launch stopped from the platform", detail["comments"][-1]["body"])
         row = sessions.session_context(self.conn, started["client_session_id"])
@@ -576,6 +590,7 @@ class ExecutionRecordTests(LaunchHarness):
         reference = self.item("stop me")
         executions.launch_work_item(self.conn, self.packet(reference))
         executions.stop_work_item(self.conn, reference)
+        self.assertEqual(1, len(self.stopped), "the stop was not requested")
         attempt = self.attempts(reference)[0]
         self.assertEqual("cancelled", attempt["status"])
         self.assertIsNotNone(attempt["ended_at"])
