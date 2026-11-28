@@ -368,7 +368,11 @@ class RunTests(TreeCase):
         self.addCleanup(note.stop)
 
     def ran(
-        self, *command: str, name: str | None = None, environment: dict[str, str] | None = None
+        self,
+        *command: str,
+        name: str | None = None,
+        environment: dict[str, str] | None = None,
+        allow_dirty: bool = False,
     ) -> tuple[int, str]:
         with contextlib.redirect_stdout(io.StringIO()) as said:
             code = run_record.run(
@@ -378,6 +382,7 @@ class RunTests(TreeCase):
                 name=name,
                 environment=os.environ if environment is None else environment,
                 root=self.repo,
+                allow_dirty=allow_dirty,
             )
         return code, said.getvalue()
 
@@ -420,7 +425,7 @@ class RunTests(TreeCase):
         self.ran("python", "-c", "pass", name="first")
         self.write("server/app.py", "print('edited')\n")
 
-        code, said = self.ran("python", "-c", "pass", name="second")
+        code, said = self.ran("python", "-c", "pass", name="second", allow_dirty=True)
 
         self.assertEqual(0, code)
         self.assertIn("a new record replaces ", said)
@@ -556,6 +561,56 @@ class RunTests(TreeCase):
         self.assertEqual(0, code, said)
         self.assertEqual(["after"], [entry["name"] for entry in self.recorded()["steps"]])
 
+    def test_a_tree_with_uncommitted_changes_is_refused_before_the_command_starts(self) -> None:
+        self.ran("python", "-c", "pass", name="first")
+        before = (self.out / run_record.NAME).read_bytes()
+        started = self.root / "started"
+        mark = f"open({str(started)!r}, 'w').close()"
+        self.write("web/tests/browser/probe.spec.ts", "a probe\n")
+        self.write("server/app.py", "print('edited')\n")
+
+        code, said = self.ran("python", "-c", mark, name="long")
+
+        self.assertEqual(run_record.REFUSED, code, said)
+        self.assertFalse(started.exists(), "the command started")
+        self.assertEqual(before, (self.out / run_record.NAME).read_bytes())
+        self.assertIn(
+            "refused before the first step: it was made with uncommitted changes,"
+            " and this tree has none; the files that differ from ",
+            said,
+        )
+        self.assertIn(": server/app.py, web/tests/browser/probe.spec.ts; commit or remove", said)
+
+    def test_a_dirty_run_allowed_is_recorded_and_held_to_those_changes_alone(self) -> None:
+        self.write("web/tests/browser/probe.spec.ts", "a probe\n")
+
+        code, said = self.ran("python", "-c", "pass", name="draft", allow_dirty=True)
+
+        self.assertEqual(0, code, said)
+        self.assertTrue(self.recorded()["tree"]["dirty"])
+        self.assertEqual(run_record.PASSED, self.checked(self.out, self.repo)[0])
+        (self.repo / "web/tests/browser/probe.spec.ts").unlink()
+        code, said = self.checked(self.out, self.repo)
+        self.assertEqual(run_record.REFUSED, code, said)
+        self.assertIn("it was made with uncommitted changes, and this tree has none", said)
+
+    def test_a_tree_git_does_not_know_is_refused_before_the_command_starts(self) -> None:
+        bare = self.root / "bare"
+        bare.mkdir()
+        with contextlib.redirect_stdout(io.StringIO()) as said:
+            code = run_record.run(
+                bare / "tmp",
+                ["python", "-c", "raise SystemExit(4)"],
+                cwd=bare,
+                name=None,
+                environment=os.environ,
+                root=bare,
+            )
+        self.assertEqual(run_record.REFUSED, code)
+        self.assertIn("refused before the first step: ", said.getvalue())
+        self.assertIn("is not a Git working tree", said.getvalue())
+        self.assertFalse((bare / "tmp" / run_record.NAME).exists())
+
     def test_the_command_line_runs_a_command_and_refuses_none(self) -> None:
         with contextlib.redirect_stdout(io.StringIO()):
             code = run_record.main(
@@ -563,6 +618,8 @@ class RunTests(TreeCase):
                     "run",
                     "--out",
                     str(self.root / "cli"),
+                    # So that this holds in a checkout with uncommitted changes too.
+                    "--allow-dirty",
                     "--cwd",
                     str(self.root),
                     "--",

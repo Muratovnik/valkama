@@ -1,6 +1,6 @@
 """The record a run of checks leaves, and the check of one against a tree.
 
-    python tests/run_record.py run --out DIR [--name NAME] [--cwd DIR] -- COMMAND ...
+    python tests/run_record.py run --out DIR [--name NAME] [--cwd DIR] [--allow-dirty] -- COMMAND ...
     python tests/run_record.py check RECORD [RECORD ...] [--tree DIR] [--require NAME ...]
 
 A report that says which checks passed is a claim; a record is what the runner
@@ -358,7 +358,7 @@ def differences(recorded: Mapping[str, object], current: Mapping[str, object]) -
 #: tree and its run failed, or it is not a record of this tree as it is now. 2 is left to
 #: argparse, which exits with it on a command line it cannot read.
 PASSED, FAILED, REFUSED = 0, 1, 3
-RUN_HELP = """Run COMMAND as a step of the record in DIR and exit with its exit code.
+RUN_HELP = f"""Run COMMAND as a step of the record in DIR and exit with its exit code.
 
 The step joins the record in DIR while this checkout is as that record says, and
 a new record replaces it otherwise, so the checks one state of the tree needs,
@@ -367,6 +367,10 @@ DIR/record.json:
 
   python tests/run_record.py run --out tmp/rec -- python -m unittest tests.test_x
   python tests/run_record.py run --out tmp/rec --cwd web -- npm run lint
+
+A tree with uncommitted changes, untracked files among them, is refused before
+the command starts, naming the files, with exit code {REFUSED}: its record would hold
+only while the tree has those same changes. --allow-dirty runs it all the same.
   python tests/run_record.py check tmp/rec/record.json"""
 CHECK_CODES = f"""exit codes:
   {PASSED}  accepted, and the run it records passed
@@ -495,8 +499,14 @@ def run(
     name: str | None,
     environment: Mapping[str, str],
     root: Path = ROOT,
+    allow_dirty: bool = False,
 ) -> int:
     """Run `command` in `cwd` as `gates` runs a step, record it in `out`, and return its exit code.
+
+    A tree with uncommitted changes, untracked files among them, is refused before the
+    command starts, with `REFUSED` and the files named, unless `allow_dirty`: `check`
+    accepts a record of such a tree only while the tree has those same changes, so a
+    long run there ends in a record its clean tree refuses.
 
     The step joins the record in `out` when the command ends, if that record says
     `root` as it was when the command started; otherwise a new record replaces it,
@@ -516,6 +526,9 @@ def run(
     if warning is not None:
         _say(warning)
     tree = tree_state(root)
+    if not allow_dirty and (found := unrecordable(tree)):
+        _say(f"refused before the first step: {'; '.join(found)}")
+        return REFUSED
     words = name or " ".join([Path(command[0]).stem, *command[1:]])
     logs = out / isolated.LOGS
     logs.mkdir(parents=True, exist_ok=True)
@@ -536,6 +549,24 @@ def run(
         _say(note)
     _say(f"record: {written}")
     return code
+
+
+def unrecordable(tree: Mapping[str, object]) -> list[str]:
+    """Why `check` refuses a record made on `tree` once that tree is clean at its commit, one reason a line.
+
+    The comparison is `check`'s own, `differences`, of `tree` with the same tree with
+    no uncommitted changes, and `tree_state` is what says which files differ, so an
+    untracked file counts here exactly as it counts there.
+    """
+
+    found = differences(tree, {**tree, "dirty": False, "changes": None})
+    paths = tree.get("paths")
+    if found and isinstance(paths, Mapping) and paths:
+        found.append(
+            f"the files that differ from {tree.get('head')}: {', '.join(sorted(paths))};"
+            " commit or remove them, or give --allow-dirty to record a run on them"
+        )
+    return found
 
 
 #: The file in a result directory that `run` holds while it reads and writes the record there.
@@ -646,6 +677,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     running.add_argument(
         "--cwd", type=Path, default=Path.cwd(), help="where COMMAND runs; by default here"
     )
+    running.add_argument(
+        "--allow-dirty",
+        action="store_true",
+        help="run in a tree with uncommitted changes, whose record holds only for those changes",
+    )
     running.add_argument("argv", nargs=argparse.REMAINDER, metavar="-- COMMAND ...")
     checking = commands.add_parser(
         "check",
@@ -680,6 +716,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             cwd=options.cwd.resolve(),
             name=options.name,
             environment=environment,
+            allow_dirty=options.allow_dirty,
         )
     code, said = check_records(options.record, options.tree, options.require)
     _say(said)

@@ -153,7 +153,10 @@ refuses for another tree or state, and, given `--require NAME`, for having no
 step of that name; a step that `run` records takes the name of its command's
 words, so `run --out DIR -- typos` is the step `typos` the integrator requires
 of a worker's record. `run` replaces the record in DIR once the tree has
-changed, so each commit's checks go into a directory of their own. Use `gates`
+changed, so each commit's checks go into a directory of their own. It refuses a
+tree with uncommitted changes, untracked files among them, before the command
+starts and naming the files, since that record holds only while those same
+changes stand; `--allow-dirty` runs there all the same. Use `gates`
 instead of a wrapper of your own, and
 `serve --out DIR` with `stop --out DIR` for a live check; a test compares its
 steps with `AGENTS.md`.
