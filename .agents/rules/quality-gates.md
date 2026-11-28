@@ -282,11 +282,17 @@ junction behind, and the directory that holds it.
 
 `lint-imports` is the one-way import rule `AGENTS.md` states in prose, stated
 as configuration so a tool refuses a breach instead of a reviewer noticing one.
-mypy checks the modules that are already clean and names the rest in
-`[[tool.mypy.overrides]]` with what each owes; that list is a ratchet to empty
-module by module, never to grow, and a module absent from it — including every
-new one — is checked. Both read the repository root as the import root, which
-is what it is: `server` sits directly in it.
+mypy checks `server`, `valkama.py` and everything under `tests`, the test
+modules included. The modules that had errors when the test modules joined are
+named in one `[[tool.mypy.overrides]]` with `ignore_errors`; that list is a
+ratchet to empty module by module, never to grow, and a module absent from it —
+including every new one — is checked. `tests/test_mypy_backlog.py` holds it
+there: it fails a module added beyond the baseline it freezes, a listed module
+that no longer exists, and one that mypy, run without the exemption, finds no
+error in, so a module that became clean comes off the list (and the baseline) in
+the commit that cleaned it. That run keeps its own cache in `.cache/mypy-backlog`:
+about 12 s cold, under a second warm. Both tools read the repository root as the
+import root, which is what it is: `server` sits directly in it.
 
 knip owns dead code on the web side: unused files, exports, types and
 dependencies all fail `npm test`. A symbol used only inside its own file must
