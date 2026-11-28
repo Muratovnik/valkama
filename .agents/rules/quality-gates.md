@@ -27,10 +27,15 @@ the same `<spec>__` prefix. The `server-` specs, run with `VALKAMA_BROWSER_STORE
 the exception: the Python server serves `web/dist` alone, so they build there.
 Each command below runs in `web/`:
 
-- One Vitest file: `npx vitest run <file>`, or from the repository root
-  `npm --prefix web run test:unit -- tests/<file>`. `npm --prefix web exec`
-  runs in the directory it is called from, so Vitest finds no `vitest.config.ts`
-  there.
+- Chosen Vitest files: `npm run test:unit:files -- <file> ...`, or from the
+  repository root `npm --prefix web run test:unit:files -- tests/<file> ...`,
+  never `npx vitest run` handed the list. Vitest given no file runs the whole
+  suite, so a list that came out empty, such as a search that matched nothing,
+  starts it; the entry refuses an empty or blank list before Vitest starts,
+  runs each name as the one file it names, a path from `web/` or from the
+  directory the command started in, and takes no lease at the heavy-process
+  gate, as a targeted run. `npm --prefix web exec` runs in the directory it is
+  called from, so Vitest finds no `vitest.config.ts` there.
 - One spec, under a lease at the heavy-process gate (below):
   `python ../tests/heavy_gate.py run --kind browser-targeted --want 4 -- npx playwright test <file> '--workers={k}'`.
   A name is a prefix, so give the whole file name when it begins another. Every test of the suite that bounds
