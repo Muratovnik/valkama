@@ -18,7 +18,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from tests import legacy_lock, parallel
+from server import store
+from tests import legacy_lock, parallel, run_record
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = "alpha_suite"
@@ -463,6 +464,56 @@ class GateTests(unittest.TestCase):
             (name, 1, [], [], True),
             tuple(recorded[key] for key in ("module", "ran", "failures", "errors", "successful")),
         )
+
+
+class SQLiteFloorTests(unittest.TestCase):
+    def test_the_whole_suite_is_refused_below_the_floor_the_migration_refuses_by(self) -> None:
+        for found, refused in (
+            ("3.45.1", True),
+            ("3.47.0", True),
+            ("3.47.1", False),
+            ("3.53.4", False),
+        ):
+            with (
+                self.subTest(found=found),
+                mock.patch("server.store._running_sqlite", return_value=found),
+            ):
+                self.assertEqual(refused, parallel.suite_sqlite_refusal() is not None)
+
+    def test_the_whole_suite_on_an_old_sqlite_exits_2_before_any_lease_or_process(self) -> None:
+        environment = {
+            name: value for name, value in os.environ.items() if name != parallel.HELD_VARIABLE
+        }
+        with (
+            mock.patch("server.store._running_sqlite", return_value="3.45.1"),
+            mock.patch.dict(os.environ, environment, clear=True),
+            mock.patch.object(parallel.subprocess, "run") as gated,
+            mock.patch.object(parallel.subprocess, "Popen") as started,
+            mock.patch.object(parallel, "run") as ran,
+            mock.patch.object(parallel, "_say") as say,
+        ):
+            self.assertEqual(2, parallel.main([]))
+        gated.assert_not_called()
+        started.assert_not_called()
+        ran.assert_not_called()
+        say.assert_called_once()
+        line = say.call_args.args[0]
+        self.assertTrue(line.startswith("Refused, no test ran: "), line)
+        self.assertIn("SQLite 3.45.1", line)
+        self.assertIn(f"SQLite {store.work_model_floor_text()} or newer", line)
+        # The step's log is what `tests/run_record.py` reads: its table must take the line.
+        self.assertEqual(line, run_record.refused_before_start(2, f"{line}\n".encode()))
+
+    def test_a_targeted_run_on_an_old_sqlite_is_not_refused(self) -> None:
+        held = {parallel.HELD_VARIABLE: "the lock"}
+        with (
+            mock.patch("server.store._running_sqlite", return_value="3.45.1") as version,
+            mock.patch.dict(os.environ, held),
+            mock.patch.object(parallel, "run", return_value=0) as ran,
+        ):
+            self.assertEqual(0, parallel.main(["tests.test_a"]))
+        version.assert_not_called()
+        self.assertEqual(["tests.test_a"], ran.call_args.args[0])
 
 
 if __name__ == "__main__":  # pragma: no cover - unittest discovery owns this

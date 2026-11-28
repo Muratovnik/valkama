@@ -18,6 +18,12 @@ error of its module, and so does one whose exit code disagrees with its report;
 nothing is lost because a module took its process down. A module named twice
 runs once.
 
+The whole suite is refused before anything starts, and before the heavy-process
+gate is asked for a lease, when the interpreter's SQLite is older than the one the
+work-model migration needs (`server/store.py`, `WORK_MODEL_SQLITE`): exit code 2,
+and a line beginning `Refused, no test ran: `. A run of named modules is not
+refused, since a module that does not reach the migration runs on any SQLite.
+
 The run takes a lease at the machine's heavy-process gate, through
 `tests/heavy_gate.py`, as the kind `KIND` sized by its modules and wanting `--jobs`
 processes at once, and runs as many as the share K the gate gives; unless a holder
@@ -484,6 +490,33 @@ def gate_command(argv: Sequence[str], modules: int, jobs: int) -> list[str]:
     ]
 
 
+def suite_sqlite_refusal() -> str | None:
+    """The line refusing the whole suite on a SQLite below the work-model floor, else None.
+
+    The floor and the comparison are `server.store`'s, the ones the migration refuses
+    by, and the version is read by the same call it reads. The workers start with
+    `sys.executable` too, so the caller's SQLite is the one the suite would run on.
+    """
+
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    # Imported here, not at the top: a run of named modules never needs the server.
+    from server import store
+
+    found = store._running_sqlite()
+    if not store.older_than_work_model_floor(found):
+        return None
+    floor = store.work_model_floor_text()
+    return (
+        f"Refused, no test ran: this Python runs SQLite {found}, and the whole suite needs"
+        f" SQLite {floor} or newer (the work-model migration tests fail below it). Run it with"
+        " an interpreter whose SQLite is that or newer: `uv python list` shows the Pythons uv"
+        ' has, and `uv run --no-project --python <version> python -c "import sqlite3;'
+        " print(sqlite3.sqlite_version)\"` shows one's SQLite. A targeted run,"
+        " `python tests/parallel.py MODULE ...`, is not refused."
+    )
+
+
 def _say(line: str) -> None:
     sys.stdout.write(f"{line}\n")
     sys.stdout.flush()
@@ -510,6 +543,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         return work(options.modules[0], options.worker, sys.stderr)
     if options.jobs < 1:
         parser.error("--jobs is a whole number from 1")
+    if not options.modules:
+        refusal = suite_sqlite_refusal()
+        if refusal is not None:
+            _say(refusal)
+            return 2
     modules = list(dict.fromkeys(options.modules)) or whole_suite()
     jobs = min(options.jobs, len(modules))
     if not options.gated and HELD_VARIABLE not in os.environ:
