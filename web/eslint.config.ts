@@ -18,6 +18,7 @@ import globals from 'globals'
 import ts from 'typescript-eslint'
 
 import { lineLimits } from './eslint-line-limits.js'
+import { reportOnly } from './eslint-report-only.js'
 import { appScript, templateExpressions } from './eslint-restricted-syntax.js'
 
 // `max-lines` stays a warning until package A5 has split the inherited large
@@ -76,7 +77,13 @@ export default ts.config(
       globals: { ...globals.browser, ...globals.node },
       parserOptions: { ecmaVersion: 'latest', sourceType: 'module' },
     },
-    plugins: { unicorn, perfectionist, 'import-x': importX, 'vue-scoped-css': scopedCss },
+    plugins: {
+      // Reported, never fixed: eslint-report-only.js says why.
+      'unicorn': reportOnly(unicorn, ['no-for-loop']),
+      perfectionist,
+      'import-x': importX,
+      'vue-scoped-css': scopedCss,
+    },
     rules: {
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
       // Wire validators reject control characters on purpose, so the character

@@ -129,7 +129,13 @@ Run the Python gates from the ignored `.venv`, built on Python 3.15 — the
 interpreter the installed launcher runs, so the suite meets the SQLite the
 service does — from `requirements-dev.txt` (`uv venv .venv --python 3.15`, then
 `uv pip install --python .venv/Scripts/python.exe -r requirements-dev.txt`),
-with `.venv/Scripts` first on `PATH`. The minimum the code supports stays
+with `.venv/Scripts` first on `PATH`. In Git Bash that entry is written
+`/c/<path>/.venv/Scripts`: an entry written `C:/<path>` is split at its colon,
+and a bare `python` is then the system one, which has no ruff or coverage
+(`python -c "import sys; print(sys.prefix)"` names the one that runs).
+`tests/isolated.py gates` and `windows/release.py check` start no step under an
+interpreter that lacks the pinned tools; a command of the list run alone has no
+such check. The minimum the code supports stays
 Python 3.11 (`target-version` and `python_version` in `pyproject.toml`). A
 shared interpreter drifts: an unpinned semgrep and mcp 2.x there broke the gate,
 because semgrep imports `mcp.server.fastmcp` at start and mcp 2 removed it.

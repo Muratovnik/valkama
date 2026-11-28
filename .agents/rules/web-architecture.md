@@ -28,6 +28,16 @@ cycle across layers impossible, so what is left is a cycle inside one layer, and
 erased, so the contract modules in `shared/api` may name each other's types, and
 two of them do.
 
+`npm run check:ui-system` holds more rules than this file states. Each family
+lives in a file of its own under `web/scripts/ui-system/`, which
+`web/scripts/check-ui-system.mjs` lists, and a family that allows something
+only in named files — a reka-ui primitive, an `@media` query on the window's
+width, a native `title` — keeps that list, with each reason, in its own file.
+Read the family's file before writing what it covers, rather than learning its
+rule from a refusal. Those lists describe the product tree alone (`scanUiTree`):
+a test's fixture tree owes none, so the guard refuses a fixture that breaks a
+rule even where a product file of the same name is allowed.
+
 Inside a slice the segments are `components/`, `composables/` and `utils/`. A
 slice whose content is all one kind keeps its files directly: a segment folder
 holding the slice's only files repeats the slice name and says nothing else.
