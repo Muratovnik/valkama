@@ -617,11 +617,15 @@ class PlaceTests(unittest.TestCase):
                 [python, "-c", "pass"],
                 [python, "-m", "unittest", "-k", "fast", "tests.test_x"],
                 [python, "tests/affected.py", "--list"],
+                [python, "windows/release.py", "check"],
                 ["C:/node/npm.CMD", "test"],
             ],
             record_chain.PYTHON: [[python, "-m", "ruff", "check", "."], ["C:/x/lint-imports.exe"]],
             record_chain.SEMGREP: [["C:/env/semgrep.exe", "scan"]],
-            record_chain.COVERAGE: [[python, "-m", "coverage", "report"]],
+            record_chain.COVERAGE: [
+                [python, "-m", "coverage", "report"],
+                [python, "windows/release.py", "coverage-margin"],
+            ],
         }
         for kind, commands in cases.items():
             for argv in commands:
