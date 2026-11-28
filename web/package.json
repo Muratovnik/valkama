@@ -18,6 +18,7 @@
     "check:tokens": "node scripts/sync-tokens.mjs --check",
     "tokens:sync": "node scripts/sync-tokens.mjs",
     "test:unit": "node tests/unitRun.ts",
+    "test:unit:files": "node tests/unitFiles.ts",
     "test:browser": "playwright test",
     "test:browser:allowed": "node tests/browser/allowedRun.ts",
     "typecheck": "vue-tsc --build",
