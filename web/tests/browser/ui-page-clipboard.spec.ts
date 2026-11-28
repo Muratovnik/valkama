@@ -110,9 +110,14 @@ test('the keys copy the selection, or what the page set, and cut and paste withi
   await page.keyboard.press('Control+Insert')
   await expect.poll(() => copiedTexts(page)).toEqual(['Words to copy', 'set by the page'])
 
-  // A page that cancels the key copies nothing, and the next press copies again.
+  // A page that cancels the key copies nothing, and the next press copies again. The press of
+  // Control comes first, as its own keydown, so the page waits for the C.
   await page.evaluate(() => {
-    document.addEventListener('keydown', (event) => event.preventDefault(), { once: true })
+    document.addEventListener('keydown', function decline(event) {
+      if (event.code !== 'KeyC') return
+      event.preventDefault()
+      document.removeEventListener('keydown', decline)
+    })
   })
   await page.keyboard.press('Control+c')
   await page.keyboard.press('Control+c')
