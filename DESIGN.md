@@ -2522,8 +2522,11 @@ chain framed on that branch — the whole of its work where that reads, else its
 beginning at reading size — with its members edged in the selection accent, a
 chip naming the branch that lets it go, and the branch in the address; focus
 goes to the graph, never to the page, and to what was asked for: the branch's first
-card, or the header of the frame folded over it, else the card's own item, not what
-the camera stood on before it moved there. The field is one Tab stop: the arrows
+card, or the header of the frame folded over it, else the card's own item or the
+header of its frame, not what the camera stood on before it moved there. Focus the
+card gives back to the field, to the header that opened it, goes there too, and a
+branch that reaches the field only after focus has takes focus with it, unless the
+operator has moved focus since. The field is one Tab stop: the arrows
 walk to the nearest node their way, Home and End to the first and last as the
 field is read, and the camera follows. The node the keyboard stands on lights its
 lineage and the rest of the field recedes; a pointer over a node lights nothing and

@@ -194,4 +194,63 @@ describe('the field the card hands over', () => {
       expect(revealed).toEqual([lands === 'card' ? 16 : 0])
     })
   }
+
+  for (const [what, moved, lands] of [
+    ['follows what was asked for when it reaches the field after focus did', false, 'card'],
+    ['leaves focus where the operator moved it when what was asked for comes later', true, 'fold'],
+  ] as const) {
+    it(what, async () => {
+      const request = ref(0)
+      const arrival = ref<string | null>(frameTarget('O'))
+      const canvas = canvasOf([foldTarget('O'), frameTarget('O'), 'card'])
+      keyboard(foldTarget('O'), {
+        arrivalId: arrival,
+        canvas: ref(canvas),
+        focusRequest: () => request.value,
+      })
+      request.value = 1
+      await vi.waitFor(() => expect(focusedTarget()).toBe(frameTarget('O')))
+      if (moved) buttonIn(canvas, foldTarget('O'))?.focus()
+      // The branch the card chose reaches the field only now.
+      arrival.value = 'card'
+      const expected = lands === 'card' ? 'card' : foldTarget('O')
+      await vi.waitFor(() => expect(focusedTarget()).toBe(expected))
+      // Time for a move the field should not make.
+      await new Promise((resolve) => setTimeout(resolve, 30))
+      expect(focusedTarget()).toBe(expected)
+    })
+  }
+
+  for (const [what, opener, lands] of [
+    // The card gives focus back to the header that opened it, out of the branch's sight.
+    ['moves focus the card gave back to the field onto what it asked to see', 'field', 'card'],
+    ['leaves focus the card gave back outside the field where it landed', 'page', 'page'],
+  ] as const) {
+    it(what, async () => {
+      const request = ref(0)
+      const canvas = canvasOf([foldTarget('O'), frameTarget('O'), 'card'])
+      const page = canvasOf(['page'])
+      keyboard(foldTarget('O'), {
+        arrivalId: ref('card'),
+        canvas: ref(canvas),
+        focusRequest: () => request.value,
+      })
+      const back = opener === 'field' ? buttonIn(canvas, frameTarget('O')) : buttonIn(page, 'page')
+      back?.focus()
+      request.value = 1
+      await nextTick()
+      await vi.waitFor(() => expect(focusedTarget()).toBe(lands))
+    })
+  }
 })
+
+/** The target the focused button stands for, if any. */
+function focusedTarget() {
+  const focused = document.activeElement
+  return focused instanceof HTMLElement ? focused.dataset.walkTarget : undefined
+}
+
+/** The button drawn for a target inside a container. */
+function buttonIn(container: HTMLElement, id: string) {
+  return container.querySelector<HTMLElement>(`[data-walk-target="${CSS.escape(id)}"]`)
+}

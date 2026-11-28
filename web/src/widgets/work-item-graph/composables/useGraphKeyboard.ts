@@ -193,13 +193,19 @@ export function useGraphKeyboard(input: KeyboardInput) {
 
   /**
    * The card asked for the graph and closes, and focus would fall to the page.
-   * Once the camera has framed what was asked for, focus takes the node it
-   * stands on — as soon as the closing card lets focus go, which may be after
-   * the framing. Focus that lands anywhere else, by the operator's hand or the
-   * card's own return, stays where it landed.
+   * Once the camera has framed what was asked for, focus takes it — as soon as
+   * the closing card lets focus go, which may be after the framing, and also
+   * when the card gives focus back to the field, to the header that opened it.
+   * What was asked for is read when focus is given, not when it was asked: a
+   * branch reaches the field after the request does. Should it reach the field
+   * after focus was given, focus follows it while it still stands where the
+   * field put it. Focus that lands outside the field, by the operator's hand or
+   * the card's own return, stays where it landed.
    */
   const asked = ref(false)
   let frame = 0
+  /** Where the field last gave focus on arrival, and until when it may still follow the request. */
+  let arrived: { id: string; until: number } | null = null
   onScopeDispose(() => cancelAnimationFrame(frame))
   watch(
     input.focusRequest,
@@ -208,27 +214,50 @@ export function useGraphKeyboard(input: KeyboardInput) {
     },
     { immediate: true },
   )
+  /** What was asked for, else the target the camera stands on. */
+  const arrival = () => input.arrivalId.value ?? input.anchorId.value
 
-  async function handOver(anchor: string, until: number) {
+  async function giveOn(id: string, until: number): Promise<boolean> {
+    placing = id
+    if (!(await focusNode(id))) {
+      placing = null
+      return false
+    }
+    arrived = { id, until }
+    return true
+  }
+
+  async function handOver(until: number) {
     const active = document.activeElement
     const lost = active === null || active === document.body
-    // Focus landed somewhere of its own: it stays there.
-    if (!lost && !active.closest('.overlay-host')) return
-    placing = lost ? anchor : null
-    if (lost && (await focusNode(anchor))) return
-    placing = null
+    const returned = !lost && Boolean(input.canvas.value?.contains(active))
+    // Focus landed outside the field of its own: it stays there.
+    if (!lost && !returned && !active.closest('.overlay-host')) return
+    const id = arrival()
+    if ((lost || returned) && id !== null && (await giveOn(id, until))) return
     // Still inside the card that is closing, or the node not yet shown: wait.
-    if (performance.now() < until) frame = requestAnimationFrame(() => void handOver(anchor, until))
+    if (performance.now() < until) frame = requestAnimationFrame(() => void handOver(until))
   }
 
   watch([asked, input.fitted, input.placed], async () => {
-    // What was asked for, not what the camera stood on before it moved there.
-    const anchor = input.arrivalId.value ?? input.anchorId.value
-    if (!asked.value || !input.fitted.value || anchor === null) return
+    if (!asked.value || !input.fitted.value || arrival() === null) return
     asked.value = false
+    arrived = null
     await nextTick()
     cancelAnimationFrame(frame)
-    await handOver(anchor, performance.now() + HANDOVER_MS)
+    await handOver(performance.now() + HANDOVER_MS)
+  })
+
+  // What was asked for reached the field after focus did: focus follows it, unless the
+  // operator has moved it since.
+  watch(input.arrivalId, (id) => {
+    const last = arrived
+    if (!last || id === null || id === last.id) return
+    if (performance.now() > last.until || document.activeElement !== nodeButton(last.id)) {
+      arrived = null
+      return
+    }
+    void giveOn(id, last.until)
   })
 
   return {
