@@ -137,7 +137,7 @@ class FakeKernel32:
         self.starts = starts
         self.cutoff = cutoff
 
-    def OpenProcess(self, rights: int, inherit: bool, pid: int) -> int:  # noqa: ARG002, N802
+    def OpenProcess(self, _rights: int, _inherit: bool, pid: int) -> int:  # noqa: N802
         return pid + self.HANDLE_BASE if pid in self.starts else 0
 
     def GetProcessId(self, handle: int) -> int:  # noqa: N802
