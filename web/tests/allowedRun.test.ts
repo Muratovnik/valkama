@@ -36,8 +36,11 @@ const projects: ProjectRule[] = [
   { name: 'production', testMatch: [productionMatch], testIgnore: [legacyIgnore] },
 ]
 
-/** A runner whose suite is `allowed`, the clipboard specs and `more`, and whose lists are `lists`. */
-function runner(lists: Record<string, string> = {}, more: readonly string[] = []) {
+/**
+ * A runner whose suite is `allowed`, the clipboard specs and `more`, and whose lists are `lists`;
+ * `store` says whether VALKAMA_BROWSER_STORE names a store.
+ */
+function runner(lists: Record<string, string> = {}, more: readonly string[] = [], store = false) {
   const written: string[][] = []
   const said: string[] = []
   const playwright = vi.fn(
@@ -51,6 +54,7 @@ function runner(lists: Record<string, string> = {}, more: readonly string[] = []
   const io: RunnerIo = {
     playwright,
     projects: () => Promise.resolve(projects),
+    storeNamed: () => store,
     readList: (file) => lists[file] ?? null,
     say: (line) => said.push(line),
     suiteSpecs: () => [...allowed, ...clipboardSpecs, ...more],
@@ -107,16 +111,57 @@ describe('the allowed browser run', () => {
     expect(playwright).not.toHaveBeenCalled()
   })
 
-  it('says the form a list file takes when it names no spec, by a name of the suite', async () => {
-    const lists = { 'batch.txt': 'tests/browser/ui-buttons.spec.ts\nui-buttons\n' }
+  it('says the forms a list file takes when it names no spec, by a name of the suite', async () => {
+    const lists = { 'batch.txt': 'tests/sweep/ui-buttons.spec.ts\nui-button\n' }
     const { io, playwright, said } = runner(lists)
     expect(await runAllowed(['--specs=batch.txt'], io)).toBe(2)
     expect(playwright).not.toHaveBeenCalled()
     expect(said).toEqual([
       'Refused, no test ran: no such spec under tests/browser: ' +
-        'tests/browser/ui-buttons.spec.ts, ui-buttons; a list file names spec files bare, ' +
-        `by their names relative to tests/browser, one a line, such as ${allowed[0]}`,
+        'tests/sweep/ui-buttons.spec.ts, ui-button; a list file names a spec one a line, ' +
+        'by its file name, that name without .spec.ts, or a path ending in tests/browser/ ' +
+        `and either, such as ${allowed[0]}`,
     ])
+  })
+
+  it('runs a spec a list file names by its path or without .spec.ts, once', async () => {
+    const lists = {
+      'batch.txt': [
+        'tests/browser/ui-buttons.spec.ts',
+        'web\\tests\\browser\\production-settings',
+        './ui-buttons',
+        'ui-buttons.spec.ts',
+      ].join('\n'),
+    }
+    const { io, playwright, written } = runner(lists)
+    expect(await runAllowed(['--specs=batch.txt'], io)).toBe(0)
+    expect(written).toEqual([['ui-buttons.spec.ts', 'production-settings.spec.ts']])
+    expect(playwright).toHaveBeenCalledOnce()
+  })
+
+  it('takes the value of a Playwright option as the next word as well as after "="', async () => {
+    const { io, playwright } = runner()
+    const argv = ['--grep', 'a|b', '-g', 'c', '--workers', '4', '--headed', '--retries=1']
+    expect(await runAllowed(argv, io)).toBe(0)
+    expect(playwright.mock.calls[0]?.[0].slice(3)).toEqual([
+      '--grep=a|b',
+      '--grep=c',
+      '--workers=4',
+      '--headed',
+      '--retries=1',
+    ])
+  })
+
+  it('refuses an option with no value, and a word after one that takes none', async () => {
+    for (const argv of [['--grep'], ['--grep', '--list'], ['--headed', 'production-settings']]) {
+      const { io, playwright, said } = runner()
+      expect(await runAllowed(argv, io)).toBe(2)
+      expect(playwright).not.toHaveBeenCalled()
+      expect(said[0]).toMatch(/^Refused, no test ran: /)
+    }
+    const dashed = runner()
+    expect(await runAllowed(['--grep=-slow'], dashed.io)).toBe(0)
+    expect(dashed.playwright.mock.calls[0]?.[0].at(-1)).toBe('--grep=-slow')
   })
 
   it('refuses a listed spec no project runs, naming it and the rule of each project', async () => {
@@ -244,6 +289,52 @@ describe('the allowed browser run', () => {
     const { io, playwright } = runner()
     expect(await runAllowed(['--with-clipboard=ui-buttons.spec.ts'], io)).not.toBe(0)
     expect(playwright).not.toHaveBeenCalled()
+  })
+
+  it('runs every clipboard spec under --with-clipboard=all, and one named without .spec.ts', async () => {
+    const every = runner()
+    expect(await runAllowed(['--with-clipboard=all'], every.io)).toBe(0)
+    expect(every.written).toEqual([[...allowed, ...clipboardSpecs]])
+    expect(every.playwright.mock.calls[0]?.[1]).toBe(true)
+
+    const one = runner({ 'batch.txt': `${notes}\n` })
+    const short = notes.replace(/\.spec\.ts$/, '')
+    expect(await runAllowed(['--specs', 'batch.txt', '--with-clipboard', short], one.io)).toBe(0)
+    expect(one.written).toEqual([[notes]])
+  })
+
+  it('refuses --with-clipboard with no value, saying it may name all', async () => {
+    const { io, playwright, said } = runner()
+    expect(await runAllowed(['--with-clipboard'], io)).toBe(2)
+    expect(playwright).not.toHaveBeenCalled()
+    expect(said[0]).toContain("--with-clipboard needs a clipboard spec's name, or all")
+  })
+
+  it('refuses a whole run under a store that does not name its project, before any lease', async () => {
+    const { io, playwright, said } = runner({}, [], true)
+    expect(await runAllowed([], io)).toBe(2)
+    expect(playwright).not.toHaveBeenCalled()
+    expect(said).toEqual([
+      'Refused, no test ran: VALKAMA_BROWSER_STORE names a store, and under it Playwright runs ' +
+        'only the server project without saying so: name it with --project=server',
+    ])
+  })
+
+  it('runs under a store when it names the server project, in either form', async () => {
+    for (const argv of [['--project=server'], ['--project', 'server']]) {
+      const { io, playwright } = runner({}, [], true)
+      expect(await runAllowed(argv, io)).toBe(0)
+      expect(playwright).toHaveBeenCalledOnce()
+      expect(playwright.mock.calls[0]?.[0]).toContain('--project=server')
+      expect(playwright.mock.calls[0]?.[2]).toEqual({ size: allowed.length })
+    }
+  })
+
+  it('runs the whole allowed set without a store, with no project named', async () => {
+    const { io, playwright } = runner({}, [], false)
+    expect(await runAllowed([], io)).toBe(0)
+    expect(playwright).toHaveBeenCalledOnce()
+    expect(playwright.mock.calls[0]?.[0]).not.toContain('--project=server')
   })
 
   it('refuses a bare argument, which Playwright would take for a spec name', async () => {

@@ -17,6 +17,8 @@ import a11y from 'eslint-plugin-vuejs-accessibility'
 import globals from 'globals'
 import ts from 'typescript-eslint'
 
+import { lineLimits } from './eslint-line-limits.js'
+import { reportOnly } from './eslint-report-only.js'
 import { appScript, templateExpressions } from './eslint-restricted-syntax.js'
 
 // `max-lines` stays a warning until package A5 has split the inherited large
@@ -41,26 +43,6 @@ const TYPE_MEMBER_ORDER = {
   groups: ['index-signature', 'required-property', 'optional-property', 'method'],
   partitionByNewLine: true,
   partitionByComment: false,
-}
-
-/**
- * What each file over the 400-line ceiling owes, pinned at the size it has now.
- *
- * The count excludes comments and blank lines already, so these are code sizes
- * rather than prose. Twelve are single-file components at two to three times the
- * limit, and splitting twelve components at once — moving scoped CSS and
- * rearranging the DOM that the browser, axe and clipping suites all read — is a
- * regression surface no product change is asking for right now.
- *
- * So the rule still holds at 400 everywhere else: a new file over it fails the
- * moment it appears, and nothing here can grow past what it already owes.
- * Removing an entry is the ratchet. Raising a number is not a move.
- */
-const LINE_DEBT = {
-  'src/shared/i18n/locales/en.ts': 1047,
-  'src/shared/i18n/locales/ru.ts': 1046,
-  'tests/uiSystemGuard.test.ts': 470,
-  'stylelint-order-preset.js': 416,
 }
 
 export default ts.config(
@@ -95,9 +77,14 @@ export default ts.config(
       globals: { ...globals.browser, ...globals.node },
       parserOptions: { ecmaVersion: 'latest', sourceType: 'module' },
     },
-    plugins: { unicorn, perfectionist, 'import-x': importX, 'vue-scoped-css': scopedCss },
+    plugins: {
+      // Reported, never fixed: eslint-report-only.js says why.
+      'unicorn': reportOnly(unicorn, ['no-for-loop']),
+      perfectionist,
+      'import-x': importX,
+      'vue-scoped-css': scopedCss,
+    },
     rules: {
-      'max-lines': ['warn', { max: 400, skipBlankLines: true, skipComments: true }],
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
       // Wire validators reject control characters on purpose, so the character
       // classes that name them are the contract, not a typo.
@@ -705,10 +692,7 @@ export default ts.config(
     files: ['tests/**'],
     rules: { '@typescript-eslint/no-explicit-any': 'off' },
   },
-  ...Object.entries(LINE_DEBT).map(([file, max]) => ({
-    files: [file],
-    rules: { 'max-lines': ['warn', { max, skipBlankLines: true, skipComments: true }] },
-  })),
+  ...lineLimits,
   // Last, so it wins: oxlint runs the same rules ahead of ESLint and reports
   // them faster, and two tools reporting one defect trains people to skim.
   ...oxlint.configs['flat/recommended'],

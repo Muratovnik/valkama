@@ -11,3 +11,5 @@ public/
 package-lock.json
 # Written by tests/test_web_contract_fixtures.py from the server, byte for byte.
 tests/fixtures/server/
+# The design document is prose kept by hand, not formatted: outside the format check.
+../DESIGN.md
