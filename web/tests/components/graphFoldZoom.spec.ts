@@ -42,6 +42,8 @@ vi.mock('@/widgets/work-item-graph/utils/graphLayoutEngine.ts', () => ({
 
 const chainEdges: PlanningEdge[] = [{ from: id(4), to: id(2), kind: 'discovered-from' }]
 
+type Graph = ReturnType<typeof openGraph>
+
 /** The chain grown from goal 1 with the camera at its whole view, the farthest out it goes. */
 async function atWholeView() {
   const graph = openGraph({ scopeKind: 'chain', scopeRootId: id(1), chain, edges: chainEdges })
@@ -52,11 +54,11 @@ async function atWholeView() {
 }
 
 /** The whole view's zoom the field hands Vue Flow as its limit. */
-function wholeZoom(graph: Awaited<ReturnType<typeof atWholeView>>['graph']) {
+function wholeZoom(graph: Graph) {
   return Number(graph.findComponent({ name: 'VueFlow' }).attributes('min-zoom'))
 }
 
-async function press(graph: Awaited<ReturnType<typeof atWholeView>>['graph'], label: string) {
+async function press(graph: Graph, label: string) {
   await graph.get(`.graph-frame button[aria-label^="${label} goal MAIN-1"]`).trigger('click')
   await drawn(graph)
 }
