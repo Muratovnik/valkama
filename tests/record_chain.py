@@ -61,7 +61,10 @@ otherwise, naming the step and the path. What a step reads, conservatively:
 The same step is the same command in the same directory, by its words after the
 program, and for the browser runner by the specs its list file named when `run`
 ran it in place of the file's path, so two runs of one list kept at two paths are
-one step and runs of two lists are two. An earlier record made on uncommitted changes counts with the paths
+one step and runs of two lists are two. A unittest run is the one step whose
+program counts too: runs on two interpreters are two pieces of evidence, so a
+run of the suite on one Python neither sets aside nor carries the touched tests
+of a run on another, and only a run of the same program does. An earlier record made on uncommitted changes counts with the paths
 it names with their content: a path differs since when its content now is not
 the one the run read. One that names none, as a record made before this check
 does, or whose run changed the tree itself, cannot be placed and is refused. The order the records are given in does not
@@ -190,11 +193,13 @@ def reaches_every_test(path: str) -> bool:
 @dataclass(frozen=True)
 class Placement:
     """What one step is: its kind, for a unittest run the tests it ran, None for all,
-    and for a Python step the paths whose Python it reads, None for every one."""
+    and the program it ran them on, and for a Python step the paths whose Python it
+    reads, None for every one."""
 
     kind: str
     units: frozenset[str] | None = None
     scope: tuple[str, ...] | None = None
+    program: str = ""
 
 
 def module_of(unit: str) -> str | None:
@@ -323,7 +328,7 @@ def place(entry: Mapping[str, object], worktree: str, logs: Path) -> Placement:
         return Placement(BROWSER if browser else WEB)
     if isinstance(units, bool):
         return Placement(NEWEST)
-    return Placement(UNITS, units)
+    return Placement(UNITS, units, program=os.path.normcase(os.path.normpath(argv[0])))
 
 
 def _named_paths(tool: str, arguments: Sequence[str]) -> list[str]:
@@ -592,10 +597,12 @@ class Link:
 
 @dataclass
 class _Ran:
-    """A unittest run's valid part: the tests it ran, None for all, and the modules it does not cover."""
+    """A unittest run's valid part: the tests it ran, None for all, the modules it does not
+    cover, and the program it ran them on."""
 
     units: frozenset[str] | None
     excluded: frozenset[str]
+    program: str = ""
 
     def covers(self, unit: str) -> bool:
         module = module_of(unit)
@@ -728,9 +735,10 @@ def _judge(
         decided |= keys
 
     valid_runs = [ran for _, _, ran, _ in runs if ran.units is None or ran.units]
-    for link, entry, _, touched_units in runs:
+    for link, entry, this, touched_units in runs:
+        same = [ran for ran in valid_runs if ran.program == this.program]
         for unit, why in touched_units.items():
-            if not any(ran.covers(unit) for ran in valid_runs):
+            if not any(ran.covers(unit) for ran in same):
                 problems.append(
                     f"{link.path}: step {entry['name']} ran {unit}, which {why},"
                     " and no record ran it untouched"
@@ -739,7 +747,7 @@ def _judge(
     for link in links:
         mine = [(entry, ran) for owner, entry, ran, _ in runs if owner is link]
         for entry, ran in mine:
-            if not _superseded(ran, covered):
+            if not _superseded(ran, [other for other in covered if other.program == ran.program]):
                 counting.append((link, entry))
         covered += [ran for _, ran in mine]
 
@@ -787,13 +795,14 @@ def _touched_units(
 ) -> tuple[_Ran, dict[str, str]]:
     """A unittest run's valid part, and each test it ran that a change reaches, with what reaches it."""
 
+    program = placement.program
     if link.newest:
-        return _Ran(placement.units, frozenset()), {}
+        return _Ran(placement.units, frozenset(), program), {}
     since = f"since {link.head}"
     if unplaced is not None:
         units = placement.units if placement.units is not None else frozenset({"tests"})
         why = f"{unplaced}, which no rule places, may reach {since}"
-        return _Ran(frozenset(), frozenset()), dict.fromkeys(sorted(units), why)
+        return _Ran(frozenset(), frozenset(), program), dict.fromkeys(sorted(units), why)
     modules = reached(link)
     if placement.units is None:
         touched = {module: f"{why} {since}" for module, why in modules.items()}
@@ -803,7 +812,7 @@ def _touched_units(
             for unit in sorted(placement.units)
             if (module := module_of(unit)) in modules
         }
-    return _Ran(placement.units, frozenset(modules)), touched
+    return _Ran(placement.units, frozenset(modules), program), touched
 
 
 def _superseded(ran: _Ran, newer: list[_Ran]) -> bool:

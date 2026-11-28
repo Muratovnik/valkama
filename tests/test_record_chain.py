@@ -668,6 +668,47 @@ class UnitTests(ChainCase):
         code, said = self.judged(self.record("unsaid", [TYPOS, SUBJECTS, unsaid]), full)
         self.assertEqual(run_record.REFUSED, code, said)
 
+    def test_a_run_on_another_python_neither_sets_aside_nor_hides_a_run_of_the_suite(
+        self,
+    ) -> None:
+        def whole(name: str, python: str, code: int) -> Step:
+            return (name, [python, "tests/parallel.py", "--coverage"], "", code, "")
+
+        new, old = "C:/Python315/python.exe", "C:/Python311/python.exe"
+        failed = self.record("gates", [TYPOS, SUBJECTS, whole("unittest", new, 1)])
+        self.write("server/other.py", "print('other')\n")
+        self.commit("fix: another file no test reaches")
+
+        on_old = self.record("old", [TYPOS, SUBJECTS, whole("unittest-311", old, 0)])
+        code, said = self.judged(on_old, failed, required=["unittest"])
+        self.assertEqual(run_record.FAILED, code, said)
+        self.assertIn("unittest exit=1", said)
+        self.assertIn("unittest-311 exit=0", said)
+        # The control: a rerun on the same Python sets the failed run aside.
+        rerun = self.record("rerun", [TYPOS, SUBJECTS, whole("rerun", new, 0)])
+        code, said = self.judged(rerun, failed)
+        self.assertEqual(run_record.PASSED, code, said)
+        self.assertNotIn("unittest exit=1", said)
+
+    def test_a_touched_module_counts_again_only_from_a_run_of_it_on_the_same_python(
+        self,
+    ) -> None:
+        new, old = "C:/Python315/python.exe", "C:/Python311/python.exe"
+        full = self.record(
+            "full", [TYPOS, SUBJECTS, ("unittest", [new, "tests/parallel.py"], "", 0, "")]
+        )
+        self.write("server/app.py", "print('two')\n")
+        self.commit("fix: say two")
+
+        def app(python: str) -> Step:
+            return ("app", [python, "-m", "unittest", "tests.test_app"], "", 0, "")
+
+        code, said = self.judged(self.record("on-old", [TYPOS, SUBJECTS, app(old)]), full)
+        self.assertEqual(run_record.REFUSED, code, said)
+        self.assertIn("step unittest ran tests.test_app, which imports server.app since", said)
+        code, said = self.judged(self.record("on-new", [TYPOS, SUBJECTS, app(new)]), full)
+        self.assertEqual(run_record.PASSED, code, said)
+
 
 class MergeTests(ChainCase):
     def test_a_merge_carries_a_branch_record_for_steps_the_other_side_did_not_touch(self) -> None:
