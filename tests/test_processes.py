@@ -22,6 +22,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from typing import Any
 from unittest import mock
 
 from server import processes
@@ -88,6 +89,7 @@ class Held:
         import _winapi
 
         self._winapi = _winapi
+        self.pid = pid
         # SYNCHRONIZE | PROCESS_TERMINATE | PROCESS_QUERY_LIMITED_INFORMATION
         self.handle = _winapi.OpenProcess(0x00100000 | 0x0001 | 0x1000, False, pid)
 
@@ -217,6 +219,120 @@ class ContainedTests(unittest.TestCase):
             self.assertEqual(1, len(started))
             self.assertIsNotNone(started[0].poll(), "the refused child was left running")
             self.assertFalse(marker.exists(), "the refused child ran")
+
+
+@unittest.skipUnless(sys.platform == "win32", "the tree is held by handle on Windows")
+class StopByOutcomeTests(unittest.TestCase):
+    """`stop_process_tree` answers by what is left of the tree, not by what `taskkill` said."""
+
+    def start_tree(self) -> tuple[subprocess.Popen, list[Held]]:
+        """A child with a sleeper of its own, both held until the test ends."""
+
+        child = subprocess.Popen([sys.executable, "-c", PARENT], stdout=subprocess.PIPE)
+        # Run last, after the ends below: it reaps the child they ended.
+        self.addCleanup(child.wait, GONE_SECONDS)
+        assert child.stdout is not None
+        self.addCleanup(child.stdout.close)
+        grandchild = int(child.stdout.readline())
+        tree = [Held(child.pid), Held(grandchild)]
+        for held in tree:
+            self.addCleanup(held.end)
+        return child, tree
+
+    def taskkill(self, *, code: int | None = None, kills: bool) -> Any:
+        """`taskkill` that kills for real or not at all, then exits `code` or times out."""
+
+        real_run = subprocess.run
+
+        def run(argv, **options):
+            self.assertEqual("taskkill", argv[0])
+            if kills:
+                real_run(argv, **options)
+            if code is None:
+                raise subprocess.TimeoutExpired(argv, options.get("timeout", 5))
+            return subprocess.CompletedProcess(argv, code, b"", b"")
+
+        return mock.patch.object(processes.subprocess, "run", side_effect=run)
+
+    def test_a_tree_that_is_gone_is_true_though_taskkill_exited_non_zero(self) -> None:
+        child, tree = self.start_tree()
+
+        with self.taskkill(code=128, kills=True):
+            stopped = processes.stop_process_tree(child, wait_timeout=GONE_SECONDS)
+
+        self.assertTrue(stopped)
+        self.assertEqual([True, True], [held.gone_within(0) for held in tree])
+
+    def test_what_a_timed_out_taskkill_left_running_is_ended_through_its_handles(self) -> None:
+        child, tree = self.start_tree()
+
+        with self.taskkill(kills=False):
+            stopped = processes.stop_process_tree(child, wait_timeout=GONE_SECONDS)
+
+        self.assertTrue(stopped)
+        self.assertEqual([True, True], [held.gone_within(0) for held in tree])
+
+    def test_a_tree_still_running_after_a_timed_out_taskkill_is_false(self) -> None:
+        child, tree = self.start_tree()
+
+        with self.taskkill(kills=False), mock.patch.object(processes._Tree, "end"):
+            stopped = processes.stop_process_tree(child, wait_timeout=0.5)
+
+        self.assertFalse(stopped)
+        self.assertEqual([False, False], [held.gone_within(0) for held in tree])
+
+    def test_with_no_tree_to_read_a_failed_taskkill_stops_the_child_alone_and_says_so(
+        self,
+    ) -> None:
+        child, (held_child, held_grandchild) = self.start_tree()
+        refused = mock.patch.object(processes, "process_table", side_effect=OSError(5, "refused"))
+
+        with refused, self.taskkill(code=1, kills=False):
+            stopped = processes.stop_process_tree(child, wait_timeout=GONE_SECONDS)
+
+        self.assertFalse(stopped)
+        self.assertTrue(held_child.gone_within(0), "the fallback left the child running")
+        self.assertFalse(held_grandchild.gone_within(0), "the fallback reached past the child")
+
+    def test_with_no_tree_to_read_taskkill_s_success_is_the_answer(self) -> None:
+        child, tree = self.start_tree()
+        refused = mock.patch.object(processes, "process_table", side_effect=OSError(5, "refused"))
+
+        with refused:
+            stopped = processes.stop_process_tree(child, wait_timeout=GONE_SECONDS)
+
+        self.assertTrue(stopped)
+        self.assertEqual([True, True], [held.gone_within(GONE_SECONDS) for held in tree])
+
+    def test_a_number_no_process_has_is_not_taken_for_its_neighbour_s(self) -> None:
+        child, _ = self.start_tree()
+
+        # Windows opens process n for n + 2 as well, so a stop of a made-up number
+        # would reach whatever process holds the number next to it.
+        self.assertIsNone(processes._Tree.seen(child.pid + 2))
+        seen = processes._Tree.seen(child.pid)
+        assert seen is not None
+        self.addCleanup(seen.close)
+        self.assertIn(child.pid, seen.pids)
+
+    def test_a_process_older_than_the_parent_it_names_is_not_taken_into_the_tree(self) -> None:
+        child, tree = self.start_tree()
+        real_table = processes.process_table
+        grandchild = tree[1].pid
+
+        def table() -> dict[int, tuple[int, str]]:
+            # This test process, as if its parent's number now named the sleeper.
+            return {**real_table(), os.getpid(): (grandchild, "python.exe")}
+
+        with mock.patch.object(processes, "process_table", side_effect=table):
+            seen = processes._Tree.seen(child.pid)
+        assert seen is not None
+        self.addCleanup(seen.close)
+
+        # The tree may hold more, such as the console host Windows gives the child.
+        self.assertLessEqual({child.pid, grandchild}, set(seen.pids))
+        self.assertNotIn(os.getpid(), seen.pids)
+        self.assertFalse(seen.unseen)
 
 
 @unittest.skipIf(sys.platform == "win32", "a process group is the POSIX tree")

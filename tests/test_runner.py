@@ -262,6 +262,16 @@ class RunnerLifecycleTests(unittest.TestCase):
 
         self.runner = runner.Runner(spawn=spawn)
 
+        # The fake's number is made up, and a real stop of it would reach whatever
+        # process holds that number, or the one next to it, on this machine.
+        def stop(process: FakeProcess, *, wait_timeout: float) -> bool:  # noqa: ARG001
+            process.kill()
+            return True
+
+        stopping = mock.patch.object(runner.processes, "stop_process_tree", side_effect=stop)
+        stopping.start()
+        self.addCleanup(stopping.stop)
+
     def tearDown(self) -> None:
         os.environ.pop("VALKAMA_CLAUDE_BIN", None)
         self._dir.cleanup()
@@ -313,6 +323,8 @@ class RunnerLifecycleTests(unittest.TestCase):
         self.runner.launch("QA-14", self.packet())
         stopped = self.runner.stop("QA-14")
         self.assertTrue(stopped["stopped"])
+        self.assertTrue(self.process.killed, "the launch's tree was not stopped")
+        self.assertTrue(stopped["tree"])
         self.assertEqual([], self.runner.running())
         with self.assertRaisesRegex(runner.LaunchError, "no launch in this platform"):
             self.runner.stop("QA-14")

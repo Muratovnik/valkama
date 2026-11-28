@@ -20,11 +20,13 @@ relaxes it says which peer and why at the call site.
 from __future__ import annotations
 
 import contextlib
+import functools
 import os
 import signal
 import subprocess
 import sys
 import threading
+import time
 from collections.abc import Iterator, Mapping
 from typing import Any, NamedTuple
 
@@ -110,6 +112,184 @@ _PROCESS_SUSPEND_RESUME = 0x0800
 _JOB_OBJECT_LIMIT_BREAKAWAY_OK = 0x00000800
 _JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000
 _JOB_OBJECT_EXTENDED_LIMIT_INFORMATION = 9
+_PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+_SYNCHRONIZE = 0x00100000
+_ERROR_INVALID_PARAMETER = 87
+_SNAPSHOT_PROCESSES = 0x00000002
+
+
+@functools.cache
+def _kernel32() -> Any:
+    """kernel32 with the signatures this module calls it by, bound once. Windows only."""
+
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    handle, dword, boolean, pointer = (
+        wintypes.HANDLE,
+        wintypes.DWORD,
+        wintypes.BOOL,
+        ctypes.c_void_p,
+    )
+    signatures: dict[str, tuple[tuple[Any, ...], Any]] = {
+        "CreateJobObjectW": ((pointer, wintypes.LPCWSTR), handle),
+        "SetInformationJobObject": ((handle, ctypes.c_int, pointer, dword), boolean),
+        "AssignProcessToJobObject": ((handle, handle), boolean),
+        "OpenProcess": ((dword, boolean, dword), handle),
+        "TerminateProcess": ((handle, wintypes.UINT), boolean),
+        "WaitForSingleObject": ((handle, dword), dword),
+        "GetProcessTimes": ((handle, pointer, pointer, pointer, pointer), boolean),
+        "GetProcessId": ((handle,), dword),
+        "CloseHandle": ((handle,), boolean),
+        "CreateToolhelp32Snapshot": ((dword, dword), handle),
+        "Process32FirstW": ((handle, pointer), boolean),
+        "Process32NextW": ((handle, pointer), boolean),
+    }
+    for name, (arguments, result) in signatures.items():
+        function = getattr(kernel32, name)
+        function.argtypes, function.restype = arguments, result
+    return kernel32
+
+
+def _windows_error(call: str) -> OSError:
+    import ctypes
+
+    code = ctypes.get_last_error()
+    return OSError(code, f"{call} failed: {ctypes.FormatError(code).strip()}")
+
+
+def process_table() -> dict[int, tuple[int, str]]:
+    """Every process as `{pid: (parent pid, executable name)}`, from one Toolhelp snapshot.
+
+    Windows only. A parent number outlives its process and may since name another.
+    """
+
+    import ctypes
+    from ctypes import wintypes
+
+    class ProcessEntry(ctypes.Structure):
+        # PROCESSENTRY32W, field for field.
+        _fields_ = (
+            ("dwSize", wintypes.DWORD),
+            ("cntUsage", wintypes.DWORD),
+            ("th32ProcessID", wintypes.DWORD),
+            ("th32DefaultHeapID", ctypes.c_size_t),
+            ("th32ModuleID", wintypes.DWORD),
+            ("cntThreads", wintypes.DWORD),
+            ("th32ParentProcessID", wintypes.DWORD),
+            ("pcPriClassBase", wintypes.LONG),
+            ("dwFlags", wintypes.DWORD),
+            ("szExeFile", wintypes.WCHAR * 260),
+        )
+
+    kernel32 = _kernel32()
+    handle = kernel32.CreateToolhelp32Snapshot(_SNAPSHOT_PROCESSES, 0)
+    if handle is None or handle == wintypes.HANDLE(-1).value:
+        raise OSError(ctypes.get_last_error(), "process snapshot refused")
+    table: dict[int, tuple[int, str]] = {}
+    try:
+        entry = ProcessEntry(dwSize=ctypes.sizeof(ProcessEntry))
+        more = kernel32.Process32FirstW(handle, ctypes.addressof(entry))
+        while more:
+            table[int(entry.th32ProcessID)] = (int(entry.th32ParentProcessID), entry.szExeFile)
+            more = kernel32.Process32NextW(handle, ctypes.addressof(entry))
+    finally:
+        kernel32.CloseHandle(handle)
+    return table
+
+
+class _Tree:
+    """A process and what it started, each held by a handle taken before a stop. Windows only.
+
+    A held process keeps its number, so what is waited on and ended here is what
+    was seen, and never a process that took a number over. A process counts as a
+    child only when it started after its parent: the parent number a process
+    records outlives that parent, and may since name a newer process. What a
+    member starts after the snapshot is not held; `taskkill /T` reads its own.
+    """
+
+    def __init__(self) -> None:
+        self._kernel32 = _kernel32()
+        self.pids: list[int] = []
+        self._handles: list[int] = []
+        #: A member that exists but would not open, so its end cannot be seen.
+        self.unseen = False
+
+    @classmethod
+    def seen(cls, pid: int) -> _Tree | None:
+        """The tree under `pid` as it is now, or None when it cannot be read."""
+
+        tree = cls()
+        started = tree._hold(pid)
+        if started is None:
+            return None
+        try:
+            table = process_table()
+        except OSError:
+            tree.close()
+            return None
+        children: dict[int, list[int]] = {}
+        for child, (parent, _) in table.items():
+            children.setdefault(parent, []).append(child)
+        waiting = [(pid, started)]
+        while waiting:
+            parent, parent_started = waiting.pop()
+            for child in children.get(parent, ()):
+                if child in tree.pids:
+                    continue
+                child_started = tree._hold(child, after=parent_started)
+                if child_started is not None:
+                    waiting.append((child, child_started))
+        return tree
+
+    def _hold(self, pid: int, *, after: int = 0) -> int | None:
+        """Hold `pid` when it started at `after` or later; its start, or None when not held."""
+
+        import ctypes
+
+        rights = _SYNCHRONIZE | _PROCESS_TERMINATE | _PROCESS_QUERY_LIMITED_INFORMATION
+        handle = self._kernel32.OpenProcess(rights, False, pid)
+        if not handle:
+            # Gone is the one refusal that says the process has ended.
+            self.unseen |= ctypes.get_last_error() != _ERROR_INVALID_PARAMETER
+            return None
+        times = (ctypes.c_ulonglong * 4)()
+        address = ctypes.addressof(times)
+        size = ctypes.sizeof(ctypes.c_ulonglong)
+        started = 0
+        if self._kernel32.GetProcessTimes(handle, *(address + size * n for n in range(4))):
+            started = int(times[0])
+        # Windows ignores a number's two low bits when it opens one, so 4242 opens
+        # process 4240: a number no process has is not taken for its neighbour's.
+        if self._kernel32.GetProcessId(handle) != pid or started < after:
+            self._kernel32.CloseHandle(handle)
+            return None
+        self.pids.append(pid)
+        self._handles.append(handle)
+        return started
+
+    def ended(self, seconds: float) -> bool:
+        """Whether every held process ends within `seconds`, waited for together."""
+
+        deadline = time.monotonic() + seconds
+        for handle in self._handles:
+            remaining = max(0, int((deadline - time.monotonic()) * 1000))
+            if self._kernel32.WaitForSingleObject(handle, remaining) != 0:
+                return False
+        return True
+
+    def end(self) -> None:
+        """End every held process; one that has ended already is left as it is."""
+
+        for handle in self._handles:
+            if self._kernel32.WaitForSingleObject(handle, 0) != 0:
+                self._kernel32.TerminateProcess(handle, 1)
+
+    def close(self) -> None:
+        for handle in self._handles:
+            self._kernel32.CloseHandle(handle)
+        self._handles = []
 
 
 class _Job:
@@ -149,28 +329,13 @@ class _Job:
                 ("PeakJobMemoryUsed", ctypes.c_size_t),
             )
 
-        self._ctypes = ctypes
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        self._kernel32 = kernel32 = _kernel32()
         self._ntdll = ctypes.WinDLL("ntdll")
-        handle, dword, boolean = wintypes.HANDLE, wintypes.DWORD, wintypes.BOOL
-        kernel32.CreateJobObjectW.argtypes = (ctypes.c_void_p, wintypes.LPCWSTR)
-        kernel32.CreateJobObjectW.restype = handle
-        kernel32.SetInformationJobObject.argtypes = (handle, ctypes.c_int, ctypes.c_void_p, dword)
-        kernel32.SetInformationJobObject.restype = boolean
-        kernel32.AssignProcessToJobObject.argtypes = (handle, handle)
-        kernel32.AssignProcessToJobObject.restype = boolean
-        kernel32.OpenProcess.argtypes = (dword, boolean, dword)
-        kernel32.OpenProcess.restype = handle
-        kernel32.TerminateProcess.argtypes = (handle, wintypes.UINT)
-        kernel32.TerminateProcess.restype = boolean
-        kernel32.CloseHandle.argtypes = (handle,)
-        kernel32.CloseHandle.restype = boolean
-        self._ntdll.NtResumeProcess.argtypes = (handle,)
+        self._ntdll.NtResumeProcess.argtypes = (wintypes.HANDLE,)
         self._ntdll.NtResumeProcess.restype = ctypes.c_long
-        self._kernel32 = kernel32
         self._handle = kernel32.CreateJobObjectW(None, None)
         if not self._handle:
-            raise self._error("CreateJobObjectW")
+            raise _windows_error("CreateJobObjectW")
         limits = ExtendedLimit(
             BasicLimitInformation=BasicLimit(
                 LimitFlags=_JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | _JOB_OBJECT_LIMIT_BREAKAWAY_OK
@@ -182,13 +347,9 @@ class _Job:
             ctypes.byref(limits),
             ctypes.sizeof(limits),
         ):
-            error = self._error("SetInformationJobObject")
+            error = _windows_error("SetInformationJobObject")
             self.close()
             raise error
-
-    def _error(self, call: str) -> OSError:
-        code = self._ctypes.get_last_error()
-        return OSError(code, f"{call} failed: {self._ctypes.FormatError(code).strip()}")
 
     def take(self, pid: int) -> None:
         """Put a process started suspended into the job, then let it run.
@@ -201,10 +362,10 @@ class _Job:
         rights = _PROCESS_SET_QUOTA | _PROCESS_TERMINATE | _PROCESS_SUSPEND_RESUME
         process = kernel32.OpenProcess(rights, False, pid)
         if not process:
-            raise self._error(f"OpenProcess({pid})")
+            raise _windows_error(f"OpenProcess({pid})")
         try:
             if not kernel32.AssignProcessToJobObject(self._handle, process):
-                error = self._error(f"AssignProcessToJobObject({pid})")
+                error = _windows_error(f"AssignProcessToJobObject({pid})")
                 kernel32.TerminateProcess(process, 1)
                 raise error
             status = self._ntdll.NtResumeProcess(process)
@@ -268,7 +429,7 @@ def contained(argv: list[str], **options: Any) -> Iterator[subprocess.Popen[byte
 
 
 def stop_process_tree(process: Any, *, wait_timeout: float = 2.0) -> bool:
-    """Stop a child and everything it started; report whether the tree went.
+    """Stop a child and everything it started; say whether the tree was seen to end.
 
     An agent client spawns its own children, so `terminate()` leaves them
     running with the pipe still open. Windows needs `taskkill /T`, POSIX needs
@@ -276,6 +437,16 @@ def stop_process_tree(process: Any, *, wait_timeout: float = 2.0) -> bool:
     POSIX the group is the child's tree only when the child was started in one
     of its own (`start_new_session=True`); a child left in the caller's group
     is stopped alone, because killing that group kills the caller too.
+
+    The answer is what is left, not what the tool said: `taskkill` fails when a
+    member ends on its own while it walks the tree, as a venv launcher does once
+    the interpreter it started is killed, so it failed now and then with the whole
+    tree gone, and a caller took that for a live tree. On Windows the tree is held
+    by handle before the kill, and True means each process held has ended within
+    `wait_timeout`; what `taskkill` leaves running, after a timeout or a failure,
+    this ends through those handles rather than leaving all but the child. On
+    POSIX True means the group is empty. Where the tree cannot be seen, the child
+    alone stopped is False, and so is a member that exists but cannot be opened.
 
     This lived in three places — the launch runner, the evaluation sandbox and
     the job supervisor — and the copies had already drifted apart: only two of
@@ -288,29 +459,46 @@ def stop_process_tree(process: Any, *, wait_timeout: float = 2.0) -> bool:
     """
     pid = getattr(process, "pid", None)
     if sys.platform == "win32" and pid:
+        tree = _Tree.seen(pid)
+        said: int | None = None
         with contextlib.suppress(OSError, subprocess.SubprocessError):
-            killed = subprocess.run(
+            said = subprocess.run(
                 ["taskkill", "/PID", str(pid), "/T", "/F"],
                 capture_output=True,
                 shell=False,
                 timeout=5,
                 check=False,
                 creationflags=NO_WINDOW,
-            )
-            if killed.returncode == 0:
-                with contextlib.suppress(OSError, subprocess.TimeoutExpired):
-                    process.wait(timeout=wait_timeout)
-                return True
+            ).returncode
+        if tree is not None:
+            try:
+                gone = tree.ended(wait_timeout)
+                if not gone:
+                    tree.end()
+                    gone = tree.ended(wait_timeout)
+                gone = gone and not tree.unseen
+            finally:
+                tree.close()
+            with contextlib.suppress(OSError, subprocess.SubprocessError):
+                process.wait(timeout=wait_timeout)
+            return gone
+        if said == 0:
+            with contextlib.suppress(OSError, subprocess.TimeoutExpired):
+                process.wait(timeout=wait_timeout)
+            return True
     elif sys.platform != "win32" and pid:
         # Named rather than implied by the branch above: the process-group API
         # does not exist on Windows, and the platform check is what tells a
         # type checker this line is unreachable there.
-        with contextlib.suppress(OSError, subprocess.SubprocessError):
+        group: int | None = None
+        with contextlib.suppress(OSError):
             group = os.getpgid(pid)
-            if group != os.getpgrp():
+        if group is not None and group != os.getpgrp():
+            with contextlib.suppress(OSError):
                 os.killpg(group, signal.SIGKILL)
+            with contextlib.suppress(OSError, subprocess.SubprocessError):
                 process.wait(timeout=wait_timeout)
-                return True
+            return _group_ended(group, wait_timeout)
     try:
         process.terminate()
         process.wait(timeout=wait_timeout)
@@ -322,4 +510,29 @@ def stop_process_tree(process: Any, *, wait_timeout: float = 2.0) -> bool:
     return False
 
 
-__all__ = ["TextResult", "contained", "run_text", "start_detached", "stop_process_tree"]
+def _group_ended(group: int, seconds: float) -> bool:
+    """Whether POSIX process group `group` has no member left within `seconds`."""
+
+    if sys.platform == "win32":  # no process groups there; said for the type checker
+        return False
+    deadline = time.monotonic() + seconds
+    while True:
+        try:
+            os.killpg(group, 0)  # signal 0 asks; it delivers nothing
+        except ProcessLookupError:
+            return True
+        except OSError:
+            pass  # a member this user may not signal still counts
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.02)
+
+
+__all__ = [
+    "TextResult",
+    "contained",
+    "process_table",
+    "run_text",
+    "start_detached",
+    "stop_process_tree",
+]

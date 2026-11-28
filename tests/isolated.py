@@ -759,11 +759,10 @@ def _answers(port: int) -> bool:
 def _stop_tree(process: object, port: int | None) -> list[str]:
     """Stop a tree and judge the result by what is left of it.
 
-    `stop_process_tree` answering False says only that `taskkill` did not report
-    success, which happened on a loaded machine with the whole tree already gone.
-    What counts is whether the server still answers here and, right after this,
-    whether its profile can be removed: a process holding the store open prevents
-    that, so a server that survived cannot be reported as stopped.
+    `stop_process_tree` answers by the processes it saw before the stop. What
+    counts here is what the server holds: whether it still answers here and, right
+    after this, whether its profile can be removed. A process holding the store
+    open prevents that, so a server that survived cannot be reported as stopped.
     """
 
     processes.stop_process_tree(process)
