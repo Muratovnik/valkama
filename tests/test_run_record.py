@@ -757,6 +757,102 @@ class RunTests(TreeCase):
             run_record.main(["run", "--out", str(self.root / "cli"), "--"])
 
 
+class WorktreeDefectTests(TreeCase):
+    """`run` and `check` refuse a worktree that breaks a rule of parallel work, before anything runs."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.out = self.other / "tmp" / "checks"
+        versions = mock.patch.object(run_record, "tool_versions", return_value={"python": "3"})
+        versions.start()
+        self.addCleanup(versions.stop)
+        note = mock.patch.object(heavy_gate, "load_note", return_value=None)
+        note.start()
+        self.addCleanup(note.stop)
+        self.started = self.root / "started"
+
+    def carry_bundle(self, subject: str) -> str:
+        """A commit of the worktree's branch that changes `web/dist`, by its short hash."""
+
+        bundle = self.other / "web" / "dist" / "index.html"
+        bundle.parent.mkdir(parents=True, exist_ok=True)
+        bundle.write_text(f"{subject}\n", encoding="utf-8")
+        self.git("add", "-A", cwd=self.other)
+        self.git("commit", "-m", subject, cwd=self.other)
+        return self.git("rev-parse", "--short", "HEAD", cwd=self.other).strip()
+
+    def ran(self, *, allow_dirty: bool = False) -> tuple[int, str]:
+        mark = f"open({str(self.started)!r}, 'w').close()"
+        with contextlib.redirect_stdout(io.StringIO()) as said:
+            code = run_record.run(
+                self.out,
+                ["python", "-c", mark],
+                cwd=self.other,
+                name="mark",
+                environment=os.environ,
+                root=self.other,
+                allow_dirty=allow_dirty,
+            )
+        return code, said.getvalue()
+
+    def test_run_refuses_each_defect_before_the_command_starts_dirty_allowed_or_not(
+        self,
+    ) -> None:
+        first = self.carry_bundle("fix: the drawer closes on escape")
+        second = self.carry_bundle("feat(web): a wider rail")
+
+        for allow_dirty in (False, True):
+            with self.subTest(allow_dirty=allow_dirty):
+                code, said = self.ran(allow_dirty=allow_dirty)
+
+                self.assertEqual(2, code, said)
+                self.assertFalse(self.started.exists(), "the command started")
+                self.assertFalse((self.out / run_record.NAME).exists(), "a record was begun")
+                lines = said.splitlines()
+                self.assertEqual(2, len(lines), said)
+                self.assertTrue(
+                    lines[0].startswith(f"Refused, no test ran: commit {second} (feat(web): "),
+                    said,
+                )
+                self.assertTrue(
+                    lines[1].startswith(f"Refused, no test ran: commit {first} (fix: "), said
+                )
+                # A run of `run` under another is refused as the browser runner's is.
+                self.assertEqual(lines[0], run_record.refused_before_start(code, said.encode()))
+
+    def test_run_runs_in_a_worktree_with_no_defect(self) -> None:
+        self.carry_bundle("build(web): rebuild the bundle on the integrated head")
+
+        code, said = self.ran()
+
+        self.assertEqual(0, code, said)
+        self.assertTrue(self.started.exists(), said)
+        self.assertEqual(["mark"], [entry["name"] for entry in self.recorded_steps()])
+
+    def recorded_steps(self) -> list[dict]:
+        return json.loads((self.out / run_record.NAME).read_text(encoding="utf-8"))["steps"]
+
+    def test_check_refuses_a_record_of_a_worktree_with_a_defect_naming_it(self) -> None:
+        self.assertEqual(0, self.ran()[0])
+        accepted = self.checked(self.out, self.other)
+        self.assertEqual(run_record.PASSED, accepted[0], accepted[1])
+        commit = self.carry_bundle("fix: the drawer closes on escape")
+        # Made at the tree as it is now, so the defect is all that refuses it.
+        record = self.record_of(self.other, "after")
+        chain = io.StringIO()
+        with contextlib.redirect_stdout(chain):
+            chained = run_record.main(
+                ["check", str(record), str(self.out), "--tree", str(self.other)]
+            )
+
+        for code, said in (self.checked(record, self.other), (chained, chain.getvalue())):
+            self.assertEqual(run_record.REFUSED, code, said)
+            self.assertTrue(
+                said.startswith(f"refused: commit {commit} (fix: the drawer closes on escape)"),
+                said,
+            )
+
+
 class RefusedBeforeStartTests(unittest.TestCase):
     """The declared refusals are each runner's own code and words, read from the runner."""
 

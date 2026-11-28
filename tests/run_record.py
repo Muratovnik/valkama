@@ -74,6 +74,11 @@ REFUSED_BEFORE_START: dict[int, re.Pattern[bytes]] = {
     2: re.compile(rb"^Refused, no test ran: [^\r\n]*", re.MULTILINE),
     75: re.compile(rb"^(?:heavy-gate: )?no room for \S+: [^\r\n]*", re.MULTILINE),
 }
+#: The code and the start of each line `run` refuses a worktree with when
+#: `tests/worktree.py` names its defects: the browser runner's, so that a run of `run`
+#: under another records nothing either.
+DEFECT_EXIT = 2
+DEFECT_REFUSAL = "Refused, no test ran:"
 
 
 def refused_before_start(code: int, log: bytes) -> str | None:
@@ -400,7 +405,11 @@ run one after another or at the same time, make one record.
 A tree with uncommitted changes, untracked files among them, is refused before
 the command starts, naming the files, with exit code {REFUSED}: its record would
 hold only while the tree has those same changes. --allow-dirty runs it all the
-same. A command its runner refused before any test started (the browser runner's
+same. A worktree that breaks a rule of parallel work, a copy of npm modules where
+a link to the main checkout's was due or a commit that carries web/dist under a
+subject not starting build(web), is refused before the command starts with exit
+code {DEFECT_EXIT}, each defect named with its fix, --allow-dirty or not.
+A command its runner refused before any test started (the browser runner's
 exit 2, the heavy-process gate's 75 with no room, each with the line it says
 then) is not recorded, so its corrected run joins the record in its place.
 
@@ -413,7 +422,8 @@ CHECK_CODES = f"""exit codes:
   {PASSED}  accepted, and the run it records passed
   {FAILED}  accepted, and the run it records failed; the failed steps are named
   {REFUSED}  refused: not a readable record of this format, not of this tree as it is now,
-      or with no step of a name --require gives; of a chain, also a record at a commit
+      or with no step of a name --require gives, or of a worktree that breaks a rule
+      of parallel work, each defect named; of a chain, also a record at a commit
       HEAD does not descend from, or a step a change since its record touched that no
       record has untouched"""
 
@@ -458,8 +468,17 @@ def _describing(
 def check_records(
     paths: Sequence[Path], tree: Path, required: Collection[str] = ()
 ) -> tuple[int, str]:
-    """`check` of one record, or of a chain of several, which `tests/record_chain.py` judges."""
+    """`check` of one record, or of a chain of several, which `tests/record_chain.py` judges.
 
+    A worktree `tests/worktree.py`'s `defects` names is refused whatever its records
+    say, naming each defect: a record of it attests a tree its integrator cannot take.
+    """
+
+    # Imported here, not at the top, for the reason `tests/isolated.py` gives `_refusal`.
+    from tests import worktree
+
+    if found := worktree.defects(tree):
+        return REFUSED, "refused: " + "; ".join(found)
     if len(paths) == 1:
         return check(paths[0], tree, required)
     # Imported here: the chain reads the import graph, which a single record never needs.
@@ -559,14 +578,22 @@ def run(
     declares, ran nothing and is not recorded: the record stays as it was, so the
     corrected run of the same command joins it as the first one would have, and no
     other step runs again for it. Its log keeps the name it ran under.
+
+    A worktree `tests/worktree.py`'s `defects` names is refused before the command
+    starts, each defect on a line of `DEFECT_REFUSAL`'s, with that refusal's code,
+    `allow_dirty` or not: those are no uncommitted changes.
     """
 
     # Imported here, not at the top, for the reason `tests/isolated.py` gives `_refusal`.
-    from tests import heavy_gate, isolated
+    from tests import heavy_gate, isolated, worktree
 
     warning = placement_warning(root, out)
     if warning is not None:
         _say(warning)
+    if found := worktree.defects(root):
+        for defect in found:
+            _say(f"{DEFECT_REFUSAL} {defect}")
+        return DEFECT_EXIT
     tree = tree_state(root)
     if not allow_dirty and (found := unrecordable(tree)):
         _say(f"refused before the first step: {'; '.join(found)}")

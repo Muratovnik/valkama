@@ -31,6 +31,11 @@ the main checkout's modules. Before it touches a link, `remove` refuses a
 worktree that Git would refuse to remove: one that is locked or has changes. It
 never passes `--force`.
 
+`defects` says how a worktree breaks the rules of parallel work: a copy of
+modules where a link was due, and a worker's commit that carries `web/dist`.
+`tests/run_record.py run` and `check` and `tests/isolated.py gates` refuse such a
+worktree before anything runs, naming each defect and its fix.
+
 Nothing here imports the `tests` package: its import moves the environment, and
 Git run from this tool must see the caller's.
 """
@@ -133,6 +138,73 @@ def _same_bytes(one: Path, other: Path) -> bool:
         return one.read_bytes() == other.read_bytes()
     except OSError:
         return False
+
+
+#: The subject start of the one commit that may carry `web/dist` on a branch: the
+#: integrator's rebuild on the integrated head. A worker's commits leave it alone.
+BUNDLE_COMMIT = "build(web)"
+
+
+def defects(root: Path) -> list[str]:
+    """How the linked worktree `root` breaks the two rules of parallel work, one line each with its fix.
+
+    Empty for the main checkout, for a directory Git does not know, and for a worktree
+    that keeps both rules. The first rule: a package whose `package-lock.json` is the
+    main checkout's byte for byte links its `node_modules` there, and a directory of
+    its own in its place is a defect. The second: a commit of the branch since it left
+    `main`, merges aside, carries `web/dist` only under a subject starting with
+    `BUNDLE_COMMIT`. Without a `main` to measure from, the second rule is not judged.
+    The runners call this before their first step and refuse a tree it names.
+    """
+
+    found = git_worktrees.git_text(
+        str(root),
+        "rev-parse",
+        "--path-format=absolute",
+        "--show-toplevel",
+        "--git-dir",
+        "--git-common-dir",
+    )
+    lines = found.stdout.splitlines()
+    if found.returncode or len(lines) != 3:
+        return []
+    top, own, common = (Path(line) for line in lines)
+    if git_worktrees.canonical(own) == git_worktrees.canonical(common):
+        return []
+    main = common.parent
+    said = []
+    for name in release.NPM_PACKAGES:
+        modules = top / name / "node_modules"
+        if (
+            modules.is_dir()
+            and not git_worktrees.is_reparse_point(str(modules))
+            and _same_bytes(top / name / "package-lock.json", main / name / "package-lock.json")
+        ):
+            said.append(
+                f"{modules} is a copy of its own, though its package-lock.json is the main"
+                f" checkout's: remove that copy, then run"
+                f" python -B {main / 'tests' / 'worktree.py'} link {top}"
+            )
+    base = git_worktrees.git_text(str(top), "merge-base", "main", "HEAD")
+    if base.returncode == 0 and base.stdout.strip():
+        carried = git_worktrees.git_text(
+            str(top),
+            "log",
+            "--no-merges",
+            "--format=%h %s",
+            f"{base.stdout.strip()}..HEAD",
+            "--",
+            "web/dist",
+        )
+        for line in carried.stdout.splitlines():
+            commit, _, subject = line.partition(" ")
+            if not subject.startswith(BUNDLE_COMMIT):
+                said.append(
+                    f"commit {commit} ({subject}) carries web/dist: take web/dist out of it;"
+                    f" only the integrator rebuilds it, in a commit whose subject starts"
+                    f" {BUNDLE_COMMIT}"
+                )
+    return said
 
 
 def add(

@@ -595,7 +595,8 @@ def gates(steps: Sequence[Step], out: Path, *, allow_dirty: bool = False) -> int
     lacks the tools the steps start. `check` accepts a record of a dirty tree only
     while the tree has those same changes, so a run of many minutes there ends in a
     record its committed tree refuses. The tree is read once, and the record says the
-    state that was judged.
+    state that was judged. Before the dirty tree, it returns 2 for a worktree that
+    `tests/worktree.py`'s `defects` names, naming each defect, `allow_dirty` or not.
     """
 
     occupied = _occupied(out)
@@ -603,8 +604,13 @@ def gates(steps: Sequence[Step], out: Path, *, allow_dirty: bool = False) -> int
         _say(occupied)
         return 1
     # Imported here, not at the top, for the reason `_refusal` gives.
-    from tests import run_record
+    from tests import run_record, worktree
 
+    if found := worktree.defects(ROOT):
+        for defect in found:
+            _say(f"refused before the first step: {defect}")
+        _say("no gate step ran")
+        return 2
     tree = run_record.tree_state(ROOT)
     if not allow_dirty and (found := run_record.unrecordable(tree)):
         _say(f"refused before the first step: {'; '.join(found)}")

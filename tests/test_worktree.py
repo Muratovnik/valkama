@@ -190,5 +190,113 @@ class RemoveTests(WorktreeCase):
         self.assert_main_modules_intact()
 
 
+class DefectsTests(WorktreeCase):
+    """`defects`: a copy of modules where a link was due, and a worker's commit carrying `web/dist`."""
+
+    def worktree(self, branch: str, start: str = "main") -> Path:
+        path = self.base / branch
+        self.git(self.main, "worktree", "add", "-q", "-b", branch, str(path), start)
+        return path
+
+    def commit_bundle(self, checkout: Path, subject: str) -> str:
+        """A commit in `checkout` that changes `web/dist`, by its short hash."""
+
+        bundle = checkout / "web" / "dist" / "index.html"
+        bundle.parent.mkdir(parents=True, exist_ok=True)
+        bundle.write_text(f"{subject}\n", encoding="utf-8")
+        self.git(checkout, "add", "-A")
+        self.git(checkout, "commit", "-q", "-m", subject)
+        return self.git(checkout, "rev-parse", "--short", "HEAD").strip()
+
+    def test_the_main_checkout_has_none_whatever_it_holds(self) -> None:
+        # Its own modules are directories, and its history carries web/dist under any subject.
+        self.commit_bundle(self.main, "fix: a bundle committed by hand")
+
+        self.assertEqual([], worktree.defects(self.main))
+
+    def test_a_worktree_with_linked_modules_and_no_bundle_commit_has_none(self) -> None:
+        path = self.base / "wt"
+        self.assertEqual(0, self.run_tool("add", "-b", "probe", str(path))[0])
+        self.assertTrue(git_worktrees.is_reparse_point(str(path / "web" / "node_modules")))
+
+        self.assertEqual([], worktree.defects(path))
+
+    def test_a_copy_of_modules_beside_the_main_lockfile_is_named_with_its_fix(self) -> None:
+        path = self.worktree("copied")
+        (path / "web" / "node_modules").mkdir()
+
+        found = worktree.defects(path)
+
+        self.assertEqual(1, len(found), found)
+        self.assertIn(f"{path / 'web' / 'node_modules'} is a copy of its own", found[0])
+        self.assertIn(
+            f"remove that copy, then run python -B {self.main / 'tests' / 'worktree.py'}"
+            f" link {path}",
+            found[0],
+        )
+
+    def test_a_copy_beside_another_lockfile_and_an_absent_one_are_no_defect(self) -> None:
+        path = self.worktree("other-lock")
+        (path / "desktop" / "package-lock.json").write_bytes(DESKTOP_LOCK.replace(b"3", b"4"))
+        self.git(path, "commit", "-q", "-am", "chore: another desktop lockfile")
+        (path / "desktop" / "node_modules").mkdir()
+
+        # web has no node_modules at all, desktop a copy of its own lockfile's.
+        self.assertEqual([], worktree.defects(path))
+
+    def test_a_worker_commit_that_carries_the_bundle_is_named_by_hash_and_subject(self) -> None:
+        path = self.worktree("worker")
+        first = self.commit_bundle(path, "fix: the drawer closes on escape")
+        self.commit_bundle(path, "build(web): rebuild the bundle on the integrated head")
+        second = self.commit_bundle(path, "feat(web): a wider rail")
+
+        found = worktree.defects(path)
+
+        self.assertEqual(2, len(found), found)
+        self.assertTrue(
+            found[0].startswith(f"commit {second} (feat(web): a wider rail) carries web/dist"),
+            found,
+        )
+        self.assertTrue(
+            found[1].startswith(f"commit {first} (fix: the drawer closes on escape)"), found
+        )
+        self.assertIn("only the integrator rebuilds it", found[0])
+
+    def test_the_integrator_rebuild_is_no_defect(self) -> None:
+        path = self.worktree("integration")
+        self.commit_bundle(path, "build(web): rebuild the bundle on the integrated head")
+
+        self.assertEqual([], worktree.defects(path))
+
+    def test_a_merge_that_brings_a_bundle_change_is_no_defect_on_its_own(self) -> None:
+        self.git(self.main, "branch", "side")
+        side = self.base / "side"
+        self.git(self.main, "worktree", "add", "-q", str(side), "side")
+        (side / "notes.txt").write_text("side\n", encoding="utf-8")
+        self.git(side, "add", "-A")
+        self.git(side, "commit", "-q", "-m", "docs: a note from the side")
+        path = self.worktree("merging")
+        # The merge itself changes web/dist, which neither parent has.
+        self.git(path, "merge", "-q", "--no-ff", "--no-commit", "side")
+        bundle = path / "web" / "dist" / "index.html"
+        bundle.parent.mkdir(parents=True)
+        bundle.write_text("merged\n", encoding="utf-8")
+        self.git(path, "add", "-A")
+        self.git(path, "commit", "-q", "-m", "chore: merge side")
+        self.assertIn(
+            "web/dist/index.html",
+            self.git(path, "show", "--first-parent", "--name-only", "--format=", "HEAD"),
+        )
+
+        self.assertEqual([], worktree.defects(path))
+
+    def test_with_no_main_branch_the_bundle_rule_is_not_judged(self) -> None:
+        path = self.worktree("worker")
+        self.commit_bundle(path, "fix: the drawer closes on escape")
+        self.git(self.main, "branch", "-q", "-m", "main", "trunk")
+
+        self.assertEqual([], worktree.defects(path))
+
+
 if __name__ == "__main__":
     unittest.main()
