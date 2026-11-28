@@ -5,15 +5,14 @@ import { aCardAsking, LINK, linkIn } from './documentBackend.ts'
 import { openBesideCard, paneOf, settled, shot } from './documentBeside.ts'
 import {
   answerFilePlans,
-  copiedIn,
   EDITOR,
   fileAsked,
-  keepCopies,
   noticeOf,
   openedIn,
   ringRoom,
 } from './documentEditorPlan.ts'
 import { openPage } from './documentPageSurface.ts'
+import { copiedTexts } from './pageClipboard.ts'
 import { test } from './test.ts'
 
 /**
@@ -109,7 +108,6 @@ test.describe('over a card', () => {
 test('beside a card: the top block’s line once the reader has moved, and a refusal copies', async ({
   page,
 }) => {
-  await keepCopies(page)
   const { drawer } = await openBesideCard(page)
   await linkIn(drawer, LINK).focus()
   await page.keyboard.press('Enter')
@@ -130,7 +128,7 @@ test('beside a card: the top block’s line once the reader has moved, and a ref
   await answerFilePlans(page, true)
   await editor.click()
   await expect(noticeOf(page)).toHaveText('Nothing is there. The path was copied')
-  expect(await copiedIn(page)).toEqual(['docs/plan.md'])
+  expect(await copiedTexts(page)).toEqual(['docs/plan.md'])
   // A refusal opens nothing, and the document stays beside the card.
   expect(await openedIn(page)).toHaveLength(1)
   await expect(pane).toBeVisible()

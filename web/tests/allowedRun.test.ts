@@ -20,7 +20,7 @@ vi.mock('./heavyLock.ts', async (actual) => ({
 }))
 
 const allowed = ['production-settings.spec.ts', 'ui-buttons.spec.ts']
-const notes = 'production-card-notes.spec.ts'
+const notes = 'production-card-notes-clipboard.spec.ts'
 /** A spec file of the suite whose name no project's pattern takes. */
 const scratch = 'zz-scratch-shots.spec.ts'
 /** A spec file a project's pattern takes and its ignore list leaves out. */

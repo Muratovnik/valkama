@@ -1,7 +1,9 @@
 /**
- * The browser specs that touch the system clipboard are named in one list, which a run of the
- * allowed set leaves out. A spec that grants or writes the clipboard and is not on it would
- * run with the rest; a name on it that is no longer a spec would let the renamed one back in.
+ * The browser specs that use the system clipboard are named in one list, which a run of the
+ * allowed set leaves out, and every other spec runs with the page's clipboard, which the suite's
+ * `test` brings. A spec that grants or writes the clipboard and is not on the list would run
+ * with the rest; a name on it that is no longer a spec would let the renamed one back in; and a
+ * spec that took Playwright's own `test` would leave its pages the system clipboard.
  */
 
 import { readdirSync, readFileSync } from 'node:fs'
@@ -15,6 +17,9 @@ import {
   clipboardListGaps,
   clipboardOptIn,
   clipboardSpecs,
+  pageClipboardSpec,
+  specsWithoutSuiteTest,
+  usesSystemClipboard,
 } from './browser/clipboardSpecs.ts'
 
 const suite = fileURLToPath(new URL('browser/', import.meta.url))
@@ -35,9 +40,11 @@ describe('the clipboard specs', () => {
   })
 
   it('fails on the suite as it is when one of its clipboard specs is left off', () => {
-    const listed = clipboardSpecs.filter((name) => name !== 'production-card-source.spec.ts')
+    const listed = clipboardSpecs.filter(
+      (name) => name !== 'production-card-source-clipboard.spec.ts',
+    )
     expect(clipboardListGaps(suiteSources(), listed).unlisted).toEqual([
-      'production-card-source.spec.ts',
+      'production-card-source-clipboard.spec.ts',
     ])
   })
 
@@ -74,12 +81,54 @@ describe('the clipboard specs', () => {
     expect(clipboardListGaps(new Map([['ui-stub.spec.ts', stub]]), []).unlisted).toEqual([])
   })
 
+  it('leaves off the list the spec of the page clipboard alone, which is a spec', () => {
+    expect(suiteSources().has(pageClipboardSpec)).toBe(true)
+    const grants = "test('asks', ({ context }) => context.grantPermissions(['clipboard-read']))\n"
+    const sources = new Map([
+      [pageClipboardSpec, grants],
+      ['ui-asks.spec.ts', grants],
+    ])
+    expect(clipboardListGaps(sources, []).unlisted).toEqual(['ui-asks.spec.ts'])
+  })
+
+  it('tells a listed spec by its name, from a path or from the name alone', () => {
+    const listed = 'production-card-notes-clipboard.spec.ts'
+    expect(usesSystemClipboard(`${suite}${listed}`)).toBe(true)
+    expect(usesSystemClipboard(listed)).toBe(true)
+    expect(usesSystemClipboard(`${suite}production-card-notes.spec.ts`)).toBe(false)
+  })
+
   it('reports a listed name that is no longer a spec', () => {
     const sources = new Map([['production-card-notes.spec.ts', quiet]])
     expect(
       clipboardListGaps(sources, ['production-card-notes.spec.ts', 'production-gone.spec.ts'])
         .stale,
     ).toEqual(['production-gone.spec.ts'])
+  })
+})
+
+describe("the suite's test", () => {
+  it('is the test every spec of the suite takes', () => {
+    const sources = suiteSources()
+    const specs = [...sources.keys()].filter((name) => name.endsWith('.spec.ts'))
+    expect(specs.length).toBeGreaterThan(clipboardSpecs.length)
+    expect(specsWithoutSuiteTest(sources)).toEqual([])
+  })
+
+  it("catches a spec that takes Playwright's test, or no test of the suite", () => {
+    const sources = new Map([
+      ['ui-suite.spec.ts', `import { expect } from '@playwright/test'\n${quiet}`],
+      ['ui-lines.spec.ts', "import {\n  expect,\n  test,\n} from './test.ts'\n"],
+      ['ui-own.spec.ts', "import { expect, test } from '@playwright/test'\n"],
+      ['ui-both.spec.ts', `import { test } from '@playwright/test'\n${quiet}`],
+      ['ui-none.spec.ts', "import { expect } from '@playwright/test'\n"],
+      ['copyHelper.ts', "import { test } from '@playwright/test'\n"],
+    ])
+    expect(specsWithoutSuiteTest(sources)).toEqual([
+      'ui-own.spec.ts',
+      'ui-both.spec.ts',
+      'ui-none.spec.ts',
+    ])
   })
 })
 
@@ -126,7 +175,8 @@ describe('the browser configuration', () => {
   it('opts in on `1` only, and leaves out a spec whose name merely begins with a listed one', () => {
     expect(clipboardIgnore({ [clipboardOptIn]: 'yes' })).toHaveLength(clipboardSpecs.length)
     const ignored = (name: string) => clipboardIgnore({}).some((one) => one.test(`/web/${name}`))
-    expect(ignored('production-open-session.spec.ts')).toBe(true)
-    expect(ignored('production-open-session-app.spec.ts')).toBe(false)
+    expect(ignored('production-open-session-clipboard.spec.ts')).toBe(true)
+    expect(ignored('production-open-session-clipboard-app.spec.ts')).toBe(false)
+    expect(ignored('production-open-session.spec.ts')).toBe(false)
   })
 })

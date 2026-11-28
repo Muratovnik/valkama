@@ -1,117 +1,32 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect } from '@playwright/test'
-import type { Locator, Page } from '@playwright/test'
+import type { Page } from '@playwright/test'
 
-import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
-import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
-
-import { installBackend } from './backend.ts'
+import {
+  ANCHOR,
+  askedOfTheApp,
+  expectViewerAtAnchor,
+  inTheApp,
+  openCard,
+  toRelations,
+} from './cardSourcePage.ts'
 import { requestedShot } from './keptShots.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { PLAN_PATH } from './planDocumentFixture.ts'
-import { spaceScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 /**
  * An item's plan anchor, in the head as a mark and in Relations as a row: both are one
  * path of the card's, so a plan opens in the viewer at its anchor, in a browser and in
  * the desktop app alike, and one that cannot be opened is copied with the reason.
+ *
+ * A copy here lands in the page's clipboard (`pageClipboard.ts`); the tests that read one back
+ * from the system clipboard are in `production-card-source-clipboard.spec.ts`.
  */
-
-const ANCHOR = `${PLAN_PATH}#kb:architecture`
-
-/** The page's side of the desktop bridge, and what it was asked to carry out. */
-async function inTheApp(page: Page) {
-  await page.addInitScript(() => {
-    const asked: unknown[] = []
-    Object.assign(window, {
-      asked,
-      valkamaDesktop: {
-        onOpenRoute: () => {},
-        openSession(request: unknown) {
-          asked.push(request)
-          return Promise.resolve({ ok: true, mode: 'opened', next: null })
-        },
-      },
-    })
-  })
-}
-
-/** Nothing in a browser, where no bridge stands to be asked. */
-const askedOfTheApp = (page: Page) =>
-  page.evaluate(() => (window as unknown as { asked?: unknown[] }).asked ?? [])
-
-async function openCard(
-  page: Page,
-  {
-    locale = 'en',
-    source,
-    width = 1280,
-  }: { locale?: string; source?: string; width?: number } = {},
-) {
-  await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
-  await page.setViewportSize({ width, height: 900 })
-  await installBackend(page, source === undefined ? {} : { source })
-  await page.context().grantPermissions(['clipboard-write', 'clipboard-read'])
-  await page.goto(
-    serializePlatformRoute({
-      module_id: 'planning',
-      scope: spaceScope,
-      entity: planningWorkItemEntity(workItemRef),
-    }),
-  )
-  const drawer = page.getByRole('dialog').filter({ has: page.locator('.head-reference') })
-  await expect(drawer.locator('.card-identity')).toBeVisible()
-  await expect(drawer).toHaveCSS('transform', 'none')
-  return drawer
-}
-
-async function toRelations(drawer: Locator, name = 'Relations') {
-  await drawer.getByRole('tab', { name, exact: true }).click()
-  return drawer.locator('.ref-row').first()
-}
-
-const clipboardOf = (page: Page) => page.evaluate(() => navigator.clipboard.readText())
-
-/** The viewer stands at the anchor's block, which holds focus and is on screen. */
-async function expectViewerAtAnchor(page: Page) {
-  const viewer = page.locator('.document-drawer')
-  await expect(viewer).toHaveCSS('transform', 'none')
-  await expect(viewer.locator('.overlay-header-name')).toHaveText('The platform plan')
-  const target = viewer.locator('.document-block.is-target')
-  await expect(target).toContainText('The architecture')
-  await expect(target).toBeFocused()
-  await expect(target).toBeInViewport()
-  await expect
-    .poll(() => viewer.locator('.document-body').evaluate((n) => n.scrollTop))
-    .toBeGreaterThan(0)
-}
 
 for (const place of ['browser', 'app'] as const) {
   test.describe(`in the ${place}`, () => {
     test.beforeEach(async ({ page }) => {
       if (place === 'app') await inTheApp(page)
-    })
-
-    test('the mark opens the plan in the viewer at its anchor, and Escape comes back', async ({
-      page,
-    }) => {
-      const drawer = await openCard(page)
-      const mark = drawer.locator('.identity-source')
-      await expect(mark).toHaveAccessibleName(`Open the document in Valkama: ${ANCHOR}`)
-      await expect(mark).toHaveAttribute('data-tooltip', `Open the document in Valkama: ${ANCHOR}`)
-      await expect(mark.locator('svg.lucide-file-text')).toBeVisible()
-      await page.evaluate(() => navigator.clipboard.writeText('untouched'))
-
-      await mark.focus()
-      await page.keyboard.press('Enter')
-      await expectViewerAtAnchor(page)
-      await page.keyboard.press('Escape')
-
-      await expect(page.locator('.document-drawer')).toHaveCount(0)
-      await expect(mark).toBeFocused()
-      expect(await clipboardOf(page)).toBe('untouched')
-      expect(await askedOfTheApp(page)).toEqual([])
     })
 
     test('the row of Relations opens the same place, and says what it does', async ({ page }) => {
@@ -144,29 +59,6 @@ test('in the app, a source that is not Markdown goes to the editor by the plan, 
       { path: { kind: 'file', project: 'demo', path: 'src/a.ts', line: 42 }, fallback: 'vscode' },
     ])
   await expect(page.locator('.document-drawer')).toHaveCount(0)
-})
-
-test('a source that is not there is copied as written, with the reason beforehand', async ({
-  page,
-}) => {
-  const gone = 'docs/plans/gone.md#kb:missing'
-  const drawer = await openCard(page, { source: gone })
-  const mark = drawer.locator('.identity-source')
-  await expect(mark).toHaveAccessibleName(`Copy the path ${gone}: nothing is there`)
-  await expect(mark.locator('svg.lucide-copy')).toBeVisible()
-
-  await mark.focus()
-  await page.keyboard.press('Enter')
-  await expect.poll(() => clipboardOf(page)).toBe(gone)
-  await expect(page.locator('.notice')).toContainText('Path copied')
-  await expect(mark).toBeFocused()
-  await expect(page.locator('.document-drawer')).toHaveCount(0)
-  await expectNoSilentClipping(page, 'card with a source that is gone')
-
-  const row = await toRelations(drawer)
-  const link = row.getByRole('button', { name: `Copy the path ${gone}: nothing is there` })
-  await expect(link).toHaveText(gone)
-  await expect(link).toHaveCSS('text-decoration-style', 'dotted')
 })
 
 test('a source that holds no path is text: nothing to press and nothing asked', async ({

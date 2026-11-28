@@ -58,19 +58,30 @@ Each command below runs in `web/`:
   Playwright option takes its value after `=`, as in `--grep=freshness`: the
   runner refuses a separate value.
 
-The specs that write the system clipboard or are granted it are named in
+The specs that use the system clipboard are named in
 `web/tests/browser/clipboardSpecs.ts`, and they run only when asked for: with
 `VALKAMA_BROWSER_CLIPBOARD=1` or through the runner's `--with-clipboard=<spec name>`.
+Each holds only tests that are granted the clipboard and read back what a page
+put there, split off from the spec beside it as `<spec>-clipboard.spec.ts`.
 `web/playwright.config.ts` reads that list and selects none of them without the
 variable — not in a bare run, not when one is named, not under `--list` — and
 the runner sets it when `--with-clipboard` names one and removes it otherwise.
-A bare `npx playwright test` or `npm run test:browser` is therefore safe for the
-clipboard, but it is still not how the suite runs: it refuses nothing and ends
-with no count to compare, so the whole suite goes through the runner.
+Every other spec runs with the page's clipboard,
+`web/tests/browser/pageClipboard.ts`: the suite's `test` puts it into each
+context such a spec opens, before its first page, so `navigator.clipboard`
+writes into the page, and the browser's own copy, cut and paste, by a key or by
+`execCommand`, never start, the page getting the clipboard event in their place.
+A test there reads what was copied with `copiedTexts` and makes the clipboard
+refuse with `refuseClipboard`; a grant of the clipboard there fails, naming the
+list. A bare `npx playwright test` or `npm run test:browser` is therefore safe
+for the clipboard, but it is still not how the suite runs: it refuses nothing
+and ends with no count to compare, so the whole suite goes through the runner.
 `tests/clipboardSpecs.test.ts` fails on a spec that grants or writes the
-clipboard and is not on that list, so a spec that starts to goes onto it in the
-same change, and on a configuration that selects a listed spec without the
-variable.
+clipboard and is not on that list, so a test that starts to goes into a listed
+spec of its own in the same change; on a spec that takes its `test` from
+anywhere but the suite's; and on a configuration that selects a listed spec
+without the variable. `ui-page-clipboard.spec.ts` checks the page's clipboard
+itself, and is the one spec off the list that may write and ask for it.
 
 The Analytics sweep (`web/tests/sweep/analyticsSweep.ts`) is not a gate but a
 measurement of a running Valkama: every rail section, period, chart view and the
